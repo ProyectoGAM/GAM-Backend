@@ -9,6 +9,15 @@ use App\Modules\Geography\Http\Controllers\DepartmentController;
 use App\Modules\Geography\Http\Controllers\LocalityController;
 use App\Modules\IdentityAndAccess\Http\Controllers\AdminController;
 use App\Modules\IdentityAndAccess\Http\Controllers\AuthController;
+use App\Modules\Inventory\Http\Controllers\InventoryMovementController;
+use App\Modules\Inventory\Http\Controllers\InventoryReadController;
+use App\Modules\Inventory\Http\Controllers\StockLocationController;
+use App\Modules\Inventory\Http\Controllers\StockLocationStatusController;
+use App\Modules\Inventory\Http\Controllers\StockReservationController;
+use App\Modules\SuppliersAndCatalogs\Http\Controllers\ProductController;
+use App\Modules\SuppliersAndCatalogs\Http\Controllers\ProductStatusController;
+use App\Modules\SuppliersAndCatalogs\Http\Controllers\SupplierController;
+use App\Modules\SuppliersAndCatalogs\Http\Controllers\SupplierStatusController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.v1.')->group(function (): void {
@@ -56,5 +65,40 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             ->name('poultry-houses.status.update');
 
         Route::get('/administracion', AdminController::class)->name('admin.dashboard');
+
+        Route::get('/proveedores', [SupplierController::class, 'index'])->name('suppliers.index');
+        Route::post('/proveedores', [SupplierController::class, 'store'])->name('suppliers.store');
+        Route::get('/proveedores/{supplier}', [SupplierController::class, 'show'])->name('suppliers.show');
+        Route::patch('/proveedores/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
+        Route::patch('/proveedores/{supplier}/estado', [SupplierStatusController::class, 'update'])->name('suppliers.status.update');
+
+        Route::get('/productos', [ProductController::class, 'index'])->name('products.index');
+        Route::post('/productos', [ProductController::class, 'store'])->name('products.store');
+        Route::get('/productos/{product}', [ProductController::class, 'show'])->name('products.show');
+        Route::patch('/productos/{product}', [ProductController::class, 'update'])->name('products.update');
+        Route::patch('/productos/{product}/estado', [ProductStatusController::class, 'update'])->name('products.status.update');
+
+        Route::get('/ubicaciones-stock', [StockLocationController::class, 'index'])->name('stock-locations.index');
+        Route::post('/ubicaciones-stock', [StockLocationController::class, 'store'])->name('stock-locations.store');
+        Route::get('/ubicaciones-stock/{stockLocation}', [StockLocationController::class, 'show'])->name('stock-locations.show');
+        Route::patch('/ubicaciones-stock/{stockLocation}', [StockLocationController::class, 'update'])->name('stock-locations.update');
+        Route::patch('/ubicaciones-stock/{stockLocation}/estado', [StockLocationStatusController::class, 'update'])->name('stock-locations.status.update');
+
+        Route::prefix('inventario')->name('inventory.')->group(function (): void {
+            Route::get('/saldos', [InventoryReadController::class, 'balances'])->name('balances.index');
+            Route::patch('/saldos/{stockBalance}/stock-minimo', [InventoryReadController::class, 'minimum'])->name('balances.minimum');
+            Route::get('/movimientos', [InventoryReadController::class, 'movements'])->name('movements.index');
+            Route::get('/movimientos/{inventoryMovement}', [InventoryReadController::class, 'movement'])->name('movements.show');
+            Route::get('/reservas', [InventoryReadController::class, 'reservations'])->name('reservations.index');
+            Route::post('/ingresos', [InventoryMovementController::class, 'receive'])->name('receipts.store');
+            Route::post('/salidas', [InventoryMovementController::class, 'issue'])->name('issues.store');
+            Route::post('/perdidas', [InventoryMovementController::class, 'loss'])->name('losses.store');
+            Route::post('/ajustes', [InventoryMovementController::class, 'adjust'])->name('adjustments.store');
+            Route::post('/transferencias', [InventoryMovementController::class, 'transfer'])->name('transfers.store');
+            Route::post('/movimientos/{inventoryMovement}/reversiones', [InventoryMovementController::class, 'reverse'])->name('movements.reversals.store');
+            Route::post('/reservas', [StockReservationController::class, 'store'])->name('reservations.store');
+            Route::post('/reservas/{stockReservation}/liberaciones', [StockReservationController::class, 'release'])->name('reservations.releases.store');
+            Route::post('/reservas/{stockReservation}/consumos', [StockReservationController::class, 'consume'])->name('reservations.consumptions.store');
+        });
     });
 });
