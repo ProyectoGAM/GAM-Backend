@@ -25,17 +25,26 @@ final class AdminSeederTest extends TestCase
         $this->assertTrue(Hash::check(config('auth.admin.password'), $admin->password));
         $this->assertTrue($admin->hasRole('admin'));
         $this->assertTrue($admin->can('admin.dashboard.view'));
+        $this->assertTrue($admin->can('audit.view'));
+        $this->assertTrue($admin->can('geography.manage'));
+        $this->assertTrue($admin->can('production-units.manage'));
+        $this->assertTrue($admin->can('poultry-houses.manage'));
         $this->assertDatabaseHas('permissions', [
             'name' => 'admin.dashboard.view',
             'guard_name' => 'web',
         ]);
+        $this->assertDatabaseHas('permissions', [
+            'name' => 'audit.view',
+            'guard_name' => 'web',
+        ]);
+        $this->assertDatabaseCount('departments', 19);
     }
 
     public function test_seeded_admin_can_login_and_access_the_admin_endpoint(): void
     {
         $this->seed();
 
-        $response = $this->postJson('/api/v1/auth/login', [
+        $response = $this->postJson('/api/v1/autenticacion/inicio-sesion', [
             'email' => config('auth.admin.email'),
             'password' => config('auth.admin.password'),
             'device_name' => 'seed-test',
@@ -44,7 +53,7 @@ final class AdminSeederTest extends TestCase
         $response->assertOk();
 
         $this->withToken($response->json('access_token'))
-            ->getJson('/admin')
+            ->getJson('/administracion')
             ->assertOk()
             ->assertJsonPath('user.email', config('auth.admin.email'));
     }

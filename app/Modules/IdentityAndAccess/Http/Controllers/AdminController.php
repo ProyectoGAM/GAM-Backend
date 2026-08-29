@@ -15,7 +15,7 @@ final class AdminController
         $user = $request->user();
 
         return response()->json([
-            'message' => 'Welcome to the admin area.',
+            'message' => 'Bienvenido al área de administración.',
             'user' => (new UserResource($user))->resolve($request),
         ]);
     }

@@ -2,6 +2,7 @@
 
 namespace App\Modules\IdentityAndAccess\Http\Resources;
 
+use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Laravel\Sanctum\NewAccessToken;
@@ -16,12 +17,14 @@ final class AccessTokenResource extends JsonResource
     {
         /** @var NewAccessToken $token */
         $token = $this->resource;
+        $expiresAt = $token->accessToken->getAttribute('expires_at');
+        $abilities = $token->accessToken->getAttribute('abilities');
 
         return [
             'access_token' => $token->plainTextToken,
             'token_type' => 'Bearer',
-            'expires_at' => $token->accessToken->expires_at?->toIso8601String(),
-            'abilities' => $token->accessToken->abilities ?? [],
+            'expires_at' => $expiresAt instanceof CarbonInterface ? $expiresAt->toIso8601String() : null,
+            'abilities' => is_array($abilities) ? $abilities : [],
         ];
     }
 }

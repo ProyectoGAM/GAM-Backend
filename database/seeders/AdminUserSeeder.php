@@ -16,7 +16,7 @@ final class AdminUserSeeder extends Seeder
         $adminConfig = config('auth.admin');
 
         if (! is_string($adminConfig['password']) || trim($adminConfig['password']) === '') {
-            throw new RuntimeException('ADMIN_PASSWORD must be configured before seeding the administrator.');
+            throw new RuntimeException('ADMIN_PASSWORD debe configurarse antes de crear el administrador.');
         }
 
         $admin = User::withTrashed()->firstOrNew([
@@ -34,9 +34,18 @@ final class AdminUserSeeder extends Seeder
             'email_verified_at' => now(),
         ])->save();
 
-        $permission = Permission::findOrCreate('admin.dashboard.view', 'web');
+        $permissions = [
+            Permission::findOrCreate('admin.dashboard.view', 'web'),
+            Permission::findOrCreate('audit.view', 'web'),
+            Permission::findOrCreate('geography.view', 'web'),
+            Permission::findOrCreate('geography.manage', 'web'),
+            Permission::findOrCreate('production-units.view', 'web'),
+            Permission::findOrCreate('production-units.manage', 'web'),
+            Permission::findOrCreate('poultry-houses.view', 'web'),
+            Permission::findOrCreate('poultry-houses.manage', 'web'),
+        ];
         $role = Role::findOrCreate('admin', 'web');
-        $role->syncPermissions([$permission]);
+        $role->syncPermissions($permissions);
         $admin->syncRoles([$role]);
     }
 }

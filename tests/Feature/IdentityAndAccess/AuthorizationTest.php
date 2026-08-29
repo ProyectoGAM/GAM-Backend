@@ -18,9 +18,9 @@ class AuthorizationTest extends TestCase
         $admin = $this->userWithAdminPermission();
         Sanctum::actingAs($admin, ['*']);
 
-        $this->getJson('/api/v1/admin')
+        $this->getJson('/api/v1/administracion')
             ->assertOk()
-            ->assertJsonPath('message', 'Welcome to the admin area.')
+            ->assertJsonPath('message', 'Bienvenido al área de administración.')
             ->assertJsonPath('user.email', $admin->email);
     }
 
@@ -29,7 +29,7 @@ class AuthorizationTest extends TestCase
         $admin = $this->userWithAdminPermission();
         Sanctum::actingAs($admin, ['*']);
 
-        $this->getJson('/admin')
+        $this->getJson('/administracion')
             ->assertOk()
             ->assertJsonPath('user.email', $admin->email);
     }
@@ -38,12 +38,14 @@ class AuthorizationTest extends TestCase
     {
         Sanctum::actingAs(User::factory()->create(), ['*']);
 
-        $this->getJson('/admin')->assertForbidden();
+        $this->getJson('/administracion')
+            ->assertForbidden()
+            ->assertJsonPath('message', 'No tienes autorización para realizar esta acción.');
     }
 
     public function test_admin_endpoint_returns_401_without_authentication(): void
     {
-        $this->getJson('/admin')->assertUnauthorized();
+        $this->getJson('/administracion')->assertUnauthorized();
     }
 
     public function test_role_inherits_the_admin_permission(): void
@@ -55,7 +57,7 @@ class AuthorizationTest extends TestCase
         $user->assignRole($role);
         Sanctum::actingAs($user, ['*']);
 
-        $this->getJson('/api/v1/admin')->assertOk();
+        $this->getJson('/api/v1/administracion')->assertOk();
     }
 
     public function test_soft_deleted_user_cannot_use_an_existing_token(): void
@@ -65,7 +67,7 @@ class AuthorizationTest extends TestCase
         $user->delete();
 
         $this->withToken($token->plainTextToken)
-            ->getJson('/api/v1/admin')
+            ->getJson('/api/v1/administracion')
             ->assertUnauthorized();
     }
 

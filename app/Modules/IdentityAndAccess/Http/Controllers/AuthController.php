@@ -7,8 +7,8 @@ use App\Modules\IdentityAndAccess\Application\Actions\IssueAccessTokenAction;
 use App\Modules\IdentityAndAccess\Application\Actions\LoginUserAction;
 use App\Modules\IdentityAndAccess\Application\Actions\LogoutUserAction;
 use App\Modules\IdentityAndAccess\Application\Actions\RegisterUserAction;
-use App\Modules\IdentityAndAccess\Http\Requests\LogoutRequest;
 use App\Modules\IdentityAndAccess\Http\Requests\LoginRequest;
+use App\Modules\IdentityAndAccess\Http\Requests\LogoutRequest;
 use App\Modules\IdentityAndAccess\Http\Requests\MeRequest;
 use App\Modules\IdentityAndAccess\Http\Requests\RegisterRequest;
 use App\Modules\IdentityAndAccess\Http\Resources\AccessTokenResource;
@@ -46,7 +46,7 @@ final class AuthController
 
         if (! $user instanceof User) {
             return response()->json([
-                'message' => 'The provided credentials are incorrect.',
+                'message' => 'Las credenciales proporcionadas no son correctas.',
             ], Response::HTTP_UNAUTHORIZED);
         }
 
@@ -67,7 +67,7 @@ final class AuthController
             $request->session()->regenerateToken();
         }
 
-        return response()->json(['message' => 'Logged out successfully.']);
+        return response()->json(['message' => 'La sesión se cerró correctamente.']);
     }
 
     public function me(MeRequest $request): UserResource

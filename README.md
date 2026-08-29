@@ -1,6 +1,6 @@
-Laravel: http://localhost:8080
+GAM: http://localhost:8080
 
-Health de Laravel: http://localhost:8080/up
+Estado de la aplicación: http://localhost:8080/estado
 
 Mailpit: http://localhost:8025
 

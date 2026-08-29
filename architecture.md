@@ -43,16 +43,27 @@ La estructura objetivo separa `apps/api`, `apps/web`, `contracts/openapi`, `infr
 
 | Código | Módulo | Responsabilidad y entidades principales |
 |---|---|---|
-| M01 | Identidad y acceso | Usuarios, roles, permisos, sesiones y alcance por UP |
-| M02 | Geografía y referencia | `Departamento`, `Localidad` y catálogos geográficos |
-| M03 | Instalaciones | `UP`, `Galpon`, `Mantenimiento` y capacidad operativa |
+| M01 | Identidad y acceso | Usuarios, roles, permisos y sesiones |
+| M02 | Auditoría y trazabilidad | Historial append-only, actor, operación, traza y cambios explícitos |
+| M03 | Ubicaciones y estructura de la granja | `Department`, `Locality`, `ProductionUnit`, `PoultryHouse`, estados y capacidad máxima |
 | M04 | Proveedores y sanidad | `Proveedor`, `TipoP`, `Alimento`, `Medicamento`, `Sanidad`, `Vacuna`, `VacunaLote` |
 | M05 | Lotes y producción | `Raza`, `Categoria`, `Division`, `Lote` y recolecciones |
 | M06 | Ejecución del manejo | `Manejo`, `Peso`, `DetallePeso`, `Mortalidad` y tareas realizadas |
 | M07 | Planes de manejo | `PlanDeManejo`, versiones, asignaciones y ocurrencias |
 | M08 | Inventario y reparto | `Huevo`, `Reparto`, `Imprevisto`, retiros, retornos y stock |
 | M09 | Clientes y ventas | `Cliente`, `Venta`, `CuentaCorriente`, `Movimiento` y cobros |
-| M10 | Reportes y monitoreo | KPIs, alertas, auditoría, proyecciones y exportaciones |
+| M10 | Reportes y monitoreo | KPIs, alertas, proyecciones y exportaciones |
+
+### Módulo 2 de la hoja de ruta: auditoría y trazabilidad
+
+La auditoría es una capacidad transversal implementada en `AuditAndTraceability`. Su objetivo es reconstruir el historial de operaciones importantes sin depender del estado actual de una entidad.
+
+- Las Actions propietarias de Inventario, Clientes/Cuenta Corriente y Repartos deben registrar movimientos, modificaciones, cobros, retiros, retornos y conciliaciones.
+- También deben auditar fabricación de ración, aplicación de medicamentos, mantenimientos y cualquier transición con impacto operativo o financiero.
+- Cada entrada conserva `event`, `operation_id`, `trace_id`, actor, sujeto, módulo, UP cuando aplique, resultado y cambios explícitos.
+- El registro se escribe dentro de la misma transacción que la operación. Si falla la auditoría, falla la operación completa.
+- Las correcciones se representan con contramovimientos o eventos compensatorios; las entradas de auditoría no se editan ni eliminan.
+- Las consultas se exponen de forma paginada y sólo para usuarios con `audit.view`. Los snapshots se construyen mediante listas permitidas y nunca incluyen contraseñas, tokens ni secretos.
 
 ### Reglas entre módulos
 
@@ -182,7 +193,7 @@ Retiros y retornos operan con cantidades normalizadas. Nunca se crea un reparto 
 
 - Web: Sanctum stateful, CSRF y cookie `HttpOnly`, `Secure` y `SameSite`.
 - Móvil futuro: tokens revocables, expirables y con capacidades limitadas.
-- Autorización server-side mediante roles, permisos, Policies y alcance de UP.
+- Autorización server-side mediante roles, permisos y Policies. Actualmente los permisos funcionales se aplican a todas las unidades productivas porque la empresa opera como una única organización pequeña.
 - Usuarios o permisos inactivos nunca conceden acceso.
 - CORS usa orígenes explícitos; login y recuperación tienen rate limiting.
 - Secrets permanecen fuera del repositorio.

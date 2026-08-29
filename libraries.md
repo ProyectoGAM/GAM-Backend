@@ -130,7 +130,7 @@ El paquete resuelve RBAC, pero no garantiza que el usuario tenga acceso a la UP 
 
 - **Paquete:** `spatie/laravel-backup`
 - **Repositorio:** [spatie/laravel-backup](https://github.com/spatie/laravel-backup)
-- **Uso en GAM:** generar backups de MySQL y archivos relevantes y enviarlos a almacenamiento externo.
+- **Uso en GAM:** generar backups de PostgreSQL y archivos relevantes y enviarlos a almacenamiento externo.
 
 Ejemplo de planificación en `routes/console.php`:
 
@@ -145,13 +145,13 @@ Schedule::command('backup:clean')
     ->dailyAt('03:00');
 ```
 
-El contenedor deberá tener `mysqldump` y la extensión ZIP. Los backups deben almacenarse fuera del servidor principal y probarse mediante restauraciones periódicas.
+El contenedor deberá tener `pg_dump` y la extensión ZIP. Los backups deben almacenarse fuera del servidor principal y probarse mediante restauraciones periódicas.
 
 ### 3.7 Spatie Laravel Health
 
 - **Paquete:** `spatie/laravel-health`
 - **Repositorio:** [spatie/laravel-health](https://github.com/spatie/laravel-health)
-- **Uso en GAM:** verificar MySQL, Redis, espacio en disco, backups, colas y scheduler.
+- **Uso en GAM:** verificar PostgreSQL, Redis, espacio en disco, backups, colas y scheduler.
 
 Ejemplo de registro de checks:
 
@@ -169,7 +169,7 @@ Health::checks([
 ]);
 ```
 
-La readiness puede comprobar dependencias externas. La liveness debe ser una ruta mínima que no provoque reinicios por una caída temporal de MySQL o Redis.
+La readiness puede comprobar dependencias externas. La liveness debe ser una ruta mínima que no provoque reinicios por una caída temporal de PostgreSQL o Redis.
 
 ### 3.8 Spatie Simple Excel
 
@@ -195,21 +195,26 @@ Los reportes grandes se generarán en la cola `reporting`. Los datos y permisos 
 - **Repositorio:** [spatie/laravel-activitylog](https://github.com/spatie/laravel-activitylog)
 - **Uso en GAM:** auditar cambios sensibles de permisos, stock, repartos, ventas y cobros.
 
-Ejemplo de auditoría explícita al confirmar una venta:
+La auditoría de una operación crítica debe pasar por el contrato compartido desde la Action propietaria:
 
 ```php
-activity('ventas')
-    ->performedOn($venta)
-    ->causedBy($usuario)
-    ->event('confirmada')
-    ->withProperties([
-        'up_id' => $venta->up_id,
-        'total' => (string) $venta->total,
-    ])
-    ->log('Venta confirmada');
+DB::transaction(function () use ($auditRecorder, $sale, $user): void {
+    $auditRecorder->record(AuditEntryData::forSubject(
+        subject: $sale,
+        actor: $user,
+        logName: 'sales',
+        event: 'sale_confirmed',
+        description: 'Venta confirmada',
+        properties: [
+            'result' => 'confirmed',
+            'total' => (string) $sale->total,
+        ],
+        upId: $sale->up_id,
+    ));
+});
 ```
 
-No deben registrarse contraseñas, tokens, cookies ni datos sensibles innecesarios. El activity log no sustituye los movimientos inmutables ni los contramovimientos del dominio.
+El `AuditRecorder` escribe el evento de forma síncrona dentro de la misma transacción. No deben registrarse contraseñas, tokens, cookies ni datos sensibles innecesarios. El activity log no sustituye los movimientos inmutables ni los contramovimientos del dominio.
 
 ### 3.10 Spatie Laravel Query Builder
 
@@ -234,7 +239,7 @@ $ventas = QueryBuilder::for(Venta::query())
     ->paginate();
 ```
 
-Los filtros e includes permitidos deben estar documentados en OpenAPI. El alcance por UP debe aplicarse antes o dentro de la Query y nunca confiarse a parámetros enviados por el cliente.
+Los filtros e includes permitidos deben estar documentados en OpenAPI. El acceso se autoriza mediante permisos funcionales y actualmente no se filtra por unidad productiva: todo usuario autorizado puede operar sobre todas las unidades de la empresa.
 
 ### 3.11 Brick Money
 

@@ -7,6 +7,6 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/admin', AdminController::class)
+Route::get('/administracion', AdminController::class)
     ->middleware('auth:sanctum')
     ->name('admin.dashboard');
