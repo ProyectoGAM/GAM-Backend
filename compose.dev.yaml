@@ -98,7 +98,8 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-gam_dev_password}
       TZ: ${TZ:-America/Montevideo}
     ports:
-      - "127.0.0.1:${DB_FORWARD_PORT:-5432}:5432"
+      # DB_PORT es el puerto de PostgreSQL expuesto en el host; dentro de Docker sigue siendo 5432.
+      - "127.0.0.1:${DB_PORT:-55432}:5432"
     volumes:
       # PostgreSQL 18 usa /var/lib/postgresql como volumen principal.
       - postgres-data:/var/lib/postgresql

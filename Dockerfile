@@ -120,7 +120,6 @@ RUN --mount=type=cache,target=/tmp/composer-cache \
         --no-progress \
         --prefer-dist; \
     chown -R www-data:www-data \
-        /var/www/html/vendor \
         /var/www/html/storage \
         /var/www/html/bootstrap/cache
 
