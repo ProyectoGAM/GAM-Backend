@@ -14,8 +14,6 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('/me', [AuthController::class, 'me'])->name('me');
         Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
 
-        Route::get('/admin', AdminController::class)
-            ->middleware('permission:admin.dashboard.view')
-            ->name('admin.dashboard');
+        Route::get('/admin', AdminController::class)->name('admin.dashboard');
     });
 });

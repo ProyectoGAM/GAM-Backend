@@ -8,5 +8,5 @@ Route::get('/', function () {
 });
 
 Route::get('/admin', AdminController::class)
-    ->middleware(['auth:sanctum', 'permission:admin.dashboard.view'])
+    ->middleware('auth:sanctum')
     ->name('admin.dashboard');

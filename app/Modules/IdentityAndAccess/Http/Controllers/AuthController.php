@@ -7,12 +7,13 @@ use App\Modules\IdentityAndAccess\Application\Actions\IssueAccessTokenAction;
 use App\Modules\IdentityAndAccess\Application\Actions\LoginUserAction;
 use App\Modules\IdentityAndAccess\Application\Actions\LogoutUserAction;
 use App\Modules\IdentityAndAccess\Application\Actions\RegisterUserAction;
+use App\Modules\IdentityAndAccess\Http\Requests\LogoutRequest;
 use App\Modules\IdentityAndAccess\Http\Requests\LoginRequest;
+use App\Modules\IdentityAndAccess\Http\Requests\MeRequest;
 use App\Modules\IdentityAndAccess\Http\Requests\RegisterRequest;
 use App\Modules\IdentityAndAccess\Http\Resources\AccessTokenResource;
 use App\Modules\IdentityAndAccess\Http\Resources\UserResource;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 final class AuthController
@@ -55,7 +56,7 @@ final class AuthController
         ]);
     }
 
-    public function logout(Request $request, LogoutUserAction $logoutUser): JsonResponse
+    public function logout(LogoutRequest $request, LogoutUserAction $logoutUser): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -69,7 +70,7 @@ final class AuthController
         return response()->json(['message' => 'Logged out successfully.']);
     }
 
-    public function me(Request $request): UserResource
+    public function me(MeRequest $request): UserResource
     {
         /** @var User $user */
         $user = $request->user();

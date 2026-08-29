@@ -22,6 +22,8 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - You must follow all existing code conventions used in this application. When creating or editing a file, check sibling files for the correct structure, approach, and naming.
 - Use descriptive names for variables and methods. For example, `isRegisteredForDiscounts`, not `discount()`.
 - Check for existing components to reuse before writing a new one.
+- Write all source code and identifiers in English. Write comments and PHPDoc blocks in Spanish.
+- Every controller action `$request` parameter must use a custom, reusable `FormRequest` class. Put its validation rules in `rules()` and its authorization logic in `authorize()`, allowing Laravel to automatically resolve, validate, and authorize the request before the controller executes. Reuse an existing `FormRequest` when it applies; otherwise, create a dedicated one. Framework callbacks and `JsonResource::toArray()` may retain `Illuminate\Http\Request` when required by Laravel's method contracts.
 
 ## Verification Scripts
 
