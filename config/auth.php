@@ -20,6 +20,16 @@ return [
         'passwords' => env('AUTH_PASSWORD_BROKER', 'users'),
     ],
 
+    'admin' => [
+        'name' => env('ADMIN_NAME', 'GAM Administrator'),
+        'email' => env('ADMIN_EMAIL', 'admin@gam.test'),
+        'password' => env('ADMIN_PASSWORD'),
+    ],
+
+    'api_token_abilities' => [
+        'api:access',
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Authentication Guards

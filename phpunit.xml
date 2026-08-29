@@ -32,5 +32,9 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <env name="ADMIN_NAME" value="GAM Administrator"/>
+        <env name="ADMIN_EMAIL" value="admin@gam.test"/>
+        <env name="ADMIN_PASSWORD" value="ChangeMe123!"/>
+        <env name="SANCTUM_TOKEN_EXPIRATION" value="10080"/>
     </php>
 </phpunit>
