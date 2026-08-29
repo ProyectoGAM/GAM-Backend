@@ -43,6 +43,15 @@ final class AdminUserSeeder extends Seeder
             Permission::findOrCreate('production-units.manage', 'web'),
             Permission::findOrCreate('poultry-houses.view', 'web'),
             Permission::findOrCreate('poultry-houses.manage', 'web'),
+            Permission::findOrCreate('suppliers.view', 'web'),
+            Permission::findOrCreate('suppliers.manage', 'web'),
+            Permission::findOrCreate('products.view', 'web'),
+            Permission::findOrCreate('products.manage', 'web'),
+            Permission::findOrCreate('inventory.view', 'web'),
+            Permission::findOrCreate('inventory.move', 'web'),
+            Permission::findOrCreate('inventory.adjust', 'web'),
+            Permission::findOrCreate('inventory.reserve', 'web'),
+            Permission::findOrCreate('inventory.manage', 'web'),
         ];
         $role = Role::findOrCreate('admin', 'web');
         $role->syncPermissions($permissions);
