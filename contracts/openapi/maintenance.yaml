@@ -1,0 +1,334 @@
+openapi: 3.1.0
+info:
+  title: API de mantenimientos de instalaciones
+  version: 1.0.0
+  description: |
+    Histórico de trabajos realizados en galpones, propiedad de FarmStructure.
+    No programa mantenimientos ni modifica el estado o capacidad del galpón.
+    Los cancelados permanecen en el historial. Los permisos son globales en la empresa.
+  license:
+    name: Proprietary
+    identifier: Proprietary
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+  - sessionCookie: []
+tags:
+  - name: Mantenimientos
+    description: Registro, corrección e histórico de mantenimientos realizados.
+paths:
+  /galpones/{poultryHouse}/mantenimientos:
+    parameters:
+      - $ref: '#/components/parameters/PoultryHouse'
+    get:
+      tags: [Mantenimientos]
+      operationId: listPoultryHouseMaintenances
+      summary: Consulta el histórico del galpón
+      description: |
+        Requiere poultry-houses.view. Incluye cancelados salvo filtro de estado.
+        Orden por maintenance_date DESC e id DESC. No filtra por usuario ni UP.
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/MaintenanceStatus' }
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          description: Mayor o igual a date_from cuando se proporcionan ambos límites.
+          schema: { type: string, format: date }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100000, default: 1 }
+      responses:
+        '200':
+          description: Histórico paginado, incluyendo cancelados.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, links, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Maintenance' }
+                  links: { type: object }
+                  meta: { type: object }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    post:
+      tags: [Mantenimientos]
+      operationId: createMaintenance
+      summary: Registra un mantenimiento realizado
+      description: |
+        Requiere poultry-houses.manage. Permite registrar hechos pasados incluso
+        si el galpón o su UP están inactivos. El responsable debe estar activo.
+        Idempotency-Key se limita al actor autenticado: misma clave y contenido
+        normalizado devuelven el registro existente, sin nueva auditoría.
+        Si fue corregido o cancelado después, el reintento devuelve su estado actual.
+        Una clave reutilizada con otro contenido devuelve 409.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateMaintenance' }
+            example:
+              maintenance_date: '2026-08-29'
+              description: Reparación de bebederos.
+              cost_amount: '1250.50'
+              cost_currency: UYU
+              responsible_user_id: 1
+      responses:
+        '201':
+          description: Mantenimiento y auditoría creados en la misma transacción.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenanceResponse' }
+        '200': { $ref: '#/components/responses/Success' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /galpones/{poultryHouse}/mantenimientos/ultimo:
+    parameters:
+      - $ref: '#/components/parameters/PoultryHouse'
+    get:
+      tags: [Mantenimientos]
+      operationId: getLatestPoultryHouseMaintenance
+      summary: Consulta el último mantenimiento vigente
+      description: |
+        Requiere poultry-houses.view. Excluye cancelados; ordena por fecha e id descendentes.
+        Si no existe uno vigente, devuelve 200 con data null.
+      responses:
+        '200':
+          description: Último hecho vigente o ausencia explícita.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    oneOf:
+                      - $ref: '#/components/schemas/Maintenance'
+                      - type: 'null'
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /mantenimientos/{maintenance}:
+    parameters:
+      - $ref: '#/components/parameters/Maintenance'
+    get:
+      tags: [Mantenimientos]
+      operationId: getMaintenance
+      summary: Consulta el detalle, incluso si está cancelado
+      description: Requiere poultry-houses.view.
+      responses:
+        '200': { $ref: '#/components/responses/Success' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Mantenimientos]
+      operationId: correctMaintenance
+      summary: Corrige un mantenimiento con motivo y control de versión
+      description: |
+        Requiere poultry-houses.manage. Sólo admite registros completed.
+        La versión debe coincidir con la persistida; aumenta en uno al corregir.
+        Exige al menos un campo modificable. El galpón y el estado no pueden cambiarse.
+        La auditoría conserva valores anteriores y nuevos sin alterar entradas anteriores.
+        Si cambia moneda o importe, se valida el par completo sin conversión ni redondeo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CorrectMaintenance' }
+      responses:
+        '200': { $ref: '#/components/responses/Success' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /mantenimientos/{maintenance}/cancelacion:
+    parameters:
+      - $ref: '#/components/parameters/Maintenance'
+    post:
+      tags: [Mantenimientos]
+      operationId: cancelMaintenance
+      summary: Anula un registro conservando el histórico
+      description: |
+        Requiere poultry-houses.manage. Única transición permitida completed -> cancelled.
+        Exige versión actual y motivo. No se permite una segunda cancelación ni reactivación.
+        No elimina el mantenimiento y no existe endpoint DELETE.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, reason]
+              properties:
+                version: { type: integer, minimum: 1 }
+                reason: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        '200': { $ref: '#/components/responses/Success' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer }
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: gam_session
+      description: Sesión Sanctum; las escrituras de la SPA requieren CSRF.
+  parameters:
+    PoultryHouse:
+      name: poultryHouse
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    Maintenance:
+      name: maintenance
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+  schemas:
+    MaintenanceStatus:
+      type: string
+      enum: [completed, cancelled]
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount:
+          type: string
+          description: Importe exacto, normalizado a los decimales de la moneda.
+          example: '1250.50'
+        currency: { type: string, pattern: '^[A-Z]{3}$', example: UYU }
+    MaintenanceFields:
+      type: object
+      properties:
+        maintenance_date:
+          type: string
+          format: date
+          description: Fecha realizada, no posterior a la fecha actual de la aplicación.
+        description: { type: string, minLength: 1, maxLength: 5000 }
+        cost_amount:
+          type: string
+          pattern: '^\d{1,15}(?:\.\d{1,4})?$'
+          description: No negativo. La moneda puede admitir menos decimales; no se redondea.
+        cost_currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          description: Código de moneda reconocido por Brick Money; no se asume una moneda implícita.
+        responsible_user_id:
+          type: integer
+          description: Usuario activo; el nombre se conserva como snapshot histórico.
+    CreateMaintenance:
+      allOf:
+        - $ref: '#/components/schemas/MaintenanceFields'
+        - type: object
+          required: [maintenance_date, description, cost_amount, cost_currency, responsible_user_id]
+    CorrectMaintenance:
+      allOf:
+        - $ref: '#/components/schemas/MaintenanceFields'
+        - type: object
+          required: [version, reason]
+          properties:
+            version: { type: integer, minimum: 1 }
+            reason: { type: string, minLength: 1, maxLength: 1000 }
+          anyOf:
+            - required: [maintenance_date]
+            - required: [description]
+            - required: [cost_amount]
+            - required: [cost_currency]
+            - required: [responsible_user_id]
+    Maintenance:
+      type: object
+      required: [id, poultry_house_id, maintenance_date, description, cost, responsible, status, version, cancellation_reason, cancelled_at, created_at, updated_at]
+      properties:
+        id: { type: integer }
+        poultry_house_id: { type: integer }
+        maintenance_date: { type: string, format: date }
+        description: { type: string }
+        cost: { $ref: '#/components/schemas/Money' }
+        responsible:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: integer }
+            name: { type: string }
+        status: { $ref: '#/components/schemas/MaintenanceStatus' }
+        version: { type: integer, minimum: 1 }
+        cancellation_reason: { type: [string, 'null'] }
+        cancelled_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    MaintenanceResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Maintenance' }
+    Problem:
+      type: object
+      required: [type, title, status, detail, message]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        message: { type: string }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+  responses:
+    Success:
+      description: Mantenimiento solicitado o actualizado.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/MaintenanceResponse' }
+    Unauthenticated:
+      description: Autenticación requerida.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: Falta el permiso funcional correspondiente.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Galpón o mantenimiento inexistente.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: Versión obsoleta, registro cancelado, responsable inactivo o clave reutilizada.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ValidationError:
+      description: Datos, filtros o encabezados inválidos.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }

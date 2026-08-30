@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\AuditAndTraceability\Http\Controllers\AuditEntryController;
+use App\Modules\FarmStructure\Http\Controllers\MaintenanceController;
 use App\Modules\FarmStructure\Http\Controllers\PoultryHouseController;
 use App\Modules\FarmStructure\Http\Controllers\PoultryHouseStatusController;
 use App\Modules\FarmStructure\Http\Controllers\ProductionUnitController;
@@ -85,6 +86,13 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             ->name('poultry-houses.update');
         Route::patch('/galpones/{poultryHouse}/estado', [PoultryHouseStatusController::class, 'update'])
             ->name('poultry-houses.status.update');
+
+        Route::get('/galpones/{poultryHouse}/mantenimientos', [MaintenanceController::class, 'index'])->name('maintenances.index');
+        Route::get('/galpones/{poultryHouse}/mantenimientos/ultimo', [MaintenanceController::class, 'latest'])->name('maintenances.latest');
+        Route::post('/galpones/{poultryHouse}/mantenimientos', [MaintenanceController::class, 'store'])->name('maintenances.store');
+        Route::get('/mantenimientos/{maintenance}', [MaintenanceController::class, 'show'])->name('maintenances.show');
+        Route::patch('/mantenimientos/{maintenance}', [MaintenanceController::class, 'update'])->name('maintenances.update');
+        Route::post('/mantenimientos/{maintenance}/cancelacion', [MaintenanceController::class, 'cancel'])->name('maintenances.cancel');
 
         Route::get('/administracion', AdminController::class)->name('admin.dashboard');
 
