@@ -11,7 +11,7 @@ final class HealthEndpointTest extends TestCase
         $this->getJson('/estado')
             ->assertOk()
             ->assertJson([
-                'status' => 'ok',
+                'estado' => 'ok',
                 'message' => 'La aplicación está disponible.',
             ]);
     }

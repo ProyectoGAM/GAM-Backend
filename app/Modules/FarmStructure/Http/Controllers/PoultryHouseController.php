@@ -14,6 +14,7 @@ use App\Modules\FarmStructure\Http\Requests\StorePoultryHouseRequest;
 use App\Modules\FarmStructure\Http\Requests\UpdatePoultryHouseRequest;
 use App\Modules\FarmStructure\Http\Requests\ViewPoultryHouseRequest;
 use App\Modules\FarmStructure\Http\Resources\PoultryHouseResource;
+use App\Support\PublicInputMapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Symfony\Component\HttpFoundation\Response;
@@ -22,24 +23,24 @@ final readonly class PoultryHouseController
 {
     public function index(
         ListPoultryHousesRequest $request,
-        ProductionUnit $productionUnit,
+        ProductionUnit $unidadProductiva,
         ListPoultryHousesQuery $query,
     ): AnonymousResourceCollection {
         return PoultryHouseResource::collection(
-            $query->execute($productionUnit, $request->validated()),
+            $query->execute($unidadProductiva, PublicInputMapper::toInternal($request->validated())),
         );
     }
 
     public function store(
         StorePoultryHouseRequest $request,
-        ProductionUnit $productionUnit,
+        ProductionUnit $unidadProductiva,
         CreatePoultryHouseAction $action,
     ): JsonResponse {
         /** @var User $actor */
         $actor = $request->user();
-        $data = $request->safe()->only(['name', 'bird_capacity']);
+        $data = PublicInputMapper::toInternal($request->safe()->only(['nombre', 'capacidad_aves']));
         $data['bird_capacity'] = (int) $data['bird_capacity'];
-        $poultryHouse = $action->execute($productionUnit, $data, $actor);
+        $poultryHouse = $action->execute($unidadProductiva, $data, $actor);
 
         return (new PoultryHouseResource($poultryHouse))
             ->response()
@@ -61,7 +62,7 @@ final readonly class PoultryHouseController
     ): PoultryHouseResource {
         /** @var User $actor */
         $actor = $request->user();
-        $data = $request->safe()->only(['name', 'bird_capacity']);
+        $data = PublicInputMapper::toInternal($request->safe()->only(['nombre', 'capacidad_aves']));
 
         if (array_key_exists('bird_capacity', $data)) {
             $data['bird_capacity'] = (int) $data['bird_capacity'];

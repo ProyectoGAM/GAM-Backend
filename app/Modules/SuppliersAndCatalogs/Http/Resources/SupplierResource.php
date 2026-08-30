@@ -15,10 +15,10 @@ final class SupplierResource extends JsonResource
     {
         return [
             'id' => (int) $this->getKey(),
-            'name' => $this->name,
-            'address' => $this->address,
-            'status' => $this->status->value,
-            'locality' => LocalityResource::make($this->whenLoaded('locality')),
+            'nombre' => $this->name,
+            'direccion' => $this->address,
+            'estado' => $this->status->value,
+            'localidad' => LocalityResource::make($this->whenLoaded('locality')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

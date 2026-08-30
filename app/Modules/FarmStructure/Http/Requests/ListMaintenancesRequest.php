@@ -17,11 +17,11 @@ final class ListMaintenancesRequest extends MaintenanceRequest
     public function rules(): array
     {
         return [
-            'status' => ['sometimes', Rule::enum(MaintenanceStatus::class)],
-            'date_from' => ['sometimes', 'date_format:Y-m-d'],
-            'date_to' => ['sometimes', 'date_format:Y-m-d', Rule::when($this->filled('date_from'), 'after_or_equal:date_from')],
-            'per_page' => ['sometimes', 'integer', 'between:1,100'],
-            'page' => ['sometimes', 'integer', 'between:1,100000'],
+            'estado' => ['sometimes', Rule::enum(MaintenanceStatus::class)],
+            'fecha_desde' => ['sometimes', 'date_format:Y-m-d'],
+            'fecha_hasta' => ['sometimes', 'date_format:Y-m-d', Rule::when($this->filled('fecha_desde'), 'after_or_equal:fecha_desde')],
+            'por_pagina' => ['sometimes', 'integer', 'between:1,100'],
+            'pagina' => ['sometimes', 'integer', 'between:1,100000'],
         ];
     }
 }

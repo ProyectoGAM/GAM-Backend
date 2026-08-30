@@ -18,7 +18,7 @@ final class StoreDepartmentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:120'],
+            'nombre' => ['required', 'string', 'max:120'],
         ];
     }
 
@@ -27,16 +27,16 @@ final class StoreDepartmentRequest extends FormRequest
     {
         return [
             function (Validator $validator): void {
-                if ($validator->errors()->has('name')) {
+                if ($validator->errors()->has('nombre')) {
                     return;
                 }
 
                 $exists = Department::query()
-                    ->where('normalized_name', Str::lower(trim($this->string('name')->toString())))
+                    ->where('normalized_name', Str::lower(trim($this->string('nombre')->toString())))
                     ->exists();
 
                 if ($exists) {
-                    $validator->errors()->add('name', 'El nombre ya está registrado.');
+                    $validator->errors()->add('nombre', 'El nombre ya está registrado.');
                 }
             },
         ];

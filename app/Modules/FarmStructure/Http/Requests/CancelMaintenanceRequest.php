@@ -14,7 +14,7 @@ final class CancelMaintenanceRequest extends MaintenanceRequest
     {
         return [
             'version' => ['required', 'integer', 'min:1'],
-            'reason' => ['required', 'string', 'max:1000'],
+            'motivo' => ['required', 'string', 'max:1000'],
         ];
     }
 }

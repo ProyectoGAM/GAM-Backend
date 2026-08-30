@@ -18,13 +18,13 @@ final class ListInventoryMovementsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'type' => ['sometimes', Rule::enum(InventoryMovementType::class)],
-            'product_id' => ['sometimes', 'integer', 'exists:products,id'],
-            'stock_location_id' => ['sometimes', 'integer', 'exists:stock_locations,id'],
-            'supplier_id' => ['sometimes', 'integer', 'exists:suppliers,id'],
-            'from' => ['sometimes', 'date_format:Y-m-d'],
-            'to' => ['sometimes', 'date_format:Y-m-d', 'after_or_equal:from'],
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'tipo' => ['sometimes', Rule::enum(InventoryMovementType::class)],
+            'producto_id' => ['sometimes', 'integer', 'exists:products,id'],
+            'ubicacion_stock_id' => ['sometimes', 'integer', 'exists:stock_locations,id'],
+            'proveedor_id' => ['sometimes', 'integer', 'exists:suppliers,id'],
+            'desde' => ['sometimes', 'date_format:Y-m-d'],
+            'hasta' => ['sometimes', 'date_format:Y-m-d', 'after_or_equal:desde'],
+            'por_pagina' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }
 }

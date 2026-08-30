@@ -27,22 +27,22 @@ paths:
       summary: Consulta el histórico del galpón
       description: |
         Requiere poultry-houses.view. Incluye cancelados salvo filtro de estado.
-        Orden por maintenance_date DESC e id DESC. No filtra por usuario ni UP.
+        Orden por fecha_mantenimiento DESC e id DESC. No filtra por usuario ni UP.
       parameters:
-        - name: status
+        - name: estado
           in: query
           schema: { $ref: '#/components/schemas/MaintenanceStatus' }
-        - name: date_from
+        - name: fecha_desde
           in: query
           schema: { type: string, format: date }
-        - name: date_to
+        - name: fecha_hasta
           in: query
-          description: Mayor o igual a date_from cuando se proporcionan ambos límites.
+          description: Mayor o igual a fecha_desde cuando se proporcionan ambos límites.
           schema: { type: string, format: date }
-        - name: per_page
+        - name: por_pagina
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
-        - name: page
+        - name: pagina
           in: query
           schema: { type: integer, minimum: 1, maximum: 100000, default: 1 }
       responses:
@@ -85,11 +85,11 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CreateMaintenance' }
             example:
-              maintenance_date: '2026-08-29'
-              description: Reparación de bebederos.
-              cost_amount: '1250.50'
-              cost_currency: UYU
-              responsible_user_id: 1
+              fecha_mantenimiento: '2026-08-29'
+              descripcion: Reparación de bebederos.
+              costo_importe: '1250.50'
+              costo_moneda: UYU
+              responsable_id: 1
       responses:
         '201':
           description: Mantenimiento y auditoría creados en la misma transacción.
@@ -180,10 +180,10 @@ paths:
           application/json:
             schema:
               type: object
-              required: [version, reason]
+              required: [version, motivo]
               properties:
                 version: { type: integer, minimum: 1 }
-                reason: { type: string, minLength: 1, maxLength: 1000 }
+                motivo: { type: string, minLength: 1, maxLength: 1000 }
       responses:
         '200': { $ref: '#/components/responses/Success' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
@@ -216,70 +216,70 @@ components:
       enum: [completed, cancelled]
     Money:
       type: object
-      required: [amount, currency]
+      required: [importe, moneda]
       properties:
-        amount:
+        importe:
           type: string
           description: Importe exacto, normalizado a los decimales de la moneda.
           example: '1250.50'
-        currency: { type: string, pattern: '^[A-Z]{3}$', example: UYU }
+        moneda: { type: string, pattern: '^[A-Z]{3}$', example: UYU }
     MaintenanceFields:
       type: object
       properties:
-        maintenance_date:
+        fecha_mantenimiento:
           type: string
           format: date
           description: Fecha realizada, no posterior a la fecha actual de la aplicación.
-        description: { type: string, minLength: 1, maxLength: 5000 }
-        cost_amount:
+        descripcion: { type: string, minLength: 1, maxLength: 5000 }
+        costo_importe:
           type: string
           pattern: '^\d{1,15}(?:\.\d{1,4})?$'
           description: No negativo. La moneda puede admitir menos decimales; no se redondea.
-        cost_currency:
+        costo_moneda:
           type: string
           pattern: '^[A-Z]{3}$'
           description: Código de moneda reconocido por Brick Money; no se asume una moneda implícita.
-        responsible_user_id:
+        responsable_id:
           type: integer
           description: Usuario activo; el nombre se conserva como snapshot histórico.
     CreateMaintenance:
       allOf:
         - $ref: '#/components/schemas/MaintenanceFields'
         - type: object
-          required: [maintenance_date, description, cost_amount, cost_currency, responsible_user_id]
+          required: [fecha_mantenimiento, descripcion, costo_importe, costo_moneda, responsable_id]
     CorrectMaintenance:
       allOf:
         - $ref: '#/components/schemas/MaintenanceFields'
         - type: object
-          required: [version, reason]
+          required: [version, motivo]
           properties:
             version: { type: integer, minimum: 1 }
-            reason: { type: string, minLength: 1, maxLength: 1000 }
+            motivo: { type: string, minLength: 1, maxLength: 1000 }
           anyOf:
-            - required: [maintenance_date]
-            - required: [description]
-            - required: [cost_amount]
-            - required: [cost_currency]
-            - required: [responsible_user_id]
+            - required: [fecha_mantenimiento]
+            - required: [descripcion]
+            - required: [costo_importe]
+            - required: [costo_moneda]
+            - required: [responsable_id]
     Maintenance:
       type: object
-      required: [id, poultry_house_id, maintenance_date, description, cost, responsible, status, version, cancellation_reason, cancelled_at, created_at, updated_at]
+      required: [id, galpon_id, fecha_mantenimiento, descripcion, costo, responsable, estado, version, motivo_cancelacion, cancelado_en, created_at, updated_at]
       properties:
         id: { type: integer }
-        poultry_house_id: { type: integer }
-        maintenance_date: { type: string, format: date }
-        description: { type: string }
-        cost: { $ref: '#/components/schemas/Money' }
-        responsible:
+        galpon_id: { type: integer }
+        fecha_mantenimiento: { type: string, format: date }
+        descripcion: { type: string }
+        costo: { $ref: '#/components/schemas/Money' }
+        responsable:
           type: object
-          required: [id, name]
+          required: [id, nombre]
           properties:
             id: { type: integer }
-            name: { type: string }
-        status: { $ref: '#/components/schemas/MaintenanceStatus' }
+            nombre: { type: string }
+        estado: { $ref: '#/components/schemas/MaintenanceStatus' }
         version: { type: integer, minimum: 1 }
-        cancellation_reason: { type: [string, 'null'] }
-        cancelled_at: { type: [string, 'null'], format: date-time }
+        motivo_cancelacion: { type: [string, 'null'] }
+        cancelado_en: { type: [string, 'null'], format: date-time }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     MaintenanceResponse:

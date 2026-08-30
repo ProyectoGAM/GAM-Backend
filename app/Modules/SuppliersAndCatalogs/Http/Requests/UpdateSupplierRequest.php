@@ -11,16 +11,16 @@ final class UpdateSupplierRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('update', $this->route('supplier')) ?? false;
+        return $this->user()?->can('update', $this->route('proveedor')) ?? false;
     }
 
     /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
         return [
-            'locality_id' => ['sometimes', 'nullable', 'integer', 'exists:localities,id'],
-            'name' => ['sometimes', 'string', 'max:160'],
-            'address' => ['sometimes', 'string', 'max:255'],
+            'localidad_id' => ['sometimes', 'nullable', 'integer', 'exists:localities,id'],
+            'nombre' => ['sometimes', 'string', 'max:160'],
+            'direccion' => ['sometimes', 'string', 'max:255'],
         ];
     }
 
@@ -28,12 +28,12 @@ final class UpdateSupplierRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
-            $supplier = $this->route('supplier');
-            if ($validator->errors()->has('name') || ! $supplier instanceof Supplier || ! $this->filled('name')) {
+            $proveedor = $this->route('proveedor');
+            if ($validator->errors()->has('nombre') || ! $proveedor instanceof Supplier || ! $this->filled('nombre')) {
                 return;
             }
-            if (Supplier::query()->where('normalized_name', Str::lower(trim($this->string('name')->toString())))->whereKeyNot($supplier->getKey())->exists()) {
-                $validator->errors()->add('name', 'El nombre del proveedor ya está registrado.');
+            if (Supplier::query()->where('normalized_name', Str::lower(trim($this->string('nombre')->toString())))->whereKeyNot($proveedor->getKey())->exists()) {
+                $validator->errors()->add('nombre', 'El nombre del proveedor ya está registrado.');
             }
         }];
     }

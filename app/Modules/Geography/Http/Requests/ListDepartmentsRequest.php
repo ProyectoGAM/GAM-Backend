@@ -16,8 +16,8 @@ final class ListDepartmentsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'search' => ['sometimes', 'nullable', 'string', 'max:120'],
-            'per_page' => ['sometimes', 'integer', 'between:1,100'],
+            'buscar' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'por_pagina' => ['sometimes', 'integer', 'between:1,100'],
         ];
     }
 }

@@ -168,7 +168,7 @@ paths:
       summary: Lista las exportaciones propias
       operationId: listarExportacionesDeReporte
       parameters:
-        - name: status
+        - name: estado
           in: query
           required: false
           schema: { type: string, enum: [pending, processing, completed, failed, expired] }
@@ -201,7 +201,7 @@ paths:
   /exportaciones-reportes/{reportExport}/descarga:
     get:
       tags: [Exportaciones]
-      summary: Descarga un archivo propio o mediante enlace firmado
+      summary: Descarga un archivo o visualiza el reporte HTML mediante enlace firmado
       operationId: descargarExportacionDeReporte
       security: []
       parameters:
@@ -210,6 +210,10 @@ paths:
           in: query
           required: false
           schema: { type: integer, enum: [1] }
+        - name: view
+          in: query
+          required: false
+          schema: { type: string, enum: [html] }
         - name: signature
           in: query
           required: false
@@ -220,10 +224,11 @@ paths:
           schema: { type: integer }
       responses:
         '200':
-          description: Archivo XLSX o PDF privado.
+          description: Archivo XLSX/PDF privado o reporte HTML compartido.
           content:
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: { schema: { type: string, format: binary } }
             application/pdf: { schema: { type: string, format: binary } }
+            text/html: { schema: { type: string } }
         '401': { $ref: '#/components/responses/NoAutenticado' }
         '403': { $ref: '#/components/responses/Prohibido' }
         '404': { $ref: '#/components/responses/NoEncontrado' }
@@ -270,7 +275,7 @@ components:
       name: source
       in: path
       required: true
-      schema: { type: string, example: inventory.stock-balances }
+      schema: { type: string, example: inventario.saldos-stock }
     ReportPreset:
       name: reportPreset
       in: path
@@ -287,29 +292,29 @@ components:
       required: true
       schema: { type: string, format: uuid }
     Page:
-      name: page
+      name: pagina
       in: query
       required: false
       schema: { type: integer, minimum: 1, default: 1 }
     PerPage:
-      name: per_page
+      name: por_pagina
       in: query
       required: false
       schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
   schemas:
     ReportSource:
       type: object
-      required: [key, definition_version, label, description, columns, filters, groupings, metrics, sorts, formats, limits]
+      required: [key, version_definicion, label, description, columnas, filtros, agrupaciones, metricas, ordenamientos, formats, limits]
       properties:
         key: { type: string }
-        definition_version: { type: string }
+        version_definicion: { type: string }
         label: { type: string }
         description: { type: string }
-        columns: { type: object, additionalProperties: true }
-        filters: { type: object, additionalProperties: true }
-        groupings: { type: object, additionalProperties: true }
-        metrics: { type: object, additionalProperties: true }
-        sorts: { type: object, additionalProperties: true }
+        columnas: { type: object, additionalProperties: true }
+        filtros: { type: object, additionalProperties: true }
+        agrupaciones: { type: object, additionalProperties: true }
+        metricas: { type: object, additionalProperties: true }
+        ordenamientos: { type: object, additionalProperties: true }
         formats:
           type: array
           items: { type: string, enum: [xlsx, pdf] }
@@ -324,107 +329,107 @@ components:
       type: object
       additionalProperties: false
       properties:
-        columns: { type: array, items: { type: string }, maxItems: 30 }
-        filters:
+        columnas: { type: array, items: { type: string }, maxItems: 30 }
+        filtros:
           type: array
           maxItems: 20
           items:
             type: object
             additionalProperties: false
-            required: [field, operator, value]
+            required: [campo, operador, valor]
             properties:
-              field: { type: string }
-              operator: { type: string, enum: [eq, neq, in, not_in] }
-              value: {}
-        from: { type: string, format: date }
-        to: { type: string, format: date }
-        sorts:
+              campo: { type: string }
+              operador: { type: string, enum: [eq, neq, in, not_in] }
+              valor: {}
+        desde: { type: string, format: date }
+        hasta: { type: string, format: date }
+        ordenamientos:
           type: array
           maxItems: 10
           items:
             type: object
             additionalProperties: false
-            required: [field, direction]
+            required: [campo, direccion]
             properties:
-              field: { type: string }
-              direction: { type: string, enum: [asc, desc] }
-        sort:
+              campo: { type: string }
+              direccion: { type: string, enum: [asc, desc] }
+        orden:
           type: array
           maxItems: 10
           items:
             type: object
             additionalProperties: false
-            required: [field, direction]
+            required: [campo, direccion]
             properties:
-              field: { type: string }
-              direction: { type: string, enum: [asc, desc] }
-        groupings: { type: array, items: { type: string }, maxItems: 10 }
-        metrics: { type: array, items: { type: string }, maxItems: 10 }
-        page: { type: integer, minimum: 1, default: 1 }
-        per_page: { type: integer, minimum: 1, maximum: 100, default: 50 }
+              campo: { type: string }
+              direccion: { type: string, enum: [asc, desc] }
+        agrupaciones: { type: array, items: { type: string }, maxItems: 10 }
+        metricas: { type: array, items: { type: string }, maxItems: 10 }
+        pagina: { type: integer, minimum: 1, default: 1 }
+        por_pagina: { type: integer, minimum: 1, maximum: 100, default: 50 }
     ReportResult:
       type: object
-      required: [source_key, definition_version, columns, rows, aggregates, units, pagination, generated_at]
+      required: [clave_fuente, version_definicion, columnas, rows, aggregates, units, pagination, generated_at]
       properties:
-        source_key: { type: string }
-        definition_version: { type: string }
-        columns: { type: array, items: { type: string } }
+        clave_fuente: { type: string }
+        version_definicion: { type: string }
+        columnas: { type: array, items: { type: string } }
         rows: { type: array, items: { type: object, additionalProperties: true } }
         aggregates: { type: object, additionalProperties: true }
         units: { type: object, additionalProperties: { type: [string, 'null'] } }
         pagination:
           type: object
-          required: [current_page, per_page, total, last_page]
+          required: [current_page, por_pagina, total, last_page]
           properties:
             current_page: { type: integer }
-            per_page: { type: integer }
+            por_pagina: { type: integer }
             total: { type: integer }
             last_page: { type: integer }
         generated_at: { type: string, format: date-time }
     ReportExportInput:
       type: object
       additionalProperties: false
-      required: [format]
+      required: [formato]
       properties:
-        format: { type: string, enum: [xlsx, pdf] }
-        columns: { type: array, items: { type: string }, maxItems: 30 }
-        filters:
+        formato: { type: string, enum: [xlsx, pdf] }
+        columnas: { type: array, items: { type: string }, maxItems: 30 }
+        filtros:
           type: array
           maxItems: 20
           items:
             type: object
             additionalProperties: false
-            required: [field, operator, value]
+            required: [campo, operador, valor]
             properties:
-              field: { type: string }
-              operator: { type: string, enum: [eq, neq, in, not_in] }
-              value: {}
-        from: { type: string, format: date }
-        to: { type: string, format: date }
-        sorts:
+              campo: { type: string }
+              operador: { type: string, enum: [eq, neq, in, not_in] }
+              valor: {}
+        desde: { type: string, format: date }
+        hasta: { type: string, format: date }
+        ordenamientos:
           type: array
           maxItems: 10
           items:
             type: object
             additionalProperties: false
-            required: [field, direction]
+            required: [campo, direccion]
             properties:
-              field: { type: string }
-              direction: { type: string, enum: [asc, desc] }
-        sort:
+              campo: { type: string }
+              direccion: { type: string, enum: [asc, desc] }
+        orden:
           type: array
           maxItems: 10
           items:
             type: object
             additionalProperties: false
-            required: [field, direction]
+            required: [campo, direccion]
             properties:
-              field: { type: string }
-              direction: { type: string, enum: [asc, desc] }
-        groupings: { type: array, items: { type: string }, maxItems: 10 }
-        metrics: { type: array, items: { type: string }, maxItems: 10 }
-        page: { type: integer, minimum: 1, default: 1 }
-        per_page: { type: integer, minimum: 1, maximum: 100, default: 50 }
+              campo: { type: string }
+              direccion: { type: string, enum: [asc, desc] }
+        agrupaciones: { type: array, items: { type: string }, maxItems: 10 }
+        metricas: { type: array, items: { type: string }, maxItems: 10 }
+        pagina: { type: integer, minimum: 1, default: 1 }
+        por_pagina: { type: integer, minimum: 1, maximum: 100, default: 50 }
     ReportResultResponse:
       type: object
       required: [data]
@@ -432,48 +437,48 @@ components:
         data: { $ref: '#/components/schemas/ReportResult' }
     ReportPresetInput:
       type: object
-      required: [name, source_key, configuration]
+      required: [nombre, clave_fuente, configuracion]
       properties:
-        name: { type: string, maxLength: 160 }
-        source_key: { type: string }
-        configuration: { $ref: '#/components/schemas/ReportQuery' }
+        nombre: { type: string, maxLength: 160 }
+        clave_fuente: { type: string }
+        configuracion: { $ref: '#/components/schemas/ReportQuery' }
     ReportPresetUpdate:
       type: object
       additionalProperties: false
       properties:
-        name: { type: string, maxLength: 160 }
-        source_key: { type: string }
-        configuration: { $ref: '#/components/schemas/ReportQuery' }
+        nombre: { type: string, maxLength: 160 }
+        clave_fuente: { type: string }
+        configuracion: { $ref: '#/components/schemas/ReportQuery' }
     ReportPreset:
       type: object
-      required: [id, name, source_key, definition_version, configuration, created_at, updated_at]
+      required: [id, nombre, clave_fuente, version_definicion, configuracion, created_at, updated_at]
       properties:
         id: { type: integer }
-        name: { type: string }
-        source_key: { type: string }
-        definition_version: { type: string }
-        configuration: { $ref: '#/components/schemas/ReportQuery' }
+        nombre: { type: string }
+        clave_fuente: { type: string }
+        version_definicion: { type: string }
+        configuracion: { $ref: '#/components/schemas/ReportQuery' }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     ReportExport:
       type: object
-      required: [id, operation_id, source_key, definition_version, format, status, query, file_name, expires_at, created_at]
+      required: [id, id_operacion, clave_fuente, version_definicion, formato, estado, consulta, nombre_archivo, expira_en, created_at]
       properties:
         id: { type: integer }
-        operation_id: { type: string, format: uuid }
-        source_key: { type: string }
-        definition_version: { type: string }
-        format: { type: string, enum: [xlsx, pdf] }
-        status: { type: string, enum: [pending, processing, completed, failed, expired] }
-        query: { $ref: '#/components/schemas/ReportQuery' }
-        file_name: { type: string }
-        mime_type: { type: [string, 'null'] }
-        file_size: { type: [integer, 'null'] }
-        expires_at: { type: [string, 'null'], format: date-time }
-        completed_at: { type: [string, 'null'], format: date-time }
-        failed_at: { type: [string, 'null'], format: date-time }
-        failure_code: { type: [string, 'null'] }
-        failure_message: { type: [string, 'null'] }
+        id_operacion: { type: string, format: uuid }
+        clave_fuente: { type: string }
+        version_definicion: { type: string }
+        formato: { type: string, enum: [xlsx, pdf] }
+        estado: { type: string, enum: [pending, processing, completed, failed, expired] }
+        consulta: { $ref: '#/components/schemas/ReportQuery' }
+        nombre_archivo: { type: string }
+        tipo_mime: { type: [string, 'null'] }
+        tamano_archivo: { type: [integer, 'null'] }
+        expira_en: { type: [string, 'null'], format: date-time }
+        completada_en: { type: [string, 'null'], format: date-time }
+        fallida_en: { type: [string, 'null'], format: date-time }
+        codigo_falla: { type: [string, 'null'] }
+        mensaje_falla: { type: [string, 'null'] }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     ReportPresetResponse:

@@ -10,7 +10,7 @@ Route::get('/', function () {
 
 Route::get('/estado', function (): JsonResponse {
     return response()->json([
-        'status' => 'ok',
+        'estado' => 'ok',
         'message' => 'La aplicación está disponible.',
     ]);
 })->name('health');

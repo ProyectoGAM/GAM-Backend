@@ -19,30 +19,30 @@ final class PoultryHouseEndpointTest extends TestCase
     public function test_valid_payload_creates_poultry_house_without_mutating_capacity(): void
     {
         // Preparación: crea la unidad productiva y autentica al gestor.
-        $productionUnit = ProductionUnit::factory()->create();
+        $unidadProductiva = ProductionUnit::factory()->create();
         $actor = $this->userWithPermissions(['poultry-houses.manage']);
         Sanctum::actingAs($actor, ['*']);
 
         // Acción: registra el galpón con su capacidad física.
         $response = $this->postJson(
-            "/api/v1/unidades-productivas/{$productionUnit->getKey()}/galpones",
-            ['name' => 'House A', 'bird_capacity' => 12000],
+            "/api/v1/unidades-productivas/{$unidadProductiva->getKey()}/galpones",
+            ['nombre' => 'House A', 'capacidad_aves' => 12000],
         )->assertCreated()
-            ->assertJsonPath('data.bird_capacity', 12000)
-            ->assertJsonPath('data.status', 'operational');
+            ->assertJsonPath('data.capacidad_aves', 12000)
+            ->assertJsonPath('data.estado', 'operational');
 
         $poultryHouseId = (int) $response->json('data.id');
 
         // Verificación: confirma capacidad persistida y auditoría del alta.
         $this->assertDatabaseHas('poultry_houses', [
             'id' => $poultryHouseId,
-            'production_unit_id' => $productionUnit->getKey(),
+            'production_unit_id' => $unidadProductiva->getKey(),
             'bird_capacity' => 12000,
         ]);
         $this->assertDatabaseHas('activity_log', [
             'event' => 'poultry_house_created',
             'subject_id' => $poultryHouseId,
-            'up_id' => $productionUnit->getKey(),
+            'up_id' => $unidadProductiva->getKey(),
         ]);
     }
 
@@ -50,20 +50,20 @@ final class PoultryHouseEndpointTest extends TestCase
     public function test_returns_409_when_creating_poultry_house_in_inactive_unit(): void
     {
         // Preparación: crea una unidad inactiva y autentica al gestor.
-        $productionUnit = ProductionUnit::factory()->inactive()->create();
+        $unidadProductiva = ProductionUnit::factory()->inactive()->create();
         $actor = $this->userWithPermissions(['poultry-houses.manage']);
         Sanctum::actingAs($actor, ['*']);
 
         // Acción: intenta registrar un galpón en la unidad inactiva.
         $this->postJson(
-            "/api/v1/unidades-productivas/{$productionUnit->getKey()}/galpones",
-            ['name' => 'House A', 'bird_capacity' => 12000],
+            "/api/v1/unidades-productivas/{$unidadProductiva->getKey()}/galpones",
+            ['nombre' => 'House A', 'capacidad_aves' => 12000],
         )->assertConflict()
             ->assertJsonPath('message', 'Los galpones sólo pueden crearse en una unidad productiva activa.');
 
         // Verificación: confirma que el galpón no se creó.
         $this->assertDatabaseMissing('poultry_houses', [
-            'production_unit_id' => $productionUnit->getKey(),
+            'production_unit_id' => $unidadProductiva->getKey(),
         ]);
     }
 
@@ -84,7 +84,7 @@ final class PoultryHouseEndpointTest extends TestCase
 
         // Acción: intenta reducir la capacidad por debajo de la ocupación.
         $this->patchJson("/api/v1/galpones/{$poultryHouse->getKey()}", [
-            'bird_capacity' => 79,
+            'capacidad_aves' => 79,
         ])->assertConflict()
             ->assertJsonPath('message', 'La capacidad de aves no puede ser menor que la ocupación actual.');
 
@@ -110,12 +110,12 @@ final class PoultryHouseEndpointTest extends TestCase
         $url = "/api/v1/galpones/{$poultryHouse->getKey()}/estado";
 
         // Acción 1: cambia el galpón a mantenimiento.
-        $this->patchJson($url, ['status' => 'maintenance'])
+        $this->patchJson($url, ['estado' => 'maintenance'])
             ->assertOk()
-            ->assertJsonPath('data.status', 'maintenance');
+            ->assertJsonPath('data.estado', 'maintenance');
 
         // Acción 2: repite la transición ya aplicada.
-        $this->patchJson($url, ['status' => 'maintenance'])
+        $this->patchJson($url, ['estado' => 'maintenance'])
             ->assertConflict()
             ->assertJsonPath('message', 'La transición de estado del galpón no está permitida.');
 

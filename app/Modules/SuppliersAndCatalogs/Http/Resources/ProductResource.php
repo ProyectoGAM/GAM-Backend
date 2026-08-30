@@ -15,11 +15,11 @@ final class ProductResource extends JsonResource
         return [
             'id' => (int) $this->getKey(),
             'sku' => $this->sku,
-            'name' => $this->name,
-            'kind' => $this->kind->value,
-            'base_unit' => $this->base_unit->value,
-            'stock_tracked' => $this->stock_tracked,
-            'status' => $this->status->value,
+            'nombre' => $this->name,
+            'tipo' => $this->kind->value,
+            'unidad_base' => $this->base_unit->value,
+            'controla_stock' => $this->stock_tracked,
+            'estado' => $this->status->value,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

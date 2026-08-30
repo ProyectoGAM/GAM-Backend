@@ -22,11 +22,11 @@ abstract class InventoryCommandRequest extends FormRequest
         return [
             'idempotency_key.required' => 'El encabezado Idempotency-Key es obligatorio.',
             'idempotency_key.uuid' => 'El encabezado Idempotency-Key debe ser un UUID válido.',
-            'lines.required' => 'Debes indicar al menos una línea.',
-            'lines.min' => 'Debes indicar al menos una línea.',
-            'lines.max' => 'No puedes enviar más de 100 líneas.',
-            'lines.*.quantity.regex' => 'La cantidad debe tener hasta seis decimales y ser positiva.',
-            'lines.*.counted_quantity.regex' => 'La cantidad contada debe tener hasta seis decimales y no ser negativa.',
+            'lineas.required' => 'Debes indicar al menos una línea.',
+            'lineas.min' => 'Debes indicar al menos una línea.',
+            'lineas.max' => 'No puedes enviar más de 100 líneas.',
+            'lineas.*.cantidad.regex' => 'La cantidad debe tener hasta seis decimales y ser positiva.',
+            'lineas.*.cantidad_contada.regex' => 'La cantidad contada debe tener hasta seis decimales y no ser negativa.',
         ];
     }
 }

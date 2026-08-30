@@ -16,7 +16,7 @@ final class UpdateMaintenanceRequest extends MaintenanceRequest
     {
         return $this->maintenanceRules(true) + [
             'version' => ['required', 'integer', 'min:1'],
-            'reason' => ['required', 'string', 'max:1000'],
+            'motivo' => ['required', 'string', 'max:1000'],
         ];
     }
 
@@ -24,8 +24,8 @@ final class UpdateMaintenanceRequest extends MaintenanceRequest
     public function after(): array
     {
         return [...parent::after(), function (Validator $validator): void {
-            if (! $this->hasAny(['maintenance_date', 'description', 'cost_amount', 'cost_currency', 'responsible_user_id'])) {
-                $validator->errors()->add('request', 'Debes proporcionar al menos un campo para corregir.');
+            if (! $this->hasAny(['fecha_mantenimiento', 'descripcion', 'costo_importe', 'costo_moneda', 'responsable_id'])) {
+                $validator->errors()->add('solicitud', 'Debes proporcionar al menos un campo para corregir.');
             }
         }];
     }

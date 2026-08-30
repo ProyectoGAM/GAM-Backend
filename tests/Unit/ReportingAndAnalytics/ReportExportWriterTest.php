@@ -63,7 +63,7 @@ final class ReportExportWriterTest extends TestCase
         return new ReportQueryData(
             sourceKey: 'test.source',
             definitionVersion: '1.0',
-            columns: ['name', 'value'],
+            columns: ['nombre', 'valor'],
             filters: [],
             from: null,
             to: null,
@@ -88,8 +88,8 @@ final class ReportExportWriterTest extends TestCase
                     description: 'Fuente usada por las pruebas del escritor.',
                     permission: 'reports.view',
                     columns: [
-                        'name' => ['label' => 'Nombre', 'type' => 'string'],
-                        'value' => ['label' => 'Valor', 'type' => 'string'],
+                        'nombre' => ['label' => 'Nombre', 'tipo' => 'string'],
+                        'valor' => ['label' => 'Valor', 'tipo' => 'string'],
                     ],
                     filters: [],
                     groupings: [],
@@ -97,7 +97,7 @@ final class ReportExportWriterTest extends TestCase
                     sorts: [],
                     formats: ['xlsx', 'pdf'],
                     limits: ['max_page_size' => 100, 'max_range_days' => 366, 'max_export_rows' => 100],
-                    defaultSort: 'name:asc',
+                    defaultSort: 'nombre:asc',
                 );
             }
 
@@ -109,8 +109,8 @@ final class ReportExportWriterTest extends TestCase
             public function rows(ReportQueryData $query): LazyCollection
             {
                 return LazyCollection::make([
-                    ['name' => 'normal', 'value' => '12'],
-                    ['name' => 'formula', 'value' => '=1+1'],
+                    ['nombre' => 'normal', 'valor' => '12'],
+                    ['nombre' => 'formula', 'valor' => '=1+1'],
                 ]);
             }
         };

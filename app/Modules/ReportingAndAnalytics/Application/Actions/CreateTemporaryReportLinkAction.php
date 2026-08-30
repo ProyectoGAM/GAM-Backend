@@ -32,7 +32,7 @@ final readonly class CreateTemporaryReportLinkAction
         $url = URL::temporarySignedRoute(
             'api.v1.report-exports.download',
             $expiresAt,
-            ['reportExport' => $export->getKey(), 'share' => 1],
+            ['reportExport' => $export->getKey(), 'share' => 1, 'view' => 'html'],
         );
 
         DB::transaction(function () use ($export, $actor, $expiresAt): void {

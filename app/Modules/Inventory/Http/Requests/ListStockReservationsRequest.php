@@ -18,8 +18,8 @@ final class ListStockReservationsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status' => ['sometimes', Rule::enum(StockReservationStatus::class)],
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'estado' => ['sometimes', Rule::enum(StockReservationStatus::class)],
+            'por_pagina' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }
 }

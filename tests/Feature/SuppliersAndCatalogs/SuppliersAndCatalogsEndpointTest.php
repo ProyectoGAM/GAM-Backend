@@ -25,14 +25,14 @@ final class SuppliersAndCatalogsEndpointTest extends TestCase
 
         // Acción: registra el proveedor mediante la API.
         $response = $this->postJson('/api/v1/proveedores', [
-            'name' => 'Proveedor Norte',
-            'address' => 'Camino Rural 10',
-        ])->assertCreated()->assertJsonPath('data.name', 'Proveedor Norte');
+            'nombre' => 'Supplier Norte',
+            'direccion' => 'Camino Rural 10',
+        ])->assertCreated()->assertJsonPath('data.nombre', 'Supplier Norte');
 
         $supplierId = (int) $response->json('data.id');
 
         // Verificación: confirma datos normalizados y auditoría del alta.
-        $this->assertDatabaseHas('suppliers', ['id' => $supplierId, 'normalized_name' => 'proveedor norte', 'status' => 'active']);
+        $this->assertDatabaseHas('suppliers', ['id' => $supplierId, 'normalized_name' => 'supplier norte', 'status' => 'active']);
         $this->assertDatabaseHas('activity_log', ['event' => 'supplier_created', 'subject_id' => $supplierId, 'causer_id' => $actor->getKey()]);
     }
 
@@ -45,13 +45,13 @@ final class SuppliersAndCatalogsEndpointTest extends TestCase
         // Acción: registra el producto del catálogo.
         $this->postJson('/api/v1/productos', [
             'sku' => 'HUEVO-BOLITA',
-            'name' => 'Huevo Bolita',
-            'kind' => 'egg',
-            'base_unit' => 'unit',
-            'stock_tracked' => true,
+            'nombre' => 'Huevo Bolita',
+            'tipo' => 'egg',
+            'unidad_base' => 'unit',
+            'controla_stock' => true,
         ])->assertCreated()
-            ->assertJsonPath('data.kind', 'egg')
-            ->assertJsonPath('data.base_unit', 'unit');
+            ->assertJsonPath('data.tipo', 'egg')
+            ->assertJsonPath('data.unidad_base', 'unit');
 
         // Verificación: confirma SKU y nombre normalizado persistidos.
         $this->assertDatabaseHas('products', ['sku' => 'HUEVO-BOLITA', 'normalized_name' => 'huevo bolita']);
@@ -64,20 +64,20 @@ final class SuppliersAndCatalogsEndpointTest extends TestCase
         Sanctum::actingAs(User::factory()->create(), ['*']);
 
         // Acción: intenta crear un proveedor.
-        $this->postJson('/api/v1/proveedores', ['name' => 'Proveedor', 'address' => 'Dirección'])->assertForbidden();
+        $this->postJson('/api/v1/proveedores', ['nombre' => 'Supplier', 'direccion' => 'Dirección'])->assertForbidden();
     }
 
     // Flujo: crea un proveedor duplicado y verifica el error de validación.
     public function test_duplicate_supplier_name_returns_validation_error(): void
     {
         // Preparación: persiste el proveedor original y autentica al gestor.
-        Supplier::factory()->create(['name' => 'Proveedor Único']);
+        Supplier::factory()->create(['name' => 'Supplier Único']);
         Sanctum::actingAs($this->userWithPermissions(['suppliers.manage']), ['*']);
 
         // Acción: intenta repetir el nombre con distinta capitalización.
-        $this->postJson('/api/v1/proveedores', ['name' => ' proveedor único ', 'address' => 'Otra dirección'])
+        $this->postJson('/api/v1/proveedores', ['nombre' => ' supplier único ', 'direccion' => 'Otra dirección'])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['name']);
+            ->assertJsonValidationErrors(['nombre']);
     }
 
     // Flujo: crea un producto con SKU duplicado y verifica el error de validación.
@@ -88,7 +88,7 @@ final class SuppliersAndCatalogsEndpointTest extends TestCase
         Sanctum::actingAs($this->userWithPermissions(['products.manage']), ['*']);
 
         // Acción: intenta crear otro producto con el mismo SKU.
-        $this->postJson('/api/v1/productos', ['sku' => 'SKU-1', 'name' => 'Otro', 'kind' => 'supply', 'base_unit' => 'unit'])
+        $this->postJson('/api/v1/productos', ['sku' => 'SKU-1', 'nombre' => 'Otro', 'tipo' => 'supply', 'unidad_base' => 'unit'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['sku']);
     }
@@ -99,21 +99,21 @@ final class SuppliersAndCatalogsEndpointTest extends TestCase
         // Preparación: crea un producto en kilogramos y autentica los permisos requeridos.
         $actor = $this->userWithPermissions(['products.manage', 'inventory.move']);
         Sanctum::actingAs($actor, ['*']);
-        $product = Product::factory()->create(['base_unit' => 'kg']);
+        $producto = Product::factory()->create(['base_unit' => 'kg']);
 
         // Acción 1: cambia la unidad antes de registrar movimientos.
-        $this->patchJson('/api/v1/productos/'.$product->getKey(), ['base_unit' => 'unit'])
+        $this->patchJson('/api/v1/productos/'.$producto->getKey(), ['unidad_base' => 'unit'])
             ->assertOk()
-            ->assertJsonPath('data.base_unit', 'unit');
+            ->assertJsonPath('data.unidad_base', 'unit');
 
         // Acción 2: registra el primer movimiento del producto.
         $this->postJson('/api/v1/inventario/ingresos', [
-            'supplier_id' => Supplier::factory()->create()->getKey(),
-            'lines' => [['product_id' => $product->getKey(), 'stock_location_id' => StockLocation::factory()->create()->getKey(), 'quantity' => '2']],
+            'proveedor_id' => Supplier::factory()->create()->getKey(),
+            'lineas' => [['producto_id' => $producto->getKey(), 'ubicacion_stock_id' => StockLocation::factory()->create()->getKey(), 'cantidad' => '2']],
         ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated();
 
         // Acción 3: intenta cambiar la unidad después del primer movimiento.
-        $this->patchJson('/api/v1/productos/'.$product->getKey(), ['base_unit' => 'kg'])
+        $this->patchJson('/api/v1/productos/'.$producto->getKey(), ['unidad_base' => 'kg'])
             ->assertConflict();
     }
 

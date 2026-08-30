@@ -13,15 +13,15 @@ final readonly class ProductionUnitStatusController
 {
     public function update(
         ChangeProductionUnitStatusRequest $request,
-        ProductionUnit $productionUnit,
+        ProductionUnit $unidadProductiva,
         ChangeProductionUnitStatusAction $action,
     ): ProductionUnitResource {
         /** @var User $actor */
         $actor = $request->user();
 
         return new ProductionUnitResource($action->execute(
-            $productionUnit,
-            ProductionUnitStatus::from($request->string('status')->toString()),
+            $unidadProductiva,
+            ProductionUnitStatus::from($request->string('estado')->toString()),
             $actor,
         ));
     }

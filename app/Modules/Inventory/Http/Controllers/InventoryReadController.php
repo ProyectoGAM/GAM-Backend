@@ -18,18 +18,19 @@ use App\Modules\Inventory\Http\Requests\ViewInventoryMovementRequest;
 use App\Modules\Inventory\Http\Resources\InventoryMovementResource;
 use App\Modules\Inventory\Http\Resources\StockBalanceResource;
 use App\Modules\Inventory\Http\Resources\StockReservationResource;
+use App\Support\PublicInputMapper;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 final readonly class InventoryReadController
 {
     public function balances(ListStockBalancesRequest $request, ListStockBalancesQuery $query): AnonymousResourceCollection
     {
-        return StockBalanceResource::collection($query->execute($request->validated()));
+        return StockBalanceResource::collection($query->execute(PublicInputMapper::toInternal($request->validated(), 'inventory')));
     }
 
-    public function movements(ListInventoryMovementsRequest $request, ListInventoryMovementsQuery $query): AnonymousResourceCollection
+    public function movimientos(ListInventoryMovementsRequest $request, ListInventoryMovementsQuery $query): AnonymousResourceCollection
     {
-        return InventoryMovementResource::collection($query->execute($request->validated()));
+        return InventoryMovementResource::collection($query->execute(PublicInputMapper::toInternal($request->validated(), 'inventory')));
     }
 
     public function movement(ViewInventoryMovementRequest $request, InventoryMovement $inventoryMovement, GetInventoryMovementQuery $query): InventoryMovementResource
@@ -39,7 +40,7 @@ final readonly class InventoryReadController
 
     public function reservations(ListStockReservationsRequest $request, ListStockReservationsQuery $query): AnonymousResourceCollection
     {
-        return StockReservationResource::collection($query->execute($request->validated()));
+        return StockReservationResource::collection($query->execute(PublicInputMapper::toInternal($request->validated(), 'inventory')));
     }
 
     public function minimum(SetMinimumStockRequest $request, StockBalance $stockBalance, SetMinimumStockAction $action): StockBalanceResource
@@ -47,6 +48,6 @@ final readonly class InventoryReadController
         /** @var User $actor */
         $actor = $request->user();
 
-        return new StockBalanceResource($action->execute($stockBalance, (string) $request->validated('minimum_quantity'), $actor));
+        return new StockBalanceResource($action->execute($stockBalance, (string) PublicInputMapper::toInternal(['cantidad_minima' => $request->validated('cantidad_minima')], 'inventory')['minimum_quantity'], $actor));
     }
 }

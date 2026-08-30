@@ -14,8 +14,8 @@ final class DepartmentResource extends JsonResource
     {
         return [
             'id' => (int) $this->getKey(),
-            'name' => $this->name,
-            'localities_count' => $this->whenCounted('localities'),
+            'nombre' => $this->name,
+            'localidades_count' => $this->whenCounted('localities'),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

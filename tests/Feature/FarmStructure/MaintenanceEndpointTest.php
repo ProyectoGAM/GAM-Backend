@@ -35,16 +35,19 @@ final class MaintenanceEndpointTest extends TestCase
         Sanctum::actingAs($actor, ['*']);
         $before = $house->refresh()->getAttributes();
         $payload = $this->payload($actor);
-        $payload['cost_amount'] = '999999999999999.99';
+        $payload['costo_importe'] = '999999999999999.99';
 
         // Acción: registra el mantenimiento y comprueba el contrato de salida.
         $response = $this->withHeader('Idempotency-Key', Str::uuid()->toString())
             ->postJson($this->collectionUrl($house), $payload)
             ->assertCreated()
-            ->assertJsonPath('data.cost.amount', '999999999999999.99')
-            ->assertJsonPath('data.cost.currency', 'UYU')
-            ->assertJsonPath('data.responsible.name', $actor->name)
-            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.costo.importe', '999999999999999.99')
+            ->assertJsonPath('data.costo.moneda', 'UYU')
+            ->assertJsonPath('data.responsable.nombre', $actor->name)
+            ->assertJsonPath('data.galpon_id', $house->id)
+            ->assertJsonPath('data.fecha_mantenimiento', '2026-01-15')
+            ->assertJsonPath('data.descripcion', 'Reparación de bebederos')
+            ->assertJsonPath('data.estado', 'completed')
             ->assertJsonPath('data.version', 1);
         $id = $response->json('data.id');
 
@@ -57,7 +60,8 @@ final class MaintenanceEndpointTest extends TestCase
         $this->assertNotEmpty($entry->operation_id);
         $this->assertNotEmpty($entry->trace_id);
         $this->assertSame('999999999999999.99', $entry->properties['subject_snapshot']['cost']['amount']);
-        $response->assertJsonMissingPath('data.idempotency_key')->assertJsonMissingPath('data.responsible.email');
+        $response->assertJsonMissingPath('data.idempotency_key')->assertJsonMissingPath('data.responsable.correo_electronico')
+            ->assertJsonMissingPath('data.cost')->assertJsonMissingPath('data.status')->assertJsonMissingPath('data.poultry_house_id');
     }
 
     // Flujo: reintenta el alta y rechaza la reutilización de clave con otro contenido.
@@ -73,7 +77,7 @@ final class MaintenanceEndpointTest extends TestCase
         // Acción: repite la operación y luego cambia su contenido usando la misma clave.
         $id = $this->postJson($this->collectionUrl($house), $payload)->assertCreated()->json('data.id');
         $this->postJson($this->collectionUrl($house), $payload)->assertOk()->assertJsonPath('data.id', $id);
-        $this->postJson($this->collectionUrl($house), [...$payload, 'description' => 'Otro trabajo'])
+        $this->postJson($this->collectionUrl($house), [...$payload, 'descripcion' => 'Otro trabajo'])
             ->assertConflict()->assertHeader('Content-Type', 'application/problem+json');
 
         // Verificación: no duplica hechos ni auditorías.
@@ -105,22 +109,22 @@ final class MaintenanceEndpointTest extends TestCase
     public static function invalidPayloads(): array
     {
         return [
-            'fecha futura' => ['maintenance_date', '2026-08-31'],
-            'fecha imposible' => ['maintenance_date', '2026-02-30'],
-            'descripción vacía' => ['description', '   '],
-            'descripción extensa' => ['description', str_repeat('a', 5001)],
-            'importe negativo' => ['cost_amount', '-0.01'],
-            'importe numérico' => ['cost_amount', 1.25],
-            'notación científica' => ['cost_amount', '1e3'],
-            'demasiados enteros' => ['cost_amount', '1000000000000000'],
-            'demasiados decimales' => ['cost_amount', '0.00001'],
-            'redondeo implícito' => ['cost_amount', '1.001'],
-            'moneda desconocida' => ['cost_currency', 'ZZZ'],
-            'moneda minúscula' => ['cost_currency', 'uyu'],
-            'responsable inexistente' => ['responsible_user_id', 999999],
-            'estado manual' => ['status', 'cancelled'],
-            'cambio de galpón' => ['poultry_house_id', 123],
-            'programación' => ['scheduled_for', '2026-09-30'],
+            'fecha futura' => ['fecha_mantenimiento', '2026-08-31'],
+            'fecha imposible' => ['fecha_mantenimiento', '2026-02-30'],
+            'descripción vacía' => ['descripcion', '   '],
+            'descripción extensa' => ['descripcion', str_repeat('a', 5001)],
+            'importe negativo' => ['costo_importe', '-0.01'],
+            'importe numérico' => ['costo_importe', 1.25],
+            'notación científica' => ['costo_importe', '1e3'],
+            'demasiados enteros' => ['costo_importe', '1000000000000000'],
+            'demasiados decimales' => ['costo_importe', '0.00001'],
+            'redondeo implícito' => ['costo_importe', '1.001'],
+            'moneda desconocida' => ['costo_moneda', 'ZZZ'],
+            'moneda minúscula' => ['costo_moneda', 'uyu'],
+            'responsable inexistente' => ['responsable_id', 999999],
+            'estado manual' => ['estado', 'cancelled'],
+            'cambio de galpón' => ['galpon_id', 123],
+            'programación' => ['programado_para', '2026-09-30'],
         ];
     }
 
@@ -134,8 +138,8 @@ final class MaintenanceEndpointTest extends TestCase
         // Acción: envía una solicitud vacía.
         $this->postJson($this->collectionUrl($house), [])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['maintenance_date', 'description', 'cost_amount', 'cost_currency', 'responsible_user_id', 'idempotency_key'])
-            ->assertJsonPath('errors.maintenance_date.0', 'Debes indicar la fecha del mantenimiento.')
+            ->assertJsonValidationErrors(['fecha_mantenimiento', 'descripcion', 'costo_importe', 'costo_moneda', 'responsable_id', 'idempotency_key'])
+            ->assertJsonPath('errors.fecha_mantenimiento.0', 'Debes indicar la fecha del mantenimiento.')
             ->assertJsonPath('errors.idempotency_key.0', 'El encabezado Idempotency-Key es obligatorio.');
     }
 
@@ -151,14 +155,18 @@ final class MaintenanceEndpointTest extends TestCase
         Sanctum::actingAs($this->userWithPermissions(['poultry-houses.view']), ['*']);
 
         // Acción: consulta páginas sucesivas y filtros individuales.
-        $this->getJson($this->collectionUrl($house).'?per_page=2')->assertOk()
+        $response = $this->getJson($this->collectionUrl($house).'?por_pagina=2&fecha_desde=2026-01-01')->assertOk()
             ->assertJsonPath('meta.total', 3)->assertJsonPath('data.0.id', $last->id)->assertJsonPath('data.1.id', $first->id);
-        $this->getJson($this->collectionUrl($house).'?per_page=2&page=2')->assertOk()->assertJsonPath('data.0.id', $old->id);
-        $this->getJson($this->collectionUrl($house).'?status=cancelled')->assertOk()->assertJsonCount(1, 'data');
-        $this->getJson($this->collectionUrl($house).'?date_to=2026-01-31')->assertOk()->assertJsonPath('data.0.id', $old->id)->assertJsonCount(1, 'data');
-        $this->getJson($this->collectionUrl($house).'?date_from=2026-08-01&date_to=2026-08-01')->assertOk()->assertJsonCount(2, 'data');
-        $this->getJson($this->collectionUrl($house).'?date_from=2026-08-01&date_to=2026-01-01')->assertUnprocessable();
-        $this->getJson($this->collectionUrl($house).'?per_page=101&page=0')->assertUnprocessable();
+        $nextPage = $response->json('links.next');
+        $this->assertStringContainsString('pagina=2', $nextPage);
+        $this->assertStringContainsString('por_pagina=2', $nextPage);
+        $this->assertStringContainsString('fecha_desde=2026-01-01', $nextPage);
+        $this->getJson($nextPage)->assertOk()->assertJsonPath('data.0.id', $old->id);
+        $this->getJson($this->collectionUrl($house).'?estado=cancelled')->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson($this->collectionUrl($house).'?fecha_hasta=2026-01-31')->assertOk()->assertJsonPath('data.0.id', $old->id)->assertJsonCount(1, 'data');
+        $this->getJson($this->collectionUrl($house).'?fecha_desde=2026-08-01&fecha_hasta=2026-08-01')->assertOk()->assertJsonCount(2, 'data');
+        $this->getJson($this->collectionUrl($house).'?fecha_desde=2026-08-01&fecha_hasta=2026-01-01')->assertUnprocessable();
+        $this->getJson($this->collectionUrl($house).'?por_pagina=101&pagina=0')->assertUnprocessable();
     }
 
     // Flujo: consulta el último trabajo válido y devuelve null cuando no queda ninguno.
@@ -188,10 +196,10 @@ final class MaintenanceEndpointTest extends TestCase
 
         // Acción: corrige el costo y luego intenta sobrescribir con una versión obsoleta.
         $this->patchJson("/api/v1/mantenimientos/{$id}", [
-            'version' => 1, 'reason' => 'Corrección de comprobante', 'cost_amount' => '0.10',
-        ])->assertOk()->assertJsonPath('data.cost.amount', '0.10')->assertJsonPath('data.version', 2);
+            'version' => 1, 'motivo' => 'Corrección de comprobante', 'costo_importe' => '0.10',
+        ])->assertOk()->assertJsonPath('data.costo.importe', '0.10')->assertJsonPath('data.version', 2);
         $this->patchJson("/api/v1/mantenimientos/{$id}", [
-            'version' => 1, 'reason' => 'Versión vieja', 'description' => 'No guardar',
+            'version' => 1, 'motivo' => 'Versión vieja', 'descripcion' => 'No guardar',
         ])->assertConflict();
 
         // Verificación: conserva ambas instantáneas y la entrada inicial intacta.
@@ -214,13 +222,13 @@ final class MaintenanceEndpointTest extends TestCase
         $url = "/api/v1/mantenimientos/{$maintenance->id}";
 
         // Acción: valida el motivo y realiza la cancelación.
-        $this->postJson($url.'/cancelacion', ['version' => 1])->assertUnprocessable()->assertJsonValidationErrors('reason');
-        $this->postJson($url.'/cancelacion', ['version' => 1, 'reason' => 'Registro duplicado'])
-            ->assertOk()->assertJsonPath('data.status', 'cancelled')->assertJsonPath('data.version', 2);
-        $this->postJson($url.'/cancelacion', ['version' => 2, 'reason' => 'Reintento'])->assertConflict();
-        $this->patchJson($url, ['version' => 2, 'reason' => 'Cambio', 'description' => 'No guardar'])->assertConflict();
+        $this->postJson($url.'/cancelacion', ['version' => 1])->assertUnprocessable()->assertJsonValidationErrors('motivo');
+        $this->postJson($url.'/cancelacion', ['version' => 1, 'motivo' => 'Registro duplicado'])
+            ->assertOk()->assertJsonPath('data.estado', 'cancelled')->assertJsonPath('data.version', 2);
+        $this->postJson($url.'/cancelacion', ['version' => 2, 'motivo' => 'Reintento'])->assertConflict();
+        $this->patchJson($url, ['version' => 2, 'motivo' => 'Cambio', 'descripcion' => 'No guardar'])->assertConflict();
         $this->deleteJson($url)->assertMethodNotAllowed();
-        $this->getJson($url)->assertOk()->assertJsonPath('data.cancellation_reason', 'Registro duplicado');
+        $this->getJson($url)->assertOk()->assertJsonPath('data.motivo_cancelacion', 'Registro duplicado');
         $this->getJson($this->collectionUrl($maintenance->poultryHouse).'/ultimo')->assertExactJson(['data' => null]);
 
         // Verificación: el hecho original sigue disponible.
@@ -238,9 +246,9 @@ final class MaintenanceEndpointTest extends TestCase
         $url = "/api/v1/mantenimientos/{$maintenance->id}";
 
         // Acción: intenta cancelar una versión anterior o corregir sin cambios.
-        $this->postJson($url.'/cancelacion', ['version' => 1, 'reason' => 'Obsoleto'])->assertConflict();
-        $this->patchJson($url, ['version' => 3, 'reason' => 'Sin datos'])->assertUnprocessable()->assertJsonValidationErrors('request');
-        $this->patchJson($url, ['description' => 'Nuevo texto', 'reason' => 'Sin versión'])->assertUnprocessable()->assertJsonValidationErrors('version');
+        $this->postJson($url.'/cancelacion', ['version' => 1, 'motivo' => 'Obsoleto'])->assertConflict();
+        $this->patchJson($url, ['version' => 3, 'motivo' => 'Sin datos'])->assertUnprocessable()->assertJsonValidationErrors('solicitud');
+        $this->patchJson($url, ['descripcion' => 'Nuevo texto', 'motivo' => 'Sin versión'])->assertUnprocessable()->assertJsonValidationErrors('version');
 
         // Verificación: no se altera el registro ni se agregan auditorías.
         $this->assertDatabaseHas('maintenances', ['id' => $maintenance->id, 'version' => 3, 'status' => 'completed']);
@@ -262,10 +270,10 @@ final class MaintenanceEndpointTest extends TestCase
             ->postJson($this->collectionUrl($house), $this->payload($responsible))->assertCreated()->json('data.id');
         $responsible->update(['name' => 'Nombre posterior']);
         $responsible->delete();
-        $this->getJson("/api/v1/mantenimientos/{$id}")->assertOk()->assertJsonPath('data.responsible.name', 'Responsable original');
-        $this->patchJson("/api/v1/mantenimientos/{$id}", ['version' => 1, 'reason' => 'Descripción', 'description' => 'Detalle corregido'])->assertOk();
+        $this->getJson("/api/v1/mantenimientos/{$id}")->assertOk()->assertJsonPath('data.responsable.nombre', 'Responsable original');
+        $this->patchJson("/api/v1/mantenimientos/{$id}", ['version' => 1, 'motivo' => 'Descripción', 'descripcion' => 'Detalle corregido'])->assertOk();
         $this->withHeader('Idempotency-Key', Str::uuid()->toString())
-            ->postJson($this->collectionUrl($house), $this->payload($responsible))->assertUnprocessable()->assertJsonValidationErrors('responsible_user_id');
+            ->postJson($this->collectionUrl($house), $this->payload($responsible))->assertUnprocessable()->assertJsonValidationErrors('responsable_id');
     }
 
     // Flujo: obliga a autenticación en todas las operaciones públicas.
@@ -362,10 +370,10 @@ final class MaintenanceEndpointTest extends TestCase
             'create' => $this->withHeader('Idempotency-Key', Str::uuid()->toString())
                 ->postJson($this->collectionUrl($maintenance->poultryHouse), $this->payload($actor)),
             'update' => $this->patchJson("/api/v1/mantenimientos/{$maintenance->id}", [
-                'version' => 1, 'reason' => 'Corrección', 'cost_amount' => '0.00',
+                'version' => 1, 'motivo' => 'Corrección', 'costo_importe' => '0.00',
             ]),
             'cancel' => $this->postJson("/api/v1/mantenimientos/{$maintenance->id}/cancelacion", [
-                'version' => 1, 'reason' => 'Duplicado',
+                'version' => 1, 'motivo' => 'Duplicado',
             ]),
         };
         $response->assertInternalServerError();
@@ -393,8 +401,8 @@ final class MaintenanceEndpointTest extends TestCase
         $this->getJson('/api/v1/galpones/999999/mantenimientos')->assertNotFound();
         $this->getJson('/api/v1/mantenimientos/999999')->assertNotFound();
         $this->patchJson("/api/v1/mantenimientos/{$maintenance->id}", [
-            'version' => 1, 'reason' => 'Cambio', 'description' => 'Nuevo texto', 'poultry_house_id' => 999999,
-        ])->assertUnprocessable()->assertJsonValidationErrors('poultry_house_id');
+            'version' => 1, 'motivo' => 'Cambio', 'descripcion' => 'Nuevo texto', 'galpon_id' => 999999,
+        ])->assertUnprocessable()->assertJsonValidationErrors('galpon_id');
     }
 
     // Flujo: PostgreSQL impide costos negativos, estados imposibles y pérdida de referencias históricas.
@@ -430,15 +438,15 @@ final class MaintenanceEndpointTest extends TestCase
         return ['costo' => ['cost'], 'estado' => ['status'], 'cancelación incompleta' => ['cancel'], 'galpón' => ['house'], 'responsable' => ['responsible']];
     }
 
-    /** @return array{maintenance_date: string, description: string, cost_amount: string, cost_currency: string, responsible_user_id: int} */
+    /** @return array{fecha_mantenimiento: string, descripcion: string, costo_importe: string, costo_moneda: string, responsable_id: int} */
     private function payload(User $responsible): array
     {
         return [
-            'maintenance_date' => '2026-01-15',
-            'description' => 'Reparación de bebederos',
-            'cost_amount' => '1250.50',
-            'cost_currency' => 'UYU',
-            'responsible_user_id' => $responsible->id,
+            'fecha_mantenimiento' => '2026-01-15',
+            'descripcion' => 'Reparación de bebederos',
+            'costo_importe' => '1250.50',
+            'costo_moneda' => 'UYU',
+            'responsable_id' => $responsible->id,
         ];
     }
 

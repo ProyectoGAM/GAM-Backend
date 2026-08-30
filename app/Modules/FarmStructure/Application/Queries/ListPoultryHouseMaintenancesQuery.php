@@ -22,6 +22,6 @@ final readonly class ListPoultryHouseMaintenancesQuery
             ->when($filters['date_to'] ?? null, fn (Builder $query, string $date): Builder => $query->where('maintenance_date', '<=', $date))
             ->orderByDesc('maintenance_date')
             ->orderByDesc('id')
-            ->paginate($filters['per_page'] ?? 50, ['*'], 'page', $filters['page'] ?? 1);
+            ->paginate($filters['per_page'] ?? 50, ['*'], 'pagina', $filters['page'] ?? 1);
     }
 }

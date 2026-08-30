@@ -14,9 +14,9 @@ final class LocalityResource extends JsonResource
     {
         return [
             'id' => (int) $this->getKey(),
-            'department_id' => $this->department_id,
-            'name' => $this->name,
-            'department' => DepartmentResource::make($this->whenLoaded('department')),
+            'departamento_id' => $this->department_id,
+            'nombre' => $this->name,
+            'departamento' => DepartmentResource::make($this->whenLoaded('department')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

@@ -11,18 +11,18 @@ final class UpdateLocalityRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $locality = $this->route('locality');
+        $localidad = $this->route('localidad');
 
-        return $locality instanceof Locality
-            && ($this->user()?->can('update', $locality) ?? false);
+        return $localidad instanceof Locality
+            && ($this->user()?->can('update', $localidad) ?? false);
     }
 
     /** @return array<string, array<int, string>> */
     public function rules(): array
     {
         return [
-            'department_id' => ['sometimes', 'required', 'integer', 'exists:departments,id'],
-            'name' => ['sometimes', 'required', 'string', 'max:120'],
+            'departamento_id' => ['sometimes', 'required', 'integer', 'exists:departments,id'],
+            'nombre' => ['sometimes', 'required', 'string', 'max:120'],
         ];
     }
 
@@ -31,28 +31,28 @@ final class UpdateLocalityRequest extends FormRequest
     {
         return [
             function (Validator $validator): void {
-                $locality = $this->route('locality');
+                $localidad = $this->route('localidad');
 
-                if (! $locality instanceof Locality || $validator->errors()->isNotEmpty()) {
+                if (! $localidad instanceof Locality || $validator->errors()->isNotEmpty()) {
                     return;
                 }
 
-                if (! $this->hasAny(['department_id', 'name'])) {
+                if (! $this->hasAny(['departamento_id', 'nombre'])) {
                     $validator->errors()->add('request', 'Debes proporcionar al menos un campo.');
 
                     return;
                 }
 
-                $departmentId = $this->integer('department_id', $locality->department_id);
-                $name = $this->has('name') ? $this->string('name')->toString() : $locality->name;
+                $departmentId = $this->integer('departamento_id', $localidad->department_id);
+                $nombre = $this->has('nombre') ? $this->string('nombre')->toString() : $localidad->name;
                 $exists = Locality::query()
-                    ->whereKeyNot($locality->getKey())
+                    ->whereKeyNot($localidad->getKey())
                     ->where('department_id', $departmentId)
-                    ->where('normalized_name', Str::lower(trim($name)))
+                    ->where('normalized_name', Str::lower(trim($nombre)))
                     ->exists();
 
                 if ($exists) {
-                    $validator->errors()->add('name', 'El nombre ya está registrado en este departamento.');
+                    $validator->errors()->add('nombre', 'El nombre ya está registrado en este departamento.');
                 }
             },
         ];

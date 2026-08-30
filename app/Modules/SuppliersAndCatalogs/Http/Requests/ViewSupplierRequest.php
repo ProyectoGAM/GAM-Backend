@@ -8,7 +8,7 @@ final class ViewSupplierRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('view', $this->route('supplier')) ?? false;
+        return $this->user()?->can('view', $this->route('proveedor')) ?? false;
     }
 
     public function rules(): array

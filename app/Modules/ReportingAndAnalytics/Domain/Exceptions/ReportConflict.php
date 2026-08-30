@@ -13,9 +13,9 @@ final class ReportConflict extends DomainException implements ShouldntReport
     public function render(Request $request): JsonResponse
     {
         return response()->json([
-            'type' => 'https://httpstatuses.com/409',
+            'tipo' => 'https://httpstatuses.com/409',
             'title' => 'Conflicto de reporte',
-            'status' => Response::HTTP_CONFLICT,
+            'estado' => Response::HTTP_CONFLICT,
             'detail' => $this->getMessage(),
         ], Response::HTTP_CONFLICT)->header('Content-Type', 'application/problem+json');
     }

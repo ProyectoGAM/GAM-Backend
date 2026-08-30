@@ -26,7 +26,7 @@ final class ReportExportFactory extends Factory
             'operation_id' => Str::uuid()->toString(),
             'idempotency_key_hash' => hash('sha256', Str::uuid()->toString()),
             'payload_hash' => hash('sha256', fake()->sentence()),
-            'source_key' => 'inventory.stock-balances',
+            'source_key' => 'inventario.saldos-stock',
             'definition_version' => '1.0',
             'query' => [],
             'format' => ReportExportFormat::Xlsx,

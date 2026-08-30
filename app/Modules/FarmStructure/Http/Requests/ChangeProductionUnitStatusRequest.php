@@ -16,7 +16,7 @@ final class ChangeProductionUnitStatusRequest extends FarmStructureRequest
     public function rules(): array
     {
         return [
-            'status' => ['required', Rule::enum(ProductionUnitStatus::class)],
+            'estado' => ['required', Rule::enum(ProductionUnitStatus::class)],
         ];
     }
 }

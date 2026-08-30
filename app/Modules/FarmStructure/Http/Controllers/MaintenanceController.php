@@ -18,6 +18,7 @@ use App\Modules\FarmStructure\Http\Requests\StoreMaintenanceRequest;
 use App\Modules\FarmStructure\Http\Requests\UpdateMaintenanceRequest;
 use App\Modules\FarmStructure\Http\Requests\ViewMaintenanceRequest;
 use App\Modules\FarmStructure\Http\Resources\MaintenanceResource;
+use App\Support\PublicInputMapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -25,7 +26,10 @@ final readonly class MaintenanceController
 {
     public function index(ListMaintenancesRequest $request, PoultryHouse $poultryHouse, ListPoultryHouseMaintenancesQuery $query): AnonymousResourceCollection
     {
-        return MaintenanceResource::collection($query->execute($poultryHouse, $request->validated()));
+        return MaintenanceResource::collection(
+            $query->execute($poultryHouse, PublicInputMapper::toInternal($request->validated(), 'maintenance'))
+                ->appends($request->safe()->except('pagina')),
+        );
     }
 
     public function latest(LatestMaintenanceRequest $request, PoultryHouse $poultryHouse, GetLatestPoultryHouseMaintenanceQuery $query): MaintenanceResource|JsonResponse
@@ -44,7 +48,10 @@ final readonly class MaintenanceController
     {
         /** @var User $actor */
         $actor = $request->user();
-        $data = $request->safe()->only(['maintenance_date', 'description', 'cost_amount', 'cost_currency', 'responsible_user_id', 'idempotency_key']);
+        $data = PublicInputMapper::toInternal(
+            $request->safe()->only(['fecha_mantenimiento', 'descripcion', 'costo_importe', 'costo_moneda', 'responsable_id', 'idempotency_key']),
+            'maintenance',
+        );
         $data['responsible_user_id'] = (int) $data['responsible_user_id'];
         $maintenance = $action->execute($poultryHouse, $data, $actor);
 
@@ -55,14 +62,17 @@ final readonly class MaintenanceController
     {
         /** @var User $actor */
         $actor = $request->user();
-        $data = $request->safe()->only(['maintenance_date', 'description', 'cost_amount', 'cost_currency', 'responsible_user_id']);
+        $data = PublicInputMapper::toInternal(
+            $request->safe()->only(['fecha_mantenimiento', 'descripcion', 'costo_importe', 'costo_moneda', 'responsable_id']),
+            'maintenance',
+        );
 
         if (isset($data['responsible_user_id'])) {
             $data['responsible_user_id'] = (int) $data['responsible_user_id'];
         }
 
         return new MaintenanceResource($action->execute(
-            $maintenance, $data, (int) $request->validated('version'), $request->validated('reason'), $actor,
+            $maintenance, $data, (int) $request->validated('version'), $request->validated('motivo'), $actor,
         ));
     }
 
@@ -72,7 +82,7 @@ final readonly class MaintenanceController
         $actor = $request->user();
 
         return new MaintenanceResource($action->execute(
-            $maintenance, (int) $request->validated('version'), $request->validated('reason'), $actor,
+            $maintenance, (int) $request->validated('version'), $request->validated('motivo'), $actor,
         ));
     }
 }

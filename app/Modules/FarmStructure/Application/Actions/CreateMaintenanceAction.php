@@ -19,11 +19,11 @@ final readonly class CreateMaintenanceAction
     public function __construct(private AuditRecorder $auditRecorder) {}
 
     /** @param array{maintenance_date: string, description: string, cost_amount: string, cost_currency: string, responsible_user_id: int, idempotency_key: string} $attributes */
-    public function execute(PoultryHouse $poultryHouse, array $attributes, User $actor): Maintenance
+    public function execute(PoultryHouse $poultryHouse, array $attributes, User $actor, string $source = 'api'): Maintenance
     {
         Gate::forUser($actor)->authorize('create', Maintenance::class);
 
-        return DB::transaction(function () use ($poultryHouse, $attributes, $actor): Maintenance {
+        return DB::transaction(function () use ($poultryHouse, $attributes, $actor, $source): Maintenance {
             $cost = Money::fromDecimal($attributes['cost_amount'], $attributes['cost_currency']);
 
             if ($cost->isNegative()) {
@@ -89,7 +89,7 @@ final readonly class CreateMaintenanceAction
                 properties: ['subject_snapshot' => $snapshot, 'result' => 'completed'],
                 attributeChanges: ['old' => [], 'new' => $snapshot],
                 upId: $house->production_unit_id,
-                source: 'api',
+                source: $source,
             ));
 
             return $maintenance;

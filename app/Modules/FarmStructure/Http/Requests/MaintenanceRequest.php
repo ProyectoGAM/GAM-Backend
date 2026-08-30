@@ -27,14 +27,14 @@ abstract class MaintenanceRequest extends FormRequest
         $required = $partial ? 'sometimes' : 'required';
 
         return [
-            'maintenance_date' => [$required, 'required', 'date_format:Y-m-d', 'before_or_equal:today'],
-            'description' => [$required, 'required', 'string', 'max:5000'],
-            'cost_amount' => [$required, 'required', 'string', 'regex:/^\d{1,15}(?:\.\d{1,4})?$/D'],
-            'cost_currency' => [$required, 'required', 'string', 'regex:/^[A-Z]{3}$/D'],
-            'responsible_user_id' => [$required, 'required', 'integer', Rule::exists('users', 'id')->whereNull('deleted_at')],
-            'poultry_house_id' => ['prohibited'],
-            'status' => ['prohibited'],
-            'scheduled_for' => ['prohibited'],
+            'fecha_mantenimiento' => [$required, 'required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'descripcion' => [$required, 'required', 'string', 'max:5000'],
+            'costo_importe' => [$required, 'required', 'string', 'regex:/^\d{1,15}(?:\.\d{1,4})?$/D'],
+            'costo_moneda' => [$required, 'required', 'string', 'regex:/^[A-Z]{3}$/D'],
+            'responsable_id' => [$required, 'required', 'integer', Rule::exists('users', 'id')->whereNull('deleted_at')],
+            'galpon_id' => ['prohibited'],
+            'estado' => ['prohibited'],
+            'programado_para' => ['prohibited'],
         ];
     }
 
@@ -43,19 +43,19 @@ abstract class MaintenanceRequest extends FormRequest
     {
         return [
             function (Validator $validator): void {
-                if ($validator->errors()->hasAny(['cost_amount', 'cost_currency'])) {
+                if (! $this->hasAny(['costo_importe', 'costo_moneda']) || $validator->errors()->hasAny(['costo_importe', 'costo_moneda'])) {
                     return;
                 }
 
                 $maintenance = $this->route('maintenance');
-                $amount = $this->input('cost_amount', $maintenance instanceof Maintenance ? $maintenance->cost_amount : null);
-                $currency = $this->input('cost_currency', $maintenance instanceof Maintenance ? $maintenance->cost_currency : null);
+                $amount = $this->input('costo_importe', $maintenance instanceof Maintenance ? $maintenance->cost_amount : null);
+                $currency = $this->input('costo_moneda', $maintenance instanceof Maintenance ? $maintenance->cost_currency : null);
 
                 if (is_string($amount) && is_string($currency)) {
                     try {
                         Money::fromDecimal($amount, $currency);
                     } catch (InvalidArgumentException $exception) {
-                        $validator->errors()->add('cost_amount', $exception->getMessage());
+                        $validator->errors()->add('costo_importe', $exception->getMessage());
                     }
                 }
             },
@@ -66,24 +66,24 @@ abstract class MaintenanceRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'maintenance_date.required' => 'Debes indicar la fecha del mantenimiento.',
-            'maintenance_date.date_format' => 'La fecha debe tener el formato AAAA-MM-DD.',
-            'maintenance_date.before_or_equal' => 'La fecha del mantenimiento no puede ser futura.',
-            'description.required' => 'Debes indicar la descripción del mantenimiento.',
-            'cost_amount.required' => 'Debes indicar el costo del mantenimiento.',
-            'cost_amount.string' => 'El costo debe enviarse como texto decimal.',
-            'cost_amount.regex' => 'El costo debe ser no negativo, con hasta 15 enteros y 4 decimales.',
-            'cost_currency.required' => 'Debes indicar la moneda del costo.',
-            'cost_currency.regex' => 'La moneda debe ser un código ISO de tres letras mayúsculas.',
-            'responsible_user_id.required' => 'Debes indicar el responsable del mantenimiento.',
-            'responsible_user_id.exists' => 'El responsable debe ser un usuario activo.',
-            'reason.required' => 'Debes indicar el motivo de la operación.',
+            'fecha_mantenimiento.required' => 'Debes indicar la fecha del mantenimiento.',
+            'fecha_mantenimiento.date_format' => 'La fecha debe tener el formato AAAA-MM-DD.',
+            'fecha_mantenimiento.before_or_equal' => 'La fecha del mantenimiento no puede ser futura.',
+            'descripcion.required' => 'Debes indicar la descripción del mantenimiento.',
+            'costo_importe.required' => 'Debes indicar el costo del mantenimiento.',
+            'costo_importe.string' => 'El costo debe enviarse como texto decimal.',
+            'costo_importe.regex' => 'El costo debe ser no negativo, con hasta 15 enteros y 4 decimales.',
+            'costo_moneda.required' => 'Debes indicar la moneda del costo.',
+            'costo_moneda.regex' => 'La moneda debe ser un código ISO de tres letras mayúsculas.',
+            'responsable_id.required' => 'Debes indicar el responsable del mantenimiento.',
+            'responsable_id.exists' => 'El responsable debe ser un usuario activo.',
+            'motivo.required' => 'Debes indicar el motivo de la operación.',
             'version.required' => 'Debes indicar la versión actual del mantenimiento.',
             'idempotency_key.required' => 'El encabezado Idempotency-Key es obligatorio.',
             'idempotency_key.uuid' => 'El encabezado Idempotency-Key debe ser un UUID válido.',
-            'poultry_house_id.prohibited' => 'El galpón se define en la ruta y no puede cambiarse.',
-            'status.prohibited' => 'El estado sólo puede cambiarse mediante la acción de cancelación.',
-            'scheduled_for.prohibited' => 'No se permite programar mantenimientos futuros.',
+            'galpon_id.prohibited' => 'El galpón se define en la ruta y no puede cambiarse.',
+            'estado.prohibited' => 'El estado sólo puede cambiarse mediante la acción de cancelación.',
+            'programado_para.prohibited' => 'No se permite programar mantenimientos futuros.',
         ];
     }
 }
