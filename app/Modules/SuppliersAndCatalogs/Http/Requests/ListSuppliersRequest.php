@@ -18,9 +18,9 @@ final class ListSuppliersRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'search' => ['sometimes', 'string', 'max:120'],
-            'status' => ['sometimes', Rule::enum(SupplierStatus::class)],
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'buscar' => ['sometimes', 'string', 'max:120'],
+            'estado' => ['sometimes', Rule::enum(SupplierStatus::class)],
+            'por_pagina' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }
 }

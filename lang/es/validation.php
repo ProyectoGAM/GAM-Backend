@@ -29,6 +29,7 @@ return [
         'actor_id' => 'identificador del actor',
         'actor_type' => 'tipo de actor',
         'bird_capacity' => 'capacidad de aves',
+        'correo_electronico' => 'correo electrónico',
         'department_id' => 'departamento',
         'device_name' => 'nombre del dispositivo',
         'email' => 'correo electrónico',

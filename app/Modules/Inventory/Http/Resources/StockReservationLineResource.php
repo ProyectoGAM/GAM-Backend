@@ -16,14 +16,14 @@ final class StockReservationLineResource extends JsonResource
     {
         return [
             'id' => (int) $this->getKey(),
-            'product' => ProductResource::make($this->whenLoaded('product')),
-            'product_id' => (int) $this->product_id,
-            'stock_location_id' => (int) $this->stock_location_id,
-            'unit' => $this->unit,
-            'reserved_quantity' => (string) $this->reserved_quantity,
-            'released_quantity' => (string) $this->released_quantity,
-            'consumed_quantity' => (string) $this->consumed_quantity,
-            'remaining_quantity' => (string) BigDecimal::of((string) $this->reserved_quantity)->minus((string) $this->released_quantity)->minus((string) $this->consumed_quantity)->toScale(6),
+            'producto' => ProductResource::make($this->whenLoaded('product')),
+            'producto_id' => (int) $this->product_id,
+            'ubicacion_stock_id' => (int) $this->stock_location_id,
+            'unidad' => $this->unit,
+            'cantidad_reservada' => (string) $this->reserved_quantity,
+            'cantidad_liberada' => (string) $this->released_quantity,
+            'cantidad_consumida' => (string) $this->consumed_quantity,
+            'cantidad_restante' => (string) BigDecimal::of((string) $this->reserved_quantity)->minus((string) $this->released_quantity)->minus((string) $this->consumed_quantity)->toScale(6),
         ];
     }
 }

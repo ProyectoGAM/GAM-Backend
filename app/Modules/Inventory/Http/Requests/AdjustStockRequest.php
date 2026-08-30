@@ -16,12 +16,12 @@ final class AdjustStockRequest extends InventoryCommandRequest
     {
         return [
             'idempotency_key' => ['required', 'uuid'],
-            'lines' => ['required', 'array', 'min:1', 'max:100'],
-            'lines.*.product_id' => ['required', 'integer', 'exists:products,id'],
-            'lines.*.stock_location_id' => ['required', 'integer', 'exists:stock_locations,id'],
-            'lines.*.counted_quantity' => ['required', 'string', 'regex:/^\d+(?:\.\d{1,6})?$/'],
-            'reason' => ['required', 'string', 'max:255'],
-            'occurred_at' => ['sometimes', 'date'],
+            'lineas' => ['required', 'array', 'min:1', 'max:100'],
+            'lineas.*.producto_id' => ['required', 'integer', 'exists:products,id'],
+            'lineas.*.ubicacion_stock_id' => ['required', 'integer', 'exists:stock_locations,id'],
+            'lineas.*.cantidad_contada' => ['required', 'string', 'regex:/^\d+(?:\.\d{1,6})?$/'],
+            'motivo' => ['required', 'string', 'max:255'],
+            'ocurrido_en' => ['sometimes', 'fecha'],
         ];
     }
 }

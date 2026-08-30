@@ -14,7 +14,7 @@ final class ReverseInventoryMovementRequest extends InventoryCommandRequest
     {
         return [
             'idempotency_key' => ['required', 'uuid'],
-            'reason' => ['required', 'string', 'max:255'],
+            'motivo' => ['required', 'string', 'max:255'],
         ];
     }
 }

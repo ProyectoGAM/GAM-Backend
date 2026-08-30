@@ -19,8 +19,8 @@ final class ListReportExportsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status' => ['sometimes', Rule::enum(ReportExportStatus::class)],
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'estado' => ['sometimes', Rule::enum(ReportExportStatus::class)],
+            'por_pagina' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }
 }

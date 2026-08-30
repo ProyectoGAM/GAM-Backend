@@ -18,8 +18,8 @@ final class StoreStockLocationRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'production_unit_id' => ['sometimes', 'nullable', 'integer', 'exists:production_units,id'],
-            'name' => ['required', 'string', 'max:160'],
+            'unidad_productiva_id' => ['sometimes', 'nullable', 'integer', 'exists:production_units,id'],
+            'nombre' => ['required', 'string', 'max:160'],
         ];
     }
 
@@ -27,11 +27,11 @@ final class StoreStockLocationRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
-            if ($validator->errors()->has('name')) {
+            if ($validator->errors()->has('nombre')) {
                 return;
             }
-            if (StockLocation::query()->where('normalized_name', Str::lower(trim($this->string('name')->toString())))->exists()) {
-                $validator->errors()->add('name', 'El nombre de la ubicación ya está registrado.');
+            if (StockLocation::query()->where('normalized_name', Str::lower(trim($this->string('nombre')->toString())))->exists()) {
+                $validator->errors()->add('nombre', 'El nombre de la ubicación ya está registrado.');
             }
         }];
     }

@@ -16,7 +16,7 @@ final class ChangePoultryHouseStatusRequest extends FarmStructureRequest
     public function rules(): array
     {
         return [
-            'status' => ['required', Rule::enum(PoultryHouseStatus::class)],
+            'estado' => ['required', Rule::enum(PoultryHouseStatus::class)],
         ];
     }
 }

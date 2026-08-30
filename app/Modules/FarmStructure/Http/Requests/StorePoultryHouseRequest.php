@@ -18,8 +18,8 @@ final class StorePoultryHouseRequest extends FarmStructureRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:120'],
-            'bird_capacity' => ['required', 'integer', 'min:1'],
+            'nombre' => ['required', 'string', 'max:120'],
+            'capacidad_aves' => ['required', 'integer', 'min:1'],
         ];
     }
 
@@ -28,19 +28,19 @@ final class StorePoultryHouseRequest extends FarmStructureRequest
     {
         return [
             function (Validator $validator): void {
-                $productionUnit = $this->route('productionUnit');
+                $unidadProductiva = $this->route('unidadProductiva');
 
-                if (! $productionUnit instanceof ProductionUnit || $validator->errors()->has('name')) {
+                if (! $unidadProductiva instanceof ProductionUnit || $validator->errors()->has('nombre')) {
                     return;
                 }
 
                 $exists = PoultryHouse::query()
-                    ->whereBelongsTo($productionUnit)
-                    ->where('normalized_name', Str::lower(trim($this->string('name')->toString())))
+                    ->whereBelongsTo($unidadProductiva)
+                    ->where('normalized_name', Str::lower(trim($this->string('nombre')->toString())))
                     ->exists();
 
                 if ($exists) {
-                    $validator->errors()->add('name', 'El nombre ya está registrado en esta unidad productiva.');
+                    $validator->errors()->add('nombre', 'El nombre ya está registrado en esta unidad productiva.');
                 }
             },
         ];

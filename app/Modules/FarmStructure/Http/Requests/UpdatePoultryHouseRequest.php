@@ -17,8 +17,8 @@ final class UpdatePoultryHouseRequest extends FarmStructureRequest
     public function rules(): array
     {
         return [
-            'name' => ['sometimes', 'required', 'string', 'max:120'],
-            'bird_capacity' => ['sometimes', 'required', 'integer', 'min:1'],
+            'nombre' => ['sometimes', 'required', 'string', 'max:120'],
+            'capacidad_aves' => ['sometimes', 'required', 'integer', 'min:1'],
         ];
     }
 
@@ -33,21 +33,21 @@ final class UpdatePoultryHouseRequest extends FarmStructureRequest
                     return;
                 }
 
-                if (! $this->hasAny(['name', 'bird_capacity'])) {
+                if (! $this->hasAny(['nombre', 'capacidad_aves'])) {
                     $validator->errors()->add('request', 'Debes proporcionar al menos un campo.');
 
                     return;
                 }
 
-                $name = $this->has('name') ? $this->string('name')->toString() : $poultryHouse->name;
+                $nombre = $this->has('nombre') ? $this->string('nombre')->toString() : $poultryHouse->name;
                 $exists = PoultryHouse::query()
                     ->whereKeyNot($poultryHouse->getKey())
                     ->where('production_unit_id', $poultryHouse->production_unit_id)
-                    ->where('normalized_name', Str::lower(trim($name)))
+                    ->where('normalized_name', Str::lower(trim($nombre)))
                     ->exists();
 
                 if ($exists) {
-                    $validator->errors()->add('name', 'El nombre ya está registrado en esta unidad productiva.');
+                    $validator->errors()->add('nombre', 'El nombre ya está registrado en esta unidad productiva.');
                 }
             },
         ];

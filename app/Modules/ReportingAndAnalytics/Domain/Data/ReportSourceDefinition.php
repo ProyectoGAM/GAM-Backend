@@ -5,11 +5,11 @@ namespace App\Modules\ReportingAndAnalytics\Domain\Data;
 final readonly class ReportSourceDefinition
 {
     /**
-     * @param  array<string, array{label: string, type: string, unit?: string|null}>  $columns
-     * @param  array<string, array{label: string, type: string, operators: list<string>, options?: list<string>}>  $filters
-     * @param  array<string, array{label: string, type: string}>  $groupings
-     * @param  array<string, array{label: string, type: string, unit?: string|null}>  $metrics
-     * @param  array<string, array{label: string, direction: string}>  $sorts
+     * @param  array<string, array{label: string, tipo: string, unit?: string|null}>  $columns
+     * @param  array<string, array{label: string, tipo: string, operators: list<string>, options?: list<string>}>  $filters
+     * @param  array<string, array{label: string, tipo: string}>  $groupings
+     * @param  array<string, array{label: string, tipo: string, unit?: string|null}>  $metrics
+     * @param  array<string, array{label: string, direccion: string}>  $sorts
      * @param  list<string>  $formats
      * @param  array{max_page_size: int, max_range_days: int, max_export_rows: int}  $limits
      */
@@ -39,14 +39,14 @@ final readonly class ReportSourceDefinition
     {
         return [
             'key' => $this->key,
-            'definition_version' => $this->definitionVersion,
+            'version_definicion' => $this->definitionVersion,
             'label' => $this->label,
             'description' => $this->description,
-            'columns' => $this->columns,
-            'filters' => $this->filters,
-            'groupings' => $this->groupings,
-            'metrics' => $this->metrics,
-            'sorts' => $this->sorts,
+            'columnas' => $this->columns,
+            'filtros' => $this->filters,
+            'agrupaciones' => $this->groupings,
+            'metricas' => $this->metrics,
+            'ordenamientos' => $this->sorts,
             'default_sort' => $this->defaultSort,
             'formats' => $this->formats,
             'limits' => $this->limits,

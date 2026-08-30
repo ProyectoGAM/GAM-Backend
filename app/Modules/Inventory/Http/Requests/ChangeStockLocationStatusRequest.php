@@ -10,12 +10,12 @@ final class ChangeStockLocationStatusRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('changeStatus', $this->route('stockLocation')) ?? false;
+        return $this->user()?->can('changeStatus', $this->route('ubicacionStock')) ?? false;
     }
 
     /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
-        return ['status' => ['required', Rule::enum(StockLocationStatus::class)]];
+        return ['estado' => ['required', Rule::enum(StockLocationStatus::class)]];
     }
 }

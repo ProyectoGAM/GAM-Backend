@@ -18,10 +18,10 @@ final class ListStockLocationsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'search' => ['sometimes', 'string', 'max:120'],
-            'status' => ['sometimes', Rule::enum(StockLocationStatus::class)],
-            'production_unit_id' => ['sometimes', 'integer', 'exists:production_units,id'],
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'buscar' => ['sometimes', 'string', 'max:120'],
+            'estado' => ['sometimes', Rule::enum(StockLocationStatus::class)],
+            'unidad_productiva_id' => ['sometimes', 'integer', 'exists:production_units,id'],
+            'por_pagina' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }
 }

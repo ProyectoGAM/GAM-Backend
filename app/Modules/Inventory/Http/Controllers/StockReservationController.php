@@ -11,6 +11,7 @@ use App\Modules\Inventory\Http\Requests\ConsumeStockReservationRequest;
 use App\Modules\Inventory\Http\Requests\ReleaseStockReservationRequest;
 use App\Modules\Inventory\Http\Requests\ReserveStockRequest;
 use App\Modules\Inventory\Http\Resources\StockReservationResource;
+use App\Support\PublicInputMapper;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -21,7 +22,7 @@ final readonly class StockReservationController
         /** @var User $actor */
         $actor = $request->user();
 
-        return (new StockReservationResource($action->execute($request->validated(), $actor)))->response()->setStatusCode(Response::HTTP_CREATED);
+        return (new StockReservationResource($action->execute(PublicInputMapper::toInternal($request->validated(), 'inventory'), $actor)))->response()->setStatusCode(Response::HTTP_CREATED);
     }
 
     public function release(ReleaseStockReservationRequest $request, StockReservation $stockReservation, ReleaseStockReservationAction $action): StockReservationResource
@@ -29,7 +30,7 @@ final readonly class StockReservationController
         /** @var User $actor */
         $actor = $request->user();
 
-        return new StockReservationResource($action->execute($stockReservation, $request->validated(), $actor));
+        return new StockReservationResource($action->execute($stockReservation, PublicInputMapper::toInternal($request->validated(), 'inventory'), $actor));
     }
 
     public function consume(ConsumeStockReservationRequest $request, StockReservation $stockReservation, ConsumeStockReservationAction $action): StockReservationResource
@@ -37,6 +38,6 @@ final readonly class StockReservationController
         /** @var User $actor */
         $actor = $request->user();
 
-        return new StockReservationResource($action->execute($stockReservation, $request->validated(), $actor));
+        return new StockReservationResource($action->execute($stockReservation, PublicInputMapper::toInternal($request->validated(), 'inventory'), $actor));
     }
 }

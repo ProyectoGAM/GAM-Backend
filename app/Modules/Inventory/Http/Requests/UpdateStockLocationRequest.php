@@ -11,15 +11,15 @@ final class UpdateStockLocationRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('update', $this->route('stockLocation')) ?? false;
+        return $this->user()?->can('update', $this->route('ubicacionStock')) ?? false;
     }
 
     /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
         return [
-            'production_unit_id' => ['sometimes', 'nullable', 'integer', 'exists:production_units,id'],
-            'name' => ['sometimes', 'string', 'max:160'],
+            'unidad_productiva_id' => ['sometimes', 'nullable', 'integer', 'exists:production_units,id'],
+            'nombre' => ['sometimes', 'string', 'max:160'],
         ];
     }
 
@@ -27,12 +27,12 @@ final class UpdateStockLocationRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
-            $location = $this->route('stockLocation');
-            if ($validator->errors()->has('name') || ! $location instanceof StockLocation || ! $this->filled('name')) {
+            $location = $this->route('ubicacionStock');
+            if ($validator->errors()->has('nombre') || ! $location instanceof StockLocation || ! $this->filled('nombre')) {
                 return;
             }
-            if (StockLocation::query()->where('normalized_name', Str::lower(trim($this->string('name')->toString())))->whereKeyNot($location->getKey())->exists()) {
-                $validator->errors()->add('name', 'El nombre de la ubicación ya está registrado.');
+            if (StockLocation::query()->where('normalized_name', Str::lower(trim($this->string('nombre')->toString())))->whereKeyNot($location->getKey())->exists()) {
+                $validator->errors()->add('nombre', 'El nombre de la ubicación ya está registrado.');
             }
         }];
     }

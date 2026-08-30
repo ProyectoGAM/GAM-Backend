@@ -22,7 +22,7 @@ final readonly class UpdateReportPresetAction
     {
         $sourceKey = $attributes['source_key'] ?? $preset->source_key;
         $configuration = $attributes['configuration'] ?? $preset->configuration;
-        unset($configuration['source_key'], $configuration['definition_version']);
+        unset($configuration['clave_fuente'], $configuration['version_definicion']);
         $source = $this->registry->get($sourceKey);
         $this->registry->assertCanRead($actor, $source);
         $query = $this->normalizer->normalize($sourceKey, $configuration);

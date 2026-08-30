@@ -12,6 +12,7 @@ use App\Modules\Geography\Http\Requests\ListLocalitiesRequest;
 use App\Modules\Geography\Http\Requests\StoreLocalityRequest;
 use App\Modules\Geography\Http\Requests\UpdateLocalityRequest;
 use App\Modules\Geography\Http\Resources\LocalityResource;
+use App\Support\PublicInputMapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Symfony\Component\HttpFoundation\Response;
@@ -20,37 +21,37 @@ final readonly class LocalityController
 {
     public function index(
         ListLocalitiesRequest $request,
-        Department $department,
+        Department $departamento,
         ListLocalitiesQuery $query,
     ): AnonymousResourceCollection {
-        return LocalityResource::collection($query->execute($department, $request->validated()));
+        return LocalityResource::collection($query->execute($departamento, PublicInputMapper::toInternal($request->validated())));
     }
 
     public function store(
         StoreLocalityRequest $request,
-        Department $department,
+        Department $departamento,
         CreateLocalityAction $action,
     ): JsonResponse {
         /** @var User $actor */
         $actor = $request->user();
-        $locality = $action->execute($department, $request->safe()->only(['name']), $actor);
+        $localidad = $action->execute($departamento, PublicInputMapper::toInternal($request->safe()->only(['nombre'])), $actor);
 
-        return (new LocalityResource($locality))
+        return (new LocalityResource($localidad))
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
     }
 
     public function update(
         UpdateLocalityRequest $request,
-        Locality $locality,
+        Locality $localidad,
         UpdateLocalityAction $action,
     ): LocalityResource {
         /** @var User $actor */
         $actor = $request->user();
 
         return new LocalityResource($action->execute(
-            $locality,
-            $request->safe()->only(['department_id', 'name']),
+            $localidad,
+            PublicInputMapper::toInternal($request->safe()->only(['departamento_id', 'nombre'])),
             $actor,
         ));
     }
