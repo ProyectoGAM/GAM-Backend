@@ -51,9 +51,6 @@ x-app-environment: &app-environment
   SESSION_SECURE_COOKIE: "false"
   SESSION_SAME_SITE: lax
 
-  SANCTUM_STATEFUL_DOMAINS: localhost:${FRONTEND_PORT:-4200},localhost:${API_PORT:-8080},127.0.0.1:${FRONTEND_PORT:-4200},127.0.0.1:${API_PORT:-8080}
-  FRONTEND_URL: http://localhost:${FRONTEND_PORT:-4200}
-
   MAIL_MAILER: smtp
   MAIL_HOST: mailpit
   MAIL_PORT: 1025
@@ -103,6 +100,8 @@ services:
     volumes:
       # PostgreSQL 18 usa /var/lib/postgresql como volumen principal.
       - postgres-data:/var/lib/postgresql
+      # Crea la base de testing solo al inicializar el volumen por primera vez.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
       interval: 5s
