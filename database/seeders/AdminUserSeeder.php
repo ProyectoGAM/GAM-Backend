@@ -52,6 +52,10 @@ final class AdminUserSeeder extends Seeder
             Permission::findOrCreate('inventory.adjust', 'web'),
             Permission::findOrCreate('inventory.reserve', 'web'),
             Permission::findOrCreate('inventory.manage', 'web'),
+            Permission::findOrCreate('reports.view', 'web'),
+            Permission::findOrCreate('reports.export', 'web'),
+            Permission::findOrCreate('reports.presets.manage', 'web'),
+            Permission::findOrCreate('reports.share', 'web'),
         ];
         $role = Role::findOrCreate('admin', 'web');
         $role->syncPermissions($permissions);

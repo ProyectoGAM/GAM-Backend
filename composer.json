@@ -11,6 +11,7 @@
     "require": {
         "php": "^8.3",
         "brick/money": "^0.14.1",
+        "dompdf/dompdf": "^3.1",
         "laravel/framework": "^13.17",
         "laravel/horizon": "^5.48",
         "laravel/pulse": "^1.8",
@@ -20,6 +21,7 @@
         "spatie/laravel-backup": "^10.3",
         "spatie/laravel-health": "^1.40",
         "spatie/laravel-medialibrary": "^11.23",
+        "spatie/laravel-pdf": "^2.0",
         "spatie/laravel-permission": "^8.3",
         "spatie/laravel-query-builder": "^7.3",
         "spatie/simple-excel": "^3.10"

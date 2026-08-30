@@ -46,9 +46,13 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return response()->json([
+                'type' => 'https://httpstatuses.com/422',
+                'title' => 'Datos inválidos',
+                'status' => Response::HTTP_UNPROCESSABLE_ENTITY,
+                'detail' => 'Los datos proporcionados no son válidos.',
                 'message' => 'Los datos proporcionados no son válidos.',
                 'errors' => $exception->errors(),
-            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+            ], Response::HTTP_UNPROCESSABLE_ENTITY)->header('Content-Type', 'application/problem+json');
         });
 
         $exceptions->render(function (AuthenticationException $exception, Request $request): ?Response {
@@ -57,8 +61,12 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return response()->json([
+                'type' => 'https://httpstatuses.com/401',
+                'title' => 'No autenticado',
+                'status' => Response::HTTP_UNAUTHORIZED,
+                'detail' => 'No estás autenticado.',
                 'message' => 'No estás autenticado.',
-            ], Response::HTTP_UNAUTHORIZED);
+            ], Response::HTTP_UNAUTHORIZED)->header('Content-Type', 'application/problem+json');
         });
 
         $exceptions->render(function (AccessDeniedHttpException $exception, Request $request): ?Response {
@@ -67,8 +75,12 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return response()->json([
+                'type' => 'https://httpstatuses.com/403',
+                'title' => 'Acceso prohibido',
+                'status' => Response::HTTP_FORBIDDEN,
+                'detail' => 'No tienes autorización para realizar esta acción.',
                 'message' => 'No tienes autorización para realizar esta acción.',
-            ], Response::HTTP_FORBIDDEN);
+            ], Response::HTTP_FORBIDDEN)->header('Content-Type', 'application/problem+json');
         });
 
         $exceptions->render(function (NotFoundHttpException $exception, Request $request): ?Response {
@@ -77,8 +89,12 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return response()->json([
+                'type' => 'https://httpstatuses.com/404',
+                'title' => 'Recurso no encontrado',
+                'status' => Response::HTTP_NOT_FOUND,
+                'detail' => 'El recurso solicitado no existe.',
                 'message' => 'El recurso solicitado no existe.',
-            ], Response::HTTP_NOT_FOUND);
+            ], Response::HTTP_NOT_FOUND)->header('Content-Type', 'application/problem+json');
         });
 
         $exceptions->render(function (HttpExceptionInterface $exception, Request $request): ?Response {
@@ -98,7 +114,11 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return response()->json([
+                'type' => 'https://httpstatuses.com/'.$exception->getStatusCode(),
+                'title' => 'Solicitud no procesada',
+                'status' => $exception->getStatusCode(),
+                'detail' => $message,
                 'message' => $message,
-            ], $exception->getStatusCode());
+            ], $exception->getStatusCode())->header('Content-Type', 'application/problem+json');
         });
     })->create();

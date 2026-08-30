@@ -14,6 +14,9 @@ use App\Modules\Inventory\Http\Controllers\InventoryReadController;
 use App\Modules\Inventory\Http\Controllers\StockLocationController;
 use App\Modules\Inventory\Http\Controllers\StockLocationStatusController;
 use App\Modules\Inventory\Http\Controllers\StockReservationController;
+use App\Modules\ReportingAndAnalytics\Http\Controllers\ReportExportController;
+use App\Modules\ReportingAndAnalytics\Http\Controllers\ReportPresetController;
+use App\Modules\ReportingAndAnalytics\Http\Controllers\ReportSourceController;
 use App\Modules\SuppliersAndCatalogs\Http\Controllers\ProductController;
 use App\Modules\SuppliersAndCatalogs\Http\Controllers\ProductStatusController;
 use App\Modules\SuppliersAndCatalogs\Http\Controllers\SupplierController;
@@ -31,6 +34,25 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::post('/autenticacion/cerrar-sesion', [AuthController::class, 'logout'])->name('auth.logout');
 
         Route::get('/auditoria/entradas', [AuditEntryController::class, 'index'])->name('audit.entries.index');
+
+        Route::get('/reportes/fuentes', [ReportSourceController::class, 'index'])->name('reports.sources.index');
+        Route::post('/reportes/{source}/previsualizaciones', [ReportSourceController::class, 'preview'])
+            ->middleware('throttle:reporting')
+            ->name('reports.previews.store');
+
+        Route::get('/configuraciones-reportes', [ReportPresetController::class, 'index'])->name('report-presets.index');
+        Route::post('/configuraciones-reportes', [ReportPresetController::class, 'store'])->name('report-presets.store');
+        Route::get('/configuraciones-reportes/{reportPreset}', [ReportPresetController::class, 'show'])->name('report-presets.show');
+        Route::patch('/configuraciones-reportes/{reportPreset}', [ReportPresetController::class, 'update'])->name('report-presets.update');
+        Route::delete('/configuraciones-reportes/{reportPreset}', [ReportPresetController::class, 'destroy'])->name('report-presets.destroy');
+
+        Route::post('/reportes/{source}/exportaciones', [ReportExportController::class, 'store'])
+            ->middleware('throttle:reporting')
+            ->name('report-exports.store');
+        Route::get('/exportaciones-reportes', [ReportExportController::class, 'index'])->name('report-exports.index');
+        Route::get('/exportaciones-reportes/{reportExport}', [ReportExportController::class, 'show'])->name('report-exports.show');
+        Route::post('/exportaciones-reportes/{reportExport}/enlaces-temporales', [ReportExportController::class, 'share'])
+            ->name('report-exports.share');
 
         Route::get('/departamentos', [DepartmentController::class, 'index'])->name('departments.index');
         Route::post('/departamentos', [DepartmentController::class, 'store'])->name('departments.store');
@@ -101,4 +123,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/reservas/{stockReservation}/consumos', [StockReservationController::class, 'consume'])->name('reservations.consumptions.store');
         });
     });
+
+    Route::get('/exportaciones-reportes/{reportExport}/descarga', [ReportExportController::class, 'download'])
+        ->name('report-exports.download');
 });
