@@ -58,7 +58,6 @@ final class PublicInputMapper
             'hasta' => 'to',
             'ordenamientos' => 'sorts',
             'orden' => 'sort',
-            'direccion' => 'address',
             'agrupaciones' => 'groupings',
             'metricas' => 'metrics',
             'formato' => 'format',
@@ -71,6 +70,16 @@ final class PublicInputMapper
             $keys['tipo'] = 'kind';
         } elseif ($context === 'inventory') {
             $keys['tipo'] = 'type';
+        } elseif ($context === 'maintenance') {
+            $keys += [
+                'fecha_mantenimiento' => 'maintenance_date',
+                'descripcion' => 'description',
+                'costo_importe' => 'cost_amount',
+                'costo_moneda' => 'cost_currency',
+                'responsable_id' => 'responsible_user_id',
+                'fecha_desde' => 'date_from',
+                'fecha_hasta' => 'date_to',
+            ];
         } elseif ($context === 'report') {
             // Las columnas y filtros son un contrato del dominio de reportes y
             // conservan sus claves en español hasta llegar a la fuente.

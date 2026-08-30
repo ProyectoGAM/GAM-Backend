@@ -31,6 +31,7 @@ use App\Modules\SuppliersAndCatalogs\Domain\Enums\BaseUnit;
 use App\Modules\SuppliersAndCatalogs\Domain\Enums\ProductKind;
 use App\Modules\SuppliersAndCatalogs\Domain\Enums\ProductStatus;
 use App\Modules\SuppliersAndCatalogs\Domain\Enums\SupplierStatus;
+use Database\Seeders\FarmStructure\MaintenanceDemoSeeder;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -48,6 +49,7 @@ final class LocalDemoDataSeeder extends Seeder
         $localities = $this->seedLocalities();
         $units = $this->seedProductionUnits($localities);
         $this->seedPoultryHouses($units);
+        $this->call(MaintenanceDemoSeeder::class);
         $suppliers = $this->seedSuppliers($localities);
         $products = $this->seedProducts();
         $locations = $this->seedStockLocations($units);

@@ -140,6 +140,18 @@ tests/
 - Deben ser inmutables, específicos del caso de uso y no espejos genéricos de tablas.
 - Aplican a casos como `RegistrarVentaData` o `CerrarRepartoData`, no a entradas simples como crear una UP.
 
+### Histórico de mantenimientos de instalaciones
+
+`FarmStructure` es propietario de `Maintenance`, asociado a un galpón. Se registran trabajos realizados con fecha, descripción, costo exacto mediante `Shared/Money` y responsable con snapshot de su nombre. No se programa trabajo futuro ni se comparte el modelo con mantenimiento vehicular.
+
+- El historial incluye registros realizados y cancelados; el último mantenimiento operacional excluye los cancelados.
+- Las correcciones y cancelaciones exigen motivo, versión vigente, bloqueo transaccional y auditoría síncrona con valores anteriores y nuevos.
+- Las entradas de auditoría son append-only. La cancelación conserva el registro; no hay endpoint de borrado ni reactivación.
+- El alta usa `Idempotency-Key` por actor para evitar duplicados. Los permisos reutilizados son `poultry-houses.view` y `poultry-houses.manage`, globales para toda la empresa.
+- Registrar mantenimiento no altera capacidad, ocupación ni estado del galpón. Se admite documentar trabajos pasados sobre instalaciones actualmente inactivas.
+
+El contrato HTTP se encuentra en `contracts/openapi/maintenance.yaml` y las decisiones y validaciones de la implementación en `maintenance-implementation.md`.
+
 ## 7. Arquitectura Angular
 
 Angular se divide en `core` para autenticación/API, `shared` para UI reutilizable y `features` alineados con los módulos de GAM.
