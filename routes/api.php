@@ -14,7 +14,7 @@ use App\Modules\Inventory\Http\Controllers\InventoryMovementController;
 use App\Modules\Inventory\Http\Controllers\InventoryReadController;
 use App\Modules\Inventory\Http\Controllers\StockLocationController;
 use App\Modules\Inventory\Http\Controllers\StockLocationStatusController;
-use App\Modules\Inventory\Http\Controllers\StockReservationController;
+use App\Modules\ReferenceData\Http\Controllers\ReferenceOptionsController;
 use App\Modules\ReportingAndAnalytics\Http\Controllers\ReportExportController;
 use App\Modules\ReportingAndAnalytics\Http\Controllers\ReportPresetController;
 use App\Modules\ReportingAndAnalytics\Http\Controllers\ReportSourceController;
@@ -33,6 +33,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('/mi-perfil', [AuthController::class, 'me'])->name('me');
         Route::post('/autenticacion/cerrar-sesion', [AuthController::class, 'logout'])->name('auth.logout');
+        Route::get('/referencias/opciones', ReferenceOptionsController::class)->name('reference-options.index');
 
         Route::get('/auditoria/entradas', [AuditEntryController::class, 'index'])->name('audit.entries.index');
 
@@ -119,16 +120,12 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::patch('/saldos/{stockBalance}/stock-minimo', [InventoryReadController::class, 'minimum'])->name('balances.minimum');
             Route::get('/movimientos', [InventoryReadController::class, 'movimientos'])->name('movimientos.index');
             Route::get('/movimientos/{inventoryMovement}', [InventoryReadController::class, 'movement'])->name('movimientos.show');
-            Route::get('/reservas', [InventoryReadController::class, 'reservations'])->name('reservations.index');
             Route::post('/ingresos', [InventoryMovementController::class, 'receive'])->name('receipts.store');
             Route::post('/salidas', [InventoryMovementController::class, 'issue'])->name('issues.store');
             Route::post('/perdidas', [InventoryMovementController::class, 'loss'])->name('losses.store');
             Route::post('/ajustes', [InventoryMovementController::class, 'adjust'])->name('adjustments.store');
             Route::post('/transferencias', [InventoryMovementController::class, 'transfer'])->name('transfers.store');
             Route::post('/movimientos/{inventoryMovement}/reversiones', [InventoryMovementController::class, 'reverse'])->name('movimientos.reversals.store');
-            Route::post('/reservas', [StockReservationController::class, 'store'])->name('reservations.store');
-            Route::post('/reservas/{stockReservation}/liberaciones', [StockReservationController::class, 'release'])->name('reservations.releases.store');
-            Route::post('/reservas/{stockReservation}/consumos', [StockReservationController::class, 'consume'])->name('reservations.consumptions.store');
         });
     });
 

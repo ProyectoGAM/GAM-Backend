@@ -7,8 +7,6 @@ final readonly class StockAvailabilityData
     public function __construct(
         public int $productId,
         public int $stockLocationId,
-        public string $onHandQuantity,
-        public string $reservedQuantity,
         public string $availableQuantity,
     ) {}
 }

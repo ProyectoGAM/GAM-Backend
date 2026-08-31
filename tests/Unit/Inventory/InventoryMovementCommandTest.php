@@ -16,8 +16,8 @@ final class InventoryMovementCommandTest extends TestCase
             type: InventoryMovementType::Receipt,
             operationId: '00000000-0000-0000-0000-000000000001',
             lines: [
-                ['product_id' => 2, 'stock_location_id' => 4, 'on_hand_delta' => '1.000000', 'reserved_delta' => '0'],
-                ['product_id' => 1, 'stock_location_id' => 3, 'on_hand_delta' => '2.000000', 'reserved_delta' => '0'],
+                ['product_id' => 2, 'stock_location_id' => 4, 'on_hand_delta' => '1.000000'],
+                ['product_id' => 1, 'stock_location_id' => 3, 'on_hand_delta' => '2.000000'],
             ],
         );
 

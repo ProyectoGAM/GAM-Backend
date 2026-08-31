@@ -18,7 +18,6 @@ class InventoryMovementLine extends Model
     {
         return [
             'on_hand_delta' => 'decimal:6',
-            'reserved_delta' => 'decimal:6',
         ];
     }
 

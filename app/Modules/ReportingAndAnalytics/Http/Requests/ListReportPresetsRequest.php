@@ -16,6 +16,9 @@ final class ListReportPresetsRequest extends FormRequest
     /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
-        return ['por_pagina' => ['sometimes', 'integer', 'min:1', 'max:100']];
+        return [
+            'pagina' => ['sometimes', 'integer', 'min:1'],
+            'por_pagina' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ];
     }
 }

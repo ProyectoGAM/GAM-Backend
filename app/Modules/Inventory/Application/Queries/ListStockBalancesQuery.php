@@ -15,7 +15,7 @@ final readonly class ListStockBalancesQuery
             ->with(['product', 'stockLocation'])
             ->when($filters['product_id'] ?? null, fn (Builder $query, int $productId): Builder => $query->where('product_id', $productId))
             ->when($filters['stock_location_id'] ?? null, fn (Builder $query, int $locationId): Builder => $query->where('stock_location_id', $locationId))
-            ->when($filters['below_minimum'] ?? false, fn (Builder $query): Builder => $query->whereRaw('(on_hand_quantity - reserved_quantity) < minimum_quantity'))
+            ->when($filters['below_minimum'] ?? false, fn (Builder $query): Builder => $query->whereColumn('on_hand_quantity', '<', 'minimum_quantity'))
             ->orderBy('stock_location_id')
             ->orderBy('product_id')
             ->orderBy('id')

@@ -21,7 +21,7 @@ final class AdjustStockRequest extends InventoryCommandRequest
             'lineas.*.ubicacion_stock_id' => ['required', 'integer', 'exists:stock_locations,id'],
             'lineas.*.cantidad_contada' => ['required', 'string', 'regex:/^\d+(?:\.\d{1,6})?$/'],
             'motivo' => ['required', 'string', 'max:255'],
-            'ocurrido_en' => ['sometimes', 'fecha'],
+            'ocurrido_en' => ['sometimes', 'date'],
         ];
     }
 }

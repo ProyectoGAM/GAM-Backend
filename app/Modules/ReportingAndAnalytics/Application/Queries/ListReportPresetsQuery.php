@@ -8,13 +8,13 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 final readonly class ListReportPresetsQuery
 {
-    /** @param array{per_page?: int} $filters */
+    /** @param array{page?: int, per_page?: int} $filters */
     public function execute(User $actor, array $filters): LengthAwarePaginator
     {
         return ReportPreset::query()
             ->whereBelongsTo($actor)
             ->orderBy('name')
             ->orderBy('id')
-            ->paginate(min((int) ($filters['per_page'] ?? 50), 100));
+            ->paginate(min((int) ($filters['per_page'] ?? 50), 100), ['*'], 'page', (int) ($filters['page'] ?? 1));
     }
 }

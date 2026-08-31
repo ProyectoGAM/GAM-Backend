@@ -18,11 +18,16 @@ x-app-build: &app-build
 
 x-app-environment: &app-environment
   APP_NAME: ${APP_NAME:-GAM}
-  APP_ENV: local
+  APP_ENV: ${APP_ENV:-local}
   APP_DEBUG: "true"
   APP_URL: http://localhost:${API_PORT:-8080}
   APP_KEY: ${APP_KEY:-base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
   TZ: ${TZ:-America/Montevideo}
+
+  # Credenciales del administrador local, consumidas por DatabaseSeeder.
+  ADMIN_NAME: ${ADMIN_NAME:-GAM Administrator}
+  ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@gam.test}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ChangeMe123!}
 
   LOG_CHANNEL: stderr
   LOG_LEVEL: debug
@@ -168,6 +173,9 @@ services:
         set -eu
         php artisan optimize:clear
         php artisan migrate --force --isolated --no-interaction
+        if [ "$${APP_ENV:-production}" = "local" ]; then
+          php artisan db:seed --force --no-interaction
+        fi
         exec /usr/local/sbin/php-fpm -F
     expose:
       - "9000"
@@ -237,6 +245,30 @@ services:
         condition: service_healthy
     stop_grace_period: 30s
 
+  swagger-ui:
+    image: docker.swagger.io/swaggerapi/swagger-ui:v5.32.14
+    restart: unless-stopped
+    environment:
+      BASE_URL: /docs
+      URLS: >-
+        [{"url":"/docs/openapi/authentication.yaml","name":"Autenticación"},
+         {"url":"/docs/openapi/maintenance.yaml","name":"Mantenimientos"},
+         {"url":"/docs/openapi/reporting.yaml","name":"Reportes e indicadores"},
+         {"url":"/docs/openapi/reference-data.yaml","name":"Opciones de referencia"}]
+      URLS_PRIMARY_NAME: Autenticación
+    volumes:
+      - ./contracts/openapi:/usr/share/nginx/html/openapi:ro
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/docs/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - gam-dev
+
   gateway:
     image: nginxinc/nginx-unprivileged:1.28-alpine
     restart: unless-stopped
@@ -248,6 +280,8 @@ services:
         mode: 0444
     depends_on:
       api:
+        condition: service_healthy
+      swagger-ui:
         condition: service_healthy
     healthcheck:
       test:

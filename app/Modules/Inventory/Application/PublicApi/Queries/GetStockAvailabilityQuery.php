@@ -21,8 +21,6 @@ final readonly class GetStockAvailabilityQuery
         return new StockAvailabilityData(
             productId: $productId,
             stockLocationId: $stockLocationId,
-            onHandQuantity: (string) $balance->on_hand_quantity,
-            reservedQuantity: (string) $balance->reserved_quantity,
             availableQuantity: (string) $balance->available_quantity,
         );
     }

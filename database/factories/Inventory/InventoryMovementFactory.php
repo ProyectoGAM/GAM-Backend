@@ -25,7 +25,6 @@ class InventoryMovementFactory extends Factory
             'request_hash' => hash('sha256', (string) Str::uuid()),
             'type' => InventoryMovementType::Receipt,
             'supplier_id' => null,
-            'stock_reservation_id' => null,
             'reference_type' => null,
             'reference_id' => null,
             'reason' => fake()->sentence(),

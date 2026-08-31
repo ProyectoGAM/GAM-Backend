@@ -2,10 +2,15 @@
 
 namespace Tests\Feature\ReportingAndAnalytics;
 
+use App\Models\Inventory\StockBalance;
+use App\Models\Inventory\StockLocation;
 use App\Models\ReportingAndAnalytics\ReportExport;
 use App\Models\ReportingAndAnalytics\ReportPreset;
+use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\User;
+use App\Modules\ReportingAndAnalytics\Application\Data\ReportResultData;
 use App\Modules\ReportingAndAnalytics\Application\Jobs\GenerateReportExport;
+use App\Modules\ReportingAndAnalytics\Application\Services\ReportSourceRegistry;
 use App\Modules\ReportingAndAnalytics\Domain\Enums\ReportExportStatus;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Queue;
@@ -48,6 +53,71 @@ final class ReportingEndpointTest extends TestCase
         $response->assertUnprocessable()->assertJsonPath('tipo', 'https://httpstatuses.com/422');
     }
 
+    // Flujo: acepta la paginación pública sin convertirla al vocabulario interno antes de normalizar.
+    public function test_preview_accepts_public_pagination_keys(): void
+    {
+        // Preparación: autentica un usuario con permisos de consulta de inventario.
+        Sanctum::actingAs($this->userWithPermissions(['reports.view', 'inventory.view']), ['*']);
+
+        // Acción: envía la consulta con las claves públicas usadas por el frontend.
+        $response = $this->postJson('/api/v1/reportes/inventario.saldos-stock/previsualizaciones', [
+            'agrupaciones' => ['producto'],
+            'metricas' => ['stock_disponible'],
+            'pagina' => 1,
+            'por_pagina' => 50,
+        ]);
+
+        // Verificación: confirma que la consulta llega al normalizador y produce resultado.
+        $response->assertOk()->assertJsonPath('data.pagination.current_page', 1);
+    }
+
+    // Flujo: agrupa saldos sin una métrica explícita; verifica que suma por dimensión.
+    public function test_grouping_adds_a_metric_and_aggregates_rows(): void
+    {
+        // Preparación: crea dos saldos del mismo producto en ubicaciones distintas.
+        Sanctum::actingAs($this->userWithPermissions(['reports.view', 'inventory.view']), ['*']);
+        $product = Product::factory()->create(['name' => 'Maíz agrupado']);
+        StockBalance::factory()->for($product, 'product')->for(StockLocation::factory(), 'stockLocation')->create([
+            'on_hand_quantity' => '3.000000',
+        ]);
+        StockBalance::factory()->for($product, 'product')->for(StockLocation::factory(), 'stockLocation')->create([
+            'on_hand_quantity' => '7.000000',
+        ]);
+
+        // Acción: agrupa por producto sin marcar ninguna métrica en la solicitud.
+        $response = $this->postJson('/api/v1/reportes/inventario.saldos-stock/previsualizaciones', [
+            'agrupaciones' => ['producto'],
+        ]);
+
+        // Verificación: devuelve una sola fila con la suma del stock disponible.
+        $response->assertOk()
+            ->assertJsonPath('data.columnas.2', 'stock_disponible')
+            ->assertJsonPath('data.pagination.total', 1)
+            ->assertJsonPath('data.rows.0.producto', 'Maíz agrupado')
+            ->assertJsonPath('data.rows.0.stock_disponible', '10.000000');
+    }
+
+    // Flujo: agrupa los movimientos por día y tipo, como el indicador de inventario.
+    public function test_preview_groups_movements_by_day_without_missing_sort_alias(): void
+    {
+        // Preparación: autentica un usuario con permisos de consulta de reportes e inventario.
+        Sanctum::actingAs($this->userWithPermissions(['reports.view', 'inventory.view']), ['*']);
+
+        // Acción: solicita la agrupación usada por el indicador de movimientos.
+        $response = $this->postJson('/api/v1/reportes/inventario.movimientos/previsualizaciones', [
+            'agrupaciones' => ['dia', 'tipo'],
+            'metricas' => ['cantidad_movimientos'],
+            'pagina' => 1,
+            'por_pagina' => 100,
+        ]);
+
+        // Verificación: el orden por defecto usa la primera agrupación sin lanzar una excepción.
+        $response->assertOk()
+            ->assertJsonPath('data.columnas.0', 'dia')
+            ->assertJsonPath('data.columnas.1', 'tipo')
+            ->assertJsonPath('data.columnas.2', 'cantidad_movimientos');
+    }
+
     // Flujo: crea un preset y verifica que solo el propietario pueda consultarlo.
     public function test_presets_are_private_to_the_authenticated_user(): void
     {
@@ -59,7 +129,12 @@ final class ReportingEndpointTest extends TestCase
         $created = $this->postJson('/api/v1/configuraciones-reportes', [
             'nombre' => 'Stock mensual',
             'clave_fuente' => 'inventario.saldos-stock',
-            'configuracion' => ['agrupaciones' => ['producto'], 'metricas' => ['stock_fisico']],
+            'configuracion' => [
+                'agrupaciones' => ['producto'],
+                'metricas' => ['stock_disponible'],
+                'pagina' => 2,
+                'por_pagina' => 25,
+            ],
         ])->assertCreated();
 
         // Verificación: confirma el preset y su normalización de unidad.
@@ -79,7 +154,7 @@ final class ReportingEndpointTest extends TestCase
         Sanctum::actingAs($actor, ['*']);
         Queue::fake();
         $key = (string) Str::uuid();
-        $payload = ['formato' => 'xlsx', 'agrupaciones' => ['producto'], 'metricas' => ['stock_fisico']];
+        $payload = ['formato' => 'xlsx', 'agrupaciones' => ['producto'], 'metricas' => ['stock_disponible']];
 
         // Acción 1: solicita la generación del archivo.
         $first = $this->postJson('/api/v1/reportes/inventario.saldos-stock/exportaciones', $payload, [
@@ -154,6 +229,38 @@ final class ReportingEndpointTest extends TestCase
             ->assertHeader('Content-Type', 'text/html; charset=UTF-8')
             ->assertSee('Saldos de inventario')
             ->assertSee('test.xlsx');
+    }
+
+    // Flujo: aplica el formato de cantidades del inventario en la vista HTML compartida.
+    public function test_shared_report_formats_quantity_values(): void
+    {
+        // Preparación: construye un resultado con cantidades en la escala de PostgreSQL.
+        $source = app(ReportSourceRegistry::class)
+            ->get('inventario.saldos-stock')
+            ->definition();
+        $result = new ReportResultData(
+            sourceKey: $source->key,
+            definitionVersion: $source->definitionVersion,
+            columns: ['cantidad_disponible'],
+            rows: [['cantidad_disponible' => '48.000000'], ['cantidad_disponible' => '95.650000']],
+            aggregates: [],
+            units: ['cantidad_disponible' => 'unidad_base'],
+            currentPage: 1,
+            perPage: 50,
+            total: 2,
+            lastPage: 1,
+            generatedAt: now(),
+        );
+        $export = new ReportExport(['file_name' => 'test.xlsx', 'completed_at' => now()]);
+
+        // Acción: renderiza la vista que consume el enlace temporal.
+        $html = view('reporting.report-export', compact('export', 'source', 'result'))->render();
+
+        // Verificación: conserva un decimal adicional al último decimal significativo.
+        $this->assertStringContainsString('48.0', $html);
+        $this->assertStringContainsString('95.650', $html);
+        $this->assertStringNotContainsString('48.000000', $html);
+        $this->assertStringNotContainsString('95.650000', $html);
     }
 
     private function completedExport(User $owner): ReportExport

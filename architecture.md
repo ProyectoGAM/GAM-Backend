@@ -50,7 +50,7 @@ La estructura objetivo separa `apps/api`, `apps/web`, `contracts/openapi`, `infr
 | M05 | Lotes y producción | `Raza`, `Categoria`, `Division`, `Lote` y recolecciones |
 | M06 | Ejecución del manejo | `Manejo`, `Peso`, `DetallePeso`, `Mortalidad` y tareas realizadas |
 | M07 | Planes de manejo | `PlanDeManejo`, versiones, asignaciones y ocurrencias |
-| M08 | Inventario | `StockLocation`, `StockBalance`, movimientos, reservas y stock mínimo |
+| M08 | Inventario | `StockLocation`, `StockBalance`, movimientos, stock disponible y stock mínimo |
 | M09 | Clientes y ventas | `Cliente`, `Venta`, `CuentaCorriente`, `Movimiento` y cobros |
 | M10 | Reportes y monitoreo | KPIs, alertas, proyecciones y exportaciones |
 
@@ -70,7 +70,7 @@ La auditoría es una capacidad transversal implementada en `AuditAndTraceability
 - Cada módulo es el único autorizado a modificar sus datos.
 - Un módulo no importa controllers, requests ni modelos Eloquent internos de otro.
 - La colaboración ocurre mediante Actions públicas, Queries, proyecciones o eventos.
-- M04 es dueño de la identidad, clasificación y unidad base de los artículos; M08 es dueño del ledger append-only, los saldos, las reservas y sus invariantes transaccionales.
+- M04 es dueño de la identidad, clasificación y unidad base de los artículos; M08 es dueño del ledger append-only, el saldo disponible y sus invariantes transaccionales.
 - El saldo sólo cambia mediante un movimiento de inventario auditado; una corrección crea un movimiento compensatorio y nunca edita el histórico.
 - Un contrato público compuesto puede usar un DTO o read model inmutable, nunca un modelo Eloquent interno.
 - M10 puede leer proyecciones de todos los módulos, pero no modificar sus datos.
@@ -173,8 +173,7 @@ Registrar una recolección y aumentar el inventario debe ocurrir en la misma tra
 1. Crear el reparto en borrador.
 2. Bloquear el saldo relevante con `lockForUpdate`.
 3. Recalcular y validar la disponibilidad.
-4. Reservar stock dentro de la misma transacción.
-5. Iniciar, conciliar y cerrar mediante transiciones explícitas.
+4. Iniciar, conciliar y cerrar mediante transiciones explícitas.
 
 Retiros y retornos operan con cantidades normalizadas. Nunca se crea un reparto operativo con stock insuficiente o negativo.
 

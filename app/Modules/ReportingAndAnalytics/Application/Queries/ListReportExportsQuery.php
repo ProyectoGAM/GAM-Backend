@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 final readonly class ListReportExportsQuery
 {
-    /** @param array{status?: string, per_page?: int} $filters */
+    /** @param array{status?: string, page?: int, per_page?: int} $filters */
     public function execute(User $actor, array $filters): LengthAwarePaginator
     {
         return ReportExport::query()
@@ -17,6 +17,6 @@ final readonly class ListReportExportsQuery
             ->when($filters['status'] ?? null, fn (Builder $query, string $status): Builder => $query->where('status', $status))
             ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->paginate(min((int) ($filters['per_page'] ?? 50), 100));
+            ->paginate(min((int) ($filters['per_page'] ?? 50), 100), ['*'], 'page', (int) ($filters['page'] ?? 1));
     }
 }

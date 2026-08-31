@@ -40,7 +40,7 @@ final class AuthController
         LoginResponder $responder,
     ): JsonResponse {
         $data = PublicInputMapper::toInternal($request->validated(), 'identity');
-        $user = $loginUser->execute([
+        $result = $loginUser->execute([
             'email' => $data['email'],
             'password' => $data['password'],
         ]);

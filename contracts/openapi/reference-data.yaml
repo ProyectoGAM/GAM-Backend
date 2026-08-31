@@ -1,0 +1,83 @@
+openapi: 3.1.0
+info:
+  title: API de opciones de referencia
+  version: 1.0.0
+  description: |
+    Catálogos vivos para construir formularios y filtros sin pedir al usuario
+    que memorice identificadores. Cada lista respeta los permisos de lectura
+    del usuario autenticado.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: Referencias
+    description: Opciones de entidades, estados y valores de dominio.
+paths:
+  /referencias/opciones:
+    get:
+      tags: [Referencias]
+      operationId: listarOpcionesDeReferencia
+      summary: Lista las opciones disponibles para formularios y filtros
+      description: |
+        Devuelve listas actualizadas desde la base de datos y los enums del
+        backend. Las listas que el usuario no puede consultar se devuelven
+        vacías. Los valores de las opciones deben enviarse en los comandos,
+        nunca las etiquetas mostradas.
+      responses:
+        '200':
+          description: Opciones disponibles para el usuario autenticado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ReferenceOptions'
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum
+  schemas:
+    Option:
+      type: object
+      required: [value, label]
+      properties:
+        value:
+          oneOf:
+            - type: integer
+            - type: string
+        label: { type: string }
+    OptionMap:
+      type: object
+      additionalProperties:
+        type: array
+        items: { $ref: '#/components/schemas/Option' }
+    ReferenceOptions:
+      type: object
+      required: [departamentos, localidades, unidades_productivas, galpones, proveedores, productos, ubicaciones_stock, saldos_inventario, movimientos, tipos, estados, auditoria]
+      properties:
+        departamentos: { type: array, items: { $ref: '#/components/schemas/Option' } }
+        localidades: { type: array, items: { $ref: '#/components/schemas/Option' } }
+        unidades_productivas: { type: array, items: { $ref: '#/components/schemas/Option' } }
+        galpones: { type: array, items: { $ref: '#/components/schemas/Option' } }
+        proveedores: { type: array, items: { $ref: '#/components/schemas/Option' } }
+        productos: { type: array, items: { $ref: '#/components/schemas/Option' } }
+        ubicaciones_stock: { type: array, items: { $ref: '#/components/schemas/Option' } }
+        saldos_inventario: { type: array, items: { $ref: '#/components/schemas/Option' } }
+        movimientos: { type: array, items: { $ref: '#/components/schemas/Option' } }
+        tipos: { $ref: '#/components/schemas/OptionMap' }
+        estados: { $ref: '#/components/schemas/OptionMap' }
+        auditoria:
+          type: object
+          required: [eventos, origenes]
+          properties:
+            eventos: { type: array, items: { $ref: '#/components/schemas/Option' } }
+            origenes: { type: array, items: { $ref: '#/components/schemas/Option' } }
+  responses:
+    NoAutenticado:
+      description: El token no existe o ya no es válido.

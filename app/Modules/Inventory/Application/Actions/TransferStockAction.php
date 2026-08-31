@@ -22,13 +22,11 @@ final readonly class TransferStockAction
                 'product_id' => (int) $line['product_id'],
                 'stock_location_id' => (int) $line['from_stock_location_id'],
                 'on_hand_delta' => '-'.ltrim($quantity, '+'),
-                'reserved_delta' => '0',
             ];
             $lines[] = [
                 'product_id' => (int) $line['product_id'],
                 'stock_location_id' => (int) $line['to_stock_location_id'],
                 'on_hand_delta' => $quantity,
-                'reserved_delta' => '0',
             ];
         }
 
@@ -43,7 +41,7 @@ final readonly class TransferStockAction
         ), $actor);
     }
 
-    /** @param list<array{product_id:int, stock_location_id:int, on_hand_delta:string, reserved_delta:string}> $lines */
+    /** @param list<array{product_id:int, stock_location_id:int, on_hand_delta:string}> $lines */
     private function mergeLines(array $lines): array
     {
         $merged = [];
@@ -55,10 +53,8 @@ final readonly class TransferStockAction
                 continue;
             }
             $merged[$key]['on_hand_delta'] = (string) BigDecimal::of($merged[$key]['on_hand_delta'])->plus($line['on_hand_delta']);
-            $merged[$key]['reserved_delta'] = (string) BigDecimal::of($merged[$key]['reserved_delta'])->plus($line['reserved_delta']);
         }
 
-        return array_values(array_filter($merged, static fn (array $line): bool => ! BigDecimal::of($line['on_hand_delta'])->isZero()
-            || ! BigDecimal::of($line['reserved_delta'])->isZero()));
+        return array_values(array_filter($merged, static fn (array $line): bool => ! BigDecimal::of($line['on_hand_delta'])->isZero()));
     }
 }
