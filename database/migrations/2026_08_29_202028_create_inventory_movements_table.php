@@ -18,7 +18,6 @@ return new class extends Migration
             $table->char('request_hash', 64);
             $table->string('type', 30);
             $table->foreignId('supplier_id')->nullable()->constrained('suppliers')->restrictOnDelete();
-            $table->foreignId('stock_reservation_id')->nullable()->constrained('stock_reservations')->restrictOnDelete();
             $table->string('reference_type', 120)->nullable();
             $table->string('reference_id', 120)->nullable();
             $table->string('reason', 255)->nullable();
@@ -34,7 +33,7 @@ return new class extends Migration
             $table->unique('reverses_movement_id');
         });
 
-        DB::statement("ALTER TABLE inventory_movements ADD CONSTRAINT inventory_movements_type_check CHECK (type IN ('opening_balance', 'receipt', 'issue', 'loss', 'adjustment', 'transfer', 'reservation', 'release', 'consumption', 'reversal'))");
+        DB::statement("ALTER TABLE inventory_movements ADD CONSTRAINT inventory_movements_type_check CHECK (type IN ('opening_balance', 'receipt', 'issue', 'loss', 'adjustment', 'transfer', 'reversal'))");
     }
 
     /**

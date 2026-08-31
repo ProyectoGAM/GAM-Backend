@@ -21,7 +21,7 @@ final class RecordStockLossRequest extends InventoryCommandRequest
             'lineas.*.ubicacion_stock_id' => ['required', 'integer', 'exists:stock_locations,id'],
             'lineas.*.cantidad' => ['required', 'string', 'regex:/^(?=.*[1-9])\d+(?:\.\d{1,6})?$/'],
             'motivo' => ['required', 'string', 'max:255'],
-            'ocurrido_en' => ['sometimes', 'fecha'],
+            'ocurrido_en' => ['sometimes', 'date'],
         ];
     }
 }

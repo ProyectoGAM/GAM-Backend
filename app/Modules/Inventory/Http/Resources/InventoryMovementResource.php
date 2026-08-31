@@ -18,7 +18,6 @@ final class InventoryMovementResource extends JsonResource
             'id_operacion' => $this->operation_id,
             'tipo' => $this->type->value,
             'proveedor' => SupplierResource::make($this->whenLoaded('supplier')),
-            'reserva_stock_id' => $this->stock_reservation_id,
             'tipo_referencia' => $this->reference_type,
             'referencia_id' => $this->reference_id,
             'motivo' => $this->reason,

@@ -23,7 +23,6 @@ class StockBalanceFactory extends Factory
             'product_id' => Product::factory(),
             'stock_location_id' => StockLocation::factory(),
             'on_hand_quantity' => '0.000000',
-            'reserved_quantity' => '0.000000',
             'minimum_quantity' => '0.000000',
         ];
     }

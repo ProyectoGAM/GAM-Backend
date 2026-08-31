@@ -6,7 +6,7 @@ final readonly class ReportSourceDefinition
 {
     /**
      * @param  array<string, array{label: string, tipo: string, unit?: string|null}>  $columns
-     * @param  array<string, array{label: string, tipo: string, operators: list<string>, options?: list<string>}>  $filters
+     * @param  array<string, array{label: string, tipo: string, operators: list<string>, options?: list<string>, options_source?: string}>  $filters
      * @param  array<string, array{label: string, tipo: string}>  $groupings
      * @param  array<string, array{label: string, tipo: string, unit?: string|null}>  $metrics
      * @param  array<string, array{label: string, direccion: string}>  $sorts

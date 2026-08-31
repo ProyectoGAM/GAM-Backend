@@ -17,7 +17,6 @@ return new class extends Migration
             $table->foreignId('product_id')->constrained('products')->restrictOnDelete();
             $table->foreignId('stock_location_id')->constrained('stock_locations')->restrictOnDelete();
             $table->decimal('on_hand_quantity', 18, 6)->default(0);
-            $table->decimal('reserved_quantity', 18, 6)->default(0);
             $table->decimal('minimum_quantity', 18, 6)->default(0);
             $table->timestamps();
 
@@ -25,7 +24,7 @@ return new class extends Migration
             $table->index(['stock_location_id', 'product_id']);
         });
 
-        DB::statement('ALTER TABLE stock_balances ADD CONSTRAINT stock_balances_quantities_check CHECK (on_hand_quantity >= 0 AND reserved_quantity >= 0 AND minimum_quantity >= 0 AND reserved_quantity <= on_hand_quantity)');
+        DB::statement('ALTER TABLE stock_balances ADD CONSTRAINT stock_balances_quantities_check CHECK (on_hand_quantity >= 0 AND minimum_quantity >= 0)');
     }
 
     /**

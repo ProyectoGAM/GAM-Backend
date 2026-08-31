@@ -65,6 +65,9 @@ paths:
       tags: [Configuraciones]
       summary: Lista las configuraciones propias
       operationId: listarConfiguracionesDeReporte
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
       responses:
         '200':
           description: Configuraciones paginadas.

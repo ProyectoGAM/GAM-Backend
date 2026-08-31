@@ -10,8 +10,6 @@ use App\Models\Inventory\InventoryMovement;
 use App\Models\Inventory\InventoryMovementLine;
 use App\Models\Inventory\StockBalance;
 use App\Models\Inventory\StockLocation;
-use App\Models\Inventory\StockReservation;
-use App\Models\Inventory\StockReservationLine;
 use App\Models\ReportingAndAnalytics\ReportExport;
 use App\Models\ReportingAndAnalytics\ReportPreset;
 use App\Models\SuppliersAndCatalogs\Product;
@@ -21,7 +19,6 @@ use App\Modules\FarmStructure\Domain\Enums\PoultryHouseStatus;
 use App\Modules\FarmStructure\Domain\Enums\ProductionUnitStatus;
 use App\Modules\Inventory\Domain\Enums\InventoryMovementType;
 use App\Modules\Inventory\Domain\Enums\StockLocationStatus;
-use App\Modules\Inventory\Domain\Enums\StockReservationStatus;
 use App\Modules\ReportingAndAnalytics\Application\Services\ReportExportWriter;
 use App\Modules\ReportingAndAnalytics\Application\Services\ReportQueryNormalizer;
 use App\Modules\ReportingAndAnalytics\Application\Services\ReportSourceRegistry;
@@ -56,7 +53,6 @@ final class LocalDemoDataSeeder extends Seeder
 
         $this->seedBalances($products, $locations);
         $this->seedMovements($admin, $products, $locations, $suppliers);
-        $this->seedReservation($admin, $products, $locations);
         $this->seedReports($admin);
     }
 
@@ -208,13 +204,13 @@ final class LocalDemoDataSeeder extends Seeder
     private function seedBalances(array $products, array $locations): void
     {
         $balances = [
-            ['product' => 'corn', 'location' => 'ombu_feed', 'on_hand' => '1240.000000', 'reserved' => '180.000000', 'minimum' => '500.000000'],
-            ['product' => 'soy', 'location' => 'ombu_feed', 'on_hand' => '680.000000', 'reserved' => '90.000000', 'minimum' => '300.000000'],
-            ['product' => 'vaccine', 'location' => 'ombu_supplies', 'on_hand' => '120.000000', 'reserved' => '20.000000', 'minimum' => '50.000000'],
-            ['product' => 'disinfectant', 'location' => 'ombu_supplies', 'on_hand' => '85.500000', 'reserved' => '0.000000', 'minimum' => '30.000000'],
-            ['product' => 'corn', 'location' => 'santa_clara_feed', 'on_hand' => '760.000000', 'reserved' => '100.000000', 'minimum' => '400.000000'],
-            ['product' => 'soy', 'location' => 'santa_clara_feed', 'on_hand' => '420.000000', 'reserved' => '60.000000', 'minimum' => '250.000000'],
-            ['product' => 'eggs', 'location' => 'santa_clara_eggs', 'on_hand' => '432.000000', 'reserved' => '96.000000', 'minimum' => '200.000000'],
+            ['product' => 'corn', 'location' => 'ombu_feed', 'on_hand' => '1240.000000', 'minimum' => '500.000000'],
+            ['product' => 'soy', 'location' => 'ombu_feed', 'on_hand' => '680.000000', 'minimum' => '300.000000'],
+            ['product' => 'vaccine', 'location' => 'ombu_supplies', 'on_hand' => '120.000000', 'minimum' => '50.000000'],
+            ['product' => 'disinfectant', 'location' => 'ombu_supplies', 'on_hand' => '85.500000', 'minimum' => '30.000000'],
+            ['product' => 'corn', 'location' => 'santa_clara_feed', 'on_hand' => '760.000000', 'minimum' => '400.000000'],
+            ['product' => 'soy', 'location' => 'santa_clara_feed', 'on_hand' => '420.000000', 'minimum' => '250.000000'],
+            ['product' => 'eggs', 'location' => 'santa_clara_eggs', 'on_hand' => '432.000000', 'minimum' => '200.000000'],
         ];
 
         foreach ($balances as $definition) {
@@ -224,7 +220,6 @@ final class LocalDemoDataSeeder extends Seeder
             ]);
             $balance->forceFill([
                 'on_hand_quantity' => $definition['on_hand'],
-                'reserved_quantity' => $definition['reserved'],
                 'minimum_quantity' => $definition['minimum'],
             ])->save();
         }
@@ -300,68 +295,11 @@ final class LocalDemoDataSeeder extends Seeder
         );
     }
 
-    /** @param array<string, Product> $products @param array<string, StockLocation> $locations */
-    private function seedReservation(User $admin, array $products, array $locations): void
-    {
-        $reservation = StockReservation::query()->firstOrNew([
-            'reference_type' => 'plan_alimentacion',
-            'reference_id' => 'PLAN-ALIMENTACION-2026-09',
-        ]);
-        $reservation->forceFill([
-            'status' => StockReservationStatus::Active,
-            'created_by' => $admin->getKey(),
-        ])->save();
-
-        $lines = [
-            ['product' => 'corn', 'location' => 'ombu_feed', 'quantity' => '180.000000'],
-            ['product' => 'soy', 'location' => 'ombu_feed', 'quantity' => '90.000000'],
-            ['product' => 'vaccine', 'location' => 'ombu_supplies', 'quantity' => '20.000000'],
-            ['product' => 'corn', 'location' => 'santa_clara_feed', 'quantity' => '100.000000'],
-            ['product' => 'soy', 'location' => 'santa_clara_feed', 'quantity' => '60.000000'],
-            ['product' => 'eggs', 'location' => 'santa_clara_eggs', 'quantity' => '96.000000'],
-        ];
-
-        foreach ($lines as $definition) {
-            $line = StockReservationLine::query()->firstOrNew([
-                'stock_reservation_id' => $reservation->getKey(),
-                'product_id' => $products[$definition['product']]->getKey(),
-                'stock_location_id' => $locations[$definition['location']]->getKey(),
-            ]);
-            $line->forceFill([
-                'unit' => $products[$definition['product']]->base_unit->value,
-                'reserved_quantity' => $definition['quantity'],
-                'released_quantity' => '0.000000',
-                'consumed_quantity' => '0.000000',
-            ])->save();
-        }
-
-        $this->saveMovement(
-            '00000000-0000-4000-8000-000000000005',
-            InventoryMovementType::Reservation,
-            null,
-            'Reserva de insumos para el plan de alimentación de septiembre.',
-            now()->subDay(),
-            array_map(
-                fn (array $definition): array => $this->movementLine(
-                    $products[$definition['product']],
-                    $locations[$definition['location']],
-                    '0.000000',
-                    $definition['quantity'],
-                ),
-                $lines,
-            ),
-            $admin,
-            $reservation->getKey(),
-            'plan_alimentacion',
-            'PLAN-ALIMENTACION-2026-09',
-        );
-    }
-
     private function seedReports(User $admin): void
     {
         $sourceKey = 'inventario.saldos-stock';
         $query = app(ReportQueryNormalizer::class)->normalize($sourceKey, [
-            'columnas' => ['producto', 'unidad_base', 'ubicacion_stock', 'cantidad_fisica', 'cantidad_reservada', 'cantidad_disponible'],
+            'columnas' => ['producto', 'unidad_base', 'ubicacion_stock', 'cantidad_disponible', 'cantidad_minima'],
             'filtros' => [],
             'desde' => null,
             'hasta' => null,
@@ -423,20 +361,19 @@ final class LocalDemoDataSeeder extends Seeder
         ])->save();
     }
 
-    /** @return array{product_id: int, stock_location_id: int, on_hand_delta: string, reserved_delta: string, unit: string} */
-    private function movementLine(Product $product, StockLocation $location, string $onHand, string $reserved = '0.000000'): array
+    /** @return array{product_id: int, stock_location_id: int, on_hand_delta: string, unit: string} */
+    private function movementLine(Product $product, StockLocation $location, string $onHand): array
     {
         return [
             'product_id' => $product->getKey(),
             'stock_location_id' => $location->getKey(),
             'on_hand_delta' => $onHand,
-            'reserved_delta' => $reserved,
             'unit' => $product->base_unit->value,
         ];
     }
 
     /**
-     * @param  list<array{product_id: int, stock_location_id: int, on_hand_delta: string, reserved_delta: string, unit: string}>  $lines
+     * @param  list<array{product_id: int, stock_location_id: int, on_hand_delta: string, unit: string}>  $lines
      */
     private function saveMovement(
         string $operationId,
@@ -446,7 +383,6 @@ final class LocalDemoDataSeeder extends Seeder
         Carbon $occurredAt,
         array $lines,
         User $admin,
-        ?int $reservationId = null,
         ?string $referenceType = null,
         ?string $referenceId = null,
     ): void {
@@ -456,7 +392,6 @@ final class LocalDemoDataSeeder extends Seeder
             'request_hash' => hash('sha256', 'local-demo|'.$operationId),
             'type' => $type,
             'supplier_id' => $supplierId,
-            'stock_reservation_id' => $reservationId,
             'reference_type' => $referenceType,
             'reference_id' => $referenceId,
             'reason' => $reason,
@@ -474,7 +409,6 @@ final class LocalDemoDataSeeder extends Seeder
             $line->forceFill([
                 'unit' => $definition['unit'],
                 'on_hand_delta' => $definition['on_hand_delta'],
-                'reserved_delta' => $definition['reserved_delta'],
             ])->save();
         }
     }

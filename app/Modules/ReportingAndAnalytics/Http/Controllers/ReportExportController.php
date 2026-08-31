@@ -28,7 +28,7 @@ final readonly class ReportExportController
         $actor = $request->user();
         $attributes = PublicInputMapper::toInternal(
             $request->safe()->except(['formato', 'idempotency_key']),
-            'report',
+            'report-query',
         );
         $result = $action->execute(
             sourceKey: $source,

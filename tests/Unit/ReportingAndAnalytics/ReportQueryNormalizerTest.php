@@ -20,13 +20,29 @@ final class ReportQueryNormalizerTest extends TestCase
         // Acción: normaliza una agrupación y una métrica cuantitativa.
         $query = $normalizer->normalize('inventario.saldos-stock', [
             'agrupaciones' => ['producto'],
-            'metricas' => ['stock_fisico'],
+            'metricas' => ['stock_disponible'],
         ]);
 
         // Verificación: confirma que los resultados quedan separados por unidad.
         $this->assertSame(['producto', 'unidad_base'], $query->groupings);
-        $this->assertSame(['stock_fisico'], $query->metrics);
+        $this->assertSame(['stock_disponible'], $query->metrics);
         $this->assertSame([['field' => 'producto', 'direction' => 'asc']], $query->sorts);
+    }
+
+    // Flujo: agrupa sin medir; verifica que la fuente elija su métrica principal automáticamente.
+    public function test_adds_default_metric_when_grouping_is_requested_without_metrics(): void
+    {
+        // Preparación: crea el normalizador con las fuentes públicas de inventario.
+        $normalizer = $this->normalizer();
+
+        // Acción: normaliza únicamente una dimensión.
+        $query = $normalizer->normalize('inventario.saldos-stock', [
+            'agrupaciones' => ['producto'],
+        ]);
+
+        // Verificación: conserva una agrupación útil y añade la medida publicada por defecto.
+        $this->assertSame(['producto', 'unidad_base'], $query->groupings);
+        $this->assertSame(['stock_disponible'], $query->metrics);
     }
 
     // Flujo: normaliza filtros, fechas y ordenamiento usando solo valores permitidos.

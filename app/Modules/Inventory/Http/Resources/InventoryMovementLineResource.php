@@ -20,7 +20,6 @@ final class InventoryMovementLineResource extends JsonResource
             'ubicacion_stock_id' => (int) $this->stock_location_id,
             'unidad' => $this->unit,
             'variacion_fisica' => (string) $this->on_hand_delta,
-            'variacion_reservada' => (string) $this->reserved_delta,
         ];
     }
 }
