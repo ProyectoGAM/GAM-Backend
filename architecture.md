@@ -47,8 +47,8 @@ La estructura objetivo separa `apps/api`, `apps/web`, `contracts/openapi`, `infr
 | M02 | Auditoría y trazabilidad | Historial append-only, actor, operación, traza y cambios explícitos |
 | M03 | Ubicaciones y estructura de la granja | `Department`, `Locality`, `ProductionUnit`, `PoultryHouse`, estados y capacidad máxima |
 | M04 | Proveedores y catálogos | `Supplier`, `Product` y catálogos de artículos inventariables |
-| M05 | Lotes y producción | `Raza`, `Categoria`, `Division`, `Lote` y recolecciones |
-| M06 | Ejecución del manejo | `Manejo`, `Peso`, `DetallePeso`, `Mortalidad` y tareas realizadas |
+| M05 | Lotes y cría | `Flock`, `Breed`, `FlockMovement`, `MortalityCategory`, `MortalityRecord`, `EggCollection` y operaciones idempotentes |
+| M06 | Ejecución del manejo | `Manejo`, `Peso`, `DetallePeso` y tareas realizadas; mortalidad pertenece a M05 |
 | M07 | Planes de manejo | `PlanDeManejo`, versiones, asignaciones y ocurrencias |
 | M08 | Inventario | `StockLocation`, `StockBalance`, movimientos, stock disponible y stock mínimo |
 | M09 | Clientes y ventas | `Cliente`, `Venta`, `CuentaCorriente`, `Movimiento` y cobros |
@@ -72,6 +72,9 @@ La auditoría es una capacidad transversal implementada en `AuditAndTraceability
 - La colaboración ocurre mediante Actions públicas, Queries, proyecciones o eventos.
 - M04 es dueño de la identidad, clasificación y unidad base de los artículos; M08 es dueño del ledger append-only, el saldo disponible y sus invariantes transaccionales.
 - El saldo sólo cambia mediante un movimiento de inventario auditado; una corrección crea un movimiento compensatorio y nunca edita el histórico.
+- M05 es dueño de cantidad viva, ubicación actual y estado del lote. Las redistribuciones no crean genealogía; un traslado total conserva identidad y la finalización registra un egreso sin borrar el lote.
+- Instalaciones expone `LockPoultryHousesQuery` y consume `PoultryHouseOccupancyProvider`, implementado por Lotes. La capacidad física nunca se usa como contador mutable de aves.
+- La recolección y su compensación de stock usan `RecordEggProductionAction`, frontera pública de Inventario, dentro de la transacción de Lotes. El fallo de cualquier auditoría revierte ambos módulos.
 - Un contrato público compuesto puede usar un DTO o read model inmutable, nunca un modelo Eloquent interno.
 - M10 puede leer proyecciones de todos los módulos, pero no modificar sus datos.
 - `Shared` contiene solamente elementos estables como `Money`, `Clock`, IDs y errores base; nunca negocio residual.

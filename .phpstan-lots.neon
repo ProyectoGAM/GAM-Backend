@@ -1,0 +1,24 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 5
+    paths:
+        - app/Models/Lots
+        - app/Modules/Lots
+        - app/Policies/Lots
+        - app/Shared
+        - app/Providers/LotsServiceProvider.php
+        - app/Providers/FarmStructureServiceProvider.php
+        - app/Support/PublicInputMapper.php
+        - app/Modules/FarmStructure/Application/PublicApi/Queries/LockPoultryHousesQuery.php
+        - app/Modules/FarmStructure/Application/PublicApi/Data/LockedPoultryHouseData.php
+        - app/Modules/Inventory/Application/PublicApi/Actions/RecordEggProductionAction.php
+        - app/Modules/Inventory/Application/PublicApi/Data/ProductionMovementData.php
+        - app/Modules/Inventory/Application/Actions/RecordInventoryMovementAction.php
+        - app/Models/Inventory/InventoryMovement.php
+        - app/Models/Inventory/StockLocation.php
+        - app/Modules/Inventory/Application/Data/InventoryMovementCommand.php
+        - database/seeders/Lots
+        - database/factories/Lots
+    tmpDir: storage/framework/cache/phpstan-lots

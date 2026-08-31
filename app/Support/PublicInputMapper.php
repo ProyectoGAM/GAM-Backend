@@ -65,7 +65,29 @@ final class PublicInputMapper
             'configuracion' => 'configuration',
         ];
 
-        if ($context === 'catalog') {
+        if ($context === 'lots') {
+            $keys = array_replace($keys, [
+                'id' => 'public_id',
+                'codigo' => 'code',
+                'raza_id' => 'breed_id',
+                'origen' => 'origin',
+                'galpon_id' => 'poultry_house_id',
+                'cantidad_inicial' => 'initial_quantity',
+                'fecha_ingreso' => 'entry_date',
+                'observaciones' => 'notes',
+                'lote_id' => 'flock_id',
+                'galpon_destino_id' => 'destination_poultry_house_id',
+                'lote_destino_id' => 'destination_flock_id',
+                'codigo_destino' => 'destination_code',
+                'id_destino' => 'destination_public_id',
+                'version_destino' => 'destination_version',
+                'version_lote' => 'flock_version',
+                'categoria_mortalidad_id' => 'mortality_category_id',
+                'fecha_desde' => 'date_from',
+                'fecha_hasta' => 'date_to',
+                'tipo' => 'type',
+            ]);
+        } elseif ($context === 'catalog') {
             $keys['tipo'] = 'kind';
         } elseif ($context === 'inventory') {
             $keys['tipo'] = 'type';
