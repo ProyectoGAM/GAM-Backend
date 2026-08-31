@@ -128,7 +128,7 @@ occupancy = valor calculado por Lots
 available_capacity = bird_capacity - occupancy
 ```
 
-`PoultryHouseOccupancyProvider` es el contrato público que deberá implementar el módulo de Lotes. Mientras Lotes no exista, `EmptyPoultryHouseOccupancyProvider` informa ocupación cero. Las Actions ya consultan el contrato al reducir capacidad o desactivar un galpón, por lo que integrar Lotes no requiere reescribirlas.
+`PoultryHouseOccupancyProvider` es el contrato público implementado por `LotsPoultryHouseOccupancyProvider`: suma aves vivas, incluida cuarentena. `EmptyPoultryHouseOccupancyProvider` queda como fallback del módulo de Instalaciones cuando Lotes no está registrado. Las Actions consultan el contrato al reducir capacidad o desactivar un galpón. Lotes obtiene referencias bloqueadas y capacidad disponible mediante `LockPoultryHousesQuery`, sin importar los modelos internos de Instalaciones.
 
 ## Autorización
 

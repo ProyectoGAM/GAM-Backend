@@ -21,7 +21,7 @@ final class FarmStructureServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->app->bind(
+        $this->app->bindIf(
             PoultryHouseOccupancyProvider::class,
             EmptyPoultryHouseOccupancyProvider::class,
         );

@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
+/** @property StockLocationStatus $status */
 #[Fillable(['production_unit_id', 'name', 'status'])]
 class StockLocation extends Model
 {

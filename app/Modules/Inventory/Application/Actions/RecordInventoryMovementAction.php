@@ -27,7 +27,7 @@ final readonly class RecordInventoryMovementAction
         private GetActiveSupplierQuery $getActiveSupplier,
     ) {}
 
-    public function execute(InventoryMovementCommand $command, User $actor): InventoryMovement
+    public function execute(InventoryMovementCommand $command, User $actor, string $source = 'api'): InventoryMovement
     {
         $requestHash = $command->requestHash();
         $existing = $this->existingMovement($command->operationId);
@@ -37,7 +37,7 @@ final readonly class RecordInventoryMovementAction
         }
 
         try {
-            return DB::transaction(function () use ($command, $actor, $requestHash): InventoryMovement {
+            return DB::transaction(function () use ($command, $actor, $requestHash, $source): InventoryMovement {
                 $existingInsideTransaction = $this->existingMovement($command->operationId);
                 if ($existingInsideTransaction !== null) {
                     return $this->resolveReplay($existingInsideTransaction, $requestHash);
@@ -177,7 +177,7 @@ final readonly class RecordInventoryMovementAction
                     description: 'Movimiento de inventario registrado',
                     operationId: $command->operationId,
                     traceId: null,
-                    source: 'api',
+                    source: $source,
                     upId: null,
                     properties: [
                         'movement_type' => $command->type->value,

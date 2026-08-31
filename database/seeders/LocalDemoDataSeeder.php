@@ -32,6 +32,7 @@ use App\Modules\SuppliersAndCatalogs\Domain\Enums\ProductKind;
 use App\Modules\SuppliersAndCatalogs\Domain\Enums\ProductStatus;
 use App\Modules\SuppliersAndCatalogs\Domain\Enums\SupplierStatus;
 use Database\Seeders\FarmStructure\MaintenanceDemoSeeder;
+use Database\Seeders\Lots\LotsDemoSeeder;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -58,6 +59,7 @@ final class LocalDemoDataSeeder extends Seeder
         $this->seedMovements($admin, $products, $locations, $suppliers);
         $this->seedReservation($admin, $products, $locations);
         $this->seedReports($admin);
+        $this->call(LotsDemoSeeder::class);
     }
 
     /** @return array<string, Locality> */
