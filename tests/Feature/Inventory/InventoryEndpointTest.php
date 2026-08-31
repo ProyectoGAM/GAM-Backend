@@ -28,6 +28,7 @@ final class InventoryEndpointTest extends TestCase
         $this->postJson('/api/v1/inventario/ingresos', [
             'proveedor_id' => $proveedor->getKey(),
             'lineas' => [['producto_id' => $producto->getKey(), 'ubicacion_stock_id' => $location->getKey(), 'cantidad' => '10.500000']],
+            'ocurrido_en' => '2026-08-31T17:00',
         ], ['Idempotency-Key' => $receiveKey])->assertCreated();
 
         // Acción 2: registra la salida de 2,5 unidades.
@@ -43,6 +44,13 @@ final class InventoryEndpointTest extends TestCase
         ]);
         $this->assertDatabaseCount('inventory_movements', 2);
         $this->assertDatabaseHas('activity_log', ['event' => 'inventory_movement_recorded', 'causer_id' => $actor->getKey()]);
+
+        // Verificación: la API expone únicamente el saldo disponible y no campos de reservas.
+        $this->getJson('/api/v1/inventario/saldos')
+            ->assertOk()
+            ->assertJsonPath('data.0.cantidad_disponible', '8.000000')
+            ->assertJsonMissingPath('data.0.cantidad_fisica')
+            ->assertJsonMissingPath('data.0.cantidad_reservada');
     }
 
     // Flujo: repite el mismo ingreso; verifica que la idempotencia evita duplicados.
@@ -107,35 +115,6 @@ final class InventoryEndpointTest extends TestCase
         $this->assertDatabaseCount('inventory_movement_lines', 0);
     }
 
-    // Flujo: recibe, reserva y consume stock; verifica la reducción física y reservada.
-    public function test_reservation_reduces_available_stock_and_consumption_reduces_physical_stock(): void
-    {
-        [, $producto, $location, $proveedor] = $this->inventoryScenario();
-
-        // Acción 1: recibe stock físico para habilitar la reserva.
-        $this->postJson('/api/v1/inventario/ingresos', [
-            'proveedor_id' => $proveedor->getKey(),
-            'lineas' => [['producto_id' => $producto->getKey(), 'ubicacion_stock_id' => $location->getKey(), 'cantidad' => '10.000000']],
-        ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated();
-
-        // Acción 2: reserva tres unidades y conserva el stock físico.
-        $reserva = $this->postJson('/api/v1/inventario/reservas', [
-            'lineas' => [['producto_id' => $producto->getKey(), 'ubicacion_stock_id' => $location->getKey(), 'cantidad' => '3.000000']],
-        ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated();
-        $reservationLineId = $reserva->json('data.lineas.0.id');
-
-        // Verificación intermedia: confirma el aumento del stock reservado.
-        $this->assertDatabaseHas('stock_balances', ['on_hand_quantity' => '10.000000', 'reserved_quantity' => '3.000000']);
-
-        // Acción 3: consume la reserva y reduce el stock físico.
-        $this->postJson('/api/v1/inventario/reservas/'.$reserva->json('data.id').'/consumos', [
-            'lineas' => [['linea_reserva_id' => $reservationLineId, 'cantidad' => '3.000000']],
-        ], ['Idempotency-Key' => (string) Str::uuid()])->assertOk();
-
-        // Verificación final: confirma el consumo y la liberación de la reserva.
-        $this->assertDatabaseHas('stock_balances', ['on_hand_quantity' => '7.000000', 'reserved_quantity' => '0.000000']);
-    }
-
     // Flujo: transfiere, ajusta y revierte stock; verifica la proyección final por ubicación.
     public function test_transfer_adjustment_and_reversal_keep_the_projection_consistent(): void
     {
@@ -178,29 +157,11 @@ final class InventoryEndpointTest extends TestCase
         $this->assertDatabaseHas('stock_balances', ['product_id' => $producto->getKey(), 'stock_location_id' => $destination->getKey(), 'on_hand_quantity' => '0.000000']);
     }
 
-    // Flujo: recibe, reserva y libera stock; verifica que vuelve a estar disponible.
-    public function test_releasing_a_reservation_restores_available_stock(): void
+    // Flujo: intenta usar un endpoint retirado y verifica que no existe ningún flujo de reservas.
+    public function test_reservation_endpoints_are_not_available(): void
     {
-        [, $producto, $location, $proveedor] = $this->inventoryScenario();
-
-        // Acción 1: recibe stock físico para reservarlo después.
-        $this->postJson('/api/v1/inventario/ingresos', [
-            'proveedor_id' => $proveedor->getKey(),
-            'lineas' => [['producto_id' => $producto->getKey(), 'ubicacion_stock_id' => $location->getKey(), 'cantidad' => '5.000000']],
-        ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated();
-
-        // Acción 2: reserva dos unidades del saldo disponible.
-        $reserva = $this->postJson('/api/v1/inventario/reservas', [
-            'lineas' => [['producto_id' => $producto->getKey(), 'ubicacion_stock_id' => $location->getKey(), 'cantidad' => '2.000000']],
-        ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated();
-
-        // Acción 3: libera completamente la reserva.
-        $this->postJson('/api/v1/inventario/reservas/'.$reserva->json('data.id').'/liberaciones', [
-            'lineas' => [['linea_reserva_id' => $reserva->json('data.lineas.0.id'), 'cantidad' => '2.000000']],
-        ], ['Idempotency-Key' => (string) Str::uuid()])->assertOk();
-
-        // Verificación: confirma que el stock reservado vuelve a estar disponible.
-        $this->assertDatabaseHas('stock_balances', ['on_hand_quantity' => '5.000000', 'reserved_quantity' => '0.000000']);
+        $this->getJson('/api/v1/inventario/reservas')->assertNotFound();
+        $this->postJson('/api/v1/inventario/reservas')->assertNotFound();
     }
 
     // Flujo: intenta fraccionar un producto por unidad; verifica rechazo sin movimiento.
@@ -248,7 +209,7 @@ final class InventoryEndpointTest extends TestCase
     private function inventoryScenario(): array
     {
         $actor = User::factory()->create();
-        foreach (['inventory.view', 'inventory.move', 'inventory.adjust', 'inventory.reserve', 'inventory.manage'] as $permission) {
+        foreach (['inventory.view', 'inventory.move', 'inventory.adjust', 'inventory.manage'] as $permission) {
             $actor->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
         Sanctum::actingAs($actor, ['*']);

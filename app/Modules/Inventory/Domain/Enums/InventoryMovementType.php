@@ -10,8 +10,5 @@ enum InventoryMovementType: string
     case Loss = 'loss';
     case Adjustment = 'adjustment';
     case Transfer = 'transfer';
-    case Reservation = 'reservation';
-    case Release = 'release';
-    case Consumption = 'consumption';
     case Reversal = 'reversal';
 }

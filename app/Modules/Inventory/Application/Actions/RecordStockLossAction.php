@@ -18,7 +18,6 @@ final readonly class RecordStockLossAction
             'product_id' => (int) $line['product_id'],
             'stock_location_id' => (int) $line['stock_location_id'],
             'on_hand_delta' => '-'.ltrim((string) $line['quantity'], '+'),
-            'reserved_delta' => '0',
         ], $attributes['lines']);
 
         return $this->recordMovement->execute(new InventoryMovementCommand(

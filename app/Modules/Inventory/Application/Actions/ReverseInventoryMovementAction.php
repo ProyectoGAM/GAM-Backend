@@ -31,7 +31,6 @@ final readonly class ReverseInventoryMovementAction
                 'product_id' => (int) $line->product_id,
                 'stock_location_id' => (int) $line->stock_location_id,
                 'on_hand_delta' => (string) BigDecimal::of((string) $line->on_hand_delta)->negated(),
-                'reserved_delta' => (string) BigDecimal::of((string) $line->reserved_delta)->negated(),
             ], $locked->lines->all());
 
             return $this->recordMovement->execute(new InventoryMovementCommand(

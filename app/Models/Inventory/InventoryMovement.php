@@ -43,12 +43,6 @@ class InventoryMovement extends Model
         return $this->belongsTo(Supplier::class);
     }
 
-    /** @return BelongsTo<StockReservation, $this> */
-    public function reservation(): BelongsTo
-    {
-        return $this->belongsTo(StockReservation::class, 'stock_reservation_id');
-    }
-
     /** @return BelongsTo<User, $this> */
     public function creator(): BelongsTo
     {

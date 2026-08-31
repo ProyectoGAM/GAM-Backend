@@ -94,13 +94,14 @@ final readonly class RequestReportExportAction
                 operationId: $export->operation_id,
             ));
 
-            GenerateReportExport::dispatch($export->getKey())
-                ->onConnection('redis')
-                ->onQueue('reporting')
-                ->afterCommit();
-
             return ['export' => $export, 'replay' => false];
         });
+
+        if (! $result['replay']) {
+            GenerateReportExport::dispatch($result['export']->getKey())
+                ->onConnection('redis')
+                ->onQueue('reporting');
+        }
 
         return $result;
     }

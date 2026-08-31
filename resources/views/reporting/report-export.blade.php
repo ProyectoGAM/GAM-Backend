@@ -21,6 +21,28 @@
 </head>
 <body>
 <main>
+    @php
+        $quantityColumns = array_keys($result->units);
+        $formatQuantity = static function (mixed $value): string {
+            if (! is_string($value) && ! is_int($value) && ! is_float($value)) {
+                return (string) ($value ?? '—');
+            }
+
+            $raw = trim((string) $value);
+            if (preg_match('/^-?\d+(?:\.\d+)?$/', $raw) !== 1) {
+                return $raw === '' ? '—' : $raw;
+            }
+
+            $parts = explode('.', $raw, 2);
+            $integer = $parts[0];
+            $fraction = $parts[1] ?? '';
+            $meaningfulFraction = rtrim($fraction, '0');
+
+            return $meaningfulFraction === ''
+                ? $integer.'.0'
+                : $integer.'.'.$meaningfulFraction.'0';
+        };
+    @endphp
     <p class="eyebrow">Reporte compartido · GAM</p>
     <h1>{{ $source->label }}</h1>
     <p class="meta">Exportación {{ $export->file_name }} · Generada {{ optional($export->completed_at)->format('d/m/Y H:i') }}</p>
@@ -32,17 +54,18 @@
             <table>
                 <thead>
                 <tr>
-                    @foreach ($result->columnas as $column)
-                        <th scope="col">{{ $source->columnas[$column]['label'] ?? $column }}</th>
+                    @foreach ($result->columns as $column)
+                        <th scope="col">{{ $source->columns[$column]['label'] ?? $source->metrics[$column]['label'] ?? $column }}</th>
                     @endforeach
                 </tr>
                 </thead>
                 <tbody>
                 @foreach ($result->rows as $row)
                     <tr>
-                        @foreach ($result->columnas as $column)
+                        @foreach ($result->columns as $column)
                             @php($value = $row[$column] ?? null)
-                            <td>{{ $value === null || $value === '' ? '—' : (is_scalar($value) ? (string) $value : (string) json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) }}</td>
+                            @php($displayValue = in_array($column, $quantityColumns, true) ? $formatQuantity($value) : ($value === null || $value === '' ? '—' : (is_scalar($value) ? (string) $value : (string) json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES))))
+                            <td>{{ $displayValue }}</td>
                         @endforeach
                     </tr>
                 @endforeach

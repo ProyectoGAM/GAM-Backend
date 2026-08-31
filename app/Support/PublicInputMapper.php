@@ -39,7 +39,6 @@ final class PublicInputMapper
             'cantidad_contada' => 'counted_quantity',
             'cantidad_minima' => 'minimum_quantity',
             'bajo_minimo' => 'below_minimum',
-            'linea_reserva_id' => 'reservation_line_id',
             'tipo_referencia' => 'reference_type',
             'referencia_id' => 'reference_id',
             'motivo' => 'reason',
@@ -116,12 +115,19 @@ final class PublicInputMapper
                 'configuracion' => 'configuration',
                 'formato' => 'format',
             ];
+        } elseif ($context === 'report-query') {
+            // La consulta se normaliza con el contrato público de reportes;
+            // no traduzcas sus claves ni siquiera dentro de filtros.
+            $keys = [];
         }
 
         $mapped = [];
         foreach ($input as $key => $value) {
+            $nestedContext = $context === 'report' && $key === 'configuracion'
+                ? 'report-query'
+                : $context;
             $mapped[$keys[$key] ?? $key] = is_array($value)
-                ? self::toInternal($value, $context)
+                ? self::toInternal($value, $nestedContext)
                 : $value;
         }
 

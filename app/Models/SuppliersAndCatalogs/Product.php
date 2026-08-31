@@ -4,7 +4,6 @@ namespace App\Models\SuppliersAndCatalogs;
 
 use App\Models\Inventory\InventoryMovementLine;
 use App\Models\Inventory\StockBalance;
-use App\Models\Inventory\StockReservationLine;
 use App\Modules\SuppliersAndCatalogs\Domain\Enums\BaseUnit;
 use App\Modules\SuppliersAndCatalogs\Domain\Enums\ProductKind;
 use App\Modules\SuppliersAndCatalogs\Domain\Enums\ProductStatus;
@@ -61,11 +60,5 @@ class Product extends Model
     public function movementLines(): HasMany
     {
         return $this->hasMany(InventoryMovementLine::class);
-    }
-
-    /** @return HasMany<StockReservationLine, $this> */
-    public function reservationLines(): HasMany
-    {
-        return $this->hasMany(StockReservationLine::class);
     }
 }

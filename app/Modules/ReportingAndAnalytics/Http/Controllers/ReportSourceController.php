@@ -27,6 +27,6 @@ final readonly class ReportSourceController
         /** @var User $actor */
         $actor = $request->user();
 
-        return new ReportResultResource($query->execute($source, PublicInputMapper::toInternal($request->safe()->all(), 'report'), $actor));
+        return new ReportResultResource($query->execute($source, PublicInputMapper::toInternal($request->safe()->all(), 'report-query'), $actor));
     }
 }

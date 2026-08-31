@@ -20,6 +20,7 @@ final class ListReportExportsRequest extends FormRequest
     {
         return [
             'estado' => ['sometimes', Rule::enum(ReportExportStatus::class)],
+            'pagina' => ['sometimes', 'integer', 'min:1'],
             'por_pagina' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }

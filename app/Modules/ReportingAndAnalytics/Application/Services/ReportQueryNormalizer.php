@@ -39,6 +39,11 @@ final readonly class ReportQueryNormalizer
         $groupings = $this->normalizeNamedList($input['agrupaciones'] ?? [], $definition->groupings, 'agrupaciones');
         $metrics = $this->normalizeNamedList($input['metricas'] ?? [], $definition->metrics, 'metricas');
 
+        // Una agrupación sin métrica solo devuelve etiquetas; agrega la medida principal publicada.
+        if ($groupings !== [] && $metrics === [] && $definition->metrics !== []) {
+            $metrics = [$this->defaultMetric($definition)];
+        }
+
         if ($definition->quantityMetricsRequireUnit && $this->hasQuantityMetric($metrics, $definition)
             && ! in_array('unidad_base', $groupings, true) && array_key_exists('unidad_base', $definition->groupings)) {
             $groupings[] = 'unidad_base';
@@ -136,7 +141,7 @@ final readonly class ReportQueryNormalizer
         return $filters;
     }
 
-    /** @param array{label: string, tipo: string, operators: list<string>, options?: list<string>} $definition */
+    /** @param array{label: string, tipo: string, operators: list<string>, options?: list<string>, options_source?: string} $definition */
     private function assertFilterValue(mixed $value, array $definition, string $key): void
     {
         $valid = match ($definition['tipo']) {
@@ -283,6 +288,17 @@ final readonly class ReportQueryNormalizer
         }
 
         return false;
+    }
+
+    private function defaultMetric(ReportSourceDefinition $definition): string
+    {
+        foreach (['stock_disponible', 'cantidad_movimientos'] as $preferred) {
+            if (array_key_exists($preferred, $definition->metrics)) {
+                return $preferred;
+            }
+        }
+
+        return (string) array_key_first($definition->metrics);
     }
 
     private function invalid(string $key, string $message): never

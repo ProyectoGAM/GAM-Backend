@@ -19,14 +19,13 @@ return new class extends Migration
             $table->foreignId('stock_location_id')->constrained('stock_locations')->restrictOnDelete();
             $table->string('unit', 20);
             $table->decimal('on_hand_delta', 18, 6)->default(0);
-            $table->decimal('reserved_delta', 18, 6)->default(0);
             $table->timestamps();
 
             $table->unique(['inventory_movement_id', 'product_id', 'stock_location_id']);
             $table->index(['product_id', 'stock_location_id', 'created_at']);
         });
 
-        DB::statement('ALTER TABLE inventory_movement_lines ADD CONSTRAINT inventory_movement_lines_delta_check CHECK (on_hand_delta <> 0 OR reserved_delta <> 0)');
+        DB::statement('ALTER TABLE inventory_movement_lines ADD CONSTRAINT inventory_movement_lines_delta_check CHECK (on_hand_delta <> 0)');
     }
 
     /**

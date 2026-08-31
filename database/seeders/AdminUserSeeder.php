@@ -62,7 +62,6 @@ final class AdminUserSeeder extends Seeder
             Permission::findOrCreate('inventory.view', 'web'),
             Permission::findOrCreate('inventory.move', 'web'),
             Permission::findOrCreate('inventory.adjust', 'web'),
-            Permission::findOrCreate('inventory.reserve', 'web'),
             Permission::findOrCreate('inventory.manage', 'web'),
             Permission::findOrCreate('reports.view', 'web'),
             Permission::findOrCreate('reports.export', 'web'),

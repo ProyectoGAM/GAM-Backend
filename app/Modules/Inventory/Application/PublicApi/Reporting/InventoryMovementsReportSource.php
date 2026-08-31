@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Application\PublicApi\Reporting;
 
 use App\Models\Inventory\InventoryMovementLine;
+use App\Modules\Inventory\Domain\Enums\InventoryMovementType;
 use App\Modules\ReportingAndAnalytics\Application\Data\ReportQueryData;
 use App\Modules\ReportingAndAnalytics\Application\Data\ReportResultData;
 use App\Modules\ReportingAndAnalytics\Domain\Contracts\ReportSource;
@@ -19,7 +20,7 @@ final class InventoryMovementsReportSource implements ReportSource
             key: 'inventario.movimientos',
             definitionVersion: '1.0',
             label: 'Movimientos de inventario',
-            description: 'Ingresos, salidas, pérdidas, ajustes y reservas por fecha y unidad base.',
+            description: 'Ingresos, salidas, pérdidas, ajustes y transferencias por fecha y unidad base.',
             permission: 'inventory.view',
             columns: [
                 'fecha' => ['label' => 'Fecha', 'tipo' => 'datetime'],
@@ -34,13 +35,12 @@ final class InventoryMovementsReportSource implements ReportSource
                 'tipo_referencia' => ['label' => 'Tipo de referencia', 'tipo' => 'string'],
                 'referencia_id' => ['label' => 'Referencia', 'tipo' => 'string'],
                 'variacion_fisica' => ['label' => 'Variación física', 'tipo' => 'number', 'unit' => 'unidad_base'],
-                'variacion_reservada' => ['label' => 'Variación reservada', 'tipo' => 'number', 'unit' => 'unidad_base'],
             ],
             filters: [
-                'tipo' => ['label' => 'Tipo', 'tipo' => 'enum', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options' => ['opening_balance', 'receipt', 'issue', 'loss', 'adjustment', 'transfer', 'reservation', 'release', 'consumption', 'reversal']],
-                'producto_id' => ['label' => 'Producto', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in']],
-                'ubicacion_stock_id' => ['label' => 'Ubicación', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in']],
-                'proveedor_id' => ['label' => 'Proveedor', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in']],
+                'tipo' => ['label' => 'Tipo', 'tipo' => 'enum', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options' => array_map(static fn (InventoryMovementType $type): string => $type->value, InventoryMovementType::cases()), 'options_source' => 'movementTypes'],
+                'producto_id' => ['label' => 'Producto', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'products'],
+                'ubicacion_stock_id' => ['label' => 'Ubicación', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'stockLocations'],
+                'proveedor_id' => ['label' => 'Proveedor', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'suppliers'],
             ],
             groupings: [
                 'dia' => ['label' => 'Día', 'tipo' => 'fecha'],
@@ -57,7 +57,6 @@ final class InventoryMovementsReportSource implements ReportSource
                 'cantidad_salidas' => ['label' => 'Cantidad de salidas', 'tipo' => 'quantity', 'unit' => 'unidad_base'],
                 'cantidad_perdidas' => ['label' => 'Cantidad de pérdidas', 'tipo' => 'quantity', 'unit' => 'unidad_base'],
                 'cantidad_ajustes' => ['label' => 'Cantidad de ajustes', 'tipo' => 'quantity', 'unit' => 'unidad_base'],
-                'cantidad_reservada' => ['label' => 'Variación reservada', 'tipo' => 'quantity', 'unit' => 'unidad_base'],
             ],
             sorts: [
                 'fecha' => ['label' => 'Fecha', 'direccion' => 'both'],
@@ -151,7 +150,6 @@ final class InventoryMovementsReportSource implements ReportSource
             'inventory_movements.reference_type as tipo_referencia',
             'inventory_movements.reference_id as referencia_id',
             'inventory_movement_lines.on_hand_delta as variacion_fisica',
-            'inventory_movement_lines.reserved_delta as variacion_reservada',
         ];
     }
 
@@ -217,7 +215,6 @@ final class InventoryMovementsReportSource implements ReportSource
             'cantidad_salidas' => "SUM(CASE WHEN inventory_movements.type = 'issue' THEN ABS(inventory_movement_lines.on_hand_delta) ELSE 0 END)",
             'cantidad_perdidas' => "SUM(CASE WHEN inventory_movements.type = 'loss' THEN ABS(inventory_movement_lines.on_hand_delta) ELSE 0 END)",
             'cantidad_ajustes' => "SUM(CASE WHEN inventory_movements.type = 'adjustment' THEN inventory_movement_lines.on_hand_delta ELSE 0 END)",
-            'cantidad_reservada' => 'SUM(inventory_movement_lines.reserved_delta)',
         ];
         foreach ($query->metrics as $metric) {
             $selects[] = DB::raw("{$metricExpressions[$metric]} as {$metric}");
@@ -229,6 +226,9 @@ final class InventoryMovementsReportSource implements ReportSource
     private function applySorts(QueryBuilder $builder, ReportQueryData $query, bool $grouped): QueryBuilder
     {
         $aliases = [
+            'dia' => 'dia',
+            'semana' => 'semana',
+            'mes' => 'mes',
             'fecha' => 'fecha',
             'tipo' => 'tipo',
             'producto' => 'producto',
@@ -251,7 +251,7 @@ final class InventoryMovementsReportSource implements ReportSource
         $result = [];
         foreach ($columns as $column) {
             $value = $row->{$column} ?? null;
-            if (in_array($column, ['variacion_fisica', 'variacion_reservada', 'cantidad_ingresos', 'cantidad_salidas', 'cantidad_perdidas', 'cantidad_ajustes', 'cantidad_reservada'], true)) {
+            if (in_array($column, ['variacion_fisica', 'cantidad_ingresos', 'cantidad_salidas', 'cantidad_perdidas', 'cantidad_ajustes'], true)) {
                 $value = (string) $value;
             }
             $result[$column] = $value;
@@ -265,7 +265,7 @@ final class InventoryMovementsReportSource implements ReportSource
     {
         $units = [];
         foreach ($columns as $column) {
-            if (in_array($column, ['variacion_fisica', 'variacion_reservada', 'cantidad_ingresos', 'cantidad_salidas', 'cantidad_perdidas', 'cantidad_ajustes', 'cantidad_reservada'], true)) {
+            if (in_array($column, ['variacion_fisica', 'cantidad_ingresos', 'cantidad_salidas', 'cantidad_perdidas', 'cantidad_ajustes'], true)) {
                 $units[$column] = 'unidad_base';
             }
         }

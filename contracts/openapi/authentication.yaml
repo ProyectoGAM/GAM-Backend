@@ -1,0 +1,234 @@
+openapi: 3.1.0
+info:
+  title: API de identidad y acceso
+  version: 1.0.0
+  description: |
+    Registro, inicio y cierre de sesión, perfil del usuario autenticado y
+    acceso al área de administración. La API usa tokens Bearer de Sanctum y
+    no expone contraseñas, tokens ni secretos en los recursos de usuario.
+  license:
+    name: Proprietary
+    identifier: Proprietary
+servers:
+  - url: /api/v1
+security: []
+tags:
+  - name: Autenticación
+    description: Registro y ciclo de vida de los tokens de acceso.
+  - name: Perfil
+    description: Identidad y permisos del usuario autenticado.
+  - name: Administración
+    description: Acceso al área administrativa según permisos funcionales.
+paths:
+  /autenticacion/registro:
+    post:
+      tags: [Autenticación]
+      operationId: registrarUsuario
+      summary: Registra un usuario
+      description: |
+        Crea un usuario activo y emite un token Bearer. El correo debe ser
+        único y la contraseña se confirma repitiendo el mismo valor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterInput' }
+            example:
+              nombre: Usuario de prueba
+              correo_electronico: usuario@example.test
+              password: correct-password
+              password_confirmation: correct-password
+              device_name: navegador
+      responses:
+        '201':
+          description: Usuario creado y token emitido.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthenticationResponse' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /autenticacion/inicio-sesion:
+    post:
+      tags: [Autenticación]
+      operationId: iniciarSesion
+      summary: Inicia sesión
+      description: Valida las credenciales y emite un token Bearer de Sanctum.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginInput' }
+            example:
+              correo_electronico: admin@gam.test
+              password: ChangeMe123!
+              device_name: navegador
+      responses:
+        '200':
+          description: Credenciales válidas y token emitido.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthenticationResponse' }
+        '401': { $ref: '#/components/responses/InvalidCredentials' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /autenticacion/cerrar-sesion:
+    post:
+      tags: [Autenticación]
+      operationId: cerrarSesion
+      summary: Cierra la sesión actual
+      description: Revoca el token Bearer usado en la solicitud.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Sesión cerrada correctamente.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+              example:
+                message: La sesión se cerró correctamente.
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /mi-perfil:
+    get:
+      tags: [Perfil]
+      operationId: obtenerMiPerfil
+      summary: Obtiene el perfil autenticado
+      description: Devuelve identidad, roles y permisos del usuario actual.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Perfil del usuario autenticado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /administracion:
+    get:
+      tags: [Administración]
+      operationId: accederAdministracion
+      summary: Accede al área de administración
+      description: Requiere el permiso funcional `admin.dashboard.view`.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Área de administración disponible.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, user]
+                properties:
+                  message: { type: string }
+                  user: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum
+      description: Token personal emitido por los endpoints de autenticación.
+  schemas:
+    RegisterInput:
+      type: object
+      required: [nombre, correo_electronico, password, password_confirmation]
+      properties:
+        nombre: { type: string, minLength: 1, maxLength: 255 }
+        correo_electronico: { type: string, format: email, maxLength: 255 }
+        password: { type: string, format: password, minLength: 8 }
+        password_confirmation: { type: string, format: password, minLength: 8 }
+        device_name: { type: string, maxLength: 100 }
+    LoginInput:
+      type: object
+      required: [correo_electronico, password]
+      properties:
+        correo_electronico: { type: string, format: email, maxLength: 255 }
+        password: { type: string, format: password }
+        device_name: { type: string, maxLength: 100 }
+    AuthenticationResponse:
+      type: object
+      required: [access_token, token_type, expires_at, abilities, user]
+      properties:
+        access_token: { type: string, description: Token Bearer opaco. }
+        token_type: { type: string, enum: [Bearer] }
+        expires_at: { type: [string, 'null'], format: date-time }
+        abilities:
+          type: array
+          items: { type: string }
+        user: { $ref: '#/components/schemas/User' }
+    User:
+      type: object
+      required: [id, nombre, correo_electronico, deleted_at, roles, permissions]
+      properties:
+        id: { type: integer, minimum: 1 }
+        nombre: { type: string }
+        correo_electronico: { type: string, format: email }
+        deleted_at: { type: [string, 'null'], format: date-time }
+        roles:
+          type: array
+          items: { type: string }
+        permissions:
+          type: array
+          items: { type: string }
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+    Problem:
+      type: object
+      required: [title, status, detail, message]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        message: { type: string }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+  responses:
+    Unauthenticated:
+      description: Autenticación requerida o token inválido.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: El usuario autenticado no tiene el permiso requerido.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    InvalidCredentials:
+      description: El correo o la contraseña no son correctos.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/MessageResponse' }
+          example:
+            message: Las credenciales proporcionadas no son correctas.
+    ValidationError:
+      description: Los datos enviados no cumplen las reglas de validación.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            title: Datos inválidos
+            status: 422
+            detail: Los datos proporcionados no son válidos.
+            message: Los datos proporcionados no son válidos.
+            errors:
+              correo_electronico:
+                - El campo correo electrónico es obligatorio.
+    TooManyRequests:
+      description: Se superó el límite de intentos permitido.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }

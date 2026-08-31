@@ -33,7 +33,7 @@ final readonly class AdjustStockToCountAction
                 throw new InventoryConflict('La clave Idempotency-Key ya fue utilizada con otros datos.');
             }
 
-            return $existing->load(['lines.product', 'lines.stockLocation', 'supplier', 'creator', 'reservation']);
+            return $existing->load(['lines.product', 'lines.stockLocation', 'supplier', 'creator']);
         }
 
         return DB::transaction(function () use ($attributes, $actor): InventoryMovement {
@@ -48,7 +48,6 @@ final readonly class AdjustStockToCountAction
                     'product_id' => $productId,
                     'stock_location_id' => $locationId,
                     'on_hand_quantity' => '0.000000',
-                    'reserved_quantity' => '0.000000',
                     'minimum_quantity' => '0.000000',
                     'created_at' => $now,
                     'updated_at' => $now,
@@ -70,7 +69,6 @@ final readonly class AdjustStockToCountAction
                         'product_id' => (int) $line['product_id'],
                         'stock_location_id' => (int) $line['stock_location_id'],
                         'on_hand_delta' => (string) $delta,
-                        'reserved_delta' => '0',
                     ];
                 }
             }

@@ -26,7 +26,6 @@ class InventoryMovementLineFactory extends Factory
             'stock_location_id' => StockLocation::factory(),
             'unit' => 'kg',
             'on_hand_delta' => '1.000000',
-            'reserved_delta' => '0.000000',
         ];
     }
 }

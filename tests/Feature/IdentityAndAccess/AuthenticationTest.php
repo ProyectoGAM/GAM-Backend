@@ -49,9 +49,9 @@ class AuthenticationTest extends TestCase
                 'token_type',
                 'expires_at',
                 'abilities',
-                'user' => ['id', 'name', 'email', 'deleted_at', 'roles', 'permissions'],
+                'user' => ['id', 'nombre', 'correo_electronico', 'deleted_at', 'roles', 'permissions'],
             ])
-            ->assertJsonPath('user.email', 'new.user@example.test')
+            ->assertJsonPath('user.correo_electronico', 'new.user@example.test')
             ->assertJsonPath('user.roles', [])
             ->assertJsonPath('token_type', 'Bearer')
             ->assertJsonMissingPath('data');
@@ -79,7 +79,7 @@ class AuthenticationTest extends TestCase
         $response = $this->withHeaders([
             'Origin' => 'http://localhost:3000',
         ])->postJson('/api/v1/autenticacion/inicio-sesion', [
-            'email' => 'login@example.test',
+            'correo_electronico' => 'login@example.test',
             'password' => 'correct-password',
             'device_name' => 'browser',
         ]);
@@ -92,7 +92,7 @@ class AuthenticationTest extends TestCase
                 'token_type',
                 'expires_at',
                 'abilities',
-                'user' => ['id', 'name', 'email', 'deleted_at', 'roles', 'permissions'],
+                'user' => ['id', 'nombre', 'correo_electronico', 'deleted_at', 'roles', 'permissions'],
             ])
             ->assertJsonPath('user.id', $user->id)
             ->assertJsonPath('token_type', 'Bearer')
@@ -116,7 +116,7 @@ class AuthenticationTest extends TestCase
         // Verificacion: confirma que la request no llega a autenticacion ni devuelve 419.
         $response
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['email', 'password']);
+            ->assertJsonValidationErrors(['correo_electronico', 'password']);
     }
 
     // Flujo: intenta iniciar sesión con contraseña incorrecta y verifica que no se emite token.

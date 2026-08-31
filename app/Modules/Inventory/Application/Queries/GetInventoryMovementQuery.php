@@ -8,6 +8,6 @@ final readonly class GetInventoryMovementQuery
 {
     public function execute(InventoryMovement $movement): InventoryMovement
     {
-        return $movement->load(['lines.product', 'lines.stockLocation', 'supplier', 'creator', 'reservation']);
+        return $movement->load(['lines.product', 'lines.stockLocation', 'supplier', 'creator']);
     }
 }

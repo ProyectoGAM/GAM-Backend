@@ -67,22 +67,17 @@ final readonly class RecordInventoryMovementAction
                             (string) ($line['on_hand_delta'] ?? '0'),
                             $productData[$line['product_id']]->baseUnit,
                         );
-                        $reservedDelta = InventoryQuantity::from(
-                            (string) ($line['reserved_delta'] ?? '0'),
-                            $productData[$line['product_id']]->baseUnit,
-                        );
                     } catch (InvalidArgumentException $exception) {
                         throw new InventoryConflict($exception->getMessage(), previous: $exception);
                     }
 
-                    if ($onHandDelta->isZero() && $reservedDelta->isZero()) {
+                    if ($onHandDelta->isZero()) {
                         throw new InventoryConflict('La operación debe modificar al menos un saldo.');
                     }
 
                     $normalizedLines[] = [
                         ...$line,
                         'on_hand_delta' => $onHandDelta->toString(),
-                        'reserved_delta' => $reservedDelta->toString(),
                     ];
                     $locationIds[$line['stock_location_id']] = true;
                 }
@@ -110,7 +105,6 @@ final readonly class RecordInventoryMovementAction
                         'product_id' => $line['product_id'],
                         'stock_location_id' => $line['stock_location_id'],
                         'on_hand_quantity' => '0.000000',
-                        'reserved_quantity' => '0.000000',
                         'minimum_quantity' => '0.000000',
                         'created_at' => $now,
                         'updated_at' => $now,
@@ -131,15 +125,13 @@ final readonly class RecordInventoryMovementAction
                 foreach ($sortedLines as $line) {
                     $balance = $balances[$line['product_id'].':'.$line['stock_location_id']];
                     $onHand = BigDecimal::of((string) $balance->on_hand_quantity)->plus($line['on_hand_delta'])->toScale(6);
-                    $reserved = BigDecimal::of((string) $balance->reserved_quantity)->plus($line['reserved_delta'])->toScale(6);
 
-                    if ($onHand->isNegative() || $reserved->isNegative() || $reserved->isGreaterThan($onHand)) {
-                        throw new InventoryConflict('El stock físico o reservado resultante no puede ser negativo.');
+                    if ($onHand->isNegative()) {
+                        throw new InventoryConflict('El stock disponible resultante no puede ser negativo.');
                     }
 
                     $balance->forceFill([
                         'on_hand_quantity' => (string) $onHand,
-                        'reserved_quantity' => (string) $reserved,
                     ])->save();
                 }
 
@@ -149,7 +141,6 @@ final readonly class RecordInventoryMovementAction
                     'request_hash' => $requestHash,
                     'type' => $command->type,
                     'supplier_id' => $command->supplierId,
-                    'stock_reservation_id' => $command->stockReservationId,
                     'reference_type' => $command->referenceType,
                     'reference_id' => $command->referenceId,
                     'reason' => $command->reason,
@@ -165,7 +156,6 @@ final readonly class RecordInventoryMovementAction
                         'stock_location_id' => $line['stock_location_id'],
                         'unit' => $productData[$line['product_id']]->baseUnit->value,
                         'on_hand_delta' => $line['on_hand_delta'],
-                        'reserved_delta' => $line['reserved_delta'],
                     ])->save();
                 }
 
@@ -182,7 +172,6 @@ final readonly class RecordInventoryMovementAction
                     properties: [
                         'movement_type' => $command->type->value,
                         'supplier_id' => $command->supplierId,
-                        'stock_reservation_id' => $command->stockReservationId,
                         'reference_type' => $command->referenceType,
                         'reference_id' => $command->referenceId,
                         'line_count' => count($sortedLines),
@@ -192,7 +181,7 @@ final readonly class RecordInventoryMovementAction
                     ],
                 ));
 
-                return $movement->load(['lines.product', 'lines.stockLocation', 'supplier', 'creator', 'reservation']);
+                return $movement->load(['lines.product', 'lines.stockLocation', 'supplier', 'creator']);
             }, 3);
         } catch (QueryException $exception) {
             if (! $this->isUniqueViolation($exception)) {
@@ -210,7 +199,7 @@ final readonly class RecordInventoryMovementAction
 
     private function existingMovement(string $operationId): ?InventoryMovement
     {
-        return InventoryMovement::query()->where('operation_id', $operationId)->with('reservation')->first();
+        return InventoryMovement::query()->where('operation_id', $operationId)->first();
     }
 
     private function resolveReplay(InventoryMovement $movement, string $requestHash): InventoryMovement
@@ -219,7 +208,7 @@ final readonly class RecordInventoryMovementAction
             throw new InventoryConflict('La clave Idempotency-Key ya fue utilizada con otros datos.');
         }
 
-        return $movement->load(['lines.product', 'lines.stockLocation', 'supplier', 'creator', 'reservation']);
+        return $movement->load(['lines.product', 'lines.stockLocation', 'supplier', 'creator']);
     }
 
     private function isUniqueViolation(QueryException $exception): bool

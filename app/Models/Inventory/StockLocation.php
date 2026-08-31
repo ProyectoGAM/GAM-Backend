@@ -54,10 +54,4 @@ class StockLocation extends Model
     {
         return $this->hasMany(InventoryMovementLine::class);
     }
-
-    /** @return HasMany<StockReservationLine, $this> */
-    public function reservationLines(): HasMany
-    {
-        return $this->hasMany(StockReservationLine::class);
-    }
 }
