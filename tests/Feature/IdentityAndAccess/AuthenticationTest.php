@@ -44,9 +44,17 @@ class AuthenticationTest extends TestCase
         // Verificación: confirma respuesta, identidad, token y registros creados.
         $response
             ->assertCreated()
-            ->assertJsonPath('user.correo_electronico', 'new.user@example.test')
+            ->assertJsonStructure([
+                'access_token',
+                'token_type',
+                'expires_at',
+                'abilities',
+                'user' => ['id', 'name', 'email', 'deleted_at', 'roles', 'permissions'],
+            ])
+            ->assertJsonPath('user.email', 'new.user@example.test')
             ->assertJsonPath('user.roles', [])
-            ->assertJsonPath('token_type', 'Bearer');
+            ->assertJsonPath('token_type', 'Bearer')
+            ->assertJsonMissingPath('data');
 
         $this->assertNotEmpty($response->json('access_token'));
         $this->assertDatabaseHas('users', [
@@ -68,8 +76,10 @@ class AuthenticationTest extends TestCase
         ]);
 
         // Acción: inicia sesión con las credenciales válidas.
-        $response = $this->postJson('/api/v1/autenticacion/inicio-sesion', [
-            'correo_electronico' => 'login@example.test',
+        $response = $this->withHeaders([
+            'Origin' => 'http://localhost:3000',
+        ])->postJson('/api/v1/autenticacion/inicio-sesion', [
+            'email' => 'login@example.test',
             'password' => 'correct-password',
             'device_name' => 'browser',
         ]);
@@ -77,14 +87,36 @@ class AuthenticationTest extends TestCase
         // Verificación: confirma identidad de respuesta y token persistido.
         $response
             ->assertOk()
+            ->assertJsonStructure([
+                'access_token',
+                'token_type',
+                'expires_at',
+                'abilities',
+                'user' => ['id', 'name', 'email', 'deleted_at', 'roles', 'permissions'],
+            ])
             ->assertJsonPath('user.id', $user->id)
-            ->assertJsonPath('token_type', 'Bearer');
+            ->assertJsonPath('token_type', 'Bearer')
+            ->assertJsonMissingPath('data');
 
         $this->assertNotEmpty($response->json('access_token'));
         $this->assertDatabaseHas('personal_access_tokens', [
             'tokenable_id' => $user->id,
             'name' => 'browser',
         ]);
+    }
+
+    // Flujo: envia un payload vacio y verifica la validacion del inicio de sesion.
+    public function test_login_rejects_an_invalid_payload(): void
+    {
+        // Accion: intenta iniciar sesion sin credenciales.
+        $response = $this->withHeaders([
+            'Origin' => 'http://localhost:3000',
+        ])->postJson('/api/v1/autenticacion/inicio-sesion', []);
+
+        // Verificacion: confirma que la request no llega a autenticacion ni devuelve 419.
+        $response
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['email', 'password']);
     }
 
     // Flujo: intenta iniciar sesión con contraseña incorrecta y verifica que no se emite token.
@@ -105,7 +137,9 @@ class AuthenticationTest extends TestCase
         // Verificación: confirma rechazo y ausencia de tokens.
         $response
             ->assertUnauthorized()
-            ->assertJsonPath('message', 'Las credenciales proporcionadas no son correctas.');
+            ->assertExactJson([
+                'message' => 'Las credenciales proporcionadas no son correctas.',
+            ]);
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }

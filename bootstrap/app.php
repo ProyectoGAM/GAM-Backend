@@ -25,7 +25,6 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->append(AssignTraceContext::class);
-        $middleware->statefulApi();
 
         $middleware->alias([
             'ability' => CheckForAnyAbility::class,
@@ -46,7 +45,6 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return response()->json([
-                'type' => 'https://httpstatuses.com/422',
                 'title' => 'Datos inválidos',
                 'status' => Response::HTTP_UNPROCESSABLE_ENTITY,
                 'detail' => 'Los datos proporcionados no son válidos.',
@@ -61,7 +59,6 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return response()->json([
-                'type' => 'https://httpstatuses.com/401',
                 'title' => 'No autenticado',
                 'status' => Response::HTTP_UNAUTHORIZED,
                 'detail' => 'No estás autenticado.',
@@ -75,7 +72,6 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return response()->json([
-                'type' => 'https://httpstatuses.com/403',
                 'title' => 'Acceso prohibido',
                 'status' => Response::HTTP_FORBIDDEN,
                 'detail' => 'No tienes autorización para realizar esta acción.',
@@ -89,7 +85,6 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return response()->json([
-                'type' => 'https://httpstatuses.com/404',
                 'title' => 'Recurso no encontrado',
                 'status' => Response::HTTP_NOT_FOUND,
                 'detail' => 'El recurso solicitado no existe.',
@@ -114,7 +109,6 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return response()->json([
-                'type' => 'https://httpstatuses.com/'.$exception->getStatusCode(),
                 'title' => 'Solicitud no procesada',
                 'status' => $exception->getStatusCode(),
                 'detail' => $message,
