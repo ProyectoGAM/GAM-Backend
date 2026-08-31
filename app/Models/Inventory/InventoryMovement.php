@@ -13,6 +13,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class InventoryMovement extends Model
 {
+    /** Los movimientos de producción deben conservar su zona al persistirse en PostgreSQL. */
+    protected $dateFormat = 'Y-m-d H:i:sP';
+
     /** @use HasFactory<InventoryMovementFactory> */
     use HasFactory;
 

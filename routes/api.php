@@ -14,6 +14,14 @@ use App\Modules\Inventory\Http\Controllers\InventoryMovementController;
 use App\Modules\Inventory\Http\Controllers\InventoryReadController;
 use App\Modules\Inventory\Http\Controllers\StockLocationController;
 use App\Modules\Inventory\Http\Controllers\StockLocationStatusController;
+use App\Modules\Inventory\Http\Controllers\StockReservationController;
+use App\Modules\Lots\Http\Controllers\BreedController;
+use App\Modules\Lots\Http\Controllers\EggCollectionController;
+use App\Modules\Lots\Http\Controllers\FlockController;
+use App\Modules\Lots\Http\Controllers\FlockRedistributionController;
+use App\Modules\Lots\Http\Controllers\FlockStatusController;
+use App\Modules\Lots\Http\Controllers\MortalityCategoryController;
+use App\Modules\Lots\Http\Controllers\MortalityController;
 use App\Modules\ReferenceData\Http\Controllers\ReferenceOptionsController;
 use App\Modules\ReportingAndAnalytics\Http\Controllers\ReportExportController;
 use App\Modules\ReportingAndAnalytics\Http\Controllers\ReportPresetController;
@@ -31,6 +39,37 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
     });
 
     Route::middleware('auth:sanctum')->group(function (): void {
+        Route::name('lots.')->group(function (): void {
+            Route::get('/lotes', [FlockController::class, 'index'])->name('index');
+            Route::post('/lotes', [FlockController::class, 'store'])->name('store');
+            Route::get('/lotes/{lote}', [FlockController::class, 'show'])->name('show');
+            Route::patch('/lotes/{lote}', [FlockController::class, 'update'])->name('update');
+            Route::patch('/lotes/{lote}/estado', [FlockStatusController::class, 'update'])->name('status');
+            Route::post('/lotes/{lote}/finalizacion', [FlockStatusController::class, 'finalize'])->name('finalize');
+            Route::post('/lotes/{lote}/redistribuciones', [FlockRedistributionController::class, 'store'])->name('redistribute');
+            Route::post('/redistribuciones/{redistribucion}/reversiones', [FlockRedistributionController::class, 'reverse'])->name('redistributions.reverse');
+            Route::get('/lotes/{lote}/historial', [FlockController::class, 'history'])->name('history');
+            Route::get('/galpones/{galpon}/lotes', [FlockController::class, 'index'])->name('by-house');
+            Route::get('/razas', [BreedController::class, 'index'])->name('breeds.index');
+            Route::post('/razas', [BreedController::class, 'store'])->name('breeds.store');
+            Route::patch('/razas/{raza}', [BreedController::class, 'update'])->name('breeds.update');
+            Route::get('/categorias-mortalidad', [MortalityCategoryController::class, 'index'])->name('mortality-categories.index');
+            Route::post('/categorias-mortalidad', [MortalityCategoryController::class, 'store'])->name('mortality-categories.store');
+            Route::patch('/categorias-mortalidad/{categoria}', [MortalityCategoryController::class, 'update'])->name('mortality-categories.update');
+            Route::get('/mortalidades', [MortalityController::class, 'index'])->name('mortality.index');
+            Route::get('/mortalidades/{mortalidad}', [MortalityController::class, 'show'])->name('mortality.show');
+            Route::get('/lotes/{lote}/mortalidades', [MortalityController::class, 'byFlock'])->name('mortality.by-flock');
+            Route::post('/lotes/{lote}/mortalidades', [MortalityController::class, 'store'])->name('mortality.store');
+            Route::patch('/mortalidades/{mortalidad}', [MortalityController::class, 'update'])->name('mortality.update');
+            Route::post('/mortalidades/{mortalidad}/cancelacion', [MortalityController::class, 'cancel'])->name('mortality.cancel');
+            Route::get('/lotes/{lote}/recolecciones', [EggCollectionController::class, 'index'])->name('collections.index');
+            Route::get('/recolecciones/{recoleccion}', [EggCollectionController::class, 'show'])->name('collections.show');
+            Route::post('/lotes/{lote}/recolecciones', [EggCollectionController::class, 'store'])->name('collections.store');
+            Route::patch('/recolecciones/{recoleccion}', [EggCollectionController::class, 'update'])->name('collections.update');
+            Route::post('/recolecciones/{recoleccion}/cancelacion', [EggCollectionController::class, 'cancel'])->name('collections.cancel');
+            Route::get('/lotes/{lote}/metricas', [EggCollectionController::class, 'metrics'])->name('metrics');
+        });
+
         Route::get('/mi-perfil', [AuthController::class, 'me'])->name('me');
         Route::post('/autenticacion/cerrar-sesion', [AuthController::class, 'logout'])->name('auth.logout');
         Route::get('/referencias/opciones', ReferenceOptionsController::class)->name('reference-options.index');

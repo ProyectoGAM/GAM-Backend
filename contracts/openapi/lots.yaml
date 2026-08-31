@@ -1,0 +1,1993 @@
+openapi: "3.1.0"
+info:
+  title: "05 — Lotes y cría"
+  version: "1.0.0"
+  description: "Contrato de Lotes para web y mobile. Redistribución sin genealogía, estado y cantidades auditados, mortalidad, recolección e inventario atómicos. No hay borrado ni interfaz mobile en esta entrega. Los valores de estado, eventos y permisos son identificadores estables en inglés."
+  license:
+    name: "Proprietary"
+    identifier: "Proprietary"
+servers:
+  -
+    url: "/api/v1"
+security:
+  -
+    bearerAuth: []
+tags:
+  -
+    name: "Lotes"
+    description: "Ciclo de vida, cantidades, ubicación y edad desde el ingreso."
+  -
+    name: "Redistribuciones"
+    description: "Traslados parciales, totales e histórico compensatorio."
+  -
+    name: "Catálogos"
+    description: "Razas y categorías de mortalidad con vigencia."
+  -
+    name: "Mortalidad"
+    description: "Bajas y correcciones auditadas."
+  -
+    name: "Recolección"
+    description: "Postura, stock y métricas."
+paths:
+  "/lotes":
+    get:
+      tags: ["Lotes"]
+      operationId: "listFlocks"
+      summary: "Lista y busca lotes de toda la empresa"
+      description: "Permiso requerido: flocks.view. El acceso es global dentro de la empresa."
+      x-permission: "flocks.view"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Page"
+        -
+          "$ref": "#/components/parameters/PerPage"
+        -
+          "$ref": "#/components/parameters/From"
+        -
+          "$ref": "#/components/parameters/To"
+        -
+          "$ref": "#/components/parameters/Search"
+        -
+          "$ref": "#/components/parameters/HouseFilter"
+        -
+          "$ref": "#/components/parameters/UnitFilter"
+        -
+          "$ref": "#/components/parameters/BreedFilter"
+        -
+          "$ref": "#/components/parameters/SupplierFilter"
+        -
+          "$ref": "#/components/parameters/FlockStatus"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/PaginatedFlocks"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+    post:
+      tags: ["Lotes"]
+      operationId: "createFlock"
+      summary: "Registra una admisión de aves"
+      description: "Permiso requerido: flocks.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "flocks.manage"
+      parameters:
+        -
+          "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/CreateFlock"
+      responses:
+        "201":
+          description: "Operación registrada o resultado original recuperado por idempotencia."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/lotes/{lote}":
+    get:
+      tags: ["Lotes"]
+      operationId: "showFlock"
+      summary: "Consulta el lote y su semana actual"
+      description: "Permiso requerido: flocks.view. El acceso es global dentro de la empresa."
+      x-permission: "flocks.view"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Lote"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/FlockResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+    patch:
+      tags: ["Lotes"]
+      operationId: "updateFlock"
+      summary: "Modifica código u observaciones del lote"
+      description: "Permiso requerido: flocks.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "flocks.manage"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Lote"
+        -
+          "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/UpdateFlock"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/lotes/{lote}/estado":
+    patch:
+      tags: ["Lotes"]
+      operationId: "changeFlockStatus"
+      summary: "Activa o pone en cuarentena un lote abierto"
+      description: "Permiso requerido: flocks.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "flocks.manage"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Lote"
+        -
+          "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/ChangeFlockStatus"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/lotes/{lote}/finalizacion":
+    post:
+      tags: ["Lotes"]
+      operationId: "finalizeFlock"
+      summary: "Finaliza con egreso de las aves remanentes y sin borrado"
+      description: "Permiso requerido: flocks.finalize. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "flocks.finalize"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Lote"
+        -
+          "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/FinalizeFlock"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/lotes/{lote}/redistribuciones":
+    post:
+      tags: ["Redistribuciones"]
+      operationId: "redistributeFlock"
+      summary: "Redistribuye parcialmente o traslada el lote completo"
+      description: "Permiso requerido: flocks.redistribute. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "flocks.redistribute"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Lote"
+        -
+          "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/RedistributeFlock"
+      responses:
+        "201":
+          description: "Operación registrada o resultado original recuperado por idempotencia."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/redistribuciones/{redistribucion}/reversiones":
+    post:
+      tags: ["Redistribuciones"]
+      operationId: "reverseRedistribution"
+      summary: "Compensa una redistribución sin operaciones posteriores"
+      description: "Permiso requerido: flocks.redistribute. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "flocks.redistribute"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Redistribucion"
+        -
+          "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/ReverseRedistribution"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/lotes/{lote}/historial":
+    get:
+      tags: ["Redistribuciones"]
+      operationId: "listFlockHistory"
+      summary: "Consulta movimientos y fotografías históricas de aves"
+      description: "Permiso requerido: flocks.view. El acceso es global dentro de la empresa."
+      x-permission: "flocks.view"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Lote"
+        -
+          "$ref": "#/components/parameters/Page"
+        -
+          "$ref": "#/components/parameters/PerPage"
+        -
+          "$ref": "#/components/parameters/From"
+        -
+          "$ref": "#/components/parameters/To"
+        -
+          "$ref": "#/components/parameters/MovementType"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/PaginatedMovements"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/galpones/{galpon}/lotes":
+    get:
+      tags: ["Lotes"]
+      operationId: "listHouseFlocks"
+      summary: "Lista lotes en su galpón actual"
+      description: "Permiso requerido: flocks.view. El acceso es global dentro de la empresa."
+      x-permission: "flocks.view"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Galpon"
+        -
+          "$ref": "#/components/parameters/Page"
+        -
+          "$ref": "#/components/parameters/PerPage"
+        -
+          "$ref": "#/components/parameters/From"
+        -
+          "$ref": "#/components/parameters/To"
+        -
+          "$ref": "#/components/parameters/Search"
+        -
+          "$ref": "#/components/parameters/UnitFilter"
+        -
+          "$ref": "#/components/parameters/BreedFilter"
+        -
+          "$ref": "#/components/parameters/SupplierFilter"
+        -
+          "$ref": "#/components/parameters/FlockStatus"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/PaginatedFlocks"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/razas":
+    get:
+      tags: ["Catálogos"]
+      operationId: "listBreeds"
+      summary: "Lista y busca razas"
+      description: "Permiso requerido: breeds.view. El acceso es global dentro de la empresa."
+      x-permission: "breeds.view"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Page"
+        -
+          "$ref": "#/components/parameters/PerPage"
+        -
+          "$ref": "#/components/parameters/Search"
+        -
+          "$ref": "#/components/parameters/CatalogStatus"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/PaginatedCatalogs"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+    post:
+      tags: ["Catálogos"]
+      operationId: "createBreed"
+      summary: "Crea una raza"
+      description: "Permiso requerido: breeds.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "breeds.manage"
+      parameters:
+        -
+          "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/CreateCatalog"
+      responses:
+        "201":
+          description: "Operación registrada o resultado original recuperado por idempotencia."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/razas/{raza}":
+    patch:
+      tags: ["Catálogos"]
+      operationId: "updateBreed"
+      summary: "Renombra o cambia la vigencia de una raza"
+      description: "Permiso requerido: breeds.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "breeds.manage"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Raza"
+        -
+          "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/UpdateCatalog"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/categorias-mortalidad":
+    get:
+      tags: ["Catálogos"]
+      operationId: "listMortalityCategories"
+      summary: "Lista categorías de mortalidad"
+      description: "Permiso requerido: mortality-categories.view. El acceso es global dentro de la empresa."
+      x-permission: "mortality-categories.view"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Page"
+        -
+          "$ref": "#/components/parameters/PerPage"
+        -
+          "$ref": "#/components/parameters/Search"
+        -
+          "$ref": "#/components/parameters/CatalogStatus"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/PaginatedCatalogs"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+    post:
+      tags: ["Catálogos"]
+      operationId: "createMortalityCategory"
+      summary: "Crea una categoría de mortalidad"
+      description: "Permiso requerido: mortality-categories.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "mortality-categories.manage"
+      parameters:
+        -
+          "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/CreateCatalog"
+      responses:
+        "201":
+          description: "Operación registrada o resultado original recuperado por idempotencia."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/categorias-mortalidad/{categoria}":
+    patch:
+      tags: ["Catálogos"]
+      operationId: "updateMortalityCategory"
+      summary: "Renombra o cambia la vigencia de una categoría"
+      description: "Permiso requerido: mortality-categories.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "mortality-categories.manage"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Categoria"
+        -
+          "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/UpdateCatalog"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/mortalidades":
+    get:
+      tags: ["Mortalidad"]
+      operationId: "listMortality"
+      summary: "Consulta mortalidad por lote, galpón histórico y fecha"
+      description: "Permiso requerido: mortality.view. El acceso es global dentro de la empresa."
+      x-permission: "mortality.view"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Page"
+        -
+          "$ref": "#/components/parameters/PerPage"
+        -
+          "$ref": "#/components/parameters/From"
+        -
+          "$ref": "#/components/parameters/To"
+        -
+          "$ref": "#/components/parameters/HouseFilter"
+        -
+          "$ref": "#/components/parameters/FlockFilter"
+        -
+          "$ref": "#/components/parameters/RecordStatus"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/PaginatedMortalityRecords"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/mortalidades/{mortalidad}":
+    get:
+      tags: ["Mortalidad"]
+      operationId: "showMortality"
+      summary: "Consulta una mortalidad, incluso cancelada"
+      description: "Permiso requerido: mortality.view. El acceso es global dentro de la empresa."
+      x-permission: "mortality.view"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Mortalidad"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/MortalityResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+    patch:
+      tags: ["Mortalidad"]
+      operationId: "correctMortality"
+      summary: "Rectifica cantidad, categoría u observaciones con auditoría"
+      description: "Permiso requerido: mortality.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "mortality.manage"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Mortalidad"
+        -
+          "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/CorrectMortality"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/lotes/{lote}/mortalidades":
+    get:
+      tags: ["Mortalidad"]
+      operationId: "listFlockMortality"
+      summary: "Lista mortalidad del lote"
+      description: "Permiso requerido: mortality.view. El acceso es global dentro de la empresa."
+      x-permission: "mortality.view"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Lote"
+        -
+          "$ref": "#/components/parameters/Page"
+        -
+          "$ref": "#/components/parameters/PerPage"
+        -
+          "$ref": "#/components/parameters/From"
+        -
+          "$ref": "#/components/parameters/To"
+        -
+          "$ref": "#/components/parameters/HouseFilter"
+        -
+          "$ref": "#/components/parameters/FlockFilter"
+        -
+          "$ref": "#/components/parameters/RecordStatus"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/PaginatedMortalityRecords"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+    post:
+      tags: ["Mortalidad"]
+      operationId: "recordMortality"
+      summary: "Registra bajas y descuenta aves vivas"
+      description: "Permiso requerido: mortality.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "mortality.manage"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Lote"
+        -
+          "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/RecordMortality"
+      responses:
+        "201":
+          description: "Operación registrada o resultado original recuperado por idempotencia."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/mortalidades/{mortalidad}/cancelacion":
+    post:
+      tags: ["Mortalidad"]
+      operationId: "cancelMortality"
+      summary: "Cancela y restituye aves si capacidad y estado lo permiten"
+      description: "Permiso requerido: mortality.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "mortality.manage"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Mortalidad"
+        -
+          "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/CancelRecord"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/lotes/{lote}/recolecciones":
+    get:
+      tags: ["Recolección"]
+      operationId: "listEggCollections"
+      summary: "Lista recolecciones con filtros históricos"
+      description: "Permiso requerido: egg-collections.view. El acceso es global dentro de la empresa."
+      x-permission: "egg-collections.view"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Lote"
+        -
+          "$ref": "#/components/parameters/Page"
+        -
+          "$ref": "#/components/parameters/PerPage"
+        -
+          "$ref": "#/components/parameters/From"
+        -
+          "$ref": "#/components/parameters/To"
+        -
+          "$ref": "#/components/parameters/HouseFilter"
+        -
+          "$ref": "#/components/parameters/FlockFilter"
+        -
+          "$ref": "#/components/parameters/RecordStatus"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/PaginatedEggCollections"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+    post:
+      tags: ["Recolección"]
+      operationId: "recordEggCollection"
+      summary: "Registra huevos y aumenta el inventario en una transacción"
+      description: "Permiso requerido: egg-collections.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "egg-collections.manage"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Lote"
+        -
+          "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/RecordEggCollection"
+      responses:
+        "201":
+          description: "Operación registrada o resultado original recuperado por idempotencia."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/recolecciones/{recoleccion}":
+    get:
+      tags: ["Recolección"]
+      operationId: "showEggCollection"
+      summary: "Consulta una recolección y su último movimiento de stock"
+      description: "Permiso requerido: egg-collections.view. El acceso es global dentro de la empresa."
+      x-permission: "egg-collections.view"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Recoleccion"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/EggCollectionResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+    patch:
+      tags: ["Recolección"]
+      operationId: "correctEggCollection"
+      summary: "Rectifica la recolección y compensa la diferencia de stock"
+      description: "Permiso requerido: egg-collections.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "egg-collections.manage"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Recoleccion"
+        -
+          "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/CorrectEggCollection"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/recolecciones/{recoleccion}/cancelacion":
+    post:
+      tags: ["Recolección"]
+      operationId: "cancelEggCollection"
+      summary: "Cancela sin borrar y retira el stock correspondiente"
+      description: "Permiso requerido: egg-collections.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "egg-collections.manage"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Recoleccion"
+        -
+          "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/CancelRecord"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+  "/lotes/{lote}/metricas":
+    get:
+      tags: ["Recolección"]
+      operationId: "showFlockMetrics"
+      summary: "Consulta totales y promedio en un período de hasta 366 días"
+      description: "Permiso requerido: egg-collections.view. El acceso es global dentro de la empresa."
+      x-permission: "egg-collections.view"
+      parameters:
+        -
+          "$ref": "#/components/parameters/Lote"
+        -
+          "$ref": "#/components/parameters/From"
+        -
+          "$ref": "#/components/parameters/To"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/MetricsResponse"
+        "401":
+          "$ref": "#/components/responses/Unauthenticated"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/InvalidInput"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: "http"
+      scheme: "bearer"
+      bearerFormat: "Sanctum"
+  parameters:
+    Lote:
+      name: "lote"
+      in: "path"
+      required: true
+      description: "ULID público del lote, incluidos los finalizados."
+      schema:
+        type: "string"
+        pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+        example: "01J00000000000000000000000"
+    Redistribucion:
+      name: "redistribucion"
+      in: "path"
+      required: true
+      description: "ULID público del movimiento original de redistribución."
+      schema:
+        type: "string"
+        pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+        example: "01J00000000000000000000000"
+    Mortalidad:
+      name: "mortalidad"
+      in: "path"
+      required: true
+      schema:
+        type: "string"
+        pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+        example: "01J00000000000000000000000"
+    Recoleccion:
+      name: "recoleccion"
+      in: "path"
+      required: true
+      schema:
+        type: "string"
+        pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+        example: "01J00000000000000000000000"
+    Galpon:
+      name: "galpon"
+      in: "path"
+      required: true
+      schema:
+        type: "integer"
+        minimum: 1
+    Raza:
+      name: "raza"
+      in: "path"
+      required: true
+      schema:
+        type: "integer"
+        minimum: 1
+    Categoria:
+      name: "categoria"
+      in: "path"
+      required: true
+      schema:
+        type: "integer"
+        minimum: 1
+    IdempotencyKey:
+      name: "Idempotency-Key"
+      in: "header"
+      required: true
+      description: "UUID por operación y actor. Conservar el mismo contenido y clave al reintentar; otra intención requiere otra clave."
+      schema:
+        type: "string"
+        format: "uuid"
+    Page:
+      name: "pagina"
+      in: "query"
+      schema:
+        type: "integer"
+        minimum: 1
+        maximum: 100000
+        default: 1
+    PerPage:
+      name: "por_pagina"
+      in: "query"
+      schema:
+        type: "integer"
+        minimum: 1
+        maximum: 100
+        default: 50
+    From:
+      name: "fecha_desde"
+      in: "query"
+      description: "Día inclusivo en la zona LOTS_TIMEZONE; en listado de lotes filtra fecha de ingreso."
+      schema:
+        type: "string"
+        format: "date"
+    To:
+      name: "fecha_hasta"
+      in: "query"
+      description: "Día inclusivo y no anterior a fecha_desde."
+      schema:
+        type: "string"
+        format: "date"
+    Search:
+      name: "buscar"
+      in: "query"
+      schema:
+        type: "string"
+        maxLength: 120
+    HouseFilter:
+      name: "galpon_id"
+      in: "query"
+      schema:
+        type: "integer"
+        minimum: 1
+    UnitFilter:
+      name: "unidad_productiva_id"
+      in: "query"
+      schema:
+        type: "integer"
+        minimum: 1
+    BreedFilter:
+      name: "raza_id"
+      in: "query"
+      schema:
+        type: "integer"
+        minimum: 1
+    SupplierFilter:
+      name: "proveedor_id"
+      in: "query"
+      schema:
+        type: "integer"
+        minimum: 1
+    FlockFilter:
+      name: "lote_id"
+      in: "query"
+      schema:
+        type: "string"
+        pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+        example: "01J00000000000000000000000"
+    FlockStatus:
+      name: "estado"
+      in: "query"
+      schema:
+        type: "string"
+        enum: ["active", "quarantined", "finished"]
+    RecordStatus:
+      name: "estado"
+      in: "query"
+      schema:
+        type: "string"
+        enum: ["recorded", "cancelled"]
+    CatalogStatus:
+      name: "estado"
+      in: "query"
+      schema:
+        type: "string"
+        enum: ["active", "inactive"]
+    MovementType:
+      name: "tipo"
+      in: "query"
+      schema:
+        type: "string"
+        enum: ["admission", "partial_new", "partial_existing", "total", "departure", "mortality", "mortality_correction", "redistribution_reversal"]
+  responses:
+    Unauthenticated:
+      description: "Sesión o token ausente o inválido."
+      content:
+        "application/problem+json":
+          schema:
+            "$ref": "#/components/schemas/Problem"
+    Forbidden:
+      description: "El usuario no tiene el permiso funcional requerido o está dado de baja."
+      content:
+        "application/problem+json":
+          schema:
+            "$ref": "#/components/schemas/Problem"
+    NotFound:
+      description: "No existe el recurso o una referencia requerida."
+      content:
+        "application/problem+json":
+          schema:
+            "$ref": "#/components/schemas/Problem"
+    Conflict:
+      description: "Conflicto de versión, capacidad, cantidad, estado, período, stock o clave de idempotencia. No se aplican cambios parciales."
+      content:
+        "application/problem+json":
+          schema:
+            "$ref": "#/components/schemas/Problem"
+    InvalidInput:
+      description: "Entrada inválida, campo desconocido o encabezado obligatorio ausente."
+      content:
+        "application/problem+json":
+          schema:
+            "$ref": "#/components/schemas/Problem"
+  schemas:
+    Flock:
+      type: "object"
+      additionalProperties: false
+      required: ["id", "codigo", "raza_id", "proveedor_id", "proveedor_nombre", "origen", "galpon_id", "unidad_productiva_id", "cantidad_inicial", "cantidad_viva", "fecha_ingreso", "establecido_en", "edad_dias", "semana_actual", "estado", "version", "observaciones", "finalizado_en", "motivo_finalizacion"]
+      properties:
+        id:
+          type: "string"
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          example: "01J00000000000000000000000"
+        codigo:
+          type: "string"
+          minLength: 1
+          maxLength: 60
+          pattern: "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+        raza_id:
+          type: "integer"
+          minimum: 1
+        proveedor_id:
+          type: ["integer", "null"]
+          minimum: 1
+        proveedor_nombre:
+          type: ["string", "null"]
+        origen:
+          type: ["string", "null"]
+        galpon_id:
+          type: "integer"
+          minimum: 1
+        unidad_productiva_id:
+          type: "integer"
+          minimum: 1
+        cantidad_inicial:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        cantidad_viva:
+          type: "integer"
+          minimum: 0
+        fecha_ingreso:
+          type: "string"
+          format: "date"
+        establecido_en:
+          type: "string"
+          format: "date-time"
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
+          description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
+        edad_dias:
+          type: "integer"
+          minimum: 0
+        semana_actual:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        estado:
+          type: "string"
+          enum: ["active", "quarantined", "finished"]
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        observaciones:
+          type: ["string", "null"]
+          maxLength: 5000
+        finalizado_en:
+          type: ["string", "null"]
+          format: "date-time"
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
+          description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
+        motivo_finalizacion:
+          type: ["string", "null"]
+          minLength: 1
+          maxLength: 500
+    Movement:
+      type: "object"
+      additionalProperties: false
+      properties:
+        id:
+          type: "string"
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          example: "01J00000000000000000000000"
+        id_operacion:
+          type: "string"
+          format: "uuid"
+        tipo:
+          type: "string"
+          enum: ["admission", "partial_new", "partial_existing", "total", "departure", "mortality", "mortality_correction", "redistribution_reversal"]
+        cantidad:
+          type: "integer"
+          minimum: 0
+        lote_origen_id:
+          type: ["string", "null"]
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          example: "01J00000000000000000000000"
+        lote_destino_id:
+          type: ["string", "null"]
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          example: "01J00000000000000000000000"
+        movimiento_revertido_id:
+          type: ["string", "null"]
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          example: "01J00000000000000000000000"
+        galpon_origen_id:
+          type: ["integer", "null"]
+          minimum: 1
+        galpon_destino_id:
+          type: ["integer", "null"]
+          minimum: 1
+        ocurrido_en:
+          type: "string"
+          format: "date-time"
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
+          description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
+        registrado_en:
+          type: "string"
+          format: "date-time"
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
+          description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
+        motivo:
+          type: ["string", "null"]
+          minLength: 1
+          maxLength: 500
+        registrado_por:
+          type: "integer"
+          minimum: 1
+        antes:
+          type: "object"
+          description: "Fotografías previas indexadas por ULID; objeto vacío para una admisión."
+          additionalProperties:
+            "$ref": "#/components/schemas/Flock"
+        despues:
+          type: "object"
+          description: "Fotografías posteriores indexadas por ULID."
+          additionalProperties:
+            "$ref": "#/components/schemas/Flock"
+    Mortality:
+      type: "object"
+      additionalProperties: false
+      required: ["id", "lote_id", "galpon_id", "unidad_productiva_id", "cantidad", "ocurrido_en", "observaciones", "estado", "version", "registrado_por", "categoria_mortalidad_id"]
+      properties:
+        id:
+          type: "string"
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          example: "01J00000000000000000000000"
+        lote_id:
+          type: "string"
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          example: "01J00000000000000000000000"
+        galpon_id:
+          type: "integer"
+          minimum: 1
+        unidad_productiva_id:
+          type: "integer"
+          minimum: 1
+        cantidad:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        ocurrido_en:
+          type: "string"
+          format: "date-time"
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
+          description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
+        observaciones:
+          type: ["string", "null"]
+          maxLength: 5000
+        estado:
+          type: "string"
+          enum: ["recorded", "cancelled"]
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        registrado_por:
+          type: "integer"
+          minimum: 1
+        categoria_mortalidad_id:
+          type: "integer"
+          minimum: 1
+    EggCollection:
+      type: "object"
+      additionalProperties: false
+      required: ["id", "lote_id", "galpon_id", "unidad_productiva_id", "cantidad", "ocurrido_en", "observaciones", "estado", "version", "registrado_por", "producto_id", "ubicacion_stock_id", "movimiento_inventario_id"]
+      properties:
+        id:
+          type: "string"
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          example: "01J00000000000000000000000"
+        lote_id:
+          type: "string"
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          example: "01J00000000000000000000000"
+        galpon_id:
+          type: "integer"
+          minimum: 1
+        unidad_productiva_id:
+          type: "integer"
+          minimum: 1
+        cantidad:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        ocurrido_en:
+          type: "string"
+          format: "date-time"
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
+          description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
+        observaciones:
+          type: ["string", "null"]
+          maxLength: 5000
+        estado:
+          type: "string"
+          enum: ["recorded", "cancelled"]
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        registrado_por:
+          type: "integer"
+          minimum: 1
+        producto_id:
+          type: "integer"
+          minimum: 1
+        ubicacion_stock_id:
+          type: "integer"
+          minimum: 1
+        movimiento_inventario_id:
+          type: ["integer", "null"]
+          minimum: 1
+    Catalog:
+      type: "object"
+      additionalProperties: false
+      required: ["id", "nombre", "estado", "version"]
+      properties:
+        id:
+          type: "integer"
+          minimum: 1
+        nombre:
+          type: "string"
+          minLength: 1
+          maxLength: 120
+        estado:
+          type: "string"
+          enum: ["active", "inactive"]
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+    Operation:
+      type: "object"
+      additionalProperties: false
+      required: ["id_operacion"]
+      properties:
+        id_operacion:
+          type: "string"
+          format: "uuid"
+        lote:
+          "$ref": "#/components/schemas/Flock"
+        lote_destino:
+          "$ref": "#/components/schemas/Flock"
+        movimiento:
+          "$ref": "#/components/schemas/Movement"
+        mortalidad:
+          "$ref": "#/components/schemas/Mortality"
+        recoleccion:
+          "$ref": "#/components/schemas/EggCollection"
+        catalogo:
+          "$ref": "#/components/schemas/Catalog"
+    CreateFlock:
+      type: "object"
+      additionalProperties: false
+      required: ["codigo", "raza_id", "galpon_id", "cantidad_inicial", "fecha_ingreso"]
+      properties:
+        id:
+          type: "string"
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          example: "01J00000000000000000000000"
+        codigo:
+          type: "string"
+          minLength: 1
+          maxLength: 60
+          pattern: "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+        raza_id:
+          type: "integer"
+          minimum: 1
+        proveedor_id:
+          type: ["integer", "null"]
+          minimum: 1
+        origen:
+          type: ["string", "null"]
+          minLength: 1
+          maxLength: 255
+        galpon_id:
+          type: "integer"
+          minimum: 1
+        cantidad_inicial:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        fecha_ingreso:
+          type: "string"
+          format: "date"
+        observaciones:
+          type: ["string", "null"]
+          maxLength: 5000
+      anyOf:
+        -
+          required: ["proveedor_id"]
+          properties:
+            proveedor_id:
+              type: "integer"
+              minimum: 1
+        -
+          required: ["origen"]
+          properties:
+            origen:
+              type: "string"
+              minLength: 1
+    UpdateFlock:
+      type: "object"
+      additionalProperties: false
+      required: ["version"]
+      properties:
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        codigo:
+          type: "string"
+          minLength: 1
+          maxLength: 60
+          pattern: "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+        observaciones:
+          type: ["string", "null"]
+          maxLength: 5000
+    ChangeFlockStatus:
+      type: "object"
+      additionalProperties: false
+      required: ["version", "estado", "motivo"]
+      properties:
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        estado:
+          type: "string"
+          enum: ["active", "quarantined"]
+        motivo:
+          type: "string"
+          minLength: 1
+          maxLength: 500
+    FinalizeFlock:
+      type: "object"
+      additionalProperties: false
+      required: ["version", "motivo"]
+      properties:
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        motivo:
+          type: "string"
+          minLength: 1
+          maxLength: 500
+    RedistributeFlock:
+      type: "object"
+      additionalProperties: false
+      required: ["version", "cantidad"]
+      properties:
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        cantidad:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        galpon_destino_id:
+          type: "integer"
+          minimum: 1
+        lote_destino_id:
+          type: "string"
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          example: "01J00000000000000000000000"
+        version_destino:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        codigo_destino:
+          type: "string"
+          minLength: 1
+          maxLength: 60
+          pattern: "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+        id_destino:
+          type: "string"
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          example: "01J00000000000000000000000"
+        ocurrido_en:
+          type: "string"
+          format: "date-time"
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
+          description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
+        motivo:
+          type: ["string", "null"]
+          minLength: 1
+          maxLength: 500
+      description: "Parcial: galpón y código nuevos, o lote existente de igual raza y su versión. Total: sólo otro galpón, conservando identidad. Nunca permite fusionar todas las aves con otro lote. El código destino es obligatorio si la cantidad es menor que las aves vivas y no se indica lote existente."
+      oneOf:
+        -
+          required: ["galpon_destino_id"]
+          not:
+            anyOf:
+              -
+                required: ["lote_destino_id"]
+              -
+                required: ["version_destino"]
+        -
+          required: ["lote_destino_id", "version_destino"]
+          not:
+            anyOf:
+              -
+                required: ["galpon_destino_id"]
+              -
+                required: ["codigo_destino"]
+              -
+                required: ["id_destino"]
+    ReverseRedistribution:
+      type: "object"
+      additionalProperties: false
+      required: ["version", "motivo"]
+      properties:
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        version_destino:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        motivo:
+          type: "string"
+          minLength: 1
+          maxLength: 500
+    RecordMortality:
+      type: "object"
+      additionalProperties: false
+      required: ["version", "cantidad", "categoria_mortalidad_id"]
+      properties:
+        id:
+          type: "string"
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          example: "01J00000000000000000000000"
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        cantidad:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        categoria_mortalidad_id:
+          type: "integer"
+          minimum: 1
+        ocurrido_en:
+          type: "string"
+          format: "date-time"
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
+          description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
+        observaciones:
+          type: ["string", "null"]
+          maxLength: 5000
+    CorrectMortality:
+      type: "object"
+      additionalProperties: false
+      required: ["version", "version_lote", "motivo"]
+      properties:
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        version_lote:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        motivo:
+          type: "string"
+          minLength: 1
+          maxLength: 500
+        cantidad:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        categoria_mortalidad_id:
+          type: "integer"
+          minimum: 1
+        observaciones:
+          type: ["string", "null"]
+          maxLength: 5000
+    CancelRecord:
+      type: "object"
+      additionalProperties: false
+      required: ["version", "version_lote", "motivo"]
+      properties:
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        version_lote:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        motivo:
+          type: "string"
+          minLength: 1
+          maxLength: 500
+    RecordEggCollection:
+      type: "object"
+      additionalProperties: false
+      required: ["version", "cantidad", "producto_id", "ubicacion_stock_id"]
+      properties:
+        id:
+          type: "string"
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          example: "01J00000000000000000000000"
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        cantidad:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        producto_id:
+          type: "integer"
+          minimum: 1
+        ubicacion_stock_id:
+          type: "integer"
+          minimum: 1
+        ocurrido_en:
+          type: "string"
+          format: "date-time"
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
+          description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
+        observaciones:
+          type: ["string", "null"]
+          maxLength: 5000
+    CorrectEggCollection:
+      type: "object"
+      additionalProperties: false
+      required: ["version", "version_lote", "motivo"]
+      properties:
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        version_lote:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        motivo:
+          type: "string"
+          minLength: 1
+          maxLength: 500
+        cantidad:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        observaciones:
+          type: ["string", "null"]
+          maxLength: 5000
+    CreateCatalog:
+      type: "object"
+      additionalProperties: false
+      required: ["nombre"]
+      properties:
+        nombre:
+          type: "string"
+          minLength: 1
+          maxLength: 120
+        estado:
+          type: "string"
+          enum: ["active", "inactive"]
+    UpdateCatalog:
+      type: "object"
+      additionalProperties: false
+      required: ["version"]
+      properties:
+        nombre:
+          type: "string"
+          minLength: 1
+          maxLength: 120
+        estado:
+          type: "string"
+          enum: ["active", "inactive"]
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+    Metrics:
+      type: "object"
+      additionalProperties: false
+      properties:
+        lote_id:
+          type: "string"
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          example: "01J00000000000000000000000"
+        fecha_desde:
+          type: "string"
+          format: "date"
+        fecha_hasta:
+          type: "string"
+          format: "date"
+        zona_horaria:
+          type: "string"
+          example: "America/Montevideo"
+        huevos_totales:
+          type: "integer"
+          minimum: 0
+        promedio_diario:
+          type: "number"
+          minimum: 0
+          description: "Total dividido por todos los días del período inclusivo, redondeado a dos decimales."
+        por_dia:
+          type: "array"
+          items:
+            type: "object"
+            additionalProperties: false
+            required: ["fecha", "cantidad"]
+            properties:
+              fecha:
+                type: "string"
+                format: "date"
+              cantidad:
+                type: "integer"
+                minimum: 1
+                maximum: 2147483647
+        por_semana:
+          type: "array"
+          items:
+            type: "object"
+            additionalProperties: false
+            required: ["inicio_semana", "cantidad"]
+            properties:
+              inicio_semana:
+                type: "string"
+                format: "date"
+              cantidad:
+                type: "integer"
+                minimum: 1
+                maximum: 2147483647
+    PageMeta:
+      type: "object"
+      additionalProperties: true
+      required: ["current_page", "last_page", "per_page", "total"]
+      properties:
+        current_page:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        last_page:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        per_page:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        total:
+          type: "integer"
+          minimum: 0
+    Problem:
+      type: "object"
+      additionalProperties: true
+      required: ["type", "title", "status"]
+      properties:
+        type:
+          type: "string"
+        title:
+          type: "string"
+        status:
+          type: "integer"
+        detail:
+          type: "string"
+        message:
+          type: "string"
+        errors:
+          type: "object"
+          additionalProperties:
+            type: "array"
+            items:
+              type: "string"
+    PaginatedFlocks:
+      type: "object"
+      additionalProperties: false
+      required: ["data", "links", "meta"]
+      properties:
+        data:
+          type: "array"
+          items:
+            "$ref": "#/components/schemas/Flock"
+        links:
+          type: "object"
+          additionalProperties:
+            type: ["string", "null"]
+        meta:
+          "$ref": "#/components/schemas/PageMeta"
+    PaginatedMovements:
+      type: "object"
+      additionalProperties: false
+      required: ["data", "links", "meta"]
+      properties:
+        data:
+          type: "array"
+          items:
+            "$ref": "#/components/schemas/Movement"
+        links:
+          type: "object"
+          additionalProperties:
+            type: ["string", "null"]
+        meta:
+          "$ref": "#/components/schemas/PageMeta"
+    PaginatedMortalityRecords:
+      type: "object"
+      additionalProperties: false
+      required: ["data", "links", "meta"]
+      properties:
+        data:
+          type: "array"
+          items:
+            "$ref": "#/components/schemas/Mortality"
+        links:
+          type: "object"
+          additionalProperties:
+            type: ["string", "null"]
+        meta:
+          "$ref": "#/components/schemas/PageMeta"
+    PaginatedEggCollections:
+      type: "object"
+      additionalProperties: false
+      required: ["data", "links", "meta"]
+      properties:
+        data:
+          type: "array"
+          items:
+            "$ref": "#/components/schemas/EggCollection"
+        links:
+          type: "object"
+          additionalProperties:
+            type: ["string", "null"]
+        meta:
+          "$ref": "#/components/schemas/PageMeta"
+    PaginatedCatalogs:
+      type: "object"
+      additionalProperties: false
+      required: ["data", "links", "meta"]
+      properties:
+        data:
+          type: "array"
+          items:
+            "$ref": "#/components/schemas/Catalog"
+        links:
+          type: "object"
+          additionalProperties:
+            type: ["string", "null"]
+        meta:
+          "$ref": "#/components/schemas/PageMeta"
+    FlockResponse:
+      type: "object"
+      additionalProperties: false
+      required: ["data"]
+      properties:
+        data:
+          "$ref": "#/components/schemas/Flock"
+    MortalityResponse:
+      type: "object"
+      additionalProperties: false
+      required: ["data"]
+      properties:
+        data:
+          "$ref": "#/components/schemas/Mortality"
+    EggCollectionResponse:
+      type: "object"
+      additionalProperties: false
+      required: ["data"]
+      properties:
+        data:
+          "$ref": "#/components/schemas/EggCollection"
+    OperationResponse:
+      type: "object"
+      additionalProperties: false
+      required: ["data"]
+      properties:
+        data:
+          "$ref": "#/components/schemas/Operation"
+    MetricsResponse:
+      type: "object"
+      additionalProperties: false
+      required: ["data"]
+      properties:
+        data:
+          "$ref": "#/components/schemas/Metrics"
