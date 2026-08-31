@@ -3,6 +3,7 @@
 namespace App\Modules\IdentityAndAccess\Application\Actions;
 
 use App\Models\User;
+use App\Modules\IdentityAndAccess\Application\Data\LoginResult;
 use Illuminate\Support\Facades\Hash;
 
 final class LoginUserAction
@@ -10,16 +11,19 @@ final class LoginUserAction
     /**
      * @param  array{email: string, password: string}  $credentials
      */
-    public function execute(array $credentials): ?User
+    public function execute(array $credentials): LoginResult
     {
         $user = User::query()
             ->where('email', $credentials['email'])
             ->first();
 
-        if (! $user instanceof User || ! Hash::check($credentials['password'], $user->password)) {
-            return null;
+        if (
+            $user === null ||
+            ! Hash::check($credentials['password'], $user->password)
+        ) {
+            return LoginResult::invalidCredentials();
         }
 
-        return $user;
+        return LoginResult::success($user);
     }
 }

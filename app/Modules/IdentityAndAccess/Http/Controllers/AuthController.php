@@ -11,8 +11,9 @@ use App\Modules\IdentityAndAccess\Http\Requests\LoginRequest;
 use App\Modules\IdentityAndAccess\Http\Requests\LogoutRequest;
 use App\Modules\IdentityAndAccess\Http\Requests\MeRequest;
 use App\Modules\IdentityAndAccess\Http\Requests\RegisterRequest;
-use App\Modules\IdentityAndAccess\Http\Resources\AccessTokenResource;
+use App\Modules\IdentityAndAccess\Http\Resources\AuthResponseResource;
 use App\Modules\IdentityAndAccess\Http\Resources\UserResource;
+use App\Modules\IdentityAndAccess\Http\Responders\LoginResponder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 
@@ -27,33 +28,23 @@ final class AuthController
         $user = $registerUser->execute($data);
         $token = $issueToken->execute($user, $data['device_name'] ?? 'registration');
 
-        return response()->json([
-            ...(new AccessTokenResource($token))->resolve($request),
-            'user' => (new UserResource($user))->resolve($request),
-        ], Response::HTTP_CREATED);
+        return AuthResponseResource::fromTokenAndUser($token, $user)
+            ->response()
+            ->setStatusCode(Response::HTTP_CREATED);
     }
 
     public function login(
         LoginRequest $request,
         LoginUserAction $loginUser,
-        IssueAccessTokenAction $issueToken,
+        LoginResponder $responder,
     ): JsonResponse {
         $data = $request->validated();
-        $user = $loginUser->execute([
+        $result = $loginUser->execute([
             'email' => $data['email'],
             'password' => $data['password'],
         ]);
 
-        if (! $user instanceof User) {
-            return response()->json([
-                'message' => 'Las credenciales proporcionadas no son correctas.',
-            ], Response::HTTP_UNAUTHORIZED);
-        }
-
-        return response()->json([
-            ...(new AccessTokenResource($issueToken->execute($user, $data['device_name'] ?? 'login')))->resolve($request),
-            'user' => (new UserResource($user))->resolve($request),
-        ]);
+        return $responder->respond($result, $data['device_name'] ?? 'login');
     }
 
     public function logout(LogoutRequest $request, LogoutUserAction $logoutUser): JsonResponse

@@ -193,11 +193,11 @@ Retiros y retornos operan con cantidades normalizadas. Nunca se crea un reparto 
 
 ## 10. Seguridad
 
-- Web: Sanctum stateful, CSRF y cookie `HttpOnly`, `Secure` y `SameSite`.
-- Móvil futuro: tokens revocables, expirables y con capacidades limitadas.
+- API: autenticación stateless con Sanctum Personal Access Tokens, expirables, revocables y con capacidades limitadas.
+- Clientes web y móviles envían `Authorization: Bearer <token>`; GAM no usa autenticación de Sanctum basada en sesión o cookies.
 - Autorización server-side mediante roles, permisos y Policies. Actualmente los permisos funcionales se aplican a todas las unidades productivas porque la empresa opera como una única organización pequeña.
 - Usuarios o permisos inactivos nunca conceden acceso.
-- CORS usa orígenes explícitos; login y recuperación tienen rate limiting.
+- CORS está limitado a la API y usa orígenes explícitos en `config/cors.php`, sin credenciales/cookies. Login y recuperación tienen rate limiting.
 - Secrets permanecen fuera del repositorio.
 - Logs no incluyen secretos; permisos, stock, repartos, ventas y cobros quedan auditados.
 
