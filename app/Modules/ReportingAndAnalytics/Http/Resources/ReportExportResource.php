@@ -13,24 +13,24 @@ final class ReportExportResource extends JsonResource
     public function toArray(Request $request): array
     {
         $query = $this->query;
-        unset($query['source_key'], $query['definition_version']);
+        unset($query['clave_fuente'], $query['version_definicion']);
 
         return [
             'id' => (int) $this->getKey(),
-            'operation_id' => $this->operation_id,
-            'source_key' => $this->source_key,
-            'definition_version' => $this->definition_version,
-            'format' => $this->format->value,
-            'status' => $this->status->value,
-            'query' => $query,
-            'file_name' => $this->file_name,
-            'mime_type' => $this->mime_type,
-            'file_size' => $this->file_size,
-            'expires_at' => $this->expires_at,
-            'completed_at' => $this->completed_at,
-            'failed_at' => $this->failed_at,
-            'failure_code' => $this->failure_code,
-            'failure_message' => $this->failure_message,
+            'id_operacion' => $this->operation_id,
+            'clave_fuente' => $this->source_key,
+            'version_definicion' => $this->definition_version,
+            'formato' => $this->format->value,
+            'estado' => $this->status->value,
+            'consulta' => $query,
+            'nombre_archivo' => $this->file_name,
+            'tipo_mime' => $this->mime_type,
+            'tamano_archivo' => $this->file_size,
+            'expira_en' => $this->expires_at,
+            'completada_en' => $this->completed_at,
+            'fallida_en' => $this->failed_at,
+            'codigo_falla' => $this->failure_code,
+            'mensaje_falla' => $this->failure_message,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

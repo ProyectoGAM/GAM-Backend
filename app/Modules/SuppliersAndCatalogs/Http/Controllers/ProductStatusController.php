@@ -11,11 +11,11 @@ use App\Modules\SuppliersAndCatalogs\Http\Resources\ProductResource;
 
 final readonly class ProductStatusController
 {
-    public function update(ChangeProductStatusRequest $request, Product $product, ChangeProductStatusAction $action): ProductResource
+    public function update(ChangeProductStatusRequest $request, Product $producto, ChangeProductStatusAction $action): ProductResource
     {
         /** @var User $actor */
         $actor = $request->user();
 
-        return new ProductResource($action->execute($product, ProductStatus::from($request->string('status')->toString()), $actor));
+        return new ProductResource($action->execute($producto, ProductStatus::from($request->string('estado')->toString()), $actor));
     }
 }

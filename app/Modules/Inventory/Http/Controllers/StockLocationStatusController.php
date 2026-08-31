@@ -11,11 +11,11 @@ use App\Modules\Inventory\Http\Resources\StockLocationResource;
 
 final readonly class StockLocationStatusController
 {
-    public function update(ChangeStockLocationStatusRequest $request, StockLocation $stockLocation, ChangeStockLocationStatusAction $action): StockLocationResource
+    public function update(ChangeStockLocationStatusRequest $request, StockLocation $ubicacionStock, ChangeStockLocationStatusAction $action): StockLocationResource
     {
         /** @var User $actor */
         $actor = $request->user();
 
-        return new StockLocationResource($action->execute($stockLocation, StockLocationStatus::from($request->string('status')->toString()), $actor));
+        return new StockLocationResource($action->execute($ubicacionStock, StockLocationStatus::from($request->string('estado')->toString()), $actor));
     }
 }

@@ -15,6 +15,7 @@ use App\Modules\ReportingAndAnalytics\Http\Requests\StoreReportExportRequest;
 use App\Modules\ReportingAndAnalytics\Http\Requests\StoreTemporaryReportLinkRequest;
 use App\Modules\ReportingAndAnalytics\Http\Requests\ViewReportExportRequest;
 use App\Modules\ReportingAndAnalytics\Http\Resources\ReportExportResource;
+use App\Support\PublicInputMapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Symfony\Component\HttpFoundation\Response;
@@ -25,11 +26,14 @@ final readonly class ReportExportController
     {
         /** @var User $actor */
         $actor = $request->user();
-        $attributes = $request->safe()->except(['format', 'idempotency_key']);
+        $attributes = PublicInputMapper::toInternal(
+            $request->safe()->except(['formato', 'idempotency_key']),
+            'report',
+        );
         $result = $action->execute(
             sourceKey: $source,
             input: $attributes,
-            format: ReportExportFormat::from((string) $request->validated('format')),
+            format: ReportExportFormat::from((string) $request->validated('formato')),
             idempotencyKey: (string) $request->validated('idempotency_key'),
             actor: $actor,
         );
@@ -44,7 +48,7 @@ final readonly class ReportExportController
         /** @var User $actor */
         $actor = $request->user();
 
-        return ReportExportResource::collection($query->execute($actor, $request->validated()));
+        return ReportExportResource::collection($query->execute($actor, PublicInputMapper::toInternal($request->validated(), 'report')));
     }
 
     public function show(ViewReportExportRequest $request, ReportExport $reportExport): ReportExportResource
@@ -54,7 +58,7 @@ final readonly class ReportExportController
 
     public function download(DownloadReportExportRequest $request, ReportExport $reportExport, DownloadReportExportAction $action): Response
     {
-        return $action->execute($reportExport);
+        return $action->execute($reportExport, $request->query('view') === 'html');
     }
 
     public function share(StoreTemporaryReportLinkRequest $request, ReportExport $reportExport, CreateTemporaryReportLinkAction $action): JsonResponse

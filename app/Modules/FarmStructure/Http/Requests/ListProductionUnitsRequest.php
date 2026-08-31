@@ -17,10 +17,10 @@ final class ListProductionUnitsRequest extends FarmStructureRequest
     public function rules(): array
     {
         return [
-            'search' => ['sometimes', 'nullable', 'string', 'max:120'],
-            'locality_id' => ['sometimes', 'integer', 'exists:localities,id'],
-            'status' => ['sometimes', Rule::enum(ProductionUnitStatus::class)],
-            'per_page' => ['sometimes', 'integer', 'between:1,100'],
+            'buscar' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'localidad_id' => ['sometimes', 'integer', 'exists:localities,id'],
+            'estado' => ['sometimes', Rule::enum(ProductionUnitStatus::class)],
+            'por_pagina' => ['sometimes', 'integer', 'between:1,100'],
         ];
     }
 }

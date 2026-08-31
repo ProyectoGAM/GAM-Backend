@@ -5,17 +5,23 @@ namespace App\Modules\ReportingAndAnalytics\Application\Actions;
 use App\Models\ReportingAndAnalytics\ReportExport;
 use App\Modules\AuditAndTraceability\Application\Contracts\AuditRecorder;
 use App\Modules\AuditAndTraceability\Application\Data\AuditEntryData;
+use App\Modules\ReportingAndAnalytics\Application\Services\ReportQueryNormalizer;
+use App\Modules\ReportingAndAnalytics\Application\Services\ReportSourceRegistry;
 use App\Modules\ReportingAndAnalytics\Domain\Enums\ReportExportStatus;
 use App\Modules\ReportingAndAnalytics\Domain\Exceptions\ReportConflict;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 final readonly class DownloadReportExportAction
 {
-    public function __construct(private AuditRecorder $auditRecorder) {}
+    public function __construct(
+        private AuditRecorder $auditRecorder,
+        private ReportQueryNormalizer $normalizer,
+        private ReportSourceRegistry $registry,
+    ) {}
 
-    public function execute(ReportExport $export): StreamedResponse
+    public function execute(ReportExport $export, bool $asHtml = false): Response
     {
         if ($export->status === ReportExportStatus::Expired
             || ($export->status !== ReportExportStatus::Failed
@@ -54,6 +60,19 @@ final readonly class DownloadReportExportAction
         $disk = Storage::disk($export->disk);
         if (! $disk->exists($export->path)) {
             throw new ReportConflict('El archivo de la exportación ya no está disponible.');
+        }
+
+        if ($asHtml) {
+            $source = $this->registry->get($export->source_key);
+            $storedQuery = is_array($export->query) ? $export->query : [];
+            unset($storedQuery['clave_fuente'], $storedQuery['version_definicion']);
+            $result = $source->preview($this->normalizer->normalize($export->source_key, $storedQuery));
+
+            return response()->view('reporting.report-export', [
+                'export' => $export,
+                'source' => $source->definition(),
+                'result' => $result,
+            ]);
         }
 
         return $disk->download($export->path, $export->file_name, [

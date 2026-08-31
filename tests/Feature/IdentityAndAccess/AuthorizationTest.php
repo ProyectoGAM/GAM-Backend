@@ -24,7 +24,7 @@ class AuthorizationTest extends TestCase
         $this->getJson('/api/v1/administracion')
             ->assertOk()
             ->assertJsonPath('message', 'Bienvenido al área de administración.')
-            ->assertJsonPath('user.email', $admin->email);
+            ->assertJsonPath('user.correo_electronico', $admin->email);
     }
 
     // Flujo: autoriza al administrador y verifica acceso al endpoint sin versión.
@@ -37,7 +37,7 @@ class AuthorizationTest extends TestCase
         // Acción: consulta el endpoint administrativo sin versión.
         $this->getJson('/administracion')
             ->assertOk()
-            ->assertJsonPath('user.email', $admin->email);
+            ->assertJsonPath('user.correo_electronico', $admin->email);
     }
 
     // Flujo: autentica a un usuario sin permiso y verifica la respuesta prohibida.

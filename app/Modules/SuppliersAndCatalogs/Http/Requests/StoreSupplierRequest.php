@@ -18,9 +18,9 @@ final class StoreSupplierRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'locality_id' => ['sometimes', 'nullable', 'integer', 'exists:localities,id'],
-            'name' => ['required', 'string', 'max:160'],
-            'address' => ['required', 'string', 'max:255'],
+            'localidad_id' => ['sometimes', 'nullable', 'integer', 'exists:localities,id'],
+            'nombre' => ['required', 'string', 'max:160'],
+            'direccion' => ['required', 'string', 'max:255'],
         ];
     }
 
@@ -28,11 +28,11 @@ final class StoreSupplierRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
-            if ($validator->errors()->has('name')) {
+            if ($validator->errors()->has('nombre')) {
                 return;
             }
-            if (Supplier::query()->where('normalized_name', Str::lower(trim($this->string('name')->toString())))->exists()) {
-                $validator->errors()->add('name', 'El nombre del proveedor ya está registrado.');
+            if (Supplier::query()->where('normalized_name', Str::lower(trim($this->string('nombre')->toString())))->exists()) {
+                $validator->errors()->add('nombre', 'El nombre del proveedor ya está registrado.');
             }
         }];
     }

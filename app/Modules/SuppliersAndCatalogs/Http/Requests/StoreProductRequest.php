@@ -22,10 +22,10 @@ final class StoreProductRequest extends FormRequest
     {
         return [
             'sku' => ['required', 'string', 'max:80'],
-            'name' => ['required', 'string', 'max:160'],
-            'kind' => ['required', Rule::enum(ProductKind::class)],
-            'base_unit' => ['required', Rule::enum(BaseUnit::class)],
-            'stock_tracked' => ['sometimes', 'boolean'],
+            'nombre' => ['required', 'string', 'max:160'],
+            'tipo' => ['required', Rule::enum(ProductKind::class)],
+            'unidad_base' => ['required', Rule::enum(BaseUnit::class)],
+            'controla_stock' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -33,14 +33,14 @@ final class StoreProductRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
-            if ($validator->errors()->hasAny(['sku', 'name'])) {
+            if ($validator->errors()->hasAny(['sku', 'nombre'])) {
                 return;
             }
             if (Product::query()->where('sku', trim($this->string('sku')->toString()))->exists()) {
                 $validator->errors()->add('sku', 'El SKU ya está registrado.');
             }
-            if (Product::query()->where('normalized_name', Str::lower(trim($this->string('name')->toString())))->exists()) {
-                $validator->errors()->add('name', 'El nombre del producto ya está registrado.');
+            if (Product::query()->where('normalized_name', Str::lower(trim($this->string('nombre')->toString())))->exists()) {
+                $validator->errors()->add('nombre', 'El nombre del producto ya está registrado.');
             }
         }];
     }

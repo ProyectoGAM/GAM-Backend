@@ -16,10 +16,10 @@ final class ListStockBalancesRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'product_id' => ['sometimes', 'integer', 'exists:products,id'],
-            'stock_location_id' => ['sometimes', 'integer', 'exists:stock_locations,id'],
-            'below_minimum' => ['sometimes', 'boolean'],
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'producto_id' => ['sometimes', 'integer', 'exists:products,id'],
+            'ubicacion_stock_id' => ['sometimes', 'integer', 'exists:stock_locations,id'],
+            'bajo_minimo' => ['sometimes', 'boolean'],
+            'por_pagina' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }
 }

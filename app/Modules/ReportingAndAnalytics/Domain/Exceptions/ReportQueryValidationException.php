@@ -25,9 +25,9 @@ final class ReportQueryValidationException extends DomainException implements Sh
     public function render(Request $request): JsonResponse
     {
         return response()->json([
-            'type' => 'https://httpstatuses.com/422',
+            'tipo' => 'https://httpstatuses.com/422',
             'title' => 'Consulta de reporte inválida',
-            'status' => Response::HTTP_UNPROCESSABLE_ENTITY,
+            'estado' => Response::HTTP_UNPROCESSABLE_ENTITY,
             'detail' => $this->getMessage(),
             'errors' => $this->errors,
         ], Response::HTTP_UNPROCESSABLE_ENTITY)->header('Content-Type', 'application/problem+json');

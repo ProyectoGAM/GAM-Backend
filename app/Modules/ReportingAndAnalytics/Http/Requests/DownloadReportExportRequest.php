@@ -12,7 +12,7 @@ final class DownloadReportExportRequest extends FormRequest
             return true;
         }
 
-        return $this->user()?->can('download', $this->route('reportExport')) ?? false;
+        return ($this->user() ?? auth('sanctum')->user())?->can('download', $this->route('reportExport')) ?? false;
     }
 
     public function rules(): array

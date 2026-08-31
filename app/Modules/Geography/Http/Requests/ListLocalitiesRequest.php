@@ -11,12 +11,12 @@ final class ListLocalitiesRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $department = $this->route('department');
+        $departamento = $this->route('departamento');
         $actor = $this->user();
 
-        return $department instanceof Department
+        return $departamento instanceof Department
             && $actor instanceof User
-            && $actor->can('view', $department)
+            && $actor->can('view', $departamento)
             && $actor->can('viewAny', Locality::class);
     }
 
@@ -24,8 +24,8 @@ final class ListLocalitiesRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'search' => ['sometimes', 'nullable', 'string', 'max:120'],
-            'per_page' => ['sometimes', 'integer', 'between:1,100'],
+            'buscar' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'por_pagina' => ['sometimes', 'integer', 'between:1,100'],
         ];
     }
 }

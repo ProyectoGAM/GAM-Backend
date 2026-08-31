@@ -34,8 +34,8 @@ class AuthenticationTest extends TestCase
     {
         // Acción: registra al usuario con credenciales y dispositivo.
         $response = $this->postJson('/api/v1/autenticacion/registro', [
-            'name' => 'New User',
-            'email' => 'new.user@example.test',
+            'nombre' => 'New User',
+            'correo_electronico' => 'new.user@example.test',
             'password' => 'correct-password',
             'password_confirmation' => 'correct-password',
             'device_name' => 'test-device',
@@ -130,7 +130,7 @@ class AuthenticationTest extends TestCase
 
         // Acción: intenta iniciar sesión con credenciales inválidas.
         $response = $this->postJson('/api/v1/autenticacion/inicio-sesion', [
-            'email' => 'login@example.test',
+            'correo_electronico' => 'login@example.test',
             'password' => 'wrong-password',
         ]);
 
@@ -145,7 +145,7 @@ class AuthenticationTest extends TestCase
     }
 
     // Flujo: elimina lógicamente un usuario e intenta autenticarlo sin éxito.
-    public function test_soft_deleted_users_cannot_login(): void
+    public function test_soft_deleted_usuarios_cannot_login(): void
     {
         // Preparación: crea y desactiva lógicamente al usuario.
         $user = User::factory()->create([
@@ -156,7 +156,7 @@ class AuthenticationTest extends TestCase
 
         // Acción: intenta iniciar sesión con el usuario eliminado.
         $this->postJson('/api/v1/autenticacion/inicio-sesion', [
-            'email' => 'inactive@example.test',
+            'correo_electronico' => 'inactive@example.test',
             'password' => 'correct-password',
         ])->assertUnauthorized();
 
@@ -190,8 +190,8 @@ class AuthenticationTest extends TestCase
         // Verificación: confirma validación y mensaje de correo requerido.
         $response
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['name', 'email', 'password'])
-            ->assertJsonPath('errors.email.0', 'El campo correo electrónico es obligatorio.');
+            ->assertJsonValidationErrors(['nombre', 'correo_electronico', 'password'])
+            ->assertJsonPath('errors.correo_electronico.0', 'El campo correo electrónico es obligatorio.');
     }
 
     // Flujo: registra un correo existente y verifica el error de unicidad en español.
@@ -202,13 +202,13 @@ class AuthenticationTest extends TestCase
 
         // Acción: intenta registrar otro usuario con el mismo correo.
         $this->postJson('/api/v1/autenticacion/registro', [
-            'name' => 'Another User',
-            'email' => 'existing@example.test',
+            'nombre' => 'Another User',
+            'correo_electronico' => 'existing@example.test',
             'password' => 'correct-password',
             'password_confirmation' => 'correct-password',
         ])
             ->assertUnprocessable()
-            ->assertJsonPath('errors.email.0', 'El valor de correo electrónico ya está en uso.');
+            ->assertJsonPath('errors.correo_electronico.0', 'El valor de correo electrónico ya está en uso.');
     }
 
     // Flujo: crea un usuario autenticado y verifica que puede leer su perfil completo.
@@ -225,7 +225,7 @@ class AuthenticationTest extends TestCase
             ->getJson('/api/v1/mi-perfil')
             ->assertOk()
             ->assertJsonPath('data.id', $user->id)
-            ->assertJsonPath('data.email', 'profile@example.test')
+            ->assertJsonPath('data.correo_electronico', 'profile@example.test')
             ->assertJsonPath('data.deleted_at', null)
             ->assertJsonPath('data.roles', [])
             ->assertJsonPath('data.permissions', []);

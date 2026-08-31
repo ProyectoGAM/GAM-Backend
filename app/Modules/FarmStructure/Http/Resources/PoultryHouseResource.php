@@ -14,11 +14,11 @@ final class PoultryHouseResource extends JsonResource
     {
         return [
             'id' => (int) $this->getKey(),
-            'production_unit_id' => $this->production_unit_id,
-            'name' => $this->name,
-            'bird_capacity' => $this->bird_capacity,
-            'status' => $this->status->value,
-            'production_unit' => ProductionUnitResource::make($this->whenLoaded('productionUnit')),
+            'unidad_productiva_id' => $this->production_unit_id,
+            'nombre' => $this->name,
+            'capacidad_aves' => $this->bird_capacity,
+            'estado' => $this->status->value,
+            'unidad_productiva' => ProductionUnitResource::make($this->whenLoaded('productionUnit')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

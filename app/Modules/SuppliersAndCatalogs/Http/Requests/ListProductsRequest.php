@@ -19,10 +19,10 @@ final class ListProductsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'search' => ['sometimes', 'string', 'max:120'],
-            'kind' => ['sometimes', Rule::enum(ProductKind::class)],
-            'status' => ['sometimes', Rule::enum(ProductStatus::class)],
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'buscar' => ['sometimes', 'string', 'max:120'],
+            'tipo' => ['sometimes', Rule::enum(ProductKind::class)],
+            'estado' => ['sometimes', Rule::enum(ProductStatus::class)],
+            'por_pagina' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }
 }

@@ -27,9 +27,9 @@ final class ListAuditEntriesRequest extends FormRequest
             'subject_type' => ['sometimes', 'string', 'max:255'],
             'subject_id' => ['sometimes', 'integer'],
             'up_id' => ['sometimes', 'integer'],
-            'from' => ['sometimes', 'date_format:Y-m-d'],
-            'to' => ['sometimes', 'date_format:Y-m-d', 'after_or_equal:from'],
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'desde' => ['sometimes', 'date_format:Y-m-d'],
+            'hasta' => ['sometimes', 'date_format:Y-m-d', 'after_or_equal:desde'],
+            'por_pagina' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }
 }

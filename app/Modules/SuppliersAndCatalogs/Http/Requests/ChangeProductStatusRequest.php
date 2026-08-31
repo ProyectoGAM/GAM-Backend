@@ -10,12 +10,12 @@ final class ChangeProductStatusRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('changeStatus', $this->route('product')) ?? false;
+        return $this->user()?->can('changeStatus', $this->route('producto')) ?? false;
     }
 
     /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
-        return ['status' => ['required', Rule::enum(ProductStatus::class)]];
+        return ['estado' => ['required', Rule::enum(ProductStatus::class)]];
     }
 }

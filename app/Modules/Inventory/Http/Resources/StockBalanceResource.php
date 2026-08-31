@@ -15,14 +15,14 @@ final class StockBalanceResource extends JsonResource
     {
         return [
             'id' => (int) $this->getKey(),
-            'product_id' => (int) $this->product_id,
-            'stock_location_id' => (int) $this->stock_location_id,
-            'product' => ProductResource::make($this->whenLoaded('product')),
-            'stock_location' => StockLocationResource::make($this->whenLoaded('stockLocation')),
-            'on_hand_quantity' => (string) $this->on_hand_quantity,
-            'reserved_quantity' => (string) $this->reserved_quantity,
-            'available_quantity' => (string) $this->available_quantity,
-            'minimum_quantity' => (string) $this->minimum_quantity,
+            'producto_id' => (int) $this->product_id,
+            'ubicacion_stock_id' => (int) $this->stock_location_id,
+            'producto' => ProductResource::make($this->whenLoaded('product')),
+            'ubicacion_stock' => StockLocationResource::make($this->whenLoaded('stockLocation')),
+            'cantidad_fisica' => (string) $this->on_hand_quantity,
+            'cantidad_reservada' => (string) $this->reserved_quantity,
+            'cantidad_disponible' => (string) $this->available_quantity,
+            'cantidad_minima' => (string) $this->minimum_quantity,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

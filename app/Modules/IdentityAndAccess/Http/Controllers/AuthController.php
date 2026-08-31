@@ -14,6 +14,7 @@ use App\Modules\IdentityAndAccess\Http\Requests\RegisterRequest;
 use App\Modules\IdentityAndAccess\Http\Resources\AuthResponseResource;
 use App\Modules\IdentityAndAccess\Http\Resources\UserResource;
 use App\Modules\IdentityAndAccess\Http\Responders\LoginResponder;
+use App\Support\PublicInputMapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 
@@ -24,7 +25,7 @@ final class AuthController
         RegisterUserAction $registerUser,
         IssueAccessTokenAction $issueToken,
     ): JsonResponse {
-        $data = $request->validated();
+        $data = PublicInputMapper::toInternal($request->validated(), 'identity');
         $user = $registerUser->execute($data);
         $token = $issueToken->execute($user, $data['device_name'] ?? 'registration');
 
@@ -38,8 +39,8 @@ final class AuthController
         LoginUserAction $loginUser,
         LoginResponder $responder,
     ): JsonResponse {
-        $data = $request->validated();
-        $result = $loginUser->execute([
+        $data = PublicInputMapper::toInternal($request->validated(), 'identity');
+        $user = $loginUser->execute([
             'email' => $data['email'],
             'password' => $data['password'],
         ]);

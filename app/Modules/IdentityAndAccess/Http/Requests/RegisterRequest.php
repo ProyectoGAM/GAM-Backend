@@ -18,8 +18,8 @@ final class RegisterRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
+            'nombre' => ['required', 'string', 'max:255'],
+            'correo_electronico' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'device_name' => ['sometimes', 'string', 'max:100'],
         ];

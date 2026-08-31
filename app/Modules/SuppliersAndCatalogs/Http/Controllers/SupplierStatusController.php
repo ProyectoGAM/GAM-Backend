@@ -11,11 +11,11 @@ use App\Modules\SuppliersAndCatalogs\Http\Resources\SupplierResource;
 
 final readonly class SupplierStatusController
 {
-    public function update(ChangeSupplierStatusRequest $request, Supplier $supplier, ChangeSupplierStatusAction $action): SupplierResource
+    public function update(ChangeSupplierStatusRequest $request, Supplier $proveedor, ChangeSupplierStatusAction $action): SupplierResource
     {
         /** @var User $actor */
         $actor = $request->user();
 
-        return new SupplierResource($action->execute($supplier, SupplierStatus::from($request->string('status')->toString()), $actor));
+        return new SupplierResource($action->execute($proveedor, SupplierStatus::from($request->string('estado')->toString()), $actor));
     }
 }

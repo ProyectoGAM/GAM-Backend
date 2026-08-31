@@ -13,7 +13,7 @@ final class UpdateProductRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('update', $this->route('product')) ?? false;
+        return $this->user()?->can('update', $this->route('producto')) ?? false;
     }
 
     /** @return array<string, array<int, mixed>> */
@@ -21,10 +21,10 @@ final class UpdateProductRequest extends FormRequest
     {
         return [
             'sku' => ['sometimes', 'string', 'max:80'],
-            'name' => ['sometimes', 'string', 'max:160'],
-            'kind' => ['sometimes', 'string', 'in:raw_material,supply,finished_feed,egg,medicine,vaccine,other'],
-            'base_unit' => ['sometimes', Rule::enum(BaseUnit::class)],
-            'stock_tracked' => ['sometimes', 'boolean'],
+            'nombre' => ['sometimes', 'string', 'max:160'],
+            'tipo' => ['sometimes', 'string', 'in:raw_material,supply,finished_feed,egg,medicine,vaccine,other'],
+            'unidad_base' => ['sometimes', Rule::enum(BaseUnit::class)],
+            'controla_stock' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -32,15 +32,15 @@ final class UpdateProductRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
-            $product = $this->route('product');
-            if (! $product instanceof Product) {
+            $producto = $this->route('producto');
+            if (! $producto instanceof Product) {
                 return;
             }
-            if ($this->filled('sku') && Product::query()->where('sku', trim($this->string('sku')->toString()))->whereKeyNot($product->getKey())->exists()) {
+            if ($this->filled('sku') && Product::query()->where('sku', trim($this->string('sku')->toString()))->whereKeyNot($producto->getKey())->exists()) {
                 $validator->errors()->add('sku', 'El SKU ya está registrado.');
             }
-            if ($this->filled('name') && Product::query()->where('normalized_name', Str::lower(trim($this->string('name')->toString())))->whereKeyNot($product->getKey())->exists()) {
-                $validator->errors()->add('name', 'El nombre del producto ya está registrado.');
+            if ($this->filled('nombre') && Product::query()->where('normalized_name', Str::lower(trim($this->string('nombre')->toString())))->whereKeyNot($producto->getKey())->exists()) {
+                $validator->errors()->add('nombre', 'El nombre del producto ya está registrado.');
             }
         }];
     }

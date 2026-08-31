@@ -14,11 +14,11 @@ final class StockReservationResource extends JsonResource
     {
         return [
             'id' => (int) $this->getKey(),
-            'status' => $this->status->value,
-            'reference_type' => $this->reference_type,
-            'reference_id' => $this->reference_id,
-            'lines' => StockReservationLineResource::collection($this->whenLoaded('lines')),
-            'created_by' => $this->created_by,
+            'estado' => $this->status->value,
+            'tipo_referencia' => $this->reference_type,
+            'referencia_id' => $this->reference_id,
+            'lineas' => StockReservationLineResource::collection($this->whenLoaded('lines')),
+            'creado_por' => $this->created_by,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

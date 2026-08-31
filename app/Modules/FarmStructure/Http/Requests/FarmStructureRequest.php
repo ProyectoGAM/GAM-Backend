@@ -12,13 +12,13 @@ abstract class FarmStructureRequest extends FormRequest
     protected function authorizeProductionUnit(string $ability): bool
     {
         $actor = $this->user();
-        $productionUnit = $this->route('productionUnit');
+        $unidadProductiva = $this->route('unidadProductiva');
 
-        if (! $actor instanceof User || ! $productionUnit instanceof ProductionUnit) {
+        if (! $actor instanceof User || ! $unidadProductiva instanceof ProductionUnit) {
             return false;
         }
 
-        return $actor->can($ability, $productionUnit);
+        return $actor->can($ability, $unidadProductiva);
     }
 
     protected function authorizePoultryHouse(string $ability): bool
@@ -36,9 +36,9 @@ abstract class FarmStructureRequest extends FormRequest
     protected function authorizePoultryHouseCollection(string $ability): bool
     {
         $actor = $this->user();
-        $productionUnit = $this->route('productionUnit');
+        $unidadProductiva = $this->route('unidadProductiva');
 
-        if (! $actor instanceof User || ! $productionUnit instanceof ProductionUnit) {
+        if (! $actor instanceof User || ! $unidadProductiva instanceof ProductionUnit) {
             return false;
         }
 
@@ -46,6 +46,6 @@ abstract class FarmStructureRequest extends FormRequest
             return $actor->can($ability, PoultryHouse::class);
         }
 
-        return $actor->can($ability, [PoultryHouse::class, $productionUnit]);
+        return $actor->can($ability, [PoultryHouse::class, $unidadProductiva]);
     }
 }

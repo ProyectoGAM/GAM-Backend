@@ -17,10 +17,10 @@ final class UpdateProductionUnitRequest extends FarmStructureRequest
     public function rules(): array
     {
         return [
-            'locality_id' => ['sometimes', 'required', 'integer', 'exists:localities,id'],
-            'name' => ['sometimes', 'required', 'string', 'max:120'],
-            'latitude' => ['sometimes', 'required', 'numeric', 'between:-90,90'],
-            'longitude' => ['sometimes', 'required', 'numeric', 'between:-180,180'],
+            'localidad_id' => ['sometimes', 'required', 'integer', 'exists:localities,id'],
+            'nombre' => ['sometimes', 'required', 'string', 'max:120'],
+            'latitud' => ['sometimes', 'required', 'numeric', 'between:-90,90'],
+            'longitud' => ['sometimes', 'required', 'numeric', 'between:-180,180'],
         ];
     }
 
@@ -29,28 +29,28 @@ final class UpdateProductionUnitRequest extends FarmStructureRequest
     {
         return [
             function (Validator $validator): void {
-                $productionUnit = $this->route('productionUnit');
+                $unidadProductiva = $this->route('unidadProductiva');
 
-                if (! $productionUnit instanceof ProductionUnit || $validator->errors()->isNotEmpty()) {
+                if (! $unidadProductiva instanceof ProductionUnit || $validator->errors()->isNotEmpty()) {
                     return;
                 }
 
-                if (! $this->hasAny(['locality_id', 'name', 'latitude', 'longitude'])) {
+                if (! $this->hasAny(['localidad_id', 'nombre', 'latitud', 'longitud'])) {
                     $validator->errors()->add('request', 'Debes proporcionar al menos un campo.');
 
                     return;
                 }
 
-                $localityId = $this->integer('locality_id', $productionUnit->locality_id);
-                $name = $this->has('name') ? $this->string('name')->toString() : $productionUnit->name;
+                $localityId = $this->integer('localidad_id', $unidadProductiva->locality_id);
+                $nombre = $this->has('nombre') ? $this->string('nombre')->toString() : $unidadProductiva->name;
                 $exists = ProductionUnit::query()
-                    ->whereKeyNot($productionUnit->getKey())
+                    ->whereKeyNot($unidadProductiva->getKey())
                     ->where('locality_id', $localityId)
-                    ->where('normalized_name', Str::lower(trim($name)))
+                    ->where('normalized_name', Str::lower(trim($nombre)))
                     ->exists();
 
                 if ($exists) {
-                    $validator->errors()->add('name', 'El nombre ya está registrado en esta localidad.');
+                    $validator->errors()->add('nombre', 'El nombre ya está registrado en esta localidad.');
                 }
             },
         ];

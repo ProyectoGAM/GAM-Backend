@@ -25,26 +25,26 @@ final class ProductionUnitEndpointTest extends TestCase
     public function test_valid_payload_creates_production_unit_and_audit_entry(): void
     {
         // Preparación: crea la localidad y autentica al actor autorizado.
-        $locality = Locality::factory()->create();
+        $localidad = Locality::factory()->create();
         $actor = $this->userWithPermissions(['production-units.manage']);
         Sanctum::actingAs($actor, ['*']);
 
         // Acción: registra la unidad productiva mediante la API.
         $response = $this->postJson('/api/v1/unidades-productivas', [
-            'locality_id' => $locality->getKey(),
-            'name' => 'North Farm',
-            'latitude' => '-34.901100',
-            'longitude' => '-56.164500',
+            'localidad_id' => $localidad->getKey(),
+            'nombre' => 'North Farm',
+            'latitud' => '-34.901100',
+            'longitud' => '-56.164500',
         ])->assertCreated()
-            ->assertJsonPath('data.name', 'North Farm')
-            ->assertJsonPath('data.status', 'active');
+            ->assertJsonPath('data.nombre', 'North Farm')
+            ->assertJsonPath('data.estado', 'active');
 
         $productionUnitId = (int) $response->json('data.id');
 
         // Verificación: confirma datos normalizados y auditoría del alta.
         $this->assertDatabaseHas('production_units', [
             'id' => $productionUnitId,
-            'locality_id' => $locality->getKey(),
+            'locality_id' => $localidad->getKey(),
             'normalized_name' => 'north farm',
             'status' => 'active',
         ]);
@@ -69,8 +69,8 @@ final class ProductionUnitEndpointTest extends TestCase
         $this->getJson('/api/v1/unidades-productivas')
             ->assertOk()
             ->assertJsonCount(2, 'data')
-            ->assertJsonFragment(['name' => 'North Farm'])
-            ->assertJsonFragment(['name' => 'South Farm']);
+            ->assertJsonFragment(['nombre' => 'North Farm'])
+            ->assertJsonFragment(['nombre' => 'South Farm']);
 
         // Acción 2: consulta la primera unidad por identificador.
         $this->getJson("/api/v1/unidades-productivas/{$firstProductionUnit->getKey()}")
@@ -84,7 +84,7 @@ final class ProductionUnitEndpointTest extends TestCase
     }
 
     // Flujo: autentica un usuario sin permiso y verifica que no puede listar unidades.
-    public function test_user_without_view_permission_cannot_access_production_units(): void
+    public function test_user_without_view_permission_cannot_access_unidades_productivas(): void
     {
         // Preparación: registra el permiso y autentica un usuario sin asignarlo.
         Permission::findOrCreate('production-units.view', 'web');
@@ -114,12 +114,12 @@ final class ProductionUnitEndpointTest extends TestCase
 
         // Acción: intenta crear una unidad con coordenadas fuera de rango.
         $this->postJson('/api/v1/unidades-productivas', [
-            'locality_id' => Locality::factory()->create()->getKey(),
-            'name' => 'Invalid Coordinates',
-            'latitude' => 91,
-            'longitude' => -181,
+            'localidad_id' => Locality::factory()->create()->getKey(),
+            'nombre' => 'Invalid Coordinates',
+            'latitud' => 91,
+            'longitud' => -181,
         ])->assertUnprocessable()
-            ->assertJsonValidationErrors(['latitude', 'longitude']);
+            ->assertJsonValidationErrors(['latitud', 'longitud']);
 
         // Verificación: confirma que la unidad inválida no se guardó.
         $this->assertDatabaseMissing('production_units', ['normalized_name' => 'invalid coordinates']);
@@ -145,46 +145,46 @@ final class ProductionUnitEndpointTest extends TestCase
     public function test_deactivation_returns_409_while_a_poultry_house_is_active(): void
     {
         // Preparación: crea la unidad, un galpón activo y el actor autorizado.
-        $productionUnit = ProductionUnit::factory()->create();
-        PoultryHouse::factory()->for($productionUnit)->create();
+        $unidadProductiva = ProductionUnit::factory()->create();
+        PoultryHouse::factory()->for($unidadProductiva)->create();
         $actor = $this->userWithPermissions(['production-units.manage']);
         Sanctum::actingAs($actor, ['*']);
 
         // Acción: solicita la desactivación de la unidad productiva.
-        $this->patchJson("/api/v1/unidades-productivas/{$productionUnit->getKey()}/estado", [
-            'status' => 'inactive',
+        $this->patchJson("/api/v1/unidades-productivas/{$unidadProductiva->getKey()}/estado", [
+            'estado' => 'inactive',
         ])->assertConflict()
             ->assertJsonPath('message', 'Una unidad productiva con galpones activos no puede desactivarse.');
 
         // Verificación: confirma que la unidad permanece activa.
         $this->assertDatabaseHas('production_units', [
-            'id' => $productionUnit->getKey(),
+            'id' => $unidadProductiva->getKey(),
             'status' => 'active',
         ]);
     }
 
     // Flujo: desactiva una unidad cuyos galpones ya están inactivos y verifica auditoría.
-    public function test_deactivation_succeeds_after_all_poultry_houses_are_inactive(): void
+    public function test_deactivation_succeeds_after_all_galpones_are_inactive(): void
     {
         // Preparación: crea la unidad con todos sus galpones inactivos.
-        $productionUnit = ProductionUnit::factory()->create();
-        PoultryHouse::factory()->for($productionUnit)->create([
+        $unidadProductiva = ProductionUnit::factory()->create();
+        PoultryHouse::factory()->for($unidadProductiva)->create([
             'status' => PoultryHouseStatus::Inactive,
         ]);
         $actor = $this->userWithPermissions(['production-units.manage']);
         Sanctum::actingAs($actor, ['*']);
 
         // Acción: cambia la unidad productiva a estado inactivo.
-        $this->patchJson("/api/v1/unidades-productivas/{$productionUnit->getKey()}/estado", [
-            'status' => 'inactive',
+        $this->patchJson("/api/v1/unidades-productivas/{$unidadProductiva->getKey()}/estado", [
+            'estado' => 'inactive',
         ])->assertOk()
-            ->assertJsonPath('data.status', 'inactive');
+            ->assertJsonPath('data.estado', 'inactive');
 
         // Verificación: confirma la auditoría del cambio de estado.
         $this->assertDatabaseHas('activity_log', [
             'event' => 'production_unit_status_changed',
-            'subject_id' => $productionUnit->getKey(),
-            'up_id' => $productionUnit->getKey(),
+            'subject_id' => $unidadProductiva->getKey(),
+            'up_id' => $unidadProductiva->getKey(),
         ]);
     }
 
@@ -192,7 +192,7 @@ final class ProductionUnitEndpointTest extends TestCase
     public function test_failed_audit_rolls_back_production_unit(): void
     {
         // Preparación: crea contexto y reemplaza el grabador por uno que falla.
-        $locality = Locality::factory()->create();
+        $localidad = Locality::factory()->create();
         $actor = User::factory()->create();
         $this->app->instance(AuditRecorder::class, new class implements AuditRecorder
         {
@@ -205,7 +205,7 @@ final class ProductionUnitEndpointTest extends TestCase
         try {
             // Acción: intenta crear la unidad productiva con auditoría fallida.
             $this->app->make(CreateProductionUnitAction::class)->execute([
-                'locality_id' => (int) $locality->getKey(),
+                'locality_id' => (int) $localidad->getKey(),
                 'name' => 'Rolled Back Farm',
                 'latitude' => '-34.901100',
                 'longitude' => '-56.164500',

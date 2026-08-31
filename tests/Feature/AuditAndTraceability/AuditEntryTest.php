@@ -23,8 +23,8 @@ final class AuditEntryTest extends TestCase
     {
         // Acción 1: registra el usuario mediante la API.
         $response = $this->postJson('/api/v1/autenticacion/registro', [
-            'name' => 'Audited User',
-            'email' => 'audited.user@example.test',
+            'nombre' => 'Audited User',
+            'correo_electronico' => 'audited.user@example.test',
             'password' => 'correct-password',
             'password_confirmation' => 'correct-password',
         ]);
@@ -101,7 +101,7 @@ final class AuditEntryTest extends TestCase
         // Acción: autentica al usuario y consulta las entradas filtradas.
         Sanctum::actingAs($user, ['*']);
 
-        $this->getJson('/api/v1/auditoria/entradas?event=stock_moved&per_page=10')
+        $this->getJson('/api/v1/auditoria/entradas?event=stock_moved&por_pagina=10')
             ->assertOk()
             ->assertJsonPath('data.0.event', 'stock_moved')
             ->assertJsonPath('data.0.description', 'Movimiento de stock realizado')

@@ -16,6 +16,6 @@ final class SetMinimumStockRequest extends FormRequest
     /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
-        return ['minimum_quantity' => ['required', 'string', 'regex:/^\d+(?:\.\d{1,6})?$/']];
+        return ['cantidad_minima' => ['required', 'string', 'regex:/^\d+(?:\.\d{1,6})?$/']];
     }
 }

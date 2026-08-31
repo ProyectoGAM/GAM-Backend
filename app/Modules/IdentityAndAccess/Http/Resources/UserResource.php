@@ -19,8 +19,8 @@ final class UserResource extends JsonResource
 
         return [
             'id' => $user->getKey(),
-            'name' => $user->name,
-            'email' => $user->email,
+            'nombre' => $user->name,
+            'correo_electronico' => $user->email,
             'deleted_at' => $user->deleted_at?->toIso8601String(),
             'roles' => $user->getRoleNames()->values()->all(),
             'permissions' => $user->getAllPermissions()->pluck('name')->values()->all(),
