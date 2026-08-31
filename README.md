@@ -9,6 +9,8 @@ Horizon: http://localhost:8080/horizon
 Pulse: http://localhost:8080/pulse
 
 
+[notion.md](notion.md) => módulos implementados pendientes de reflejar en el Kanban de Notion
+
 architecture.md => arquitectura
 
 libraries.md => paquetes/librerias usadas
@@ -17,9 +19,7 @@ module-structure-example.md => ejemplo de estructura y alguna que otra aplicacio
 
 [maintenance-implementation.md](maintenance-implementation.md) => implementación e histórico de mantenimientos de galpones
 
-[notion.md](notion.md) => módulos implementados pendientes de reflejar en el Kanban de Notion
-
-[contracts/openapi/maintenance.yaml](contracts/openapi/maintenance.yaml) => contrato API de mantenimientos
+[lots-implementation.md](lots-implementation.md) => implementación e histórico de lotes y crías
 
 docker compose -f compose.dev.yaml up -d --build
 
@@ -66,11 +66,3 @@ docker compose -f compose.dev.yaml exec api php artisan migrate:fresh --seed --f
 ```
 
 Cada módulo nuevo debe incluir su seeder de datos demo y registrarlo en `LocalDemoDataSeeder` (o en un seeder del módulo invocado por este), para que sus datos estén disponibles automáticamente cuando el ambiente sea local.
-
-## 05 — Lotes y cría
-
-[Implementación, decisiones y Do Test detallado](lots-implementation.md) · [Contrato OpenAPI](contracts/openapi/lots.yaml).
-
-El módulo soporta redistribuciones parciales a lotes nuevos o existentes y traslados totales conservando la identidad. No elimina lotes ni mantiene una genealogía. La capacidad física del galpón se conserva; ocupación y disponibilidad se derivan de aves vivas. Las correcciones son auditadas y la recolección actualiza Inventario en la misma transacción.
-
-Para conservar los datos locales al instalarlo, usar `php artisan migrate --no-interaction` y los seeders descritos en su documentación; no es necesario `migrate:fresh`. `LotsDemoSeeder` crea los lotes `DEMO-LOT-A` a `DEMO-LOT-D` y se invoca automáticamente desde la carga local.

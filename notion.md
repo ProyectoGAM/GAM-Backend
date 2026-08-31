@@ -10,7 +10,7 @@ No se consultó ni modificó Notion durante esta entrega por falta de acceso al 
 
 | Módulo / tarjeta Notion | Estado en código | Documentación fuente | Contrato | Pendiente |
 |---|---|---|---|---|
-| Mantenimientos de instalaciones | Implementado en `develop` | [maintenance-implementation.md](maintenance-implementation.md) | [maintenance.yaml](contracts/openapi/maintenance.yaml) | Sincronizar la tarjeta y ejecutar Do Test |
+| **07 — Mantenimiento de instalaciones** | Implementado en `develop` | [maintenance-implementation.md](maintenance-implementation.md) | [maintenance.yaml](contracts/openapi/maintenance.yaml) | Sincronizar la tarjeta y ejecutar Do Test |
 | **05 — Lotes y cría** | Implementado en `Lotes` | [lots-implementation.md](lots-implementation.md) | [lots.yaml](contracts/openapi/lots.yaml) | Sincronizar la tarjeta y ejecutar Do Test manual |
 
 ## Módulo 05 — Lotes y cría
