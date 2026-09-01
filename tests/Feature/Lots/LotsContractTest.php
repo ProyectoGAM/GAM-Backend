@@ -48,10 +48,10 @@ final class LotsContractTest extends TestCase
                 }
             }
         }
-        $this->assertCount(28, $actual);
+        $this->assertCount(32, $actual);
         $this->assertEqualsCanonicalizing($expected, $actual);
         $this->assertSame([['bearerAuth' => []]], $contract['security']);
-        $this->assertSame('05 — Lotes y cría', $contract['info']['title']);
+        $this->assertSame('09 — Producción y stock de huevos', $contract['info']['title']);
     }
 
     // Flujo: comprueba que los Resources no introduzcan campos distintos del contrato público.

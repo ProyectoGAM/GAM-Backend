@@ -15,7 +15,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
-/** @property BaseUnit $base_unit */
+/**
+ * @property BaseUnit $base_unit
+ * @property ProductKind $kind
+ * @property ProductStatus $status
+ * @property bool $stock_tracked
+ */
 #[Fillable(['sku', 'name', 'kind', 'base_unit', 'stock_tracked', 'status'])]
 class Product extends Model
 {

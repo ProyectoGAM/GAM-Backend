@@ -110,10 +110,15 @@ return new class extends Migration
             $table->foreignId('flock_id')->constrained()->restrictOnDelete();
             $table->foreignId('poultry_house_id')->constrained()->restrictOnDelete();
             $table->foreignId('production_unit_id')->constrained()->restrictOnDelete();
-            $table->foreignId('product_id')->constrained()->restrictOnDelete();
-            $table->foreignId('stock_location_id')->constrained()->restrictOnDelete();
+            // Alias heredados; las clasificaciones nuevas viven en egg_collection_lines.
+            $table->foreignId('product_id')->nullable()->constrained()->restrictOnDelete();
+            $table->foreignId('stock_location_id')->nullable()->constrained()->restrictOnDelete();
             $table->foreignId('inventory_movement_id')->nullable()->constrained()->restrictOnDelete();
-            $table->unsignedInteger('quantity');
+            $table->unsignedInteger('collected_quantity');
+            // Alias histórico conservado para lecturas de instalaciones previas del módulo de Lotes.
+            $table->unsignedInteger('quantity')->nullable();
+            $table->unsignedInteger('discarded_quantity')->default(0);
+            $table->string('discard_reason', 500)->nullable();
             $table->timestampTz('occurred_at');
             $table->text('notes')->nullable();
             $table->string('status', 20)->default('recorded');
@@ -123,11 +128,25 @@ return new class extends Migration
             $table->index(['flock_id', 'occurred_at', 'id']);
             $table->index(['poultry_house_id', 'occurred_at', 'id']);
         });
-        DB::statement("ALTER TABLE egg_collections ADD CONSTRAINT egg_collections_values_check CHECK (quantity > 0 AND version > 0 AND status IN ('recorded', 'cancelled'))");
+        DB::statement("ALTER TABLE egg_collections ADD CONSTRAINT egg_collections_values_check CHECK (collected_quantity > 0 AND discarded_quantity >= 0 AND discarded_quantity <= collected_quantity AND version > 0 AND status IN ('recorded', 'cancelled'))");
+        DB::statement('ALTER TABLE egg_collections ADD CONSTRAINT egg_collections_discard_reason_check CHECK (discarded_quantity = 0 OR (discard_reason IS NOT NULL AND length(trim(discard_reason)) > 0))');
+
+        Schema::create('egg_collection_lines', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('egg_collection_id')->constrained('egg_collections')->restrictOnDelete();
+            $table->foreignId('product_id')->constrained('products')->restrictOnDelete();
+            $table->foreignId('stock_location_id')->constrained('stock_locations')->restrictOnDelete();
+            $table->unsignedInteger('quantity');
+            $table->timestampsTz();
+            $table->unique(['egg_collection_id', 'product_id', 'stock_location_id']);
+            $table->index(['product_id', 'stock_location_id', 'created_at']);
+        });
+        DB::statement('ALTER TABLE egg_collection_lines ADD CONSTRAINT egg_collection_lines_quantity_check CHECK (quantity > 0)');
     }
 
     public function down(): void
     {
+        Schema::dropIfExists('egg_collection_lines');
         Schema::dropIfExists('egg_collections');
         Schema::dropIfExists('mortality_records');
         Schema::dropIfExists('flock_movements');

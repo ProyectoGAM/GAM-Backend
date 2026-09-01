@@ -64,7 +64,7 @@ final readonly class RecordInventoryMovementAction
 
                     try {
                         $onHandDelta = InventoryQuantity::from(
-                            (string) ($line['on_hand_delta'] ?? '0'),
+                            (string) $line['on_hand_delta'],
                             $productData[$line['product_id']]->baseUnit,
                         );
                     } catch (InvalidArgumentException $exception) {
@@ -146,6 +146,7 @@ final readonly class RecordInventoryMovementAction
                     'reason' => $command->reason,
                     'occurred_at' => $command->occurredAt === null ? now() : $command->occurredAt,
                     'created_by' => $actor->getKey(),
+                    'reverses_movement_id' => $command->reversesMovementId,
                 ])->save();
 
                 foreach ($sortedLines as $line) {

@@ -12,6 +12,7 @@ No se consultó ni modificó Notion durante esta entrega por falta de acceso al 
 |---|---|---|---|---|
 | **07 — Mantenimiento de instalaciones** | Implementado en `develop` | [maintenance-implementation.md](maintenance-implementation.md) | [maintenance.yaml](contracts/openapi/maintenance.yaml) | Sincronizar la tarjeta y ejecutar Do Test |
 | **05 — Lotes y cría** | Implementado en `Lotes` | [lots-implementation.md](lots-implementation.md) | [lots.yaml](contracts/openapi/lots.yaml) | Sincronizar la tarjeta y ejecutar Do Test manual |
+| **09 — Producción y stock de huevos** | Implementado en `ProduccionStockHuevos` | [egg-production-implementation.md](egg-production-implementation.md) | [lots.yaml](contracts/openapi/lots.yaml) | Pendiente: actualizar la tarjeta y ejecutar Do Test manual |
 
 ## Módulo 05 — Lotes y cría
 
@@ -26,6 +27,12 @@ Decisiones relevantes:
 - El soporte offline implementado cubre idempotencia, ULID público y conflictos por versión; el almacenamiento y la sincronización del dispositivo quedan fuera de este backend.
 
 Validación automatizada registrada: 151 pruebas aprobadas y 981 aserciones antes de integrar cambios posteriores de `develop`. La guía [lots-implementation.md](lots-implementation.md) contiene el procedimiento completo de Do Test, incluyendo evidencia requerida, escenarios de redistribución, mortalidad, huevos, permisos, auditoría y concurrencia.
+
+## Módulo 09 — Producción y stock de huevos
+
+Implementado en `ProduccionStockHuevos`. La documentación [egg-production-implementation.md](egg-production-implementation.md) describe el registro por lote, clasificación por líneas, descarte inicial, pérdidas posteriores con reversión compensatoria, integración atómica con Inventario, métricas y seeder demo.
+
+La tarjeta de Notion con el título exacto **`09 — Producción y stock de huevos`** queda pendiente de actualización. La aceptación manual **Do Test** también queda pendiente; las 217 pruebas automatizadas aprobadas no sustituyen esa revisión. Al sincronizar la tarjeta, adjuntar el contrato [lots.yaml](contracts/openapi/lots.yaml), la evidencia de saldos y auditoría, y el resultado de cada escenario manual.
 
 ## Instrucciones para sincronizar en Notion
 

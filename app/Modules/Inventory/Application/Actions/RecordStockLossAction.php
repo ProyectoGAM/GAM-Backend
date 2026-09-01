@@ -12,7 +12,7 @@ final readonly class RecordStockLossAction
     public function __construct(private RecordInventoryMovementAction $recordMovement) {}
 
     /** @param array<string, mixed> $attributes */
-    public function execute(array $attributes, User $actor): InventoryMovement
+    public function execute(array $attributes, User $actor, string $source = 'api'): InventoryMovement
     {
         $lines = array_map(static fn (array $line): array => [
             'product_id' => (int) $line['product_id'],
@@ -23,9 +23,11 @@ final readonly class RecordStockLossAction
         return $this->recordMovement->execute(new InventoryMovementCommand(
             type: InventoryMovementType::Loss,
             lines: $lines,
-            operationId: (string) $attributes['idempotency_key'],
+            operationId: (string) ($attributes['operation_id'] ?? $attributes['idempotency_key']),
+            referenceType: $attributes['reference_type'] ?? null,
+            referenceId: $attributes['reference_id'] ?? null,
             reason: (string) $attributes['reason'],
             occurredAt: $attributes['occurred_at'] ?? null,
-        ), $actor);
+        ), $actor, $source);
     }
 }

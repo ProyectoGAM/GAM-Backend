@@ -5,12 +5,18 @@ namespace App\Models\Inventory;
 use App\Models\SuppliersAndCatalogs\Supplier;
 use App\Models\User;
 use App\Modules\Inventory\Domain\Enums\InventoryMovementType;
+use Carbon\Carbon;
 use Database\Factories\Inventory\InventoryMovementFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
+/**
+ * @property InventoryMovementType $type
+ * @property Carbon $occurred_at
+ */
 class InventoryMovement extends Model
 {
     /** Los movimientos de producción deben conservar su zona al persistirse en PostgreSQL. */
@@ -53,5 +59,11 @@ class InventoryMovement extends Model
     public function reversedMovement(): BelongsTo
     {
         return $this->belongsTo(InventoryMovement::class, 'reverses_movement_id');
+    }
+
+    /** @return HasOne<InventoryMovement, $this> */
+    public function reversal(): HasOne
+    {
+        return $this->hasOne(InventoryMovement::class, 'reverses_movement_id');
     }
 }

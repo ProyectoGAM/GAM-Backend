@@ -2,17 +2,23 @@
 
 namespace App\Modules\Lots\Http\Controllers;
 
+use App\Models\Inventory\InventoryMovement;
 use App\Models\Lots\EggCollection;
 use App\Models\Lots\Flock;
+use App\Modules\Lots\Application\Actions\CancelEggCollectionLossAction;
 use App\Modules\Lots\Application\Actions\CorrectEggCollectionAction;
 use App\Modules\Lots\Application\Actions\RecordEggCollectionAction;
+use App\Modules\Lots\Application\Actions\RecordEggCollectionLossAction;
+use App\Modules\Lots\Application\Queries\GetEggProductionMetricsQuery;
 use App\Modules\Lots\Application\Queries\GetFlockMetricsQuery;
 use App\Modules\Lots\Application\Queries\ListEggCollectionsQuery;
 use App\Modules\Lots\Application\Services\LotsSnapshots;
+use App\Modules\Lots\Http\Requests\CancelEggCollectionLossRequest;
 use App\Modules\Lots\Http\Requests\CancelEggCollectionRequest;
 use App\Modules\Lots\Http\Requests\CorrectEggCollectionRequest;
 use App\Modules\Lots\Http\Requests\FlockMetricsRequest;
 use App\Modules\Lots\Http\Requests\ListEggCollectionsRequest;
+use App\Modules\Lots\Http\Requests\RecordEggCollectionLossRequest;
 use App\Modules\Lots\Http\Requests\StoreEggCollectionRequest;
 use App\Modules\Lots\Http\Resources\EggCollectionResource;
 use App\Modules\Lots\Http\Resources\LotsOperationResource;
@@ -24,6 +30,11 @@ final readonly class EggCollectionController
     public function index(ListEggCollectionsRequest $request, Flock $lote, ListEggCollectionsQuery $query): AnonymousResourceCollection
     {
         return EggCollectionResource::collection($query->execute($request->attributesForAction(), $lote));
+    }
+
+    public function indexAll(ListEggCollectionsRequest $request, ListEggCollectionsQuery $query): AnonymousResourceCollection
+    {
+        return EggCollectionResource::collection($query->execute($request->attributesForAction()));
     }
 
     public function show(ListEggCollectionsRequest $request, EggCollection $recoleccion, LotsSnapshots $snapshots): EggCollectionResource
@@ -46,8 +57,23 @@ final readonly class EggCollectionController
         return new LotsOperationResource($action->execute($recoleccion, $request->attributesForAction(), $request->actor(), cancel: true));
     }
 
+    public function loss(RecordEggCollectionLossRequest $request, EggCollection $recoleccion, RecordEggCollectionLossAction $action): JsonResponse
+    {
+        return (new LotsOperationResource($action->execute($recoleccion, $request->attributesForAction(), $request->actor())))->response()->setStatusCode(201);
+    }
+
+    public function cancelLoss(CancelEggCollectionLossRequest $request, EggCollection $recoleccion, InventoryMovement $movimiento, CancelEggCollectionLossAction $action): LotsOperationResource
+    {
+        return new LotsOperationResource($action->execute($recoleccion, $movimiento, $request->attributesForAction(), $request->actor()));
+    }
+
     public function metrics(FlockMetricsRequest $request, Flock $lote, GetFlockMetricsQuery $query): JsonResponse
     {
         return response()->json(['data' => $query->execute($lote, $request->attributesForAction())]);
+    }
+
+    public function metricsAll(FlockMetricsRequest $request, GetEggProductionMetricsQuery $query): JsonResponse
+    {
+        return response()->json(['data' => $query->execute($request->attributesForAction())]);
     }
 }

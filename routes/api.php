@@ -14,7 +14,6 @@ use App\Modules\Inventory\Http\Controllers\InventoryMovementController;
 use App\Modules\Inventory\Http\Controllers\InventoryReadController;
 use App\Modules\Inventory\Http\Controllers\StockLocationController;
 use App\Modules\Inventory\Http\Controllers\StockLocationStatusController;
-use App\Modules\Inventory\Http\Controllers\StockReservationController;
 use App\Modules\Lots\Http\Controllers\BreedController;
 use App\Modules\Lots\Http\Controllers\EggCollectionController;
 use App\Modules\Lots\Http\Controllers\FlockController;
@@ -62,11 +61,15 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/lotes/{lote}/mortalidades', [MortalityController::class, 'store'])->name('mortality.store');
             Route::patch('/mortalidades/{mortalidad}', [MortalityController::class, 'update'])->name('mortality.update');
             Route::post('/mortalidades/{mortalidad}/cancelacion', [MortalityController::class, 'cancel'])->name('mortality.cancel');
+            Route::get('/recolecciones', [EggCollectionController::class, 'indexAll'])->name('collections.index-all');
+            Route::get('/recolecciones/metricas', [EggCollectionController::class, 'metricsAll'])->name('collections.metrics');
             Route::get('/lotes/{lote}/recolecciones', [EggCollectionController::class, 'index'])->name('collections.index');
             Route::get('/recolecciones/{recoleccion}', [EggCollectionController::class, 'show'])->name('collections.show');
             Route::post('/lotes/{lote}/recolecciones', [EggCollectionController::class, 'store'])->name('collections.store');
             Route::patch('/recolecciones/{recoleccion}', [EggCollectionController::class, 'update'])->name('collections.update');
             Route::post('/recolecciones/{recoleccion}/cancelacion', [EggCollectionController::class, 'cancel'])->name('collections.cancel');
+            Route::post('/recolecciones/{recoleccion}/perdidas', [EggCollectionController::class, 'loss'])->name('collections.losses.store');
+            Route::post('/recolecciones/{recoleccion}/perdidas/{movimiento}/cancelacion', [EggCollectionController::class, 'cancelLoss'])->name('collections.losses.cancel');
             Route::get('/lotes/{lote}/metricas', [EggCollectionController::class, 'metrics'])->name('metrics');
         });
 
