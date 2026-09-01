@@ -15,9 +15,9 @@ final readonly class ReverseInventoryMovementAction
     public function __construct(private RecordInventoryMovementAction $recordMovement) {}
 
     /** @param array<string, mixed> $attributes */
-    public function execute(InventoryMovement $movement, array $attributes, User $actor): InventoryMovement
+    public function execute(InventoryMovement $movement, array $attributes, User $actor, string $source = 'api'): InventoryMovement
     {
-        return DB::transaction(function () use ($movement, $attributes, $actor): InventoryMovement {
+        return DB::transaction(function () use ($movement, $attributes, $actor, $source): InventoryMovement {
             $locked = InventoryMovement::query()
                 ->whereKey($movement->getKey())
                 ->lockForUpdate()
@@ -36,7 +36,7 @@ final readonly class ReverseInventoryMovementAction
             return $this->recordMovement->execute(new InventoryMovementCommand(
                 type: InventoryMovementType::Reversal,
                 lines: $lines,
-                operationId: (string) $attributes['idempotency_key'],
+                operationId: (string) ($attributes['operation_id'] ?? $attributes['idempotency_key']),
                 referenceType: 'inventory_movement',
                 referenceId: (string) $locked->getKey(),
                 reason: (string) $attributes['reason'],
@@ -46,7 +46,7 @@ final readonly class ReverseInventoryMovementAction
                     'movement_id' => (int) $locked->getKey(),
                     'reason' => (string) $attributes['reason'],
                 ],
-            ), $actor);
+            ), $actor, $source);
         }, 3);
     }
 }

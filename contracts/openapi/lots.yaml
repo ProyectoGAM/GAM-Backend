@@ -1,6 +1,6 @@
 openapi: "3.1.0"
 info:
-  title: "05 — Lotes y cría"
+  title: "09 — Producción y stock de huevos"
   version: "1.0.0"
   description: "Contrato de Lotes para web y mobile. Redistribución sin genealogía, estado y cantidades auditados, mortalidad, recolección e inventario atómicos. No hay borrado ni interfaz mobile en esta entrega. Los valores de estado, eventos y permisos son identificadores estables en inglés."
   license:
@@ -854,6 +854,54 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
+  "/recolecciones":
+    get:
+      tags: ["Recolección"]
+      operationId: "listAllEggCollections"
+      summary: "Lista el histórico de recolecciones de toda la empresa"
+      description: "Permiso requerido: egg-collections.view. El acceso es global dentro de la empresa."
+      x-permission: "egg-collections.view"
+      parameters:
+        - "$ref": "#/components/parameters/Page"
+        - "$ref": "#/components/parameters/PerPage"
+        - "$ref": "#/components/parameters/From"
+        - "$ref": "#/components/parameters/To"
+        - "$ref": "#/components/parameters/HouseFilter"
+        - "$ref": "#/components/parameters/FlockFilter"
+        - "$ref": "#/components/parameters/RecordStatus"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/PaginatedEggCollections"
+        "401": {"$ref": "#/components/responses/Unauthenticated"}
+        "403": {"$ref": "#/components/responses/Forbidden"}
+        "422": {"$ref": "#/components/responses/InvalidInput"}
+  "/recolecciones/metricas":
+    get:
+      tags: ["Recolección"]
+      operationId: "showEggProductionMetrics"
+      summary: "Consulta producción, descartes y pérdidas por día, semana y mes"
+      description: "Permiso requerido: egg-collections.view. Las pérdidas posteriores se agrupan por su fecha real."
+      x-permission: "egg-collections.view"
+      parameters:
+        - "$ref": "#/components/parameters/From"
+        - "$ref": "#/components/parameters/To"
+        - "$ref": "#/components/parameters/HouseFilter"
+        - "$ref": "#/components/parameters/FlockFilter"
+      responses:
+        "200":
+          description: "Consulta u operación completada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/MetricsResponse"
+        "401": {"$ref": "#/components/responses/Unauthenticated"}
+        "403": {"$ref": "#/components/responses/Forbidden"}
+        "409": {"$ref": "#/components/responses/Conflict"}
+        "422": {"$ref": "#/components/responses/InvalidInput"}
   "/recolecciones/{recoleccion}":
     get:
       tags: ["Recolección"]
@@ -948,6 +996,63 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
+  "/recolecciones/{recoleccion}/perdidas":
+    post:
+      tags: ["Recolección"]
+      operationId: "recordEggCollectionLoss"
+      summary: "Registra una pérdida posterior y reduce el stock existente"
+      description: "Permiso requerido: egg-collections.manage. La pérdida queda vinculada a la recolección y se puede revertir."
+      x-permission: "egg-collections.manage"
+      parameters:
+        - "$ref": "#/components/parameters/Recoleccion"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/RecordEggCollectionLoss"
+      responses:
+        "201":
+          description: "Pérdida registrada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401": {"$ref": "#/components/responses/Unauthenticated"}
+        "403": {"$ref": "#/components/responses/Forbidden"}
+        "404": {"$ref": "#/components/responses/NotFound"}
+        "409": {"$ref": "#/components/responses/Conflict"}
+        "422": {"$ref": "#/components/responses/InvalidInput"}
+  "/recolecciones/{recoleccion}/perdidas/{movimiento}/cancelacion":
+    post:
+      tags: ["Recolección"]
+      operationId: "cancelEggCollectionLoss"
+      summary: "Revierte una pérdida posterior sin borrar el historial"
+      description: "Permiso requerido: egg-collections.manage. La reversión genera un movimiento compensatorio."
+      x-permission: "egg-collections.manage"
+      parameters:
+        - "$ref": "#/components/parameters/Recoleccion"
+        - "$ref": "#/components/parameters/Movimiento"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/CancelEggCollectionLoss"
+      responses:
+        "200":
+          description: "Reversión registrada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401": {"$ref": "#/components/responses/Unauthenticated"}
+        "403": {"$ref": "#/components/responses/Forbidden"}
+        "404": {"$ref": "#/components/responses/NotFound"}
+        "409": {"$ref": "#/components/responses/Conflict"}
+        "422": {"$ref": "#/components/responses/InvalidInput"}
   "/lotes/{lote}/metricas":
     get:
       tags: ["Recolección"]
@@ -1020,6 +1125,14 @@ components:
         type: "string"
         pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
         example: "01J00000000000000000000000"
+    Movimiento:
+      name: "movimiento"
+      in: "path"
+      required: true
+      description: "Identificador numérico del movimiento de pérdida."
+      schema:
+        type: "integer"
+        minimum: 1
     Galpon:
       name: "galpon"
       in: "path"
@@ -1354,7 +1467,7 @@ components:
     EggCollection:
       type: "object"
       additionalProperties: false
-      required: ["id", "lote_id", "galpon_id", "unidad_productiva_id", "cantidad", "ocurrido_en", "observaciones", "estado", "version", "registrado_por", "producto_id", "ubicacion_stock_id", "movimiento_inventario_id"]
+      required: ["id", "lote_id", "galpon_id", "unidad_productiva_id", "cantidad_recolectada", "cantidad_descartada", "motivo_descarte", "cantidad_utilizable", "cantidad_perdida_posterior", "cantidad_neta", "lineas", "cantidad", "ocurrido_en", "observaciones", "estado", "version", "registrado_por", "producto_id", "ubicacion_stock_id", "movimiento_inventario_id"]
       properties:
         id:
           type: "string"
@@ -1370,6 +1483,29 @@ components:
         unidad_productiva_id:
           type: "integer"
           minimum: 1
+        cantidad_recolectada:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        cantidad_descartada:
+          type: "integer"
+          minimum: 0
+          maximum: 2147483647
+        motivo_descarte:
+          type: ["string", "null"]
+          maxLength: 500
+        cantidad_utilizable:
+          type: "integer"
+          minimum: 0
+        cantidad_perdida_posterior:
+          type: "integer"
+          minimum: 0
+        cantidad_neta:
+          type: "integer"
+        lineas:
+          type: "array"
+          items:
+            "$ref": "#/components/schemas/EggCollectionLine"
         cantidad:
           type: "integer"
           minimum: 1
@@ -1394,14 +1530,74 @@ components:
           type: "integer"
           minimum: 1
         producto_id:
+          type: ["integer", "null"]
+          minimum: 1
+        ubicacion_stock_id:
+          type: ["integer", "null"]
+          minimum: 1
+        movimiento_inventario_id:
+          type: ["integer", "null"]
+          minimum: 1
+    EggCollectionLine:
+      type: "object"
+      additionalProperties: false
+      required: ["producto_id", "ubicacion_stock_id", "cantidad"]
+      properties:
+        producto_id:
           type: "integer"
           minimum: 1
         ubicacion_stock_id:
           type: "integer"
           minimum: 1
-        movimiento_inventario_id:
+        cantidad:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+    EggCollectionLoss:
+      type: "object"
+      additionalProperties: false
+      required: ["id", "id_operacion", "tipo", "tipo_referencia", "referencia_id", "motivo", "ocurrido_en", "creado_por", "revierte_movimiento_id", "lineas"]
+      properties:
+        id:
+          type: "integer"
+          minimum: 1
+        id_operacion:
+          type: "string"
+          format: "uuid"
+        tipo:
+          type: "string"
+          enum: ["loss", "reversal"]
+        tipo_referencia:
+          type: ["string", "null"]
+        referencia_id:
+          type: ["string", "null"]
+        motivo:
+          type: ["string", "null"]
+        ocurrido_en:
+          type: ["string", "null"]
+          format: "date-time"
+        creado_por:
           type: ["integer", "null"]
           minimum: 1
+        revierte_movimiento_id:
+          type: ["integer", "null"]
+          minimum: 1
+        lineas:
+          type: "array"
+          items:
+            type: "object"
+            additionalProperties: false
+            required: ["producto_id", "ubicacion_stock_id", "cantidad"]
+            properties:
+              producto_id:
+                type: "integer"
+                minimum: 1
+              ubicacion_stock_id:
+                type: "integer"
+                minimum: 1
+              cantidad:
+                type: "integer"
+                minimum: 1
     Catalog:
       type: "object"
       additionalProperties: false
@@ -1440,6 +1636,10 @@ components:
           "$ref": "#/components/schemas/Mortality"
         recoleccion:
           "$ref": "#/components/schemas/EggCollection"
+        perdida:
+          "$ref": "#/components/schemas/EggCollectionLoss"
+        reversion:
+          "$ref": "#/components/schemas/EggCollectionLoss"
         catalogo:
           "$ref": "#/components/schemas/Catalog"
     CreateFlock:
@@ -1704,7 +1904,7 @@ components:
     RecordEggCollection:
       type: "object"
       additionalProperties: false
-      required: ["version", "cantidad", "producto_id", "ubicacion_stock_id"]
+      required: ["version"]
       properties:
         id:
           type: "string"
@@ -1715,16 +1915,35 @@ components:
           minimum: 1
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
+        cantidad_recolectada:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
         cantidad:
           type: "integer"
           minimum: 1
           maximum: 2147483647
+          description: "Alias heredado de cantidad_recolectada."
+        cantidad_descartada:
+          type: "integer"
+          minimum: 0
+          maximum: 2147483647
+        motivo_descarte:
+          type: ["string", "null"]
+          maxLength: 500
+        lineas:
+          type: "array"
+          maxItems: 100
+          items:
+            "$ref": "#/components/schemas/EggCollectionLine"
         producto_id:
           type: "integer"
           minimum: 1
+          description: "Clasificación heredada para capturas de una sola línea."
         ubicacion_stock_id:
           type: "integer"
           minimum: 1
+          description: "Ubicación heredada para capturas de una sola línea."
         ocurrido_en:
           type: "string"
           format: "date-time"
@@ -1733,6 +1952,7 @@ components:
         observaciones:
           type: ["string", "null"]
           maxLength: 5000
+      description: "Usa cantidad_recolectada y lineas para el formato compuesto, o cantidad, producto_id y ubicacion_stock_id para el formato heredado."
     CorrectEggCollection:
       type: "object"
       additionalProperties: false
@@ -1752,13 +1972,66 @@ components:
           type: "string"
           minLength: 1
           maxLength: 500
+        cantidad_recolectada:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
         cantidad:
           type: "integer"
           minimum: 1
           maximum: 2147483647
+          description: "Alias heredado de cantidad_recolectada."
+        cantidad_descartada:
+          type: "integer"
+          minimum: 0
+          maximum: 2147483647
+        motivo_descarte:
+          type: ["string", "null"]
+          maxLength: 500
+        lineas:
+          type: "array"
+          maxItems: 100
+          items:
+            "$ref": "#/components/schemas/EggCollectionLine"
+        producto_id:
+          type: "integer"
+          minimum: 1
+          description: "Clasificación heredada para correcciones de una sola línea."
+        ubicacion_stock_id:
+          type: "integer"
+          minimum: 1
+          description: "Ubicación heredada para correcciones de una sola línea."
         observaciones:
           type: ["string", "null"]
           maxLength: 5000
+      description: "Las cantidades y clasificaciones son opcionales para correcciones sólo textuales; cuando se envían, se admite el formato compuesto o el heredado."
+    RecordEggCollectionLoss:
+      type: "object"
+      additionalProperties: false
+      required: ["lineas", "motivo"]
+      properties:
+        lineas:
+          type: "array"
+          minItems: 1
+          maxItems: 100
+          items:
+            "$ref": "#/components/schemas/EggCollectionLine"
+        motivo:
+          type: "string"
+          minLength: 1
+          maxLength: 255
+        ocurrido_en:
+          type: "string"
+          format: "date-time"
+    CancelEggCollectionLoss:
+      type: "object"
+      additionalProperties: false
+      required: ["motivo"]
+      properties:
+        motivo:
+          type: "string"
+          minLength: 1
+          maxLength: 255
     CreateCatalog:
       type: "object"
       additionalProperties: false
@@ -1808,16 +2081,32 @@ components:
         huevos_totales:
           type: "integer"
           minimum: 0
+        huevos_recolectados:
+          type: "integer"
+          minimum: 0
+        huevos_descartados_iniciales:
+          type: "integer"
+          minimum: 0
+        huevos_utilizables:
+          type: "integer"
+          minimum: 0
+        huevos_perdidos_posteriores:
+          type: "integer"
+          minimum: 0
+        huevos_netos:
+          type: "integer"
         promedio_diario:
           type: "number"
-          minimum: 0
           description: "Total dividido por todos los días del período inclusivo, redondeado a dos decimales."
+        promedio_diario_neto:
+          type: "number"
+          description: "Alias explícito del promedio neto diario."
         por_dia:
           type: "array"
           items:
             type: "object"
             additionalProperties: false
-            required: ["fecha", "cantidad"]
+            required: ["fecha", "cantidad", "huevos_recolectados", "huevos_descartados_iniciales", "huevos_perdidos_posteriores", "huevos_netos"]
             properties:
               fecha:
                 type: "string"
@@ -1826,12 +2115,23 @@ components:
                 type: "integer"
                 minimum: 1
                 maximum: 2147483647
+              huevos_recolectados:
+                type: "integer"
+                minimum: 0
+              huevos_descartados_iniciales:
+                type: "integer"
+                minimum: 0
+              huevos_perdidos_posteriores:
+                type: "integer"
+                minimum: 0
+              huevos_netos:
+                type: "integer"
         por_semana:
           type: "array"
           items:
             type: "object"
             additionalProperties: false
-            required: ["inicio_semana", "cantidad"]
+            required: ["inicio_semana", "cantidad", "huevos_recolectados", "huevos_descartados_iniciales", "huevos_perdidos_posteriores", "huevos_netos"]
             properties:
               inicio_semana:
                 type: "string"
@@ -1840,6 +2140,41 @@ components:
                 type: "integer"
                 minimum: 1
                 maximum: 2147483647
+              huevos_recolectados:
+                type: "integer"
+                minimum: 0
+              huevos_descartados_iniciales:
+                type: "integer"
+                minimum: 0
+              huevos_perdidos_posteriores:
+                type: "integer"
+                minimum: 0
+              huevos_netos:
+                type: "integer"
+        por_mes:
+          type: "array"
+          items:
+            type: "object"
+            additionalProperties: false
+            required: ["inicio_mes", "cantidad", "huevos_recolectados", "huevos_descartados_iniciales", "huevos_perdidos_posteriores", "huevos_netos"]
+            properties:
+              inicio_mes:
+                type: "string"
+                format: "date"
+              cantidad:
+                type: "integer"
+                minimum: 0
+              huevos_recolectados:
+                type: "integer"
+                minimum: 0
+              huevos_descartados_iniciales:
+                type: "integer"
+                minimum: 0
+              huevos_perdidos_posteriores:
+                type: "integer"
+                minimum: 0
+              huevos_netos:
+                type: "integer"
     PageMeta:
       type: "object"
       additionalProperties: true

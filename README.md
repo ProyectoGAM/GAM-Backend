@@ -21,6 +21,8 @@ module-structure-example.md => ejemplo de estructura y alguna que otra aplicacio
 
 [lots-implementation.md](lots-implementation.md) => implementación e histórico de lotes y crías
 
+[egg-production-implementation.md](egg-production-implementation.md) => implementación e histórico de producción y stock de huevos
+
 [contracts/openapi/authentication.yaml](contracts/openapi/authentication.yaml) => contrato API de identidad y acceso
 
 [contracts/openapi/reference-data.yaml](contracts/openapi/reference-data.yaml) => catálogos dinámicos para formularios y filtros

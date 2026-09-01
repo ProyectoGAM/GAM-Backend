@@ -15,7 +15,7 @@ final readonly class ListEggCollectionsQuery
     /** @param array<string, mixed> $filters */
     public function execute(array $filters, ?Flock $flock = null): LengthAwarePaginator
     {
-        $query = EggCollection::query()->with('flock');
+        $query = EggCollection::query()->with(['flock', 'lines', 'inventoryLosses.lines', 'inventoryMovements']);
         if ($flock !== null) {
             $query->where('flock_id', $flock->id);
         }

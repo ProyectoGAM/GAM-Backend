@@ -44,6 +44,22 @@ abstract class LotsRequest extends FormRequest
                 $data[$key] = (int) $data[$key];
             }
         }
+        foreach (['collected_quantity', 'discarded_quantity'] as $key) {
+            if (isset($data[$key])) {
+                $data[$key] = (int) $data[$key];
+            }
+        }
+        if (isset($data['lines']) && is_array($data['lines'])) {
+            $data['lines'] = array_map(static function (array $line): array {
+                foreach (['product_id', 'stock_location_id', 'quantity'] as $key) {
+                    if (isset($line[$key])) {
+                        $line[$key] = (int) $line[$key];
+                    }
+                }
+
+                return $line;
+            }, $data['lines']);
+        }
 
         return $data;
     }
