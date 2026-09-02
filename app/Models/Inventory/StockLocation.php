@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 /** @property StockLocationStatus $status */
-#[Fillable(['production_unit_id', 'name', 'status'])]
+#[Fillable(['production_unit_id', 'name', 'status', 'system_managed'])]
 class StockLocation extends Model
 {
     /** @use HasFactory<StockLocationFactory> */
@@ -23,7 +23,7 @@ class StockLocation extends Model
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['status' => StockLocationStatus::class];
+        return ['status' => StockLocationStatus::class, 'system_managed' => 'boolean'];
     }
 
     /** Normaliza el nombre para mantener la unicidad a nivel de empresa. */

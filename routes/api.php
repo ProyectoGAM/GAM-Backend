@@ -10,6 +10,7 @@ use App\Modules\Geography\Http\Controllers\DepartmentController;
 use App\Modules\Geography\Http\Controllers\LocalityController;
 use App\Modules\IdentityAndAccess\Http\Controllers\AdminController;
 use App\Modules\IdentityAndAccess\Http\Controllers\AuthController;
+use App\Modules\Inventory\Http\Controllers\EggStockController;
 use App\Modules\Inventory\Http\Controllers\InventoryMovementController;
 use App\Modules\Inventory\Http\Controllers\InventoryReadController;
 use App\Modules\Inventory\Http\Controllers\StockLocationController;
@@ -68,8 +69,6 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/lotes/{lote}/recolecciones', [EggCollectionController::class, 'store'])->name('collections.store');
             Route::patch('/recolecciones/{recoleccion}', [EggCollectionController::class, 'update'])->name('collections.update');
             Route::post('/recolecciones/{recoleccion}/cancelacion', [EggCollectionController::class, 'cancel'])->name('collections.cancel');
-            Route::post('/recolecciones/{recoleccion}/perdidas', [EggCollectionController::class, 'loss'])->name('collections.losses.store');
-            Route::post('/recolecciones/{recoleccion}/perdidas/{movimiento}/cancelacion', [EggCollectionController::class, 'cancelLoss'])->name('collections.losses.cancel');
             Route::get('/lotes/{lote}/metricas', [EggCollectionController::class, 'metrics'])->name('metrics');
         });
 
@@ -121,6 +120,13 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             ->name('production-units.estado.update');
         Route::get('/unidades-productivas/{unidadProductiva}/galpones', [PoultryHouseController::class, 'index'])
             ->name('production-units.poultry-houses.index');
+        Route::get('/unidades-productivas/{unidadProductiva}/stock-huevos', [EggStockController::class, 'balance'])->name('egg-stock.balance');
+        Route::get('/unidades-productivas/{unidadProductiva}/stock-huevos/movimientos', [EggStockController::class, 'index'])->name('egg-stock.index');
+        Route::post('/unidades-productivas/{unidadProductiva}/stock-huevos/ingresos', [EggStockController::class, 'receipt'])->name('egg-stock.receipts.store');
+        Route::post('/unidades-productivas/{unidadProductiva}/stock-huevos/salidas', [EggStockController::class, 'issue'])->name('egg-stock.issues.store');
+        Route::get('/stock-huevos/movimientos/{movimiento}', [EggStockController::class, 'show'])->name('egg-stock.show');
+        Route::patch('/stock-huevos/movimientos/{movimiento}', [EggStockController::class, 'update'])->name('egg-stock.update');
+        Route::post('/stock-huevos/movimientos/{movimiento}/cancelacion', [EggStockController::class, 'cancel'])->name('egg-stock.cancel');
         Route::post('/unidades-productivas/{unidadProductiva}/galpones', [PoultryHouseController::class, 'store'])
             ->name('production-units.poultry-houses.store');
         Route::get('/galpones/{poultryHouse}', [PoultryHouseController::class, 'show'])

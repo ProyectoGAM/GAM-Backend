@@ -27,8 +27,6 @@ final class LotsOperationResource extends JsonResource
             'movement' => ['movimiento', FlockMovementResource::class],
             'mortality' => ['mortalidad', MortalityResource::class],
             'collection' => ['recoleccion', EggCollectionResource::class],
-            'loss' => ['perdida', EggCollectionLossResource::class],
-            'reversal' => ['reversion', EggCollectionLossResource::class],
             'catalog' => ['catalogo', LotsCatalogResource::class],
         ];
         foreach ($resources as $key => [$public, $resource]) {

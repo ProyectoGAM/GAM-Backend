@@ -18,7 +18,7 @@ final class InventoryStockBalancesReportSource implements ReportSource
     {
         return new ReportSourceDefinition(
             key: 'inventario.saldos-stock',
-            definitionVersion: '2.0',
+            definitionVersion: '2.1',
             label: 'Saldos de inventario',
             description: 'Stock disponible y mínimo por producto y ubicación.',
             permission: 'inventory.view',
@@ -28,6 +28,8 @@ final class InventoryStockBalancesReportSource implements ReportSource
                 'unidad_base' => ['label' => 'Unidad base', 'tipo' => 'string'],
                 'ubicacion_stock_id' => ['label' => 'ID de ubicación', 'tipo' => 'integer'],
                 'ubicacion_stock' => ['label' => 'Ubicación', 'tipo' => 'string'],
+                'unidad_productiva_id' => ['label' => 'ID de unidad productiva', 'tipo' => 'integer'],
+                'unidad_productiva' => ['label' => 'Unidad productiva', 'tipo' => 'string'],
                 'cantidad_disponible' => ['label' => 'Stock disponible', 'tipo' => 'number', 'unit' => 'unidad_base'],
                 'cantidad_minima' => ['label' => 'Stock mínimo', 'tipo' => 'number', 'unit' => 'unidad_base'],
                 'bajo_minimo' => ['label' => 'Bajo mínimo', 'tipo' => 'boolean', 'options_source' => 'booleanValues'],
@@ -35,12 +37,14 @@ final class InventoryStockBalancesReportSource implements ReportSource
             filters: [
                 'producto_id' => ['label' => 'Producto', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'products'],
                 'ubicacion_stock_id' => ['label' => 'Ubicación', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'stockLocations'],
+                'unidad_productiva_id' => ['label' => 'Unidad productiva', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'productionUnits'],
                 'unidad_base' => ['label' => 'Unidad base', 'tipo' => 'enum', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options' => array_map(static fn (BaseUnit $unit): string => $unit->value, BaseUnit::cases()), 'options_source' => 'baseUnits'],
                 'bajo_minimo' => ['label' => 'Bajo mínimo', 'tipo' => 'boolean', 'operators' => ['eq'], 'options_source' => 'booleanValues'],
             ],
             groupings: [
                 'producto' => ['label' => 'Producto', 'tipo' => 'dimension'],
                 'ubicacion_stock' => ['label' => 'Ubicación', 'tipo' => 'dimension'],
+                'unidad_productiva' => ['label' => 'Unidad productiva', 'tipo' => 'dimension'],
                 'unidad_base' => ['label' => 'Unidad base', 'tipo' => 'dimension'],
             ],
             metrics: [
@@ -117,6 +121,7 @@ final class InventoryStockBalancesReportSource implements ReportSource
         return StockBalance::query()
             ->join('products', 'products.id', '=', 'stock_balances.product_id')
             ->join('stock_locations', 'stock_locations.id', '=', 'stock_balances.stock_location_id')
+            ->leftJoin('production_units', 'production_units.id', '=', 'stock_locations.production_unit_id')
             ->where('products.stock_tracked', true)
             ->getQuery();
     }
@@ -130,6 +135,8 @@ final class InventoryStockBalancesReportSource implements ReportSource
             'products.base_unit as unidad_base',
             'stock_locations.id as ubicacion_stock_id',
             'stock_locations.name as ubicacion_stock',
+            'production_units.id as unidad_productiva_id',
+            'production_units.name as unidad_productiva',
             'stock_balances.on_hand_quantity as cantidad_disponible',
             'stock_balances.minimum_quantity as cantidad_minima',
             DB::raw('stock_balances.on_hand_quantity < stock_balances.minimum_quantity as bajo_minimo'),
@@ -141,6 +148,7 @@ final class InventoryStockBalancesReportSource implements ReportSource
         $fields = [
             'producto_id' => 'products.id',
             'ubicacion_stock_id' => 'stock_locations.id',
+            'unidad_productiva_id' => 'production_units.id',
             'unidad_base' => 'products.base_unit',
         ];
 
@@ -169,6 +177,7 @@ final class InventoryStockBalancesReportSource implements ReportSource
         $groupFields = [
             'producto' => ['products.name as producto', 'products.name'],
             'ubicacion_stock' => ['stock_locations.name as ubicacion_stock', 'stock_locations.name'],
+            'unidad_productiva' => ['production_units.name as unidad_productiva', 'production_units.name'],
             'unidad_base' => ['products.base_unit as unidad_base', 'products.base_unit'],
         ];
         $selects = [];
@@ -195,6 +204,7 @@ final class InventoryStockBalancesReportSource implements ReportSource
         $aliases = [
             'producto' => 'producto',
             'ubicacion_stock' => 'ubicacion_stock',
+            'unidad_productiva' => 'unidad_productiva',
             'unidad_base' => 'unidad_base',
             'cantidad_disponible' => 'cantidad_disponible',
         ];

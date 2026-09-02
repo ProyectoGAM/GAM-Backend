@@ -18,7 +18,7 @@ final class InventoryMovementsReportSource implements ReportSource
     {
         return new ReportSourceDefinition(
             key: 'inventario.movimientos',
-            definitionVersion: '1.0',
+            definitionVersion: '1.1',
             label: 'Movimientos de inventario',
             description: 'Ingresos, salidas, pérdidas, ajustes y transferencias por fecha y unidad base.',
             permission: 'inventory.view',
@@ -30,6 +30,8 @@ final class InventoryMovementsReportSource implements ReportSource
                 'unidad_base' => ['label' => 'Unidad base', 'tipo' => 'string'],
                 'ubicacion_stock_id' => ['label' => 'ID de ubicación', 'tipo' => 'integer'],
                 'ubicacion_stock' => ['label' => 'Ubicación', 'tipo' => 'string'],
+                'unidad_productiva_id' => ['label' => 'ID de unidad productiva', 'tipo' => 'integer'],
+                'unidad_productiva' => ['label' => 'Unidad productiva', 'tipo' => 'string'],
                 'proveedor_id' => ['label' => 'ID de proveedor', 'tipo' => 'integer'],
                 'proveedor' => ['label' => 'Proveedor', 'tipo' => 'string'],
                 'tipo_referencia' => ['label' => 'Tipo de referencia', 'tipo' => 'string'],
@@ -40,6 +42,7 @@ final class InventoryMovementsReportSource implements ReportSource
                 'tipo' => ['label' => 'Tipo', 'tipo' => 'enum', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options' => array_map(static fn (InventoryMovementType $type): string => $type->value, InventoryMovementType::cases()), 'options_source' => 'movementTypes'],
                 'producto_id' => ['label' => 'Producto', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'products'],
                 'ubicacion_stock_id' => ['label' => 'Ubicación', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'stockLocations'],
+                'unidad_productiva_id' => ['label' => 'Unidad productiva', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'productionUnits'],
                 'proveedor_id' => ['label' => 'Proveedor', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'suppliers'],
             ],
             groupings: [
@@ -49,6 +52,7 @@ final class InventoryMovementsReportSource implements ReportSource
                 'tipo' => ['label' => 'Tipo', 'tipo' => 'dimension'],
                 'producto' => ['label' => 'Producto', 'tipo' => 'dimension'],
                 'ubicacion_stock' => ['label' => 'Ubicación', 'tipo' => 'dimension'],
+                'unidad_productiva' => ['label' => 'Unidad productiva', 'tipo' => 'dimension'],
                 'unidad_base' => ['label' => 'Unidad base', 'tipo' => 'dimension'],
             ],
             metrics: [
@@ -130,6 +134,7 @@ final class InventoryMovementsReportSource implements ReportSource
             ->join('inventory_movements', 'inventory_movements.id', '=', 'inventory_movement_lines.inventory_movement_id')
             ->join('products', 'products.id', '=', 'inventory_movement_lines.product_id')
             ->join('stock_locations', 'stock_locations.id', '=', 'inventory_movement_lines.stock_location_id')
+            ->leftJoin('production_units', 'production_units.id', '=', 'stock_locations.production_unit_id')
             ->leftJoin('suppliers', 'suppliers.id', '=', 'inventory_movements.supplier_id')
             ->getQuery();
     }
@@ -145,6 +150,8 @@ final class InventoryMovementsReportSource implements ReportSource
             'products.base_unit as unidad_base',
             'stock_locations.id as ubicacion_stock_id',
             'stock_locations.name as ubicacion_stock',
+            'production_units.id as unidad_productiva_id',
+            'production_units.name as unidad_productiva',
             'suppliers.id as proveedor_id',
             'suppliers.name as proveedor',
             'inventory_movements.reference_type as tipo_referencia',
@@ -159,6 +166,7 @@ final class InventoryMovementsReportSource implements ReportSource
             'tipo' => 'inventory_movements.type',
             'producto_id' => 'products.id',
             'ubicacion_stock_id' => 'stock_locations.id',
+            'unidad_productiva_id' => 'production_units.id',
             'proveedor_id' => 'inventory_movements.supplier_id',
         ];
 
@@ -190,6 +198,7 @@ final class InventoryMovementsReportSource implements ReportSource
             'tipo' => ['inventory_movements.type', 'inventory_movements.type'],
             'producto' => ['products.name', 'products.name'],
             'ubicacion_stock' => ['stock_locations.name', 'stock_locations.name'],
+            'unidad_productiva' => ['production_units.name', 'production_units.name'],
             'unidad_base' => ['products.base_unit', 'products.base_unit'],
         ];
         $aliases = [
@@ -199,6 +208,7 @@ final class InventoryMovementsReportSource implements ReportSource
             'tipo' => 'tipo',
             'producto' => 'producto',
             'ubicacion_stock' => 'ubicacion_stock',
+            'unidad_productiva' => 'unidad_productiva',
             'unidad_base' => 'unidad_base',
         ];
         $selects = [];

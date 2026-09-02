@@ -22,6 +22,7 @@ final readonly class InventoryMovementCommand
         public ?string $occurredAt = null,
         public ?int $reversesMovementId = null,
         public ?array $idempotencyPayload = null,
+        public bool $eggAccountOperation = false,
     ) {}
 
     /** @throws JsonException */
@@ -40,6 +41,7 @@ final readonly class InventoryMovementCommand
                 'reason' => $this->reason,
                 'occurred_at' => $this->occurredAt,
                 'reverses_movement_id' => $this->reversesMovementId,
+                'egg_account_operation' => $this->eggAccountOperation,
             ],
         ], JSON_THROW_ON_ERROR));
     }

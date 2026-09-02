@@ -14,8 +14,7 @@ final class CancelEggCollectionRequest extends LotsRequest
     {
         return [
             ...$this->commandRules(),
-            'version_lote' => ['required', 'integer', 'min:1'],
-            'motivo' => ['required', 'string', 'max:500'],
+            'motivo_correccion' => ['required', 'string', 'max:500'],
         ];
     }
 }

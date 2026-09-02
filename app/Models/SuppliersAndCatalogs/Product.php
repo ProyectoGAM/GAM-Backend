@@ -21,7 +21,7 @@ use Illuminate\Support\Str;
  * @property ProductStatus $status
  * @property bool $stock_tracked
  */
-#[Fillable(['sku', 'name', 'kind', 'base_unit', 'stock_tracked', 'status'])]
+#[Fillable(['sku', 'name', 'kind', 'base_unit', 'stock_tracked', 'status', 'system_key'])]
 class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */
