@@ -27,7 +27,8 @@ final class LotsContractTest extends TestCase
         $contract = $this->contract();
         $actual = [];
         foreach (Route::getRoutes() as $route) {
-            if (! str_starts_with((string) $route->getName(), 'api.v1.lots.')) {
+            $routeName = (string) $route->getName();
+            if (! str_starts_with($routeName, 'api.v1.lots.') && ! str_starts_with($routeName, 'api.v1.egg-stock.')) {
                 continue;
             }
             foreach ($route->methods() as $method) {
@@ -48,7 +49,7 @@ final class LotsContractTest extends TestCase
                 }
             }
         }
-        $this->assertCount(32, $actual);
+        $this->assertCount(37, $actual);
         $this->assertEqualsCanonicalizing($expected, $actual);
         $this->assertSame([['bearerAuth' => []]], $contract['security']);
         $this->assertSame('09 — Producción y stock de huevos', $contract['info']['title']);

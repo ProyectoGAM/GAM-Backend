@@ -18,7 +18,7 @@ Dependencias: M03 Instalaciones, M04 Proveedores y productos, Identidad y acceso
 - ULID público para lotes, movimientos, mortalidades y recolecciones; IDs numéricos internos para relaciones. Razas, categorías y referencias de otros módulos conservan IDs numéricos.
 - Cantidades enteras, bloqueo transaccional de lotes y galpones, control de versión, idempotencia por actor y auditoría síncrona.
 - `PoultryHouseOccupancyProvider` obtiene la ocupación real desde Lotes. Las Actions existentes de Instalaciones impiden reducir la capacidad por debajo de la ocupación o desactivar un galpón ocupado.
-- `RecordEggProductionAction` es la frontera pública de Inventario. La producción no escribe directamente en sus modelos ni en sus saldos.
+- `RecordEggStockTransactionAction` es la frontera pública de Inventario. La producción no escribe directamente en sus modelos ni en sus saldos.
 - `Clock`, `SystemClock` y `FlockAge` centralizan los cálculos temporales. `config/lots.php` define `LOTS_TIMEZONE`, por defecto `America/Montevideo`.
 - `LotsDemoSeeder` se integra a `LocalDemoDataSeeder`, sólo en ambiente local. Sus operaciones se ejecutan por las mismas Actions y su auditoría indica `source=seeder`.
 
@@ -62,8 +62,8 @@ No hay DELETE, `SoftDeletes` ni `isDeleted` para Lotes, mortalidad, recolección
 - Al revertir una redistribución a un lote nuevo, éste permanece consultable, vacío y finalizado. La reversión a uno existente restaura ambas cantidades sin cambiar sus metadatos. La reversión total restituye el galpón original.
 - Mortalidad admite corregir cantidad, categoría y observaciones. Cancelar no borra el registro; su estado pasa a `cancelled`. La cantidad viva se ajusta por la diferencia y la restitución vuelve a validar capacidad en el galpón actual del lote.
 - La mortalidad conserva el galpón y la fecha originales del hecho, aunque el lote se traslade después. Las rectificaciones se aplican ahora, mediante `mortality_correction` y auditoría; no se edita el movimiento original.
-- Recolección admite corregir cantidad y observaciones. No permite cambiar lote, producto, ubicación ni fecha. La diferencia genera un ingreso o ajuste de inventario; una corrección sólo textual no genera movimientos de stock de cantidad cero.
-- Cancelar una recolección retira su cantidad actual. Si esos huevos se consumieron o reservaron y el saldo no permite retirarlos, responde `409` y no cambia ninguna tabla de producción ni inventario.
+- Recolección admite corregir cantidad, fecha efectiva y observaciones. No permite cambiar lote, galpón ni UP. La diferencia genera una compensación de inventario; una corrección sólo textual no genera movimientos de stock de cantidad cero.
+- Cancelar una recolección mantiene el hecho histórico y compensa su ingreso en la cuenta de huevos de la UP. La recolección no modifica aves ni la versión del lote.
 - Los registros cancelados y los lotes finalizados no se corrigen ni reactivan. Todas las correcciones y cancelaciones requieren `motivo`.
 - Un movimiento de corrección o finalización puede tener cantidad cero cuando no modifica aves; queda diferenciado por tipo y auditoría, sin fingir un ingreso.
 
@@ -73,7 +73,7 @@ Cada comando bloquea al actor para serializar sus claves de idempotencia, luego 
 
 Las escrituras exigen `Idempotency-Key` con UUID. Una clave queda asociada al actor y al contenido normalizado del comando. Repetir exactamente la solicitud devuelve la misma operación y sus fotografías originales, incluso si los recursos ya cambiaron. Reutilizar la clave con otro contenido devuelve `409`. Para una intención nueva se genera una clave nueva. No hay expiración automática del registro idempotente.
 
-`version` representa el lote en cambios de estado, finalización, redistribución y registro de mortalidad/recolección. Las correcciones de mortalidad/recolección requieren `version` del registro y `version_lote`. La redistribución hacia un lote existente y las reversiones parciales requieren además `version_destino`.
+`version` representa el lote en cambios de estado, finalización, redistribución y mortalidad. Las correcciones de mortalidad requieren `version` del registro y `version_lote`; las correcciones de recolección requieren la versión de la recolección y no alteran la versión del lote. La redistribución hacia un lote existente y las reversiones parciales requieren además `version_destino`.
 
 Un cliente offline debe guardar ULID, payload, clave y versiones; enviar sus operaciones en orden; ante una pérdida de respuesta reintentar el mismo comando; y ante `409` consultar los recursos/histórico y pedir resolución al usuario. No debe modificar automáticamente la versión y reenviar una operación de cantidad. Esta entrega no implementa almacenamiento local mobile, colas del dispositivo, descarga incremental ni resolución visual de conflictos.
 
@@ -87,9 +87,10 @@ Un cliente offline debe guardar ULID, payload, clave y versiones; enviar sus ope
 | `mortality-categories.view` / `mortality-categories.manage` | Lectura / administración de categorías. |
 | `mortality.view` / `mortality.manage` | Consultas / registro, corrección y cancelación de mortalidad. |
 | `egg-collections.view` / `egg-collections.manage` | Consultas y métricas / comandos de recolección. |
+| `egg-stock.view` / `egg-stock.move` / `egg-stock.adjust` | Saldos, movimientos, ingresos, salidas y correcciones de la cuenta de huevos por UP. |
 | `audit.view` | Lectura del endpoint transversal de auditoría. |
 
-`AdminUserSeeder` agrega los doce permisos nuevos al administrador. Son permisos funcionales globales para toda la empresa; no hay asignaciones usuario–UP ni restricciones por propietario. Un operador de producción no necesita permisos de movimiento manual de inventario para que su recolección legítima genere stock.
+`AdminUserSeeder` agrega los permisos funcionales de Lotes y stock de huevos al administrador. Son globales para toda la empresa; no hay asignaciones usuario–UP ni restricciones por propietario. Un operador de producción no necesita permisos de movimiento manual de inventario para que su recolección legítima genere stock.
 
 ### Auditoría y eventos
 
@@ -119,14 +120,14 @@ Todas las rutas siguientes son relativas a `/api/v1`. Las altas, redistribucione
 | GET / PATCH | `/mortalidades/{mortalidad}` | Detalle / corrección. |
 | GET / POST | `/lotes/{lote}/mortalidades` | Histórico / registro. |
 | POST | `/mortalidades/{mortalidad}/cancelacion` | Cancelación auditada. |
-| GET / POST | `/lotes/{lote}/recolecciones` | Histórico / registro con stock. |
-| GET / PATCH | `/recolecciones/{recoleccion}` | Detalle / corrección con stock. |
+| GET / POST | `/lotes/{lote}/recolecciones` | Histórico / registro de huevo genérico con ingreso en la cuenta de la UP. |
+| GET / PATCH | `/recolecciones/{recoleccion}` | Detalle / corrección con compensaciones de stock. |
 | POST | `/recolecciones/{recoleccion}/cancelacion` | Cancelación con compensación de stock. |
 | GET | `/lotes/{lote}/metricas` | Totales, promedio, agrupaciones diarias y semanales. |
 
-Listados: `pagina` de 1 a 100000 y `por_pagina` de 1 a 100, por defecto 50. El listado de lotes admite búsqueda por código, estado, raza, proveedor, galpón, UP y fechas de ingreso. El histórico admite `tipo` y fechas. Mortalidad admite lote, galpón histórico, estado y fechas; recolección admite esos filtros dentro del lote. Catálogos admiten búsqueda por nombre y estado. Las consultas incluyen finalizados/cancelados por defecto salvo filtro explícito.
+Listados: `pagina` de 1 a 100000 y `por_pagina` de 1 a 100, por defecto 50. El listado de lotes admite búsqueda por código, estado, raza, proveedor, galpón, UP y fechas de ingreso. El histórico admite `tipo` y fechas. Mortalidad admite lote, galpón histórico, estado y fechas; recolección admite lote, galpón, UP, estado y fechas. La cuenta corriente de huevos admite tipo, estado y fechas. Las consultas incluyen finalizados/cancelados por defecto salvo filtro explícito.
 
-Métricas: por defecto últimos 30 días calendario, con máximo 366 días por consulta. `fecha_desde`/`fecha_hasta` son inclusivas. Sólo cuentan recolecciones vigentes con su cantidad corregida. El promedio incluye días sin producción; las series omiten días/semanas sin registros. `por_semana` agrupa por semana calendario iniciada en lunes, no por semana de edad del lote. No se publica porcentaje de postura o mortalidad con denominadores históricos inventados.
+Métricas: por defecto últimos 30 días calendario, con máximo 366 días por consulta. `fecha_desde`/`fecha_hasta` son inclusivas. Sólo cuentan recolecciones vigentes con su cantidad corregida; las entradas manuales, salidas y pérdidas de stock no se suman a producción. El promedio incluye días sin producción; las series omiten días/semanas sin registros. `por_semana` agrupa por semana calendario iniciada en lunes, no por semana de edad del lote. No se publica porcentaje de postura o mortalidad con denominadores históricos inventados.
 
 Errores: `401` sin sesión, `403` sin permiso, `404` recurso inexistente, `422` formato/campo no permitido y `409` conflicto de negocio o versión. Se conserva el formato transversal `application/problem+json`; los identificadores de estado/evento/permisos y metadatos técnicos siguen siendo estables en inglés.
 
@@ -146,11 +147,11 @@ No se necesita ni debe usarse `migrate:fresh` sobre una base con datos que deban
 | Código demo | Estado final | Aves vivas | Situación |
 |---|---|---:|---|
 | `DEMO-LOT-A` | `active` | 70 | Admitió 100, redistribuyó 20 y 10 y se trasladó íntegro a Galpón Lotes Demo. |
-| `DEMO-LOT-B` | `active` | 48 | Admitió 40, recibió 10, registró 2 bajas y produjo 12 huevos. |
+| `DEMO-LOT-B` | `active` | 48 | Admitió 40, recibió 10, registró 2 bajas y produjo huevos genéricos. |
 | `DEMO-LOT-C` | `finished` | 0 | Recibió 20 como lote nuevo y finalizó con egreso de esas aves. |
 | `DEMO-LOT-D` | `quarantined` | 25 | Origen propio, otra raza, en Galpón Lotes Demo. |
 
-El producto `HUEVO-LOTES-DEMO` y la ubicación `Cámara de huevos - Lotes Demo` aíslan los 12 huevos de los saldos base que recarga el seeder general. Las claves estables del seeder impiden repetir movimientos o sobrescribir fechas, versiones y correcciones realizadas después por un usuario. No se promete restaurar la demo original después de modificarla: para ensayos repetidos crear códigos QA nuevos.
+El seeder de producción usa el producto técnico protegido `Huevo` y una cuenta exclusiva por UP. Las claves estables impiden repetir movimientos o sobrescribir fechas, versiones y correcciones realizadas después por un usuario. La descripción completa de los escenarios se encuentra en [egg-production-implementation.md](egg-production-implementation.md).
 
 ## Verificación automatizada
 
@@ -318,23 +319,21 @@ Consultar `/mortalidades?lote_id={B}&galpon_id={G2}&estado=cancelled&fecha_desde
 
 En otro lote/galpón pequeño: registrar bajas, ocupar las plazas liberadas con otro lote e intentar cancelar las bajas. Debe dar `409` y conservar mortalidad, cantidad viva y versiones. También probar categoría inactiva, cantidad mayor que aves vivas, doble cancelación y versiones viejas: nunca deben producir cantidades negativas ni auditorías de éxito adicionales.
 
-### 8. Recolección, métricas y stock
+### 8. Recolección y métricas
 
-Consultar de nuevo B y utilizar su versión actual. Registrar en `/lotes/{B}/recolecciones`:
+Consultar de nuevo B y registrar en `/lotes/{B}/recolecciones`:
 
 ```json
-{"version":5,"cantidad":12,"producto_id":1,"ubicacion_stock_id":1,"observaciones":"Turno QA"}
+{"cantidad":12,"observaciones":"Turno QA"}
 ```
 
-Sustituir producto/ubicación seleccionados. Esperado: `201`, recolección E versión 1; B permanece con 50 aves y aumenta su versión a 6; saldo físico `S0 + 12`, un movimiento de inventario con referencia `egg_collection` y el mismo `id_operacion` que la respuesta. La cantidad viva nunca aumenta por producir huevos.
+Esperado: `201`, recolección E versión 1; B conserva 50 aves y su versión; la cuenta de huevos de la UP aumenta en 12 mediante `collection_receipt` y el movimiento físico comparte `id_operacion` con la recolección. La cantidad viva nunca aumenta por producir huevos.
 
-Reintentar el mismo comando/clave: no aumenta el saldo. Corregir `PATCH /recolecciones/{E}` con `version:1`, `version_lote:6`, `cantidad:10`, motivo y clave nueva: saldo `S0 + 10`, E versión 2 y B versión 7. Corregir sólo observaciones con ambas versiones actuales: se audita, pero no aparece un ajuste de stock cero.
+Reintentar la misma clave no aumenta el saldo. Corregir `PATCH /recolecciones/{E}` con `version:1`, `cantidad:10`, `motivo_correccion` y clave nueva: saldo `S0 + 10`, E versión 2 y una compensación por la diferencia. Corregir sólo observaciones incrementa la versión y la auditoría, pero no crea un ajuste de stock cero.
 
-Consultar `/lotes/{B}/metricas?fecha_desde=<hoy>&fecha_hasta=<hoy>`: total 10 para este escenario sin otras recolecciones vigentes, promedio 10, series consistentes. Cancelar E con `POST /recolecciones/{E}/cancelacion`, motivo y versiones actualizadas: saldo vuelve a `S0`; E permanece `cancelled`; métricas excluyen sus huevos. No se borra ningún movimiento previo.
+Consultar `/lotes/{B}/metricas?fecha_desde=<hoy>&fecha_hasta=<hoy>`: total 10 para este escenario sin otras recolecciones vigentes, promedio 10 y series consistentes. Cancelar E con `POST /recolecciones/{E}/cancelacion`, versión y `motivo_correccion`: el saldo vuelve a `S0`; E permanece `cancelled`; métricas excluyen sus huevos. No se borra ningún movimiento previo.
 
-En un escenario separado con producto/ubicación sin saldo previo: recolectar 12, retirar o reservar 10 mediante Inventario e intentar cancelar los 12. Debe devolver `409`, sin alterar E, su versión ni los saldos. No cancelar una reserva o salida de otra operación automáticamente para forzar la prueba.
-
-Probar producto no huevo, producto inactivo, no inventariable, unidad distinta de `unit` y ubicación inactiva: `409`, sin recolección ni ingreso parcial. Un lote vacío o finalizado no puede registrar recolecciones.
+Las entradas manuales, salidas para reparto y pérdidas se validan en el recorrido de [egg-production-implementation.md](egg-production-implementation.md); no deben alterar la producción histórica. Un lote vacío o finalizado no puede registrar recolecciones.
 
 ### 9. Cuarentena, finalización, seguridad y fechas
 

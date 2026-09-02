@@ -1,8 +1,8 @@
 openapi: "3.1.0"
 info:
   title: "09 — Producción y stock de huevos"
-  version: "1.0.0"
-  description: "Contrato de Lotes para web y mobile. Redistribución sin genealogía, estado y cantidades auditados, mortalidad, recolección e inventario atómicos. No hay borrado ni interfaz mobile en esta entrega. Los valores de estado, eventos y permisos son identificadores estables en inglés."
+  version: "2.0.0"
+  description: "Contrato de Lotes y producción de huevos para web y mobile. La recolección de huevo genérico ingresa atómicamente a una cuenta corriente por unidad productiva; las correcciones son compensaciones auditadas. No hay borrado ni interfaz mobile en esta entrega. Los valores de estado, eventos, tipos y permisos son identificadores estables en inglés."
   license:
     name: "Proprietary"
     identifier: "Proprietary"
@@ -27,7 +27,10 @@ tags:
     description: "Bajas y correcciones auditadas."
   -
     name: "Recolección"
-    description: "Postura, stock y métricas."
+    description: "Producción histórica de huevo genérico y métricas."
+  -
+    name: "Stock de huevos"
+    description: "Cuenta corriente por unidad productiva, movimientos y correcciones."
 paths:
   "/lotes":
     get:
@@ -883,8 +886,8 @@ paths:
     get:
       tags: ["Recolección"]
       operationId: "showEggProductionMetrics"
-      summary: "Consulta producción, descartes y pérdidas por día, semana y mes"
-      description: "Permiso requerido: egg-collections.view. Las pérdidas posteriores se agrupan por su fecha real."
+      summary: "Consulta producción por día, semana y mes"
+      description: "Permiso requerido: egg-collections.view. Sólo cuentan recolecciones vigentes de huevo genérico."
       x-permission: "egg-collections.view"
       parameters:
         - "$ref": "#/components/parameters/From"
@@ -978,7 +981,7 @@ paths:
         content:
           "application/json":
             schema:
-              "$ref": "#/components/schemas/CancelRecord"
+              "$ref": "#/components/schemas/CancelEggCollection"
       responses:
         "200":
           description: "Consulta u operación completada."
@@ -996,63 +999,6 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/recolecciones/{recoleccion}/perdidas":
-    post:
-      tags: ["Recolección"]
-      operationId: "recordEggCollectionLoss"
-      summary: "Registra una pérdida posterior y reduce el stock existente"
-      description: "Permiso requerido: egg-collections.manage. La pérdida queda vinculada a la recolección y se puede revertir."
-      x-permission: "egg-collections.manage"
-      parameters:
-        - "$ref": "#/components/parameters/Recoleccion"
-        - "$ref": "#/components/parameters/IdempotencyKey"
-      requestBody:
-        required: true
-        content:
-          "application/json":
-            schema:
-              "$ref": "#/components/schemas/RecordEggCollectionLoss"
-      responses:
-        "201":
-          description: "Pérdida registrada."
-          content:
-            "application/json":
-              schema:
-                "$ref": "#/components/schemas/OperationResponse"
-        "401": {"$ref": "#/components/responses/Unauthenticated"}
-        "403": {"$ref": "#/components/responses/Forbidden"}
-        "404": {"$ref": "#/components/responses/NotFound"}
-        "409": {"$ref": "#/components/responses/Conflict"}
-        "422": {"$ref": "#/components/responses/InvalidInput"}
-  "/recolecciones/{recoleccion}/perdidas/{movimiento}/cancelacion":
-    post:
-      tags: ["Recolección"]
-      operationId: "cancelEggCollectionLoss"
-      summary: "Revierte una pérdida posterior sin borrar el historial"
-      description: "Permiso requerido: egg-collections.manage. La reversión genera un movimiento compensatorio."
-      x-permission: "egg-collections.manage"
-      parameters:
-        - "$ref": "#/components/parameters/Recoleccion"
-        - "$ref": "#/components/parameters/Movimiento"
-        - "$ref": "#/components/parameters/IdempotencyKey"
-      requestBody:
-        required: true
-        content:
-          "application/json":
-            schema:
-              "$ref": "#/components/schemas/CancelEggCollectionLoss"
-      responses:
-        "200":
-          description: "Reversión registrada."
-          content:
-            "application/json":
-              schema:
-                "$ref": "#/components/schemas/OperationResponse"
-        "401": {"$ref": "#/components/responses/Unauthenticated"}
-        "403": {"$ref": "#/components/responses/Forbidden"}
-        "404": {"$ref": "#/components/responses/NotFound"}
-        "409": {"$ref": "#/components/responses/Conflict"}
-        "422": {"$ref": "#/components/responses/InvalidInput"}
   "/lotes/{lote}/metricas":
     get:
       tags: ["Recolección"]
@@ -1084,6 +1030,181 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
+  "/unidades-productivas/{unidadProductiva}/stock-huevos":
+    get:
+      tags: ["Stock de huevos"]
+      operationId: "showEggStockBalance"
+      summary: "Consulta el saldo de huevos de una unidad productiva"
+      description: "Permiso requerido: egg-stock.view. Una unidad sin movimientos devuelve saldo cero."
+      x-permission: "egg-stock.view"
+      parameters:
+        - "$ref": "#/components/parameters/UnidadProductiva"
+      responses:
+        "200":
+          description: "Saldo actual, incluso negativo."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/EggStockBalanceResponse"
+        "401": {"$ref": "#/components/responses/Unauthenticated"}
+        "403": {"$ref": "#/components/responses/Forbidden"}
+        "404": {"$ref": "#/components/responses/NotFound"}
+  "/unidades-productivas/{unidadProductiva}/stock-huevos/movimientos":
+    get:
+      tags: ["Stock de huevos"]
+      operationId: "listEggStockTransactions"
+      summary: "Lista la cuenta corriente de huevos"
+      description: "Permiso requerido: egg-stock.view. Filtra por tipo, estado y fechas."
+      x-permission: "egg-stock.view"
+      parameters:
+        - "$ref": "#/components/parameters/UnidadProductiva"
+        - "$ref": "#/components/parameters/Page"
+        - "$ref": "#/components/parameters/PerPage"
+        - "$ref": "#/components/parameters/StockType"
+        - "$ref": "#/components/parameters/RecordStatus"
+        - "$ref": "#/components/parameters/From"
+        - "$ref": "#/components/parameters/To"
+      responses:
+        "200":
+          description: "Movimientos ordenados por fecha efectiva descendente."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/PaginatedEggStockTransactions"
+        "401": {"$ref": "#/components/responses/Unauthenticated"}
+        "403": {"$ref": "#/components/responses/Forbidden"}
+        "404": {"$ref": "#/components/responses/NotFound"}
+        "422": {"$ref": "#/components/responses/InvalidInput"}
+  "/unidades-productivas/{unidadProductiva}/stock-huevos/ingresos":
+    post:
+      tags: ["Stock de huevos"]
+      operationId: "recordEggStockReceipt"
+      summary: "Registra un ingreso manual de huevos"
+      description: "Permiso requerido: egg-stock.move. Sólo opera la cuenta técnica de la unidad productiva."
+      x-permission: "egg-stock.move"
+      parameters:
+        - "$ref": "#/components/parameters/UnidadProductiva"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/RecordEggStockReceipt"
+      responses:
+        "201":
+          description: "Ingreso lógico y movimiento físico registrados."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/EggStockOperationResponse"
+        "401": {"$ref": "#/components/responses/Unauthenticated"}
+        "403": {"$ref": "#/components/responses/Forbidden"}
+        "404": {"$ref": "#/components/responses/NotFound"}
+        "409": {"$ref": "#/components/responses/Conflict"}
+        "422": {"$ref": "#/components/responses/InvalidInput"}
+  "/unidades-productivas/{unidadProductiva}/stock-huevos/salidas":
+    post:
+      tags: ["Stock de huevos"]
+      operationId: "recordEggStockIssue"
+      summary: "Registra una salida de huevos"
+      description: "Permiso requerido: egg-stock.move. tipo admite distribution_preparation o loss y puede dejar saldo negativo."
+      x-permission: "egg-stock.move"
+      parameters:
+        - "$ref": "#/components/parameters/UnidadProductiva"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/RecordEggStockIssue"
+      responses:
+        "201":
+          description: "Salida lógica y movimiento físico registrados."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/EggStockOperationResponse"
+        "401": {"$ref": "#/components/responses/Unauthenticated"}
+        "403": {"$ref": "#/components/responses/Forbidden"}
+        "404": {"$ref": "#/components/responses/NotFound"}
+        "409": {"$ref": "#/components/responses/Conflict"}
+        "422": {"$ref": "#/components/responses/InvalidInput"}
+  "/stock-huevos/movimientos/{movimiento}":
+    get:
+      tags: ["Stock de huevos"]
+      operationId: "showEggStockTransaction"
+      summary: "Consulta un movimiento de la cuenta de huevos"
+      description: "Permiso requerido: egg-stock.view. Incluye revisiones y referencias a Inventario."
+      x-permission: "egg-stock.view"
+      parameters:
+        - "$ref": "#/components/parameters/MovimientoStock"
+      responses:
+        "200":
+          description: "Detalle del movimiento lógico."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/EggStockTransactionResponse"
+        "401": {"$ref": "#/components/responses/Unauthenticated"}
+        "403": {"$ref": "#/components/responses/Forbidden"}
+        "404": {"$ref": "#/components/responses/NotFound"}
+    patch:
+      tags: ["Stock de huevos"]
+      operationId: "correctEggStockTransaction"
+      summary: "Corrige una operación manual mediante compensaciones"
+      description: "Permiso requerido: egg-stock.adjust. Las operaciones originadas por recolecciones se corrigen desde Lotes."
+      x-permission: "egg-stock.adjust"
+      parameters:
+        - "$ref": "#/components/parameters/MovimientoStock"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/CorrectEggStockTransaction"
+      responses:
+        "200":
+          description: "Corrección registrada y operación versionada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/EggStockOperationResponse"
+        "401": {"$ref": "#/components/responses/Unauthenticated"}
+        "403": {"$ref": "#/components/responses/Forbidden"}
+        "404": {"$ref": "#/components/responses/NotFound"}
+        "409": {"$ref": "#/components/responses/Conflict"}
+        "422": {"$ref": "#/components/responses/InvalidInput"}
+  "/stock-huevos/movimientos/{movimiento}/cancelacion":
+    post:
+      tags: ["Stock de huevos"]
+      operationId: "cancelEggStockTransaction"
+      summary: "Cancela una operación manual sin borrar su historia"
+      description: "Permiso requerido: egg-stock.adjust. Agrega una compensación inversa y conserva la revisión."
+      x-permission: "egg-stock.adjust"
+      parameters:
+        - "$ref": "#/components/parameters/MovimientoStock"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/CancelEggStockTransaction"
+      responses:
+        "200":
+          description: "Cancelación registrada."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/EggStockOperationResponse"
+        "401": {"$ref": "#/components/responses/Unauthenticated"}
+        "403": {"$ref": "#/components/responses/Forbidden"}
+        "404": {"$ref": "#/components/responses/NotFound"}
+        "409": {"$ref": "#/components/responses/Conflict"}
+        "422": {"$ref": "#/components/responses/InvalidInput"}
 components:
   securitySchemes:
     bearerAuth:
@@ -1125,14 +1246,23 @@ components:
         type: "string"
         pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
         example: "01J00000000000000000000000"
-    Movimiento:
-      name: "movimiento"
+    UnidadProductiva:
+      name: "unidadProductiva"
       in: "path"
       required: true
-      description: "Identificador numérico del movimiento de pérdida."
+      description: "Identificador numérico de la unidad productiva."
       schema:
         type: "integer"
         minimum: 1
+    MovimientoStock:
+      name: "movimiento"
+      in: "path"
+      required: true
+      description: "ULID público del movimiento lógico de huevos."
+      schema:
+        type: "string"
+        pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+        example: "01J00000000000000000000000"
     Galpon:
       name: "galpon"
       in: "path"
@@ -1241,6 +1371,12 @@ components:
       schema:
         type: "string"
         enum: ["recorded", "cancelled"]
+    StockType:
+      name: "tipo"
+      in: "query"
+      schema:
+        type: "string"
+        enum: ["collection_receipt", "manual_receipt", "distribution_preparation", "loss"]
     CatalogStatus:
       name: "estado"
       in: "query"
@@ -1467,7 +1603,7 @@ components:
     EggCollection:
       type: "object"
       additionalProperties: false
-      required: ["id", "lote_id", "galpon_id", "unidad_productiva_id", "cantidad_recolectada", "cantidad_descartada", "motivo_descarte", "cantidad_utilizable", "cantidad_perdida_posterior", "cantidad_neta", "lineas", "cantidad", "ocurrido_en", "observaciones", "estado", "version", "registrado_por", "producto_id", "ubicacion_stock_id", "movimiento_inventario_id"]
+      required: ["id", "lote_id", "galpon_id", "unidad_productiva_id", "cantidad", "ocurrido_en", "observaciones", "estado", "version", "registrado_por"]
       properties:
         id:
           type: "string"
@@ -1483,29 +1619,6 @@ components:
         unidad_productiva_id:
           type: "integer"
           minimum: 1
-        cantidad_recolectada:
-          type: "integer"
-          minimum: 1
-          maximum: 2147483647
-        cantidad_descartada:
-          type: "integer"
-          minimum: 0
-          maximum: 2147483647
-        motivo_descarte:
-          type: ["string", "null"]
-          maxLength: 500
-        cantidad_utilizable:
-          type: "integer"
-          minimum: 0
-        cantidad_perdida_posterior:
-          type: "integer"
-          minimum: 0
-        cantidad_neta:
-          type: "integer"
-        lineas:
-          type: "array"
-          items:
-            "$ref": "#/components/schemas/EggCollectionLine"
         cantidad:
           type: "integer"
           minimum: 1
@@ -1514,7 +1627,7 @@ components:
           type: "string"
           format: "date-time"
           pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
-          description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
+          description: "Instante ISO 8601 con segundos y zona explícita."
         observaciones:
           type: ["string", "null"]
           maxLength: 5000
@@ -1525,79 +1638,9 @@ components:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-          description: "Versión actual obtenida al consultar el recurso."
         registrado_por:
           type: "integer"
           minimum: 1
-        producto_id:
-          type: ["integer", "null"]
-          minimum: 1
-        ubicacion_stock_id:
-          type: ["integer", "null"]
-          minimum: 1
-        movimiento_inventario_id:
-          type: ["integer", "null"]
-          minimum: 1
-    EggCollectionLine:
-      type: "object"
-      additionalProperties: false
-      required: ["producto_id", "ubicacion_stock_id", "cantidad"]
-      properties:
-        producto_id:
-          type: "integer"
-          minimum: 1
-        ubicacion_stock_id:
-          type: "integer"
-          minimum: 1
-        cantidad:
-          type: "integer"
-          minimum: 1
-          maximum: 2147483647
-    EggCollectionLoss:
-      type: "object"
-      additionalProperties: false
-      required: ["id", "id_operacion", "tipo", "tipo_referencia", "referencia_id", "motivo", "ocurrido_en", "creado_por", "revierte_movimiento_id", "lineas"]
-      properties:
-        id:
-          type: "integer"
-          minimum: 1
-        id_operacion:
-          type: "string"
-          format: "uuid"
-        tipo:
-          type: "string"
-          enum: ["loss", "reversal"]
-        tipo_referencia:
-          type: ["string", "null"]
-        referencia_id:
-          type: ["string", "null"]
-        motivo:
-          type: ["string", "null"]
-        ocurrido_en:
-          type: ["string", "null"]
-          format: "date-time"
-        creado_por:
-          type: ["integer", "null"]
-          minimum: 1
-        revierte_movimiento_id:
-          type: ["integer", "null"]
-          minimum: 1
-        lineas:
-          type: "array"
-          items:
-            type: "object"
-            additionalProperties: false
-            required: ["producto_id", "ubicacion_stock_id", "cantidad"]
-            properties:
-              producto_id:
-                type: "integer"
-                minimum: 1
-              ubicacion_stock_id:
-                type: "integer"
-                minimum: 1
-              cantidad:
-                type: "integer"
-                minimum: 1
     Catalog:
       type: "object"
       additionalProperties: false
@@ -1636,10 +1679,6 @@ components:
           "$ref": "#/components/schemas/Mortality"
         recoleccion:
           "$ref": "#/components/schemas/EggCollection"
-        perdida:
-          "$ref": "#/components/schemas/EggCollectionLoss"
-        reversion:
-          "$ref": "#/components/schemas/EggCollectionLoss"
         catalogo:
           "$ref": "#/components/schemas/Catalog"
     CreateFlock:
@@ -1904,75 +1943,202 @@ components:
     RecordEggCollection:
       type: "object"
       additionalProperties: false
-      required: ["version"]
+      required: ["cantidad"]
       properties:
         id:
           type: "string"
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
-          example: "01J00000000000000000000000"
-        version:
-          type: "integer"
-          minimum: 1
-          maximum: 2147483647
-          description: "Versión actual obtenida al consultar el recurso."
-        cantidad_recolectada:
-          type: "integer"
-          minimum: 1
-          maximum: 2147483647
+          description: "ULID opcional para reintentos controlados."
         cantidad:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-          description: "Alias heredado de cantidad_recolectada."
-        cantidad_descartada:
-          type: "integer"
-          minimum: 0
-          maximum: 2147483647
-        motivo_descarte:
-          type: ["string", "null"]
-          maxLength: 500
-        lineas:
-          type: "array"
-          maxItems: 100
-          items:
-            "$ref": "#/components/schemas/EggCollectionLine"
-        producto_id:
-          type: "integer"
-          minimum: 1
-          description: "Clasificación heredada para capturas de una sola línea."
-        ubicacion_stock_id:
-          type: "integer"
-          minimum: 1
-          description: "Ubicación heredada para capturas de una sola línea."
         ocurrido_en:
           type: "string"
           format: "date-time"
           pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
-          description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
+          description: "Instante ISO 8601 con segundos y zona explícita; si se omite usa el servidor."
         observaciones:
           type: ["string", "null"]
           maxLength: 5000
-      description: "Usa cantidad_recolectada y lineas para el formato compuesto, o cantidad, producto_id y ubicacion_stock_id para el formato heredado."
     CorrectEggCollection:
       type: "object"
       additionalProperties: false
-      required: ["version", "version_lote", "motivo"]
+      required: ["version", "motivo_correccion"]
       properties:
         version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-          description: "Versión actual obtenida al consultar el recurso."
-        version_lote:
+          description: "Versión actual de la recolección."
+        cantidad:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-          description: "Versión actual obtenida al consultar el recurso."
+        ocurrido_en:
+          type: "string"
+          format: "date-time"
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
+        observaciones:
+          type: ["string", "null"]
+          maxLength: 5000
+        motivo_correccion:
+          type: "string"
+          minLength: 1
+          maxLength: 500
+    CancelEggCollection:
+      type: "object"
+      additionalProperties: false
+      required: ["version", "motivo_correccion"]
+      properties:
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        motivo_correccion:
+          type: "string"
+          minLength: 1
+          maxLength: 500
+    EggStockBalance:
+      type: "object"
+      additionalProperties: false
+      required: ["unidad_productiva_id", "saldo"]
+      properties:
+        unidad_productiva_id:
+          type: "integer"
+          minimum: 1
+        saldo:
+          type: "integer"
+          description: "Saldo actual de huevos; puede ser negativo."
+    EggStockTransaction:
+      type: "object"
+      additionalProperties: false
+      required: ["id", "unidad_productiva_id", "tipo", "cantidad", "ocurrido_en", "motivo", "observaciones", "estado", "version", "referencia", "referencias_inventario", "revisiones"]
+      properties:
+        id:
+          type: "string"
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+        unidad_productiva_id:
+          type: "integer"
+          minimum: 1
+        tipo:
+          type: "string"
+          enum: ["collection_receipt", "manual_receipt", "distribution_preparation", "loss"]
+        cantidad:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        ocurrido_en:
+          type: "string"
+          format: "date-time"
+        motivo:
+          type: ["string", "null"]
+          maxLength: 500
+        observaciones:
+          type: ["string", "null"]
+          maxLength: 5000
+        estado:
+          type: "string"
+          enum: ["recorded", "cancelled"]
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        referencia:
+          type: ["object", "null"]
+          additionalProperties: false
+          required: ["tipo", "id"]
+          properties:
+            tipo:
+              type: "string"
+            id:
+              type: "string"
+        referencias_inventario:
+          type: "array"
+          items:
+            type: "object"
+            additionalProperties: true
+        saldo:
+          type: ["integer", "null"]
+        revisiones:
+          type: "array"
+          items:
+            "$ref": "#/components/schemas/EggStockTransactionRevision"
+    EggStockTransactionRevision:
+      type: "object"
+      additionalProperties: false
+      required: ["id", "accion", "antes", "despues", "motivo_correccion", "operacion_id", "realizado_por", "realizado_en"]
+      properties:
+        id:
+          type: "string"
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+        accion:
+          type: "string"
+          enum: ["correct", "cancel"]
+        antes:
+          type: "object"
+          additionalProperties: true
+        despues:
+          type: "object"
+          additionalProperties: true
+        motivo_correccion:
+          type: "string"
+        operacion_id:
+          type: "string"
+          format: "uuid"
+        realizado_por:
+          type: "integer"
+          minimum: 1
+        realizado_en:
+          type: "string"
+          format: "date-time"
+    RecordEggStockReceipt:
+      type: "object"
+      additionalProperties: false
+      required: ["cantidad", "motivo"]
+      properties:
+        cantidad:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        ocurrido_en:
+          type: "string"
+          format: "date-time"
         motivo:
           type: "string"
           minLength: 1
           maxLength: 500
-        cantidad_recolectada:
+        observaciones:
+          type: ["string", "null"]
+          maxLength: 5000
+    RecordEggStockIssue:
+      type: "object"
+      additionalProperties: false
+      required: ["cantidad", "tipo", "motivo"]
+      properties:
+        cantidad:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        tipo:
+          type: "string"
+          enum: ["distribution_preparation", "loss"]
+        ocurrido_en:
+          type: "string"
+          format: "date-time"
+        motivo:
+          type: "string"
+          minLength: 1
+          maxLength: 500
+        observaciones:
+          type: ["string", "null"]
+          maxLength: 5000
+    CorrectEggStockTransaction:
+      type: "object"
+      additionalProperties: false
+      required: ["version", "motivo_correccion"]
+      properties:
+        version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
@@ -1980,58 +2146,32 @@ components:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-          description: "Alias heredado de cantidad_recolectada."
-        cantidad_descartada:
-          type: "integer"
-          minimum: 0
-          maximum: 2147483647
-        motivo_descarte:
-          type: ["string", "null"]
-          maxLength: 500
-        lineas:
-          type: "array"
-          maxItems: 100
-          items:
-            "$ref": "#/components/schemas/EggCollectionLine"
-        producto_id:
-          type: "integer"
-          minimum: 1
-          description: "Clasificación heredada para correcciones de una sola línea."
-        ubicacion_stock_id:
-          type: "integer"
-          minimum: 1
-          description: "Ubicación heredada para correcciones de una sola línea."
-        observaciones:
-          type: ["string", "null"]
-          maxLength: 5000
-      description: "Las cantidades y clasificaciones son opcionales para correcciones sólo textuales; cuando se envían, se admite el formato compuesto o el heredado."
-    RecordEggCollectionLoss:
-      type: "object"
-      additionalProperties: false
-      required: ["lineas", "motivo"]
-      properties:
-        lineas:
-          type: "array"
-          minItems: 1
-          maxItems: 100
-          items:
-            "$ref": "#/components/schemas/EggCollectionLine"
-        motivo:
-          type: "string"
-          minLength: 1
-          maxLength: 255
         ocurrido_en:
           type: "string"
           format: "date-time"
-    CancelEggCollectionLoss:
-      type: "object"
-      additionalProperties: false
-      required: ["motivo"]
-      properties:
         motivo:
+          type: ["string", "null"]
+          maxLength: 500
+        observaciones:
+          type: ["string", "null"]
+          maxLength: 5000
+        motivo_correccion:
           type: "string"
           minLength: 1
-          maxLength: 255
+          maxLength: 500
+    CancelEggStockTransaction:
+      type: "object"
+      additionalProperties: false
+      required: ["version", "motivo_correccion"]
+      properties:
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        motivo_correccion:
+          type: "string"
+          minLength: 1
+          maxLength: 500
     CreateCatalog:
       type: "object"
       additionalProperties: false
@@ -2064,11 +2204,11 @@ components:
     Metrics:
       type: "object"
       additionalProperties: false
+      required: ["fecha_desde", "fecha_hasta", "zona_horaria", "huevos_totales", "huevos_recolectados", "promedio_diario", "por_dia", "por_semana", "por_mes"]
       properties:
         lote_id:
           type: "string"
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
-          example: "01J00000000000000000000000"
         fecha_desde:
           type: "string"
           format: "date"
@@ -2084,97 +2224,63 @@ components:
         huevos_recolectados:
           type: "integer"
           minimum: 0
-        huevos_descartados_iniciales:
-          type: "integer"
-          minimum: 0
-        huevos_utilizables:
-          type: "integer"
-          minimum: 0
-        huevos_perdidos_posteriores:
-          type: "integer"
-          minimum: 0
-        huevos_netos:
-          type: "integer"
         promedio_diario:
           type: "number"
           description: "Total dividido por todos los días del período inclusivo, redondeado a dos decimales."
-        promedio_diario_neto:
-          type: "number"
-          description: "Alias explícito del promedio neto diario."
         por_dia:
           type: "array"
           items:
-            type: "object"
-            additionalProperties: false
-            required: ["fecha", "cantidad", "huevos_recolectados", "huevos_descartados_iniciales", "huevos_perdidos_posteriores", "huevos_netos"]
-            properties:
-              fecha:
-                type: "string"
-                format: "date"
-              cantidad:
-                type: "integer"
-                minimum: 1
-                maximum: 2147483647
-              huevos_recolectados:
-                type: "integer"
-                minimum: 0
-              huevos_descartados_iniciales:
-                type: "integer"
-                minimum: 0
-              huevos_perdidos_posteriores:
-                type: "integer"
-                minimum: 0
-              huevos_netos:
-                type: "integer"
+            "$ref": "#/components/schemas/DailyEggMetric"
         por_semana:
           type: "array"
           items:
-            type: "object"
-            additionalProperties: false
-            required: ["inicio_semana", "cantidad", "huevos_recolectados", "huevos_descartados_iniciales", "huevos_perdidos_posteriores", "huevos_netos"]
-            properties:
-              inicio_semana:
-                type: "string"
-                format: "date"
-              cantidad:
-                type: "integer"
-                minimum: 1
-                maximum: 2147483647
-              huevos_recolectados:
-                type: "integer"
-                minimum: 0
-              huevos_descartados_iniciales:
-                type: "integer"
-                minimum: 0
-              huevos_perdidos_posteriores:
-                type: "integer"
-                minimum: 0
-              huevos_netos:
-                type: "integer"
+            "$ref": "#/components/schemas/WeeklyEggMetric"
         por_mes:
           type: "array"
           items:
-            type: "object"
-            additionalProperties: false
-            required: ["inicio_mes", "cantidad", "huevos_recolectados", "huevos_descartados_iniciales", "huevos_perdidos_posteriores", "huevos_netos"]
-            properties:
-              inicio_mes:
-                type: "string"
-                format: "date"
-              cantidad:
-                type: "integer"
-                minimum: 0
-              huevos_recolectados:
-                type: "integer"
-                minimum: 0
-              huevos_descartados_iniciales:
-                type: "integer"
-                minimum: 0
-              huevos_perdidos_posteriores:
-                type: "integer"
-                minimum: 0
-              huevos_netos:
-                type: "integer"
+            "$ref": "#/components/schemas/MonthlyEggMetric"
+    DailyEggMetric:
+      type: "object"
+      additionalProperties: false
+      required: ["fecha", "cantidad", "huevos_recolectados"]
+      properties:
+        fecha:
+          type: "string"
+          format: "date"
+        cantidad:
+          type: "integer"
+          minimum: 0
+        huevos_recolectados:
+          type: "integer"
+          minimum: 0
+    WeeklyEggMetric:
+      type: "object"
+      additionalProperties: false
+      required: ["inicio_semana", "cantidad", "huevos_recolectados"]
+      properties:
+        inicio_semana:
+          type: "string"
+          format: "date"
+        cantidad:
+          type: "integer"
+          minimum: 0
+        huevos_recolectados:
+          type: "integer"
+          minimum: 0
+    MonthlyEggMetric:
+      type: "object"
+      additionalProperties: false
+      required: ["inicio_mes", "cantidad", "huevos_recolectados"]
+      properties:
+        inicio_mes:
+          type: "string"
+          format: "date"
+        cantidad:
+          type: "integer"
+          minimum: 0
+        huevos_recolectados:
+          type: "integer"
+          minimum: 0
     PageMeta:
       type: "object"
       additionalProperties: true
@@ -2326,3 +2432,50 @@ components:
       properties:
         data:
           "$ref": "#/components/schemas/Metrics"
+    EggStockBalanceResponse:
+      type: "object"
+      additionalProperties: false
+      required: ["data"]
+      properties:
+        data:
+          "$ref": "#/components/schemas/EggStockBalance"
+    EggStockTransactionResponse:
+      type: "object"
+      additionalProperties: false
+      required: ["data"]
+      properties:
+        data:
+          "$ref": "#/components/schemas/EggStockTransaction"
+    PaginatedEggStockTransactions:
+      type: "object"
+      additionalProperties: false
+      required: ["data", "links", "meta"]
+      properties:
+        data:
+          type: "array"
+          items:
+            "$ref": "#/components/schemas/EggStockTransaction"
+        links:
+          type: "object"
+          additionalProperties:
+            type: ["string", "null"]
+        meta:
+          "$ref": "#/components/schemas/PageMeta"
+    EggStockOperation:
+      type: "object"
+      additionalProperties: false
+      required: ["transaction"]
+      properties:
+        transaction:
+          type: "string"
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+        movement_id:
+          type: "integer"
+          minimum: 1
+    EggStockOperationResponse:
+      type: "object"
+      additionalProperties: false
+      required: ["data"]
+      properties:
+        data:
+          "$ref": "#/components/schemas/EggStockOperation"
