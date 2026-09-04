@@ -4,29 +4,24 @@ namespace Database\Seeders\Lots;
 
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
-use App\Models\Inventory\StockLocation;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
-use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\SuppliersAndCatalogs\Supplier;
 use App\Models\User;
 use App\Modules\FarmStructure\Application\Actions\CreatePoultryHouseAction;
-use App\Modules\Inventory\Application\Actions\CreateStockLocationAction;
 use App\Modules\Lots\Application\Actions\ChangeFlockStatusAction;
 use App\Modules\Lots\Application\Actions\CreateFlockAction;
 use App\Modules\Lots\Application\Actions\FinalizeFlockAction;
-use App\Modules\Lots\Application\Actions\RecordEggCollectionAction;
 use App\Modules\Lots\Application\Actions\RecordMortalityAction;
 use App\Modules\Lots\Application\Actions\RedistributeFlockAction;
 use App\Modules\Lots\Application\Actions\SaveBreedAction;
 use App\Modules\Lots\Application\Actions\SaveMortalityCategoryAction;
-use App\Modules\SuppliersAndCatalogs\Application\Actions\CreateProductAction;
 use Closure;
 use Illuminate\Database\Seeder;
 
 final class LotsDemoSeeder extends Seeder
 {
-    public function run(CreateFlockAction $create, RedistributeFlockAction $redistribute, RecordMortalityAction $mortality, RecordEggCollectionAction $eggs, FinalizeFlockAction $finalize, ChangeFlockStatusAction $status, SaveBreedAction $breeds, SaveMortalityCategoryAction $categories, CreatePoultryHouseAction $createHouse, CreateProductAction $createProduct, CreateStockLocationAction $createLocation): void
+    public function run(CreateFlockAction $create, RedistributeFlockAction $redistribute, RecordMortalityAction $mortality, FinalizeFlockAction $finalize, ChangeFlockStatusAction $status, SaveBreedAction $breeds, SaveMortalityCategoryAction $categories, CreatePoultryHouseAction $createHouse): void
     {
         if (! app()->environment('local')) {
             return;
@@ -38,15 +33,6 @@ final class LotsDemoSeeder extends Seeder
         $destination = PoultryHouse::query()->where('production_unit_id', $unit->id)->where('normalized_name', 'galpón lotes demo')->first();
         if ($destination === null) {
             $destination = $createHouse->execute($unit, ['name' => 'Galpón Lotes Demo', 'bird_capacity' => 300], $actor);
-        }
-        /** El inventario demo de Lotes queda separado de los saldos base que recarga el seeder general. */
-        $product = Product::query()->where('sku', 'HUEVO-LOTES-DEMO')->first();
-        if ($product === null) {
-            $product = $createProduct->execute(['sku' => 'HUEVO-LOTES-DEMO', 'name' => 'Huevos demo de Lotes', 'kind' => 'egg', 'base_unit' => 'unit', 'stock_tracked' => true], $actor);
-        }
-        $location = StockLocation::query()->where('normalized_name', 'cámara de huevos - lotes demo')->first();
-        if ($location === null) {
-            $location = $createLocation->execute(['name' => 'Cámara de huevos - Lotes Demo', 'production_unit_id' => $unit->id], $actor);
         }
         $breedResult = $this->once($actor, 501, fn (string $key): FlockOperation => $breeds->execute(null, ['name' => 'Ponedoras demo', 'idempotency_key' => $key], $actor, 'seeder'));
         $otherBreed = $this->once($actor, 502, fn (string $key): FlockOperation => $breeds->execute(null, ['name' => 'Camperas demo', 'idempotency_key' => $key], $actor, 'seeder'));
@@ -85,11 +71,6 @@ final class LotsDemoSeeder extends Seeder
             $flock = Flock::query()->where('public_id', $bId)->firstOrFail();
 
             return $mortality->execute($flock, ['quantity' => 2, 'mortality_category_id' => $category->result['catalog']['id'], 'version' => $flock->version, 'idempotency_key' => $key], $actor, 'seeder');
-        });
-        $this->once($actor, 510, function (string $key) use ($bId, $product, $location, $eggs, $actor): FlockOperation {
-            $flock = Flock::query()->where('public_id', $bId)->firstOrFail();
-
-            return $eggs->execute($flock, ['quantity' => 12, 'product_id' => $product->id, 'stock_location_id' => $location->id, 'version' => $flock->version, 'idempotency_key' => $key], $actor, 'seeder');
         });
         $this->once($actor, 511, function (string $key) use ($split, $finalize, $actor): FlockOperation {
             $flock = Flock::query()->where('public_id', $split->result['destination']['public_id'])->firstOrFail();

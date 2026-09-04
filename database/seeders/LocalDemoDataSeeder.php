@@ -160,7 +160,6 @@ final class LocalDemoDataSeeder extends Seeder
             'soy' => ['sku' => 'SOJA-025', 'name' => 'Harina de soja', 'kind' => ProductKind::RawMaterial, 'unit' => BaseUnit::Kilogram],
             'vaccine' => ['sku' => 'VAC-001', 'name' => 'Vacuna aviar Newcastle', 'kind' => ProductKind::Vaccine, 'unit' => BaseUnit::Dose],
             'disinfectant' => ['sku' => 'DESINF-005', 'name' => 'Desinfectante concentrado', 'kind' => ProductKind::Supply, 'unit' => BaseUnit::Liter],
-            'eggs' => ['sku' => 'HUEVO-001', 'name' => 'Huevos clasificados', 'kind' => ProductKind::Egg, 'unit' => BaseUnit::Unit],
         ];
         $products = [];
 
@@ -187,7 +186,6 @@ final class LocalDemoDataSeeder extends Seeder
             'ombu_feed' => ['name' => 'Depósito de alimentos - El Ombú', 'unit' => 'Granja El Ombú'],
             'ombu_supplies' => ['name' => 'Cámara de insumos - El Ombú', 'unit' => 'Granja El Ombú'],
             'santa_clara_feed' => ['name' => 'Depósito de alimentos - Santa Clara', 'unit' => 'Granja Santa Clara'],
-            'santa_clara_eggs' => ['name' => 'Cámara de huevos - Santa Clara', 'unit' => 'Granja Santa Clara'],
         ];
         $locations = [];
 
@@ -214,7 +212,6 @@ final class LocalDemoDataSeeder extends Seeder
             ['product' => 'disinfectant', 'location' => 'ombu_supplies', 'on_hand' => '85.500000', 'minimum' => '30.000000'],
             ['product' => 'corn', 'location' => 'santa_clara_feed', 'on_hand' => '760.000000', 'minimum' => '400.000000'],
             ['product' => 'soy', 'location' => 'santa_clara_feed', 'on_hand' => '420.000000', 'minimum' => '250.000000'],
-            ['product' => 'eggs', 'location' => 'santa_clara_eggs', 'on_hand' => '432.000000', 'minimum' => '200.000000'],
         ];
 
         foreach ($balances as $definition) {
@@ -251,7 +248,6 @@ final class LocalDemoDataSeeder extends Seeder
                 $this->movementLine($products['disinfectant'], $locations['ombu_supplies'], '100.000000'),
                 $this->movementLine($products['corn'], $locations['santa_clara_feed'], '700.000000'),
                 $this->movementLine($products['soy'], $locations['santa_clara_feed'], '400.000000'),
-                $this->movementLine($products['eggs'], $locations['santa_clara_eggs'], '500.000000'),
             ],
             $admin,
         );
@@ -288,15 +284,6 @@ final class LocalDemoDataSeeder extends Seeder
             $admin,
         );
 
-        $this->saveMovement(
-            '00000000-0000-4000-8000-000000000004',
-            InventoryMovementType::Loss,
-            null,
-            'Merma registrada durante la clasificación de huevos.',
-            now()->subDays(3),
-            [$this->movementLine($products['eggs'], $locations['santa_clara_eggs'], '-68.000000')],
-            $admin,
-        );
     }
 
     private function seedReports(User $admin): void

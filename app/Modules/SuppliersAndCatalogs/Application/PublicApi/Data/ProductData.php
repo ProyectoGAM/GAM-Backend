@@ -13,5 +13,6 @@ final readonly class ProductData
         public ProductKind $kind,
         public BaseUnit $baseUnit,
         public bool $stockTracked,
+        public ?string $systemKey = null,
     ) {}
 }

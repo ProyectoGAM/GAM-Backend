@@ -18,6 +18,9 @@ final readonly class UpdateProductAction
     {
         return DB::transaction(function () use ($product, $attributes, $actor): Product {
             $locked = Product::query()->whereKey($product->getKey())->lockForUpdate()->firstOrFail();
+            if ($locked->system_key === 'generic_egg' && array_intersect(array_keys($attributes), ['sku', 'name', 'kind', 'base_unit', 'stock_tracked'])) {
+                throw new SuppliersAndCatalogsConflict('El producto técnico Huevo está protegido por el módulo de stock de huevos.');
+            }
             $before = $this->snapshot($locked);
             if (
                 array_key_exists('base_unit', $attributes)

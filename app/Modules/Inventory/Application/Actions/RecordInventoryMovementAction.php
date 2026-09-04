@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Application\Actions;
 
+use App\Models\Inventory\EggStockAccount;
 use App\Models\Inventory\InventoryMovement;
 use App\Models\Inventory\InventoryMovementLine;
 use App\Models\Inventory\StockBalance;
@@ -61,6 +62,9 @@ final readonly class RecordInventoryMovementAction
                     if ($productData[$line['product_id']] === null || ! $productData[$line['product_id']]->stockTracked) {
                         throw new InventoryConflict('El producto indicado no está activo o no controla stock.');
                     }
+                    if ($productData[$line['product_id']]->systemKey === 'generic_egg' && ! $command->eggAccountOperation) {
+                        throw new InventoryConflict('El producto técnico Huevo sólo puede moverse desde el módulo de stock de huevos.');
+                    }
 
                     try {
                         $onHandDelta = InventoryQuantity::from(
@@ -73,6 +77,17 @@ final readonly class RecordInventoryMovementAction
 
                     if ($onHandDelta->isZero()) {
                         throw new InventoryConflict('La operación debe modificar al menos un saldo.');
+                    }
+
+                    $isEggAccount = EggStockAccount::query()
+                        ->where('product_id', $line['product_id'])
+                        ->where('stock_location_id', $line['stock_location_id'])
+                        ->exists();
+                    if ($command->eggAccountOperation && ($productData[$line['product_id']]->systemKey !== 'generic_egg' || ! $isEggAccount)) {
+                        throw new InventoryConflict('La operación técnica sólo puede utilizar una cuenta válida de huevos.');
+                    }
+                    if ($isEggAccount && ! $command->eggAccountOperation) {
+                        throw new InventoryConflict('Las cuentas técnicas de huevos sólo pueden modificarse desde el módulo de huevos.');
                     }
 
                     $normalizedLines[] = [
@@ -106,6 +121,7 @@ final readonly class RecordInventoryMovementAction
                         'stock_location_id' => $line['stock_location_id'],
                         'on_hand_quantity' => '0.000000',
                         'minimum_quantity' => '0.000000',
+                        'allow_negative' => $command->eggAccountOperation,
                         'created_at' => $now,
                         'updated_at' => $now,
                     ],
@@ -126,7 +142,7 @@ final readonly class RecordInventoryMovementAction
                     $balance = $balances[$line['product_id'].':'.$line['stock_location_id']];
                     $onHand = BigDecimal::of((string) $balance->on_hand_quantity)->plus($line['on_hand_delta'])->toScale(6);
 
-                    if ($onHand->isNegative()) {
+                    if ($onHand->isNegative() && ! $command->eggAccountOperation) {
                         throw new InventoryConflict('El stock disponible resultante no puede ser negativo.');
                     }
 

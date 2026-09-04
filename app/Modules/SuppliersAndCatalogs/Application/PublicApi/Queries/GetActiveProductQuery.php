@@ -25,6 +25,7 @@ final readonly class GetActiveProductQuery
             kind: $product->kind,
             baseUnit: $product->base_unit,
             stockTracked: $product->stock_tracked,
+            systemKey: $product->system_key,
         );
     }
 }

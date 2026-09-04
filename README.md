@@ -30,7 +30,8 @@ module-structure-example.md => ejemplo de estructura y alguna que otra aplicacio
 Swagger UI (desarrollo): [http://localhost:8080/docs/](http://localhost:8080/docs/)
 
 La documentación se sirve desde el servicio `swagger-ui` de Compose y permite
-seleccionar los contratos de autenticación, mantenimientos y reporting. El
+seleccionar los contratos de autenticación, Lotes/producción de huevos,
+mantenimientos y reporting. El
 botón **Authorize** usa el token Bearer emitido por el login.
 
 docker compose -f compose.dev.yaml up -d --build

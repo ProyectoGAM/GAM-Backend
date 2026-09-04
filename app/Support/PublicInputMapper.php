@@ -83,9 +83,7 @@ final class PublicInputMapper
                 'version_destino' => 'destination_version',
                 'version_lote' => 'flock_version',
                 'categoria_mortalidad_id' => 'mortality_category_id',
-                'cantidad_recolectada' => 'collected_quantity',
-                'cantidad_descartada' => 'discarded_quantity',
-                'motivo_descarte' => 'discard_reason',
+                'motivo_correccion' => 'correction_reason',
                 'fecha_desde' => 'date_from',
                 'fecha_hasta' => 'date_to',
                 'tipo' => 'type',
@@ -94,6 +92,14 @@ final class PublicInputMapper
             $keys['tipo'] = 'kind';
         } elseif ($context === 'inventory') {
             $keys['tipo'] = 'type';
+        } elseif ($context === 'egg-stock') {
+            $keys = array_replace($keys, [
+                'tipo' => 'type',
+                'observaciones' => 'notes',
+                'motivo_correccion' => 'correction_reason',
+                'fecha_desde' => 'date_from',
+                'fecha_hasta' => 'date_to',
+            ]);
         } elseif ($context === 'maintenance') {
             $keys += [
                 'fecha_mantenimiento' => 'maintenance_date',

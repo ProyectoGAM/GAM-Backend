@@ -63,7 +63,7 @@ final class ReportQueryNormalizerTest extends TestCase
 
         // Verificación: confirma que la representación canónica es estable para presets y exportaciones.
         $this->assertSame('inventario.movimientos', $query->sourceKey);
-        $this->assertSame('1.0', $query->definitionVersion);
+        $this->assertSame('1.1', $query->definitionVersion);
         $this->assertSame([['field' => 'tipo', 'operator' => 'eq', 'value' => 'receipt']], $query->filters);
         $this->assertSame(2, $query->page);
         $this->assertSame(25, $query->perPage);

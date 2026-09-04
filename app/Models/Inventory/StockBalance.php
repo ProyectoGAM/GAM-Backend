@@ -20,6 +20,7 @@ class StockBalance extends Model
         return [
             'on_hand_quantity' => 'decimal:6',
             'minimum_quantity' => 'decimal:6',
+            'allow_negative' => 'boolean',
         ];
     }
 

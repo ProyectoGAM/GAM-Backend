@@ -6,6 +6,7 @@ use App\Models\Inventory\StockLocation;
 use App\Models\User;
 use App\Modules\AuditAndTraceability\Application\Contracts\AuditRecorder;
 use App\Modules\AuditAndTraceability\Application\Data\AuditEntryData;
+use App\Modules\Inventory\Domain\Exceptions\InventoryConflict;
 use Illuminate\Support\Facades\DB;
 
 final readonly class UpdateStockLocationAction
@@ -17,6 +18,9 @@ final readonly class UpdateStockLocationAction
     {
         return DB::transaction(function () use ($location, $attributes, $actor): StockLocation {
             $locked = StockLocation::query()->whereKey($location->getKey())->lockForUpdate()->firstOrFail();
+            if ($locked->system_managed) {
+                throw new InventoryConflict('La ubicación técnica de huevos está protegida.');
+            }
             $before = $this->snapshot($locked);
             $locked->fill($attributes)->save();
             $after = $this->snapshot($locked);

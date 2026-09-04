@@ -2,187 +2,145 @@
 
 ## Descripción y alcance
 
-El módulo registra la producción diaria de huevos de cada lote y la incorpora automáticamente al inventario. Permite conservar el histórico por lote y galpón, clasificar la producción por producto y ubicación, registrar descartes en la recolección, registrar pérdidas posteriores y consultar totales diarios, semanales y mensuales.
+El módulo registra la producción diaria de huevos por lote y mantiene una cuenta corriente de huevos por unidad productiva (UP). Se separan dos conceptos: la producción es un histórico del hecho ocurrido en el lote y el stock disponible es el saldo físico administrado por Inventario.
 
-Es una ampliación del módulo `Lots`, no una entidad separada de cría. Sus dependencias son Lotes y cría, Inventario y stock, productos y ubicaciones de stock, identidad y acceso, y auditoría y trazabilidad.
+La unidad atómica es siempre un huevo genérico (`Huevo`), expresado como entero en `unit`. No se solicitan productos, ubicaciones, clasificaciones, descartes ni presentaciones comerciales en la API de recolección. Cajones, mapples y clasificaciones pertenecen a módulos posteriores.
+
+Es una ampliación coordinada de `Lots` e `Inventory`. Sus dependencias son Lotes y cría, Inventario y stock, unidades productivas, identidad y acceso, y auditoría y trazabilidad. No se agregan paquetes.
 
 La estructura sigue [module-structure-example.md](module-structure-example.md) y el nivel de detalle operativo de [lots-implementation.md](lots-implementation.md). El contrato público se encuentra en [contracts/openapi/lots.yaml](contracts/openapi/lots.yaml).
 
 ### Límites de la entrega
 
-- La unidad canónica es el huevo individual (`unit`) y todas las cantidades son enteras positivas.
-- Los cajones, mapples y otras presentaciones comerciales quedan fuera de este módulo. La clasificación por líneas deja preparada la integración futura sin convertir todavía esas presentaciones en stock.
-- No se migran registros reales del sistema anterior. Los aliases heredados (`cantidad`, `producto_id`, `ubicacion_stock_id` y `movimiento_inventario_id`) se conservan para compatibilidad con clientes existentes, mientras que las líneas de clasificación son la fuente de verdad para nuevas operaciones.
-- No se modifica la cantidad de aves del lote al producir huevos.
+- Las recolecciones sólo reciben `cantidad`, `ocurrido_en` opcional y `observaciones` opcionales.
+- Una recolección no modifica cantidad viva, versión, estado ni ubicación actual del lote.
+- Las divisiones, agrupaciones, fusiones y finalizaciones de lotes no eliminan ni reatribuyen recolecciones existentes.
+- Las entradas manuales, preparaciones de reparto y pérdidas se registran directamente en la cuenta de stock de la UP; no modifican la producción histórica.
+- No se migran datos reales del sistema anterior. Al no existir datos reales, se validan las migraciones mediante `migrate:fresh --seed`.
 
 ## Implementación realizada
 
-- Las operaciones viven en `app/Modules/Lots`, con Actions para cada mutación, Queries para lecturas, FormRequests para autorización y validación, y Resources para el contrato JSON en español.
-- `EggCollection` conserva el encabezado de la recolección: lote, galpón y unidad productiva fotografiados, fecha, cantidad recolectada, descarte inicial, motivo, observaciones, estado y versión.
-- `EggCollectionLine` registra cada combinación única de producto/clasificación, ubicación de stock y cantidad utilizable. La suma de sus líneas debe coincidir con `cantidad_recolectada - cantidad_descartada`.
-- Los movimientos de inventario se vinculan mediante `reference_type=egg_collection` y el ULID público de la recolección. Las pérdidas posteriores y sus reversiones permanecen relacionadas con esa misma referencia.
-- `EggCollectionRules` concentra las reglas de productos de tipo huevo, unidad `unit`, control de stock, ubicaciones activas, cantidades y unicidad de líneas.
-- Las recolecciones, correcciones, cancelaciones, pérdidas y reversiones usan idempotencia por actor, control de versión, bloqueos transaccionales y auditoría síncrona.
-- `GetEggProductionMetricsQuery` consolida recolecciones vigentes y pérdidas posteriores activas en la zona horaria configurada por `LOTS_TIMEZONE` (por defecto `America/Montevideo`).
+- Las recolecciones viven en `app/Modules/Lots`, con Actions, Queries, FormRequests y Resources. El movimiento físico se solicita a la frontera pública de Inventario y nunca se escriben saldos desde Lotes.
+- La migración de `egg_collections` conserva lote, galpón y UP fotografiados, cantidad, fecha efectiva, observaciones, estado, versión y actor.
+- Inventario agrega `egg_stock_accounts`, `egg_stock_transactions`, `egg_stock_transaction_revisions` y `egg_stock_commands`.
+- `EnsureEggStockAccountAction` materializa de forma idempotente una cuenta técnica por UP, con el producto protegido `Huevo` (`system_key=generic_egg`, `kind=egg`, `base_unit=unit`) y una ubicación técnica exclusiva.
+- El saldo real sólo se consulta en `stock_balances`. Una UP sin movimientos responde saldo cero; la cuenta se crea al primer movimiento y los seeders la precrean.
+- `EggStockTransaction` es la proyección lógica de cada entrada o salida. Sus tipos estables son `collection_receipt`, `manual_receipt`, `distribution_preparation` y `loss`.
+- Los movimientos físicos de Inventario son `receipt` para entradas, `issue` para preparación de reparto, `loss` para pérdidas y `adjustment` para correcciones o compensaciones.
+- Las cuentas técnicas no pueden operarse mediante endpoints genéricos de Inventario. Las Actions especializadas validan producto, ubicación, unidad y UP, y protegen su desactivación o reutilización.
 
-### Registro de una recolección
+## Registro de producción e ingreso automático
 
-`RecordEggCollectionAction` bloquea el lote y las referencias de inventario dentro de la transacción. El lote debe estar abierto, tener aves vivas y aportar una versión vigente. La fecha `ocurrido_en` no puede ser futura, anterior a la existencia del lote ni anterior al último movimiento de aves.
+`RecordEggCollectionAction` bloquea el lote, la UP y la referencia de Inventario en una única transacción. El lote debe estar abierto, tener aves vivas y pertenecer a una UP operativa. La cantidad debe ser un entero entre 1 y `2147483647`.
 
-El payload nuevo admite `cantidad_recolectada`, `cantidad_descartada`, `motivo_descarte` y `lineas`. Cada línea requiere `producto_id`, `ubicacion_stock_id` y una cantidad entera mayor que cero. El producto debe ser un huevo activo, inventariable y expresado en unidades; la ubicación debe estar activa. El descarte inicial exige un motivo y no entra al stock.
+El encabezado de la recolección conserva el galpón y la UP fotografiados al momento del hecho. La fecha efectiva usa la zona horaria de `LOTS_TIMEZONE` (por defecto `America/Montevideo`) y no puede estar en el futuro ni antes de la existencia del lote o de su último movimiento de aves. Si no se envía, se utiliza el reloj del servidor.
 
-Para clientes antiguos se aceptan `cantidad`, `producto_id` y `ubicacion_stock_id` cuando representan una única línea. Una recolección completamente descartada puede tener `lineas=[]`: se conserva el hecho y su auditoría, pero no se crea un movimiento de ingreso ni se altera el saldo.
+La Action crea una transacción lógica de tipo `collection_receipt` y un movimiento físico `receipt` por la misma cantidad. Ambos comparten `id_operacion` y se confirman junto con la recolección y su auditoría. Un fallo de validación, bloqueo, inventario o auditoría revierte todo el comando.
 
-### Ingreso automático al inventario
+Corregir o cancelar una recolección no cambia aves ni versión del lote. La recolección continúa disponible aunque el lote se divida, fusione o finalice; sólo se exige una UP operativa para registrar operaciones nuevas.
 
-La Action de Lotes llama al contrato público `RecordEggProductionAction` de Inventario. El ingreso y la recolección comparten `id_operacion`, se confirman en una única transacción y generan un movimiento de tipo `receipt` por cada clasificación afectada. Un fallo de validación, stock o auditoría revierte tanto el registro de producción como el movimiento de inventario.
+## Cuenta corriente de huevos
 
-El saldo de huevos se incrementa sólo por la cantidad utilizable clasificada. La cantidad viva, capacidad del galpón y metadatos del lote permanecen sin cambios, excepto por la versión del lote utilizada para serializar la operación.
+Las operaciones manuales se ejecutan desde Inventario, siempre sobre la cuenta técnica de una UP:
 
-### Descartes y pérdidas posteriores
+| Tipo lógico | Movimiento físico | Uso |
+|---|---|---|
+| `collection_receipt` | `receipt` | Ingreso automático de una recolección. |
+| `manual_receipt` | `receipt` | Ajuste o carga manual sin lote. |
+| `distribution_preparation` | `issue` | Retiro para preparar un reparto futuro. |
+| `loss` | `loss` | Huevos caídos, rotos u otra pérdida posterior. |
 
-El descarte ocurrido durante la recolección se guarda en `cantidad_descartada` y se resta antes de crear el ingreso. Las pérdidas posteriores tienen un flujo independiente:
+El saldo se obtiene exclusivamente de `stock_balances` y puede ser negativo para cuentas de huevos. Ningún otro producto o ubicación del inventario puede tener saldo negativo. Los reportes generales de saldos y movimientos exponen UP como columna, filtro y agrupación y aumentan sus versiones de definición.
 
-1. `RecordEggCollectionLossAction` recibe una o más líneas de una recolección vigente.
-2. Cada línea debe corresponder a una clasificación existente y no puede superar la cantidad utilizable pendiente de esa clasificación.
-3. Inventario registra una salida de tipo `loss` con `reference_type=egg_collection` y `reference_id` igual al ULID de la recolección.
-4. La fecha de la pérdida debe estar entre la recolección y el momento actual; las métricas la agrupan por su fecha real.
+Una UP inactiva o finalizada no admite movimientos nuevos, pero sus operaciones históricas pueden consultarse, corregirse o cancelarse. No se implementan transferencias ni reatribuciones entre UP: la UP fotografiada por una recolección es inmutable.
 
-La pérdida no se borra para corregirla. `CancelEggCollectionLossAction` usa `ReverseInventoryMovementAction` y crea un movimiento compensatorio con `reverses_movement_id`. El histórico original queda intacto y la pérdida deja de contar en el stock y las métricas activas. Si el saldo ya fue consumido o reservado, Inventario responde `409` y no se aplica una restitución parcial.
+## Correcciones, cancelaciones e histórico
 
-### Correcciones y cancelación
+Las transacciones lógicas son append-only desde el punto de vista histórico. `egg_stock_transaction_revisions` conserva `before`, `after`, motivo obligatorio, actor, fecha real y `operation_id`; `egg_stock_commands` conserva la clave de idempotencia, hash y respuesta.
 
-`CorrectEggCollectionAction` permite reemplazar cantidades, descarte, motivo, observaciones y líneas, siempre que se envíen `version` de la recolección y `version_lote` vigentes. La diferencia entre las líneas anteriores y las nuevas se registra como un ajuste de inventario; nunca se edita el movimiento original.
+- En una corrección de cantidad en la misma fecha se registra sólo la diferencia.
+- Si cambia explícitamente `ocurrido_en`, se compensa el efecto completo en la fecha anterior y se registra el efecto completo en la nueva. La transacción muestra la nueva fecha y la revisión conserva ambas.
+- Si no se envía `ocurrido_en`, se conserva exactamente la fecha efectiva anterior.
+- Una corrección textual incrementa versión y auditoría, pero no crea movimientos de cantidad cero.
+- Una cancelación mantiene el estado `cancelled`, agrega una compensación inversa y excluye la transacción de la proyección vigente.
+- UP, dirección y tipo son inmutables. Para cambiar alguno se cancela la operación y se crea otra.
+- Las transacciones originadas por una recolección sólo se corrigen o cancelan desde los endpoints de recolecciones. Las operaciones manuales usan los endpoints de stock.
+- Todas las correcciones requieren `version` vigente, `motivo_correccion` y una nueva `Idempotency-Key`.
 
-- Una corrección sólo textual no crea un ajuste de cantidad cero.
-- Una corrección no puede reducir una clasificación por debajo de las pérdidas posteriores activas.
-- Cancelar una recolección exige motivo y no admite pérdidas posteriores activas. Retira la cantidad actualmente registrada mediante una compensación de inventario y cambia el estado a `cancelled`.
-- Una cancelación que no pueda retirar el saldo completo responde `409`, sin modificar recolección, stock, versiones ni auditoría de éxito.
-- Los registros cancelados no se reabren ni se corrigen. Las correcciones y cancelaciones son entradas nuevas de auditoría y no eliminan historia.
+La concurrencia se serializa por actor, UP, cuenta y transacción. Los deadlocks se reintentan hasta tres veces. Repetir una clave con el mismo payload devuelve la respuesta original; reutilizarla con otro contenido responde `409` sin aplicar efectos parciales.
 
-## Histórico, consultas y métricas
+## Consultas, métricas y permisos
 
-Las consultas devuelven recolecciones registradas y canceladas, salvo que se filtre explícitamente por estado. Se ordenan por `ocurrido_en` descendente y luego por identificador. El galpón y la unidad productiva se conservan como parte de la fotografía histórica, por lo que un traslado posterior del lote no cambia dónde se produjo el hecho.
+El histórico de recolecciones se consulta por lote o globalmente y permite filtrar por lote, galpón, UP, estado y fechas. El histórico de stock se pagina por UP y permite filtrar por tipo, estado y fechas; el detalle incluye revisiones y referencias a Inventario.
 
-Las métricas sólo incluyen recolecciones `recorded` y pérdidas posteriores que no tengan una reversión activa. Por defecto abarcan los últimos 30 días calendario; el período solicitado debe ser inclusivo y tener entre 1 y 366 días. El promedio diario incluye los días sin producción. Las series sólo muestran días/semanas/meses que tienen recolección o pérdida.
+Las métricas de producción diaria, semanal y mensual cuentan únicamente recolecciones con estado `recorded`. Las correcciones se reflejan en la cantidad vigente y las cancelaciones se excluyen. El período por defecto es de 30 días calendario, con máximo de 366 días inclusivos; las semanas comienzan el lunes y los meses usan el calendario local. Las entradas manuales, pérdidas y salidas no alteran estas métricas.
 
-Los campos consolidados son:
-
-| Campo | Significado |
+| Permiso | Alcance |
 |---|---|
-| `huevos_recolectados` | Total bruto registrado. |
-| `huevos_descartados_iniciales` | Descarte informado al recolectar. |
-| `huevos_utilizables` | Bruto menos descarte inicial. |
-| `huevos_perdidos_posteriores` | Pérdidas activas ocurridas después de la recolección. |
-| `huevos_netos` | Utilizable menos pérdidas posteriores. |
-| `promedio_diario_neto` | Neto dividido por todos los días del período. |
+| `egg-collections.view` | Histórico y métricas de recolección. |
+| `egg-collections.manage` | Registro, corrección y cancelación de recolecciones. |
+| `egg-stock.view` | Saldos, movimientos y revisiones de huevos. |
+| `egg-stock.move` | Entradas manuales, preparación de reparto y pérdidas. |
+| `egg-stock.adjust` | Correcciones y cancelaciones de operaciones manuales. |
 
-Las semanas comienzan el lunes y los meses usan el calendario local. La zona horaria es explícita para no mover una producción de día cuando PostgreSQL o el contenedor utilizan UTC.
+Los permisos son funcionales y globales dentro de la empresa: no existe asignación usuario–UP ni permisos con IDs de unidades. La auditoría se registra sincrónicamente dentro de la misma transacción y nunca contiene credenciales, tokens ni secretos.
 
-## Contrato de integración
+## Contrato HTTP
 
-Todas las rutas son relativas a `/api/v1` y exigen Bearer token. Las respuestas mantienen el formato transversal `application/problem+json` para errores: `401` sin sesión, `403` sin permiso, `404` para referencias inexistentes, `422` para formato/validación y `409` para conflictos de negocio, stock o versión.
+Todas las rutas son relativas a `/api/v1`, usan Bearer token y mantienen errores `application/problem+json` (`401`, `403`, `404`, `409` y `422`). Los tipos internos permanecen en inglés y el contrato público en español. Toda escritura exige `Idempotency-Key`.
 
 | Método | Ruta | Uso | Permiso |
 |---|---|---|---|
-| GET | `/lotes/{lote}/recolecciones` | Histórico de un lote con filtros. | `egg-collections.view` |
-| GET | `/recolecciones` | Histórico consolidado de la empresa. | `egg-collections.view` |
-| GET | `/recolecciones/{recoleccion}` | Detalle y líneas de una recolección. | `egg-collections.view` |
-| POST | `/lotes/{lote}/recolecciones` | Registrar recolección, descarte y clasificación. | `egg-collections.manage` |
-| PATCH | `/recolecciones/{recoleccion}` | Corregir cantidades, líneas u observaciones. | `egg-collections.manage` |
-| POST | `/recolecciones/{recoleccion}/cancelacion` | Cancelar con compensación de stock. | `egg-collections.manage` |
-| POST | `/recolecciones/{recoleccion}/perdidas` | Registrar pérdida posterior. | `egg-collections.manage` |
-| POST | `/recolecciones/{recoleccion}/perdidas/{movimiento}/cancelacion` | Revertir una pérdida sin borrar historia. | `egg-collections.manage` |
-| GET | `/lotes/{lote}/metricas` | Producción y pérdidas de un lote. | `egg-collections.view` |
-| GET | `/recolecciones/metricas` | Producción y pérdidas de toda la empresa. | `egg-collections.view` |
+| POST | `/lotes/{lote}/recolecciones` | Registrar cantidad de huevos e ingreso automático en la UP. | `egg-collections.manage` |
+| PATCH | `/recolecciones/{recoleccion}` | Corregir cantidad, fecha u observaciones. | `egg-collections.manage` |
+| POST | `/recolecciones/{recoleccion}/cancelacion` | Cancelar y compensar el ingreso. | `egg-collections.manage` |
+| GET | `/lotes/{lote}/recolecciones` | Histórico del lote. | `egg-collections.view` |
+| GET | `/recolecciones` | Histórico global filtrable. | `egg-collections.view` |
+| GET | `/recolecciones/{recoleccion}` | Detalle de la recolección. | `egg-collections.view` |
+| GET | `/recolecciones/metricas` | Producción diaria, semanal y mensual. | `egg-collections.view` |
+| GET | `/lotes/{lote}/metricas` | Métricas acotadas al lote. | `egg-collections.view` |
+| GET | `/unidades-productivas/{up}/stock-huevos` | Saldo entero actual, incluso negativo. | `egg-stock.view` |
+| GET | `/unidades-productivas/{up}/stock-huevos/movimientos` | Cuenta corriente paginada. | `egg-stock.view` |
+| GET | `/stock-huevos/movimientos/{movimiento}` | Detalle, revisiones y referencias físicas. | `egg-stock.view` |
+| POST | `/unidades-productivas/{up}/stock-huevos/ingresos` | Entrada manual. | `egg-stock.move` |
+| POST | `/unidades-productivas/{up}/stock-huevos/salidas` | Preparación de reparto o pérdida. | `egg-stock.move` |
+| PATCH | `/stock-huevos/movimientos/{movimiento}` | Corrección de una operación manual. | `egg-stock.adjust` |
+| POST | `/stock-huevos/movimientos/{movimiento}/cancelacion` | Cancelación de una operación manual. | `egg-stock.adjust` |
 
-Los listados usan `pagina` y `por_pagina` acotados, además de lote, galpón, estado y fechas. Los identificadores públicos de recolecciones son ULID; los IDs de productos, ubicaciones y movimientos de inventario continúan siendo numéricos. El permiso es funcional y global dentro de la empresa: no hay asignaciones de usuario a una unidad productiva.
-
-## Transacciones, auditoría y reintentos
-
-Cada comando exige `Idempotency-Key` con UUID. La clave queda asociada al actor y al payload normalizado: repetir exactamente la solicitud devuelve la operación original y no duplica stock; reutilizarla con otro contenido responde `409`.
-
-Las Actions bloquean el lote, la recolección, las líneas y los saldos en orden estable, y reintentan deadlocks hasta tres veces mediante `RunLotsCommand`. La auditoría se registra con `AuditRecorder` y `AuditEntryData` dentro de la misma transacción que la producción o el movimiento de inventario. Una recolección comparte `operation_id` con su ingreso; las pérdidas y compensaciones tienen su propia operación vinculada al mismo sujeto.
-
-La corrección y la cancelación son compensaciones append-only. No se actualizan ni eliminan movimientos de inventario o entradas de auditoría anteriores. Los snapshots contienen el estado permitido de la recolección y el lote para preservar el histórico si después cambian sus datos.
-
-## Permisos y eventos
-
-`egg-collections.view` habilita listados y métricas; `egg-collections.manage` habilita registro, corrección, cancelación, pérdidas y reversiones. El administrador recibe ambos permisos mediante `AdminUserSeeder`. No se requiere permiso de movimiento manual de Inventario para el ingreso legítimo generado por una recolección.
-
-Después del commit se publican `EggsCollected` y `EggCollectionCorrected`. Los eventos no reemplazan la auditoría persistida ni funcionan como outbox para integraciones externas.
+Las cantidades aceptan sólo enteros entre 1 y `2147483647`. Las salidas requieren `tipo=distribution_preparation|loss`; motivo y observaciones son texto controlado. Para cambios de UP, dirección o tipo se debe cancelar y registrar una operación nueva.
 
 ## Datos demo y despliegue
 
-`database/seeders/Lots/EggProductionDemoSeeder.php` crea datos ficticios sólo en `APP_ENV=local` y está registrado en `LocalDemoDataSeeder`. Usa las mismas Actions de producción, inventario y pérdidas que la API, con operaciones idempotentes 901 a 905:
+`database/seeders/Lots/EggProductionDemoSeeder.php` está registrado en `LocalDemoDataSeeder` y sólo corre con `APP_ENV=local`. Usa las mismas Actions que la API y crea un único producto técnico `Huevo`, una cuenta por UP, recolecciones, una entrada manual, una preparación de reparto, una pérdida y una corrección. Sus claves idempotentes evitan duplicados al repetir el seeder.
 
-| Operación | Escenario |
-|---:|---|
-| 901 | Crea el lote ponedoras demo. |
-| 902 | Registra una recolección clasificada de 30 huevos. |
-| 903 | Registra 24 huevos, 2 descartes y dos clasificaciones. |
-| 904 | Registra una pérdida posterior de 3 huevos. |
-| 905 | Conserva una recolección completamente descartada sin aumentar stock. |
-
-El seeder utiliza `HUEVO-001`, crea `HUEVO-CLASIFICADO-DEMO` si hace falta y crea una ubicación aislada de producción. Es repetible y no pisa cambios posteriores realizados por un usuario. No se ejecuta en producción.
-
-Para reconstruir datos locales ficticios se sigue el procedimiento del README:
+Como no existen datos reales, el cambio reemplaza la estructura anterior y se valida desde cero:
 
 ```bash
 docker compose -f compose.dev.yaml exec api php artisan migrate:fresh --seed --force
 ```
 
-No ejecutar `docker compose down -v`, porque elimina los volúmenes y datos existentes. En una base con datos que deban conservarse, aplicar la migración aditiva `2026_08_30_230431_create_lots_tables.php` y ejecutar el seeder de demo sólo si el ambiente es local.
+No ejecutar `docker compose down -v`, porque elimina volúmenes y datos del entorno. En un ambiente con datos que deban conservarse se debe coordinar una migración específica; esta entrega no agrega compatibilidad ni migración del modelo anterior.
 
 ## Verificación automatizada
 
-La cobertura específica está en `tests/Feature/Lots/EggProductionEndpointTest.php` y `tests/Feature/Lots/EggCollectionEndpointTest.php`. Comprueba clasificación multilinea, descarte inicial, ingreso atómico al stock, pérdidas posteriores, reversión de pérdidas, recolecciones completamente descartadas, correcciones/reclasificación, límites por stock, fechas locales, idempotencia, ciclo de vida del lote y rollback cuando falla la auditoría. `LotsContractTest` valida el contrato OpenAPI y `LotsDemoSeederTest` verifica repetibilidad y ejecución sólo local.
+La cobertura específica está en `tests/Feature/Lots/EggCollectionEndpointTest.php`, `tests/Feature/Inventory/EggStockEndpointTest.php`, `tests/Feature/Lots/LotsContractTest.php` y `tests/Feature/Lots/LotsDemoSeederTest.php`. Incluye ingreso atómico, separación entre producción y saldo, cuenta negativa sólo para huevos, entradas y salidas manuales, corrección `4000 → 400`, correcciones de fecha, cancelación, idempotencia, versiones, permisos, concurrencia, auditoría, rollback, protección de endpoints genéricos, filtros por UP y repetibilidad del seeder.
 
-Resultados de la implementación final:
+La suite específica y `migrate:fresh --seed` fueron ejecutadas durante la implementación. PHPStan/Larastan, Pint y `git diff --check` también se validaron. La aceptación humana **Do Test** permanece pendiente y no se debe marcar la tarjeta de Notion como probada sólo por la suite automática.
 
-- Regresión completa PHPUnit: **217 pruebas aprobadas, 1338 aserciones y 3 omitidas**.
-- Suite específica de producción y recolección: **13 pruebas aprobadas**.
-- PHPStan/Larastan con `.phpstan-lots.neon`: sin errores.
-- Pint aplicado a los archivos PHP del cambio.
-- `git diff --check`: sin errores.
+## Do Test — validación manual pendiente
 
-La aceptación humana **Do Test sigue pendiente**. La suite automática no sustituye la validación manual ni la actualización de la tarjeta de Notion.
+1. Levantar Compose, cargar la demo desde [README.md](README.md) y autenticar un usuario con permisos funcionales.
+2. Registrar una recolección en un lote activo. Verificar que el histórico del lote aumenta, que la cuenta de la UP recibe un `receipt` y que la cantidad viva y la versión del lote permanecen iguales.
+3. Repetir la misma clave y confirmar que no se duplica el ingreso. Consultar métricas y comprobar que sólo cuentan recolecciones vigentes.
+4. Registrar una entrada manual, una salida `distribution_preparation` y una salida `loss`; comprobar saldo, referencias físicas y que ninguna cambia las métricas de producción. Confirmar que una salida puede dejar saldo negativo sólo en huevos.
+5. Corregir una entrada de `4000` a `400`, corregir sólo observaciones y corregir moviendo explícitamente la fecha. Revisar compensaciones, revisiones `before/after`, versiones y auditoría.
+6. Cancelar una recolección y una operación manual. Confirmar estado `cancelled`, compensación completa, histórico intacto y bloqueo de correcciones posteriores sin nueva operación.
+7. Intentar operar las cuentas técnicas mediante endpoints genéricos de Inventario, cambiar el producto o ubicación técnica y registrar sobre una UP inactiva. Cada caso debe responder `403`, `409` o `422` sin escrituras parciales.
+8. Dividir, fusionar o finalizar un lote y consultar sus recolecciones previas. Deben conservar lote, galpón, UP, fecha y cantidad originales.
+9. Ejecutar el seeder local dos veces, comprobar idempotencia y verificar que con `APP_ENV=production` no genera datos.
 
-## Do Test — validación manual
-
-Ejecutar en ambiente local o QA, nunca en producción, con un usuario distinto de quien implementó cuando sea posible. Registrar responsable, fecha, rama/commit, zona horaria, ambiente, requests anonimizados, claves de idempotencia, respuestas HTTP, `data.id_operacion`, saldos y evidencia de auditoría. No guardar contraseñas ni tokens.
-
-### 1. Preparación
-
-1. Levantar Compose, aplicar migraciones y cargar datos locales según [README.md](README.md).
-2. Iniciar sesión y usar `Authorization: Bearer`, `Accept: application/json` y `Content-Type: application/json`.
-3. Elegir un lote activo con aves, un producto activo de tipo `egg` en unidad `unit`, una ubicación activa y anotar el saldo inicial `S0`.
-4. Generar una clave UUID nueva para cada intención y conservarla para repetir exactamente los comandos.
-
-### 2. Recolección clasificada y descarte
-
-Registrar una recolección con dos líneas, por ejemplo 20 huevos genéricos y 10 clasificados, con 2 descartes y motivo. Esperar `201`, una versión nueva de la recolección y del lote, líneas persistidas, `cantidad_utilizable=28`, un ingreso de `S0+28` y el mismo `id_operacion` en Lotes e Inventario. Repetir la misma clave y comprobar que no se duplica el saldo.
-
-Probar producto no huevo, inactivo, no inventariable, unidad distinta de `unit`, ubicación inactiva, línea duplicada, cantidad fraccionaria, descarte sin motivo y suma de líneas inconsistente. Cada caso debe responder `409` o `422` según corresponda, sin registros parciales.
-
-### 3. Pérdida posterior y reversión
-
-Registrar una pérdida sobre una de las líneas ya ingresadas. Esperar una salida `loss`, saldo reducido y `cantidad_perdida_posterior` incrementada. Intentar superar la cantidad pendiente: `409` sin cambios. Cancelar la pérdida; esperar una entrada compensatoria, saldo restituido, `reverses_movement_id` y el movimiento original conservado. Repetir la cancelación o usar otra recolección: `409`.
-
-### 4. Corrección, cancelación y stock consumido
-
-Reclasificar cantidades o reemplazar líneas con versiones vigentes. Esperar un ajuste sólo por la diferencia y que las pérdidas activas sigan limitando la cantidad mínima. Corregir sólo observaciones y comprobar que no aparece un movimiento de cantidad cero. Consumir o reservar parte del stock y luego intentar cancelar la recolección: `409`, sin cambios.
-
-Cancelar otra recolección sin pérdidas posteriores y comprobar compensación completa, estado `cancelled`, exclusión de métricas e histórico intacto. Intentar corregir o reabrirla: `409`.
-
-### 5. Métricas, histórico y permisos
-
-Consultar histórico por lote, galpón y fechas; comprobar que las pérdidas se ubican en el día en que ocurrieron y que los totales diarios, semanales y mensuales concilian con los saldos. Solicitar más de 366 días o fechas invertidas: `409`/`422`. Verificar `401` sin sesión, `403` sin permiso y que un usuario con permiso funcional pueda consultar distintas unidades productivas.
-
-### 6. Seeder y aceptación
-
-Ejecutar el seeder local dos veces y comprobar que no crea duplicados ni sobrescribe operaciones. Ejecutarlo con `APP_ENV=production` no debe crear registros. Considerar la aceptación completa sólo cuando stock, histórico, auditoría, errores sin efectos parciales e idempotencia tengan evidencia. Si algún caso queda bloqueado, mantener Do Test pendiente.
+Registrar ambiente, commit, zona horaria, requests anonimizados, claves de idempotencia, respuestas, saldos y evidencia de auditoría. Si algún escenario no se ejecuta, mantener Do Test pendiente.
 
 ## Fuera de alcance
 
-Presentaciones en cajones o mapples, conversiones de unidades, ventas y despachos, reservas automáticas para otros módulos, interfaz Angular/mobile, almacenamiento offline del dispositivo, outbox externo, migración de datos reales del sistema anterior y sincronización directa con Notion. Estas capacidades pueden consumir las líneas de clasificación y los movimientos de Inventario en módulos posteriores.
+Clasificación por calidad, cajones, mapples, conversiones de presentación, repartos y reservas automáticas, transferencias entre UP, interfaz web/mobile, sincronización offline del dispositivo, outbox externo, migración de datos reales y sincronización directa con Notion.

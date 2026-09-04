@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Lots;
 
-use App\Models\Inventory\StockBalance;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
 use App\Models\SuppliersAndCatalogs\Product;
@@ -37,8 +36,9 @@ final class LotsDemoSeederTest extends LotsTestCase
         $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-D', 'current_quantity' => 25, 'status' => 'quarantined']);
         $this->assertDatabaseHas('flocks', ['code' => 'DEMO-EGG-PROD', 'current_quantity' => 120, 'status' => 'active']);
         $this->assertDatabaseCount('flocks', 5);
-        $this->assertDatabaseCount('flock_operations', 18);
-        $product = Product::query()->where('sku', 'HUEVO-LOTES-DEMO')->firstOrFail();
+        $this->assertDatabaseCount('flock_operations', 15);
+        $product = Product::query()->where('system_key', 'generic_egg')->firstOrFail();
+        $this->assertDatabaseMissing('products', ['sku' => 'HUEVO-LOTES-DEMO']);
         $before = Flock::query()->orderBy('id')->get()->toArray();
         $auditCount = DB::table('activity_log')->where('log_name', 'lots')->count();
 
@@ -46,8 +46,8 @@ final class LotsDemoSeederTest extends LotsTestCase
         $this->seed(LocalDemoDataSeeder::class);
         $this->assertSame($before, Flock::query()->orderBy('id')->get()->toArray());
         $this->assertSame($auditCount, DB::table('activity_log')->where('log_name', 'lots')->count());
-        $this->assertDatabaseCount('flock_operations', 18);
-        $this->assertSame('12.000000', StockBalance::query()->where('product_id', $product->id)->firstOrFail()->on_hand_quantity);
+        $this->assertDatabaseCount('flock_operations', 15);
+        $this->assertDatabaseHas('stock_balances', ['product_id' => $product->id, 'on_hand_quantity' => '477.000000']);
         $this->assertSame(0, DB::table('activity_log')->where('log_name', 'lots')->where('source', '<>', 'seeder')->count());
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Application\Actions;
 
+use App\Models\Inventory\EggStockAccount;
 use App\Models\Inventory\StockBalance;
 use App\Models\User;
 use App\Modules\AuditAndTraceability\Application\Contracts\AuditRecorder;
@@ -18,6 +19,9 @@ final readonly class SetMinimumStockAction
     {
         return DB::transaction(function () use ($balance, $minimumQuantity, $actor): StockBalance {
             $locked = StockBalance::query()->whereKey($balance->getKey())->lockForUpdate()->firstOrFail();
+            if (EggStockAccount::query()->where('product_id', $locked->product_id)->where('stock_location_id', $locked->stock_location_id)->exists()) {
+                throw new InventoryConflict('Las cuentas técnicas de huevos sólo pueden administrarse desde su módulo especializado.');
+            }
             $minimum = BigDecimal::of($minimumQuantity)->toScale(6);
             if ($minimum->isNegative()) {
                 throw new InventoryConflict('El stock mínimo no puede ser negativo.');

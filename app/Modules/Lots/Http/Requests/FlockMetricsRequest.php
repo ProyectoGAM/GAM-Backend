@@ -19,6 +19,7 @@ final class FlockMetricsRequest extends LotsRequest
             'fecha_hasta' => ['sometimes', 'date_format:Y-m-d', ...($this->filled('fecha_desde') ? ['after_or_equal:fecha_desde'] : [])],
             'lote_id' => ['sometimes', 'ulid'],
             'galpon_id' => ['sometimes', 'integer', 'exists:poultry_houses,id'],
+            'unidad_productiva_id' => ['sometimes', 'integer', 'exists:production_units,id'],
         ];
     }
 }

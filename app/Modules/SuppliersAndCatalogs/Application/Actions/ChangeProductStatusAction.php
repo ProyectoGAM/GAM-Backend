@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Modules\AuditAndTraceability\Application\Contracts\AuditRecorder;
 use App\Modules\AuditAndTraceability\Application\Data\AuditEntryData;
 use App\Modules\SuppliersAndCatalogs\Domain\Enums\ProductStatus;
+use App\Modules\SuppliersAndCatalogs\Domain\Exceptions\SuppliersAndCatalogsConflict;
 use Illuminate\Support\Facades\DB;
 
 final readonly class ChangeProductStatusAction
@@ -17,6 +18,9 @@ final readonly class ChangeProductStatusAction
     {
         return DB::transaction(function () use ($product, $status, $actor): Product {
             $locked = Product::query()->whereKey($product->getKey())->lockForUpdate()->firstOrFail();
+            if ($locked->system_key === 'generic_egg') {
+                throw new SuppliersAndCatalogsConflict('El producto técnico Huevo está protegido por el módulo de stock de huevos.');
+            }
             $before = $locked->status->value;
             $locked->forceFill(['status' => $status])->save();
 

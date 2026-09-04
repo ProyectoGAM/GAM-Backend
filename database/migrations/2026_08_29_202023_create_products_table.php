@@ -21,6 +21,7 @@ return new class extends Migration
             $table->string('base_unit', 20);
             $table->boolean('stock_tracked')->default(true);
             $table->string('status', 20)->default('active');
+            $table->string('system_key', 80)->nullable()->unique();
             $table->timestamps();
 
             $table->index(['kind', 'status', 'name']);
