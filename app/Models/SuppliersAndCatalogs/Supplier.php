@@ -14,6 +14,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
+/**
+ * @property int $id
+ * @property string $name
+ * @property SupplierStatus $status
+ */
 #[Fillable(['locality_id', 'name', 'address', 'status'])]
 class Supplier extends Model
 {
