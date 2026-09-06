@@ -46,7 +46,7 @@ La estructura objetivo separa `apps/api`, `apps/web`, `contracts/openapi`, `infr
 | M01 | Identidad y acceso | Usuarios, roles, permisos y sesiones |
 | M02 | Auditoría y trazabilidad | Historial append-only, actor, operación, traza y cambios explícitos |
 | M03 | Ubicaciones y estructura de la granja | `Department`, `Locality`, `ProductionUnit`, `PoultryHouse`, estados y capacidad máxima |
-| M04 | Proveedores y catálogos | `Supplier`, `Product` y catálogos de artículos inventariables |
+| M04 | Proveedores y catálogos | `Supplier`, `Product`, catálogos de artículos inventariables y `Medicine` como ficha sin stock |
 | M05 | Lotes y cría | `Flock`, `Breed`, `FlockMovement`, `MortalityCategory`, `MortalityRecord`, `EggCollection` y operaciones idempotentes |
 | M06 | Ejecución del manejo | `Manejo`, `Peso`, `DetallePeso` y tareas realizadas; mortalidad pertenece a M05 |
 | M07 | Planes de manejo | `PlanDeManejo`, versiones, asignaciones y ocurrencias |
@@ -67,6 +67,7 @@ La auditoría es una capacidad transversal implementada en `AuditAndTraceability
 
 ### Reglas entre módulos
 
+- `SuppliersAndCatalogs` es dueño del catálogo `Medicine` (nombre, descripción y proveedor). Su implementación aporta un avance parcial al área funcional `06 — Manejo productivo y sanidad` de la hoja de ruta; no implementa aplicaciones de medicamentos ni planes de manejo.
 - Cada módulo es el único autorizado a modificar sus datos.
 - Un módulo no importa controllers, requests ni modelos Eloquent internos de otro.
 - La colaboración ocurre mediante Actions públicas, Queries, proyecciones o eventos.

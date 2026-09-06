@@ -9,7 +9,7 @@ Horizon: http://localhost:8080/horizon
 Pulse: http://localhost:8080/pulse
 
 
-[notion.md](notion.md) => módulos implementados pendientes de reflejar en el Kanban de Notion
+[notion.md](notion.md) => seguimiento de módulos completos y parcialmente implementados en el Kanban de Notion
 
 architecture.md => arquitectura
 
@@ -23,6 +23,10 @@ module-structure-example.md => ejemplo de estructura y alguna que otra aplicacio
 
 [egg-production-implementation.md](egg-production-implementation.md) => implementación e histórico de producción y stock de huevos
 
+[medication-implementation-plan.md](medication-implementation-plan.md) => catálogo de medicamentos implementado: alta y consulta sólo para administradores; avance parcial del módulo 06
+
+[contracts/openapi/medication.yaml](contracts/openapi/medication.yaml) => contrato API del catálogo de medicamentos
+
 [contracts/openapi/authentication.yaml](contracts/openapi/authentication.yaml) => contrato API de identidad y acceso
 
 [contracts/openapi/reference-data.yaml](contracts/openapi/reference-data.yaml) => catálogos dinámicos para formularios y filtros
@@ -31,7 +35,7 @@ Swagger UI (desarrollo): [http://localhost:8080/docs/](http://localhost:8080/doc
 
 La documentación se sirve desde el servicio `swagger-ui` de Compose y permite
 seleccionar los contratos de autenticación, Lotes/producción de huevos,
-mantenimientos y reporting. El
+mantenimientos, medicamentos y reporting. El
 botón **Authorize** usa el token Bearer emitido por el login.
 
 docker compose -f compose.dev.yaml up -d --build
@@ -70,7 +74,7 @@ docker compose -f compose.dev.yaml exec -T postgres sh -lc 'psql -U "$POSTGRES_U
 No ejecutes `docker compose down -v`: elimina los volúmenes y los datos existentes.
 ## Datos de prueba locales
 
-Cuando `APP_ENV=local`, `DatabaseSeeder` ejecuta también `LocalDemoDataSeeder` y carga datos ficticios pero coherentes de granjas, galpones, proveedores, productos, inventario, reservas, reportes y lotes con redistribuciones, mortalidad y recolección. La carga es idempotente y no se ejecuta en otros ambientes.
+Cuando `APP_ENV=local`, `DatabaseSeeder` ejecuta también `LocalDemoDataSeeder` y carga datos ficticios pero coherentes de granjas, galpones, proveedores, productos, medicamentos, inventario, reservas, reportes y lotes con redistribuciones, mortalidad y recolección. La carga es idempotente y no se ejecuta en otros ambientes.
 
 Para reconstruir la base local desde cero:
 

@@ -26,6 +26,7 @@ use App\Modules\ReferenceData\Http\Controllers\ReferenceOptionsController;
 use App\Modules\ReportingAndAnalytics\Http\Controllers\ReportExportController;
 use App\Modules\ReportingAndAnalytics\Http\Controllers\ReportPresetController;
 use App\Modules\ReportingAndAnalytics\Http\Controllers\ReportSourceController;
+use App\Modules\SuppliersAndCatalogs\Http\Controllers\MedicineController;
 use App\Modules\SuppliersAndCatalogs\Http\Controllers\ProductController;
 use App\Modules\SuppliersAndCatalogs\Http\Controllers\ProductStatusController;
 use App\Modules\SuppliersAndCatalogs\Http\Controllers\SupplierController;
@@ -152,6 +153,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::patch('/proveedores/{proveedor}/estado', [SupplierStatusController::class, 'update'])->name('proveedores.estado.update');
 
         Route::get('/productos', [ProductController::class, 'index'])->name('productos.index');
+        Route::get('/medicamentos', [MedicineController::class, 'index'])->name('medicines.index');
+        Route::post('/medicamentos', [MedicineController::class, 'store'])->name('medicines.store');
         Route::post('/productos', [ProductController::class, 'store'])->name('productos.store');
         Route::get('/productos/{producto}', [ProductController::class, 'show'])->name('productos.show');
         Route::patch('/productos/{producto}', [ProductController::class, 'update'])->name('productos.update');

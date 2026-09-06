@@ -1,0 +1,183 @@
+openapi: 3.1.0
+info:
+  title: Catálogo de medicamentos
+  version: 1.0.0
+  description: |
+    Alta y consulta de medicamentos, propiedad de Proveedores y catálogos.
+    Acceso exclusivo para administradores activos. No registra aplicaciones,
+    fechas operativas, dosis, planes de manejo ni movimientos de stock.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: Medicamentos
+    description: Fichas del catálogo de medicamentos.
+paths:
+  /medicamentos:
+    get:
+      tags: [Medicamentos]
+      operationId: listMedicines
+      summary: Consulta los medicamentos registrados
+      description: |
+        Requiere rol admin y usuario activo. Orden descendente por fecha de registro
+        e identificador interno. Conserva registros de proveedores inactivos.
+        La búsqueda por nombre es parcial, literal y sin distinción de mayúsculas.
+        Un proveedor sin coincidencias devuelve una página vacía. Los filtros desconocidos se rechazan.
+      parameters:
+        - name: buscar
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 160 }
+        - name: proveedor_id
+          in: query
+          schema: { type: integer, format: int64, minimum: 1, maximum: 9223372036854775807 }
+        - name: pagina
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100000, default: 1 }
+        - name: por_pagina
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Medicamentos paginados; los enlaces conservan los filtros.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, links, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Medicine' }
+                  links: { type: object }
+                  meta: { type: object }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    post:
+      tags: [Medicamentos]
+      operationId: createMedicine
+      summary: Registra un medicamento
+      description: |
+        Requiere rol admin y usuario activo. El proveedor debe existir y estar activo.
+        Nombre y descripción se recortan en los extremos. Se permiten nombres repetidos.
+        La misma clave por actor y los mismos datos normalizados devuelven la representación
+        original con 201 sin otra auditoría, incluso tras desactivar al proveedor.
+        Reutilizar la clave con datos diferentes produce 409. La clave se interpreta sin
+        distinción de mayúsculas y debe proceder del encabezado.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateMedicine' }
+            example:
+              nombre: Medicamento A
+              descripcion: Descripción de catálogo
+              proveedor_id: 1
+      responses:
+        '201':
+          description: Medicamento registrado o respuesta original de un reintento.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Medicine' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    CreateMedicine:
+      type: object
+      additionalProperties: false
+      required: [nombre, descripcion, proveedor_id]
+      properties:
+        nombre: { type: string, minLength: 1, maxLength: 160 }
+        descripcion: { type: string, minLength: 1, maxLength: 5000 }
+        proveedor_id: { type: integer, format: int64, minimum: 1, maximum: 9223372036854775807 }
+    Medicine:
+      type: object
+      additionalProperties: false
+      required: [id, nombre, descripcion, proveedor, registrado_por, registrado_en, id_operacion]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'
+          description: Identificador público ULID generado por el servidor.
+        nombre: { type: string, minLength: 1, maxLength: 160 }
+        descripcion: { type: string, minLength: 1, maxLength: 5000 }
+        proveedor:
+          type: object
+          additionalProperties: false
+          required: [id, nombre_al_registrar]
+          properties:
+            id: { type: integer, format: int64 }
+            nombre_al_registrar:
+              type: string
+              description: Nombre conservado al registrar, no el nombre actual del proveedor.
+        registrado_por:
+          type: object
+          additionalProperties: false
+          required: [id, nombre_al_registrar]
+          properties:
+            id: { type: integer, format: int64 }
+            nombre_al_registrar:
+              type: string
+              description: Nombre del administrador conservado al registrar.
+        registrado_en:
+          type: string
+          format: date-time
+          description: Fecha automática de creación de la ficha, no de aplicación del medicamento.
+        id_operacion: { type: string, format: uuid }
+    Problem:
+      type: object
+      required: [title, status, detail, message]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        message: { type: string }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+  responses:
+    Unauthenticated:
+      description: No estás autenticado.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: Se requiere un administrador activo.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: El proveedor no existe.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: Proveedor inactivo o clave de idempotencia utilizada con otros datos.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ValidationError:
+      description: Campos o encabezado inválidos; los errores identifican los campos afectados.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }

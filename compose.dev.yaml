@@ -254,6 +254,7 @@ services:
         [{"url":"/docs/openapi/authentication.yaml","name":"Autenticación"},
          {"url":"/docs/openapi/lots.yaml","name":"Lotes y producción de huevos"},
          {"url":"/docs/openapi/maintenance.yaml","name":"Mantenimientos"},
+         {"url":"/docs/openapi/medication.yaml","name":"Medicamentos"},
          {"url":"/docs/openapi/reporting.yaml","name":"Reportes e indicadores"},
          {"url":"/docs/openapi/reference-data.yaml","name":"Opciones de referencia"}]
       URLS_PRIMARY_NAME: Autenticación

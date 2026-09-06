@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
+use App\Models\SuppliersAndCatalogs\Medicine;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\SuppliersAndCatalogs\Supplier;
+use App\Policies\SuppliersAndCatalogs\MedicinePolicy;
 use App\Policies\SuppliersAndCatalogs\ProductPolicy;
 use App\Policies\SuppliersAndCatalogs\SupplierPolicy;
 use Illuminate\Support\Facades\Gate;
@@ -15,5 +17,6 @@ final class SuppliersAndCatalogsServiceProvider extends ServiceProvider
     {
         Gate::policy(Supplier::class, SupplierPolicy::class);
         Gate::policy(Product::class, ProductPolicy::class);
+        Gate::policy(Medicine::class, MedicinePolicy::class);
     }
 }
