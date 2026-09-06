@@ -2,14 +2,14 @@
 
 namespace Tests\Feature\Lots;
 
+use App\Actions\Lots\CreateFlockAction;
+use App\Actions\Lots\RecordMortalityAction;
+use App\Exceptions\Lots\LotsConflict;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\Lots\Breed;
 use App\Models\Lots\Flock;
 use App\Models\Lots\MortalityCategory;
 use App\Models\User;
-use App\Modules\Lots\Application\Actions\CreateFlockAction;
-use App\Modules\Lots\Application\Actions\RecordMortalityAction;
-use App\Modules\Lots\Domain\Exceptions\LotsConflict;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\Concurrency;
 use Illuminate\Support\Facades\DB;

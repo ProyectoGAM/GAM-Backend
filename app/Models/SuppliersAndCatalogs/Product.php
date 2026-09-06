@@ -2,11 +2,11 @@
 
 namespace App\Models\SuppliersAndCatalogs;
 
+use App\Enums\SuppliersAndCatalogs\BaseUnit;
+use App\Enums\SuppliersAndCatalogs\ProductKind;
+use App\Enums\SuppliersAndCatalogs\ProductStatus;
 use App\Models\Inventory\InventoryMovementLine;
 use App\Models\Inventory\StockBalance;
-use App\Modules\SuppliersAndCatalogs\Domain\Enums\BaseUnit;
-use App\Modules\SuppliersAndCatalogs\Domain\Enums\ProductKind;
-use App\Modules\SuppliersAndCatalogs\Domain\Enums\ProductStatus;
 use Database\Factories\SuppliersAndCatalogs\ProductFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Casts\Attribute;

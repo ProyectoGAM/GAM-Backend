@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\Lots;
 
-use App\Modules\Lots\Http\Resources\EggCollectionResource;
-use App\Modules\Lots\Http\Resources\FlockMovementResource;
-use App\Modules\Lots\Http\Resources\FlockResource;
-use App\Modules\Lots\Http\Resources\LotsCatalogResource;
-use App\Modules\Lots\Http\Resources\MortalityResource;
+use App\Http\Resources\Lots\EggCollectionResource;
+use App\Http\Resources\Lots\FlockMovementResource;
+use App\Http\Resources\Lots\FlockResource;
+use App\Http\Resources\Lots\LotsCatalogResource;
+use App\Http\Resources\Lots\MortalityResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Symfony\Component\Yaml\Yaml;

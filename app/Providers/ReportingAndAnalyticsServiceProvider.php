@@ -4,11 +4,11 @@ namespace App\Providers;
 
 use App\Models\ReportingAndAnalytics\ReportExport;
 use App\Models\ReportingAndAnalytics\ReportPreset;
-use App\Modules\Inventory\Application\PublicApi\Reporting\InventoryMovementsReportSource;
-use App\Modules\Inventory\Application\PublicApi\Reporting\InventoryStockBalancesReportSource;
-use App\Modules\ReportingAndAnalytics\Application\Services\ReportSourceRegistry;
 use App\Policies\ReportingAndAnalytics\ReportExportPolicy;
 use App\Policies\ReportingAndAnalytics\ReportPresetPolicy;
+use App\Services\Inventory\InventoryMovementsReportSource;
+use App\Services\Inventory\InventoryStockBalancesReportSource;
+use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 

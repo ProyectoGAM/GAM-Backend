@@ -5,20 +5,28 @@ parameters:
     level: 5
     paths:
         - app/Models/Lots
-        - app/Modules/Lots
+        - app/Actions/Lots
+        - app/Enums/Lots
+        - app/Events/Lots
+        - app/Exceptions/Lots
+        - app/Queries/Lots
+        - app/Services/Lots
+        - app/ValueObjects/Lots
+        - app/Interfaces/FarmStructure
         - app/Policies/Lots
-        - app/Shared
+        - app/Interfaces/Clock.php
+        - app/Services/SystemClock.php
         - app/Providers/LotsServiceProvider.php
         - app/Providers/FarmStructureServiceProvider.php
         - app/Support/PublicInputMapper.php
-        - app/Modules/FarmStructure/Application/PublicApi/Queries/LockPoultryHousesQuery.php
-        - app/Modules/FarmStructure/Application/PublicApi/Data/LockedPoultryHouseData.php
-        - app/Modules/Inventory/Application/PublicApi/Actions/RecordEggProductionAction.php
-        - app/Modules/Inventory/Application/PublicApi/Data/ProductionMovementData.php
-        - app/Modules/Inventory/Application/Actions/RecordInventoryMovementAction.php
+        - app/Queries/FarmStructure/LockPoultryHousesQuery.php
+        - app/DTO/FarmStructure/LockedPoultryHouseData.php
+        - app/Actions/Inventory/RecordEggProductionAction.php
+        - app/DTO/Inventory/ProductionMovementData.php
+        - app/Actions/Inventory/RecordInventoryMovementAction.php
         - app/Models/Inventory/InventoryMovement.php
         - app/Models/Inventory/StockLocation.php
-        - app/Modules/Inventory/Application/Data/InventoryMovementCommand.php
+        - app/DTO/Inventory/InventoryMovementCommand.php
         - database/seeders/Lots
         - database/factories/Lots
     tmpDir: storage/framework/cache/phpstan-lots

@@ -2,6 +2,9 @@
 
 namespace Tests\Feature\SuppliersAndCatalogs;
 
+use App\Actions\SuppliersAndCatalogs\CreateMedicineAction;
+use App\Exceptions\SuppliersAndCatalogs\MedicineConflict;
+use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\Inventory\StockBalance;
@@ -9,9 +12,6 @@ use App\Models\Lots\Flock;
 use App\Models\SuppliersAndCatalogs\Medicine;
 use App\Models\SuppliersAndCatalogs\Supplier;
 use App\Models\User;
-use App\Modules\AuditAndTraceability\Application\Contracts\AuditRecorder;
-use App\Modules\SuppliersAndCatalogs\Application\Actions\CreateMedicineAction;
-use App\Modules\SuppliersAndCatalogs\Domain\Exceptions\MedicineConflict;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Gate;

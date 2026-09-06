@@ -2,12 +2,12 @@
 
 namespace Tests\Feature\Inventory;
 
+use App\Enums\SuppliersAndCatalogs\BaseUnit;
 use App\Models\Inventory\StockBalance;
 use App\Models\Inventory\StockLocation;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\SuppliersAndCatalogs\Supplier;
 use App\Models\User;
-use App\Modules\SuppliersAndCatalogs\Domain\Enums\BaseUnit;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;

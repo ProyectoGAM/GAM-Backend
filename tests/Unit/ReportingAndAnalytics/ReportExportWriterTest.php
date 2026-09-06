@@ -2,14 +2,14 @@
 
 namespace Tests\Unit\ReportingAndAnalytics;
 
+use App\DTO\ReportingAndAnalytics\ReportQueryData;
+use App\DTO\ReportingAndAnalytics\ReportResultData;
+use App\DTO\ReportingAndAnalytics\ReportSourceDefinition;
+use App\Enums\ReportingAndAnalytics\ReportExportFormat;
+use App\Enums\ReportingAndAnalytics\ReportExportStatus;
+use App\Interfaces\ReportingAndAnalytics\ReportSource;
 use App\Models\ReportingAndAnalytics\ReportExport;
-use App\Modules\ReportingAndAnalytics\Application\Data\ReportQueryData;
-use App\Modules\ReportingAndAnalytics\Application\Data\ReportResultData;
-use App\Modules\ReportingAndAnalytics\Application\Services\ReportExportWriter;
-use App\Modules\ReportingAndAnalytics\Domain\Contracts\ReportSource;
-use App\Modules\ReportingAndAnalytics\Domain\Data\ReportSourceDefinition;
-use App\Modules\ReportingAndAnalytics\Domain\Enums\ReportExportFormat;
-use App\Modules\ReportingAndAnalytics\Domain\Enums\ReportExportStatus;
+use App\Services\ReportingAndAnalytics\ReportExportWriter;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\LazyCollection;
 use Tests\TestCase;

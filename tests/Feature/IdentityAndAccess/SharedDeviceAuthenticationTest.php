@@ -6,7 +6,7 @@ use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\IdentityAndAccess\AuthSession;
 use App\Models\SharedDevice;
 use App\Models\User;
-use App\Modules\IdentityAndAccess\Application\Services\PinHasher;
+use App\Services\IdentityAndAccess\PinHasher;
 use Database\Seeders\IdentityPermissionSeeder;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Str;

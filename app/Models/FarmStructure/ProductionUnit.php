@@ -2,8 +2,8 @@
 
 namespace App\Models\FarmStructure;
 
+use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Models\Geography\Locality;
-use App\Modules\FarmStructure\Domain\Enums\ProductionUnitStatus;
 use Database\Factories\FarmStructure\ProductionUnitFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Casts\Attribute;

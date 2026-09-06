@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Modules\IdentityAndAccess\Application\Services\SharedDeviceCredentialService;
+use App\Services\IdentityAndAccess\SharedDeviceCredentialService;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;

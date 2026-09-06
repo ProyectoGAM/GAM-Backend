@@ -2,14 +2,14 @@
 
 namespace Tests\Feature\FarmStructure;
 
+use App\Actions\FarmStructure\CreateProductionUnitAction;
+use App\DTO\AuditAndTraceability\AuditEntryData;
+use App\Enums\FarmStructure\PoultryHouseStatus;
+use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Geography\Locality;
 use App\Models\User;
-use App\Modules\AuditAndTraceability\Application\Contracts\AuditRecorder;
-use App\Modules\AuditAndTraceability\Application\Data\AuditEntryData;
-use App\Modules\FarmStructure\Application\Actions\CreateProductionUnitAction;
-use App\Modules\FarmStructure\Domain\Enums\PoultryHouseStatus;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Laravel\Sanctum\Sanctum;

@@ -2,9 +2,9 @@
 
 namespace App\Models\ReportingAndAnalytics;
 
+use App\Enums\ReportingAndAnalytics\ReportExportFormat;
+use App\Enums\ReportingAndAnalytics\ReportExportStatus;
 use App\Models\User;
-use App\Modules\ReportingAndAnalytics\Domain\Enums\ReportExportFormat;
-use App\Modules\ReportingAndAnalytics\Domain\Enums\ReportExportStatus;
 use Database\Factories\ReportingAndAnalytics\ReportExportFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;

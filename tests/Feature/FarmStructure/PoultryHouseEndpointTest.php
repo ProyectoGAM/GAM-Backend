@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\FarmStructure;
 
+use App\Interfaces\FarmStructure\PoultryHouseOccupancyProvider;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
-use App\Modules\FarmStructure\Application\PublicApi\Contracts\PoultryHouseOccupancyProvider;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Permission;

@@ -2,13 +2,13 @@
 
 namespace Tests\Feature\Lots;
 
+use App\Enums\Lots\FlockStatus;
+use App\Events\Lots\FlockCreated;
+use App\Interfaces\AuditAndTraceability\AuditRecorder;
+use App\Interfaces\FarmStructure\PoultryHouseOccupancyProvider;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\Lots\Breed;
 use App\Models\SuppliersAndCatalogs\Supplier;
-use App\Modules\AuditAndTraceability\Application\Contracts\AuditRecorder;
-use App\Modules\FarmStructure\Application\PublicApi\Contracts\PoultryHouseOccupancyProvider;
-use App\Modules\Lots\Domain\Enums\FlockStatus;
-use App\Modules\Lots\Domain\Events\FlockCreated;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;

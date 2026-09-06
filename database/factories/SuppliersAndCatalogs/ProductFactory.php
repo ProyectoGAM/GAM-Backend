@@ -2,10 +2,10 @@
 
 namespace Database\Factories\SuppliersAndCatalogs;
 
+use App\Enums\SuppliersAndCatalogs\BaseUnit;
+use App\Enums\SuppliersAndCatalogs\ProductKind;
+use App\Enums\SuppliersAndCatalogs\ProductStatus;
 use App\Models\SuppliersAndCatalogs\Product;
-use App\Modules\SuppliersAndCatalogs\Domain\Enums\BaseUnit;
-use App\Modules\SuppliersAndCatalogs\Domain\Enums\ProductKind;
-use App\Modules\SuppliersAndCatalogs\Domain\Enums\ProductStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

@@ -2,9 +2,9 @@
 
 namespace App\Models\SuppliersAndCatalogs;
 
+use App\Enums\SuppliersAndCatalogs\SupplierStatus;
 use App\Models\Geography\Locality;
 use App\Models\Inventory\InventoryMovement;
-use App\Modules\SuppliersAndCatalogs\Domain\Enums\SupplierStatus;
 use Database\Factories\SuppliersAndCatalogs\SupplierFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Casts\Attribute;

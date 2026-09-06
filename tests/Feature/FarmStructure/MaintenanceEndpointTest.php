@@ -2,13 +2,13 @@
 
 namespace Tests\Feature\FarmStructure;
 
+use App\DTO\AuditAndTraceability\AuditEntryData;
+use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\FarmStructure\Maintenance;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
-use App\Modules\AuditAndTraceability\Application\Contracts\AuditRecorder;
-use App\Modules\AuditAndTraceability\Application\Data\AuditEntryData;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\DB;

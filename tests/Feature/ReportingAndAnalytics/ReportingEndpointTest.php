@@ -2,16 +2,16 @@
 
 namespace Tests\Feature\ReportingAndAnalytics;
 
+use App\DTO\ReportingAndAnalytics\ReportResultData;
+use App\Enums\ReportingAndAnalytics\ReportExportStatus;
+use App\Jobs\ReportingAndAnalytics\GenerateReportExport;
 use App\Models\Inventory\StockBalance;
 use App\Models\Inventory\StockLocation;
 use App\Models\ReportingAndAnalytics\ReportExport;
 use App\Models\ReportingAndAnalytics\ReportPreset;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\User;
-use App\Modules\ReportingAndAnalytics\Application\Data\ReportResultData;
-use App\Modules\ReportingAndAnalytics\Application\Jobs\GenerateReportExport;
-use App\Modules\ReportingAndAnalytics\Application\Services\ReportSourceRegistry;
-use App\Modules\ReportingAndAnalytics\Domain\Enums\ReportExportStatus;
+use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;

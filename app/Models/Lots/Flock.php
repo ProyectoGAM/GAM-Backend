@@ -2,7 +2,7 @@
 
 namespace App\Models\Lots;
 
-use App\Modules\Lots\Domain\Enums\FlockStatus;
+use App\Enums\Lots\FlockStatus;
 use Carbon\CarbonImmutable;
 use Database\Factories\Lots\FlockFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;

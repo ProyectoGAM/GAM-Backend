@@ -2,10 +2,10 @@
 
 namespace Database\Factories\FarmStructure;
 
+use App\Enums\FarmStructure\MaintenanceStatus;
 use App\Models\FarmStructure\Maintenance;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\User;
-use App\Modules\FarmStructure\Domain\Enums\MaintenanceStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 

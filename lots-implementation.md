@@ -12,7 +12,7 @@ Dependencias: M03 Instalaciones, M04 Proveedores y productos, Identidad y acceso
 
 ## Implementación realizada
 
-- Módulo `app/Modules/Lots`, modelos en `app/Models/Lots` y Policies en `app/Policies/Lots`.
+- Actions, Queries, Requests y Resources de Lotes se agrupan bajo `app/Actions/Lots`, `app/Queries/Lots`, `app/Http/Requests/Lots` y `app/Http/Resources/Lots`; los modelos permanecen en `app/Models/Lots` y las Policies en `app/Policies/Lots`.
 - Siete tablas nuevas: `breeds`, `mortality_categories`, `flocks`, `flock_operations`, `flock_movements`, `mortality_records` y `egg_collections`. Incluyen FKs restrictivas, índices y restricciones de cantidades, estados y unicidad.
 - 28 operaciones HTTP bajo `/api/v1`, con contrato público en español, FormRequests, Actions, Queries y Resources.
 - ULID público para lotes, movimientos, mortalidades y recolecciones; IDs numéricos internos para relaciones. Razas, categorías y referencias de otros módulos conservan IDs numéricos.
