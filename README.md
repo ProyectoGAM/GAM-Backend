@@ -83,3 +83,15 @@ docker compose -f compose.dev.yaml exec api php artisan migrate:fresh --seed --f
 ```
 
 Cada módulo nuevo debe incluir su seeder de datos demo y registrarlo en `LocalDemoDataSeeder` (o en un seeder del módulo invocado por este), para que sus datos estén disponibles automáticamente cuando el ambiente sea local.
+
+## Autenticación multi-login
+
+Define ADMIN_PASSWORD e IDENTITY_PIN_PEPPER en el entorno antes de sembrar datos. La web usa cookies stateful y CSRF; nativo usa PAT Bearer. El acceso compartido se vincula con un código de 10 caracteres y conserva una credencial de dispositivo independiente.
+
+La guía operativa y las rutas están en identity-access-implementation.md. El contrato OpenAPI está en contracts/openapi/authentication.yaml.
+
+Pruebas backend con Docker Compose:
+
+    docker compose -f compose.dev.yaml exec -T api vendor/bin/phpunit --configuration phpunit.xml tests/Feature/IdentityAndAccess
+
+Si se revoca un dispositivo, hay que vincularlo otra vez; si se deshabilita o cambia el PIN, el empleado vuelve al selector aunque la tablet siga vinculada.

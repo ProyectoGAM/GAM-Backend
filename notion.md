@@ -1,5 +1,11 @@
 # Seguimiento de módulos en Notion
 
+## Entrega multi-login GAM
+
+Implementado en backend y frontend: login web con cookie stateful/CSRF, login nativo con PAT, vinculación de dispositivos compartidos, PIN Argon2id con pepper, sesiones revocables y auditoría transaccional. El contrato está en `contracts/openapi/authentication.yaml`.
+
+La validación automatizada se ejecutó con Docker Compose. Los builds firmados Android/iOS y la validación de navegador físico requieren sus plataformas/toolchains respectivas.
+
 Registro local del avance de los módulos, tanto completos como parcialmente implementados. Este archivo permite preparar la actualización del Kanban sin afirmar que Notion fue modificado.
 
 ## Estado general

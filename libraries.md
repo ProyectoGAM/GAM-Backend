@@ -72,7 +72,7 @@ El dashboard de Horizon también debe protegerse mediante autorización. Los job
 
 - **Paquete:** `laravel/sanctum`
 - **Repositorio:** [laravel/sanctum](https://github.com/laravel/sanctum)
-- **Uso en GAM:** autenticar la API mediante Sanctum Personal Access Tokens y el header `Authorization: Bearer <token>`.
+- **Uso en GAM:** autenticar Angular mediante cookies stateful y emitir tokens limitados para futuros clientes móviles.
 
 Ejemplo de una ruta privada:
 
@@ -85,7 +85,7 @@ Route::middleware('auth:sanctum')->get('/v1/me', function (Request $request) {
 });
 ```
 
-Las requests autenticadas deben enviar `Authorization: Bearer <token>`. GAM no usa actualmente autenticación stateful de Sanctum basada en sesión, cookies o CSRF; los permisos se validan después de autenticar al usuario.
+Para la web se utilizan cookies HttpOnly, Secure en producción, CSRF y orígenes CORS explícitos. Los clientes nativos reciben PAT Bearer con vencimiento. El header X-Shared-Device-Token y la cookie gam_shared_device son credenciales independientes del usuario; no se sustituyen por abilities de Sanctum.
 
 ### 3.4 Spatie Laravel Media Library
 

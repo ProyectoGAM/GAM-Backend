@@ -55,6 +55,11 @@ x-app-environment: &app-environment
   SESSION_DOMAIN: localhost
   SESSION_SECURE_COOKIE: "false"
   SESSION_SAME_SITE: lax
+  SESSION_LIFETIME: 129600
+  SESSION_EXPIRE_ON_CLOSE: "false"
+
+  IDENTITY_PIN_PEPPER: ${IDENTITY_PIN_PEPPER:-gam-local-only-change-me}
+  IDENTITY_PIN_PEPPER_VERSION: ${IDENTITY_PIN_PEPPER_VERSION:-v1}
 
   MAIL_MAILER: smtp
   MAIL_HOST: mailpit
