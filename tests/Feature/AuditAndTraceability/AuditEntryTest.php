@@ -21,12 +21,16 @@ final class AuditEntryTest extends TestCase
     // Flujo: registra un usuario y comprueba la auditoría con trazabilidad y datos protegidos.
     public function test_registration_records_an_append_only_audit_entry_with_trace_context(): void
     {
-        // Acción 1: registra el usuario mediante la API.
-        $response = $this->postJson('/api/v1/autenticacion/registro', [
+        // Acción 1: crea un administrador de prueba y registra el usuario mediante la API administrativa.
+        $admin = User::factory()->create();
+        $admin->givePermissionTo(Permission::findOrCreate('identity.users.manage', 'web'));
+        Sanctum::actingAs($admin, ['api:access']);
+        $response = $this->postJson('/api/v1/usuarios', [
             'nombre' => 'Audited User',
             'correo_electronico' => 'audited.user@example.test',
             'password' => 'correct-password',
             'password_confirmation' => 'correct-password',
+            'rol' => 'employee',
         ]);
 
         // Verificación: confirma respuesta, usuario creado y entrada de auditoría.
@@ -42,7 +46,7 @@ final class AuditEntryTest extends TestCase
         $this->assertSame('identity', $entry->log_name);
         $this->assertSame('api', $entry->source);
         $this->assertSame(User::class, $entry->subject_type);
-        $this->assertNull($entry->causer_id);
+        $this->assertSame($admin->getKey(), $entry->causer_id);
         $this->assertNotSame('', $entry->operation_id);
         $this->assertSame($response->headers->get('X-Trace-Id'), $entry->trace_id);
         $this->assertSame([

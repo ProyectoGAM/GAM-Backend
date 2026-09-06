@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Middleware\AssignTraceContext;
+use App\Http\Middleware\ResolveSharedDevice;
+use App\Http\Middleware\ValidateSharedSession;
+use App\Modules\IdentityAndAccess\Http\Exceptions\IdentityException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -25,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->append(AssignTraceContext::class);
+        $middleware->trimStrings(except: ['pin', 'pin_confirmation']);
         $middleware->statefulApi();
 
         $middleware->alias([
@@ -33,6 +37,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => PermissionMiddleware::class,
             'role' => RoleMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
+            'shared.device' => ResolveSharedDevice::class,
+            'shared.session' => ValidateSharedSession::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
@@ -97,6 +103,23 @@ return Application::configure(basePath: dirname(__DIR__))
             ], Response::HTTP_NOT_FOUND)->header('Content-Type', 'application/problem+json');
         });
 
+        $exceptions->render(function (IdentityException $exception, Request $request): ?Response {
+            if (! $request->is('api/*') && ! $request->expectsJson()) {
+                return null;
+            }
+
+            return response()->json([
+                'type' => 'https://httpstatuses.com/'.$exception->getStatusCode(),
+                'title' => 'Solicitud no procesada',
+                'status' => $exception->getStatusCode(),
+                'code' => $exception->errorCode,
+                'detail' => $exception->getMessage(),
+                'message' => $exception->getMessage(),
+            ], $exception->getStatusCode())
+                ->header('Content-Type', 'application/problem+json')
+                ->withHeaders($exception->getHeaders());
+        });
+
         $exceptions->render(function (HttpExceptionInterface $exception, Request $request): ?Response {
             if (! $request->is('api/*') && ! $request->expectsJson()) {
                 return null;
@@ -119,6 +142,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 'status' => $exception->getStatusCode(),
                 'detail' => $message,
                 'message' => $message,
-            ], $exception->getStatusCode())->header('Content-Type', 'application/problem+json');
+            ], $exception->getStatusCode())->header('Content-Type', 'application/problem+json')
+                ->withHeaders($exception->getHeaders());
         });
     })->create();

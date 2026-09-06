@@ -5,6 +5,7 @@ namespace Tests\Feature\IdentityAndAccess;
 use App\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Auth;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class AuthenticationTest extends TestCase
@@ -29,33 +30,11 @@ class AuthenticationTest extends TestCase
             ->assertJsonPath('message', 'El método HTTP no está permitido.');
     }
 
-    // Flujo: registra un usuario y verifica estado activo, token y persistencia.
-    public function test_register_creates_an_active_user_and_returns_a_sanctum_token(): void
+    // Flujo: confirma que el autorregistro público fue retirado.
+    public function test_public_registration_is_not_available(): void
     {
-        // Acción: registra al usuario con credenciales y dispositivo.
-        $response = $this->postJson('/api/v1/autenticacion/registro', [
-            'nombre' => 'New User',
-            'correo_electronico' => 'new.user@example.test',
-            'password' => 'correct-password',
-            'password_confirmation' => 'correct-password',
-            'device_name' => 'test-device',
-        ]);
-
-        // Verificación: confirma respuesta, identidad, token y registros creados.
-        $response
-            ->assertCreated()
-            ->assertJsonPath('user.correo_electronico', 'new.user@example.test')
-            ->assertJsonPath('user.roles', [])
-            ->assertJsonPath('token_type', 'Bearer');
-
-        $this->assertNotEmpty($response->json('access_token'));
-        $this->assertDatabaseHas('users', [
-            'email' => 'new.user@example.test',
-            'deleted_at' => null,
-        ]);
-        $this->assertDatabaseHas('personal_access_tokens', [
-            'name' => 'test-device',
-        ]);
+        $this->postJson('/api/v1/autenticacion/registro', [])->assertNotFound();
+        $this->assertDatabaseMissing('users', ['email' => 'new.user@example.test']);
     }
 
     // Flujo: crea credenciales válidas, inicia sesión y verifica el token emitido.
@@ -66,6 +45,7 @@ class AuthenticationTest extends TestCase
             'email' => 'login@example.test',
             'password' => 'correct-password',
         ]);
+        $user->givePermissionTo(Permission::findOrCreate('identity.personal.login', 'web'));
 
         // Acción: inicia sesión con las credenciales válidas.
         $response = $this->postJson('/api/v1/autenticacion/inicio-sesion', [
@@ -85,6 +65,33 @@ class AuthenticationTest extends TestCase
             'tokenable_id' => $user->id,
             'name' => 'browser',
         ]);
+    }
+
+    public function test_web_login_uses_a_cookie_session_without_emitting_a_token(): void
+    {
+        // Preparación: crea una cuenta con permiso de login web.
+        $user = User::factory()->create([
+            'email' => 'web-login@example.test',
+            'password' => 'correct-password',
+        ]);
+        $user->givePermissionTo(Permission::findOrCreate('identity.web.login', 'web'));
+
+        // Acción: inicia la sesión stateful desde el origen permitido.
+        $this->withHeader('Origin', 'http://localhost:4200')
+            ->postJson('/api/v1/autenticacion/web/inicio-sesion', [
+                'correo_electronico' => 'web-login@example.test',
+                'password' => 'correct-password',
+            ])
+            ->assertOk()
+            ->assertJsonPath('user.id', $user->id)
+            ->assertJsonMissingPath('access_token');
+
+        // Verificación: la cookie conserva la sesión al consultar el perfil.
+        $this->withHeader('Origin', 'http://localhost:4200')
+            ->getJson('/api/v1/mi-perfil')
+            ->assertOk()
+            ->assertJsonPath('data.id', $user->id)
+            ->assertJsonPath('session.kind', 'personal');
     }
 
     // Flujo: intenta iniciar sesión con contraseña incorrecta y verifica que no se emite token.
@@ -147,34 +154,24 @@ class AuthenticationTest extends TestCase
         $this->assertSame(now()->toDateTimeString(), $storedUser->deleted_at->toDateTimeString());
     }
 
-    // Flujo: envía un registro vacío y verifica todos los campos obligatorios.
-    public function test_register_rejects_an_invalid_payload(): void
+    // Flujo: confirma que un registro inválido tampoco reactiva el endpoint retirado.
+    public function test_public_registration_does_not_validate_or_create(): void
     {
-        // Acción: intenta registrar un usuario sin datos.
-        $response = $this->postJson('/api/v1/autenticacion/registro', []);
-
-        // Verificación: confirma validación y mensaje de correo requerido.
-        $response
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors(['nombre', 'correo_electronico', 'password'])
-            ->assertJsonPath('errors.correo_electronico.0', 'El campo correo electrónico es obligatorio.');
+        $this->postJson('/api/v1/autenticacion/registro', [])->assertNotFound();
     }
 
-    // Flujo: registra un correo existente y verifica el error de unicidad en español.
-    public function test_register_reports_duplicate_email_in_spanish(): void
+    // Flujo: confirma que el registro duplicado sigue cerrado.
+    public function test_public_registration_duplicate_email_is_not_available(): void
     {
         // Preparación: crea el usuario que ya posee el correo.
         User::factory()->create(['email' => 'existing@example.test']);
 
-        // Acción: intenta registrar otro usuario con el mismo correo.
         $this->postJson('/api/v1/autenticacion/registro', [
             'nombre' => 'Another User',
             'correo_electronico' => 'existing@example.test',
             'password' => 'correct-password',
             'password_confirmation' => 'correct-password',
-        ])
-            ->assertUnprocessable()
-            ->assertJsonPath('errors.correo_electronico.0', 'El valor de correo electrónico ya está en uso.');
+        ])->assertNotFound();
     }
 
     // Flujo: crea un usuario autenticado y verifica que puede leer su perfil completo.

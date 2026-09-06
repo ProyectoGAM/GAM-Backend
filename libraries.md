@@ -85,7 +85,7 @@ Route::middleware('auth:sanctum')->get('/v1/me', function (Request $request) {
 });
 ```
 
-Para la web se utilizarán cookies `HttpOnly`, `Secure`, CSRF y orígenes CORS explícitos. Los permisos se validarán después de autenticar al usuario.
+Para la web se utilizan cookies HttpOnly, Secure en producción, CSRF y orígenes CORS explícitos. Los clientes nativos reciben PAT Bearer con vencimiento. El header X-Shared-Device-Token y la cookie gam_shared_device son credenciales independientes del usuario; no se sustituyen por abilities de Sanctum.
 
 ### 3.4 Spatie Laravel Media Library
 

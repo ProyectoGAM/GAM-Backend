@@ -9,6 +9,8 @@ use App\Modules\Geography\Http\Controllers\DepartmentController;
 use App\Modules\Geography\Http\Controllers\LocalityController;
 use App\Modules\IdentityAndAccess\Http\Controllers\AdminController;
 use App\Modules\IdentityAndAccess\Http\Controllers\AuthController;
+use App\Modules\IdentityAndAccess\Http\Controllers\SharedDeviceController;
+use App\Modules\IdentityAndAccess\Http\Controllers\UserManagementController;
 use App\Modules\Inventory\Http\Controllers\InventoryMovementController;
 use App\Modules\Inventory\Http\Controllers\InventoryReadController;
 use App\Modules\Inventory\Http\Controllers\StockLocationController;
@@ -24,14 +26,79 @@ use App\Modules\SuppliersAndCatalogs\Http\Controllers\SupplierStatusController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.v1.')->group(function (): void {
-    Route::prefix('autenticacion')->name('auth.')->middleware('throttle:auth')->group(function (): void {
-        Route::post('/registro', [AuthController::class, 'register'])->name('register');
+    Route::prefix('autenticacion')->name('auth.')->middleware(['throttle:auth', 'throttle:auth-account'])->group(function (): void {
         Route::post('/inicio-sesion', [AuthController::class, 'login'])->name('login');
     });
 
+    Route::post('/dispositivos-compartidos/vinculacion', [SharedDeviceController::class, 'redeemCode'])
+        ->middleware('throttle:pairing')
+        ->name('shared-devices.pair');
+
+    Route::get('/dispositivo-compartido', [SharedDeviceController::class, 'status'])
+        ->middleware('shared.device:native')
+        ->name('shared-device.status');
+    Route::get('/dispositivo-compartido/usuarios', [SharedDeviceController::class, 'users'])
+        ->middleware(['shared.device:native', 'throttle:shared-device'])
+        ->name('shared-device.users');
+    Route::post('/dispositivo-compartido/inicio-sesion-pin', [SharedDeviceController::class, 'loginPin'])
+        ->middleware(['shared.device:native', 'throttle:pin'])
+        ->name('shared-device.pin-login');
+    Route::post('/dispositivo-compartido/finalizar-sesion', [SharedDeviceController::class, 'finalize'])
+        ->middleware('shared.device:native')
+        ->name('shared-device.finalize');
+    Route::delete('/dispositivo-compartido/vinculacion', [SharedDeviceController::class, 'revokeLocal'])
+        ->middleware('shared.device:native')
+        ->name('shared-device.local-revoke');
+
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('/mi-perfil', [AuthController::class, 'me'])->name('me');
+        Route::get('/mis-sesiones', [AuthController::class, 'sessions'])->name('auth.sessions');
+        Route::delete('/mis-sesiones/{session}', [AuthController::class, 'revokeSession'])->name('auth.sessions.revoke');
         Route::post('/autenticacion/cerrar-sesion', [AuthController::class, 'logout'])->name('auth.logout');
+        Route::post('/autenticacion/confirmar-password', [AuthController::class, 'confirmPassword'])->name('auth.confirm-password');
+
+        Route::get('/usuarios', [UserManagementController::class, 'index'])
+            ->middleware('permission:identity.users.manage')
+            ->name('users.index');
+        Route::post('/usuarios', [UserManagementController::class, 'store'])
+            ->middleware('permission:identity.users.manage')
+            ->name('users.store');
+        Route::patch('/usuarios/{user}/estado', [UserManagementController::class, 'status'])
+            ->middleware('permission:identity.users.manage')
+            ->withTrashed()
+            ->name('users.status');
+        Route::put('/usuarios/{user}/roles', [UserManagementController::class, 'roles'])
+            ->middleware('permission:identity.users.manage')
+            ->name('users.roles');
+        Route::put('/usuarios/{user}/pin', [UserManagementController::class, 'setPin'])
+            ->middleware('permission:identity.pins.manage')
+            ->name('users.pin.update');
+        Route::delete('/usuarios/{user}/pin', [UserManagementController::class, 'deletePin'])
+            ->middleware('permission:identity.pins.manage')
+            ->name('users.pin.destroy');
+        Route::post('/usuarios/{user}/pin/desbloqueo', [UserManagementController::class, 'unlockPin'])
+            ->middleware('permission:identity.pins.manage')
+            ->name('users.pin.unlock');
+        Route::put('/usuarios/{user}/password', [UserManagementController::class, 'password'])
+            ->middleware('permission:identity.users.manage')
+            ->name('users.password');
+        Route::delete('/usuarios/{user}/sesiones', [UserManagementController::class, 'sessions'])
+            ->middleware('permission:identity.sessions.manage')
+            ->name('users.sessions.revoke');
+
+        Route::post('/dispositivos-compartidos/codigos', [SharedDeviceController::class, 'generateCode'])
+            ->middleware('permission:identity.shared-devices.manage')
+            ->name('shared-devices.codes.store');
+        Route::get('/dispositivos-compartidos', [SharedDeviceController::class, 'managedIndex'])
+            ->middleware('permission:identity.shared-devices.manage')
+            ->name('shared-devices.index');
+        Route::delete('/dispositivos-compartidos/{sharedDevice}/vinculacion', [SharedDeviceController::class, 'revokeDevice'])
+            ->middleware('permission:identity.shared-devices.manage')
+            ->name('shared-devices.revoke');
+
+        Route::post('/dispositivo-compartido/actividad', [SharedDeviceController::class, 'activity'])
+            ->middleware(['shared.device:native', 'auth:sanctum', 'shared.session'])
+            ->name('shared-device.activity');
 
         Route::get('/auditoria/entradas', [AuditEntryController::class, 'index'])->name('audit.entries.index');
 

@@ -1,0 +1,689 @@
+openapi: 3.1.0
+info:
+  title: GAM Identity and Access API
+  version: 1.0.0
+  description: Contrato de autenticación personal, vinculación y sesiones de dispositivos compartidos.
+servers:
+  - url: /
+tags:
+  - name: Autenticación
+  - name: Administración
+  - name: Dispositivos compartidos
+paths:
+  /sanctum/csrf-cookie:
+    get:
+      tags: [Autenticación]
+      summary: Prepara la cookie CSRF para el navegador
+      responses:
+        '204':
+          description: Cookie CSRF establecida
+  /api/v1/autenticacion/inicio-sesion:
+    post:
+      tags: [Autenticación]
+      summary: Login personal nativo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordLogin' }
+      responses:
+        '200':
+          description: PAT personal y contexto de sesión
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PersonalLoginResponse' }
+        '401': { $ref: '#/components/responses/InvalidCredentials' }
+  /api/v1/autenticacion/web/inicio-sesion:
+    post:
+      tags: [Autenticación]
+      summary: Login personal web mediante cookie
+      security: [{ csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordLogin' }
+      responses:
+        '200':
+          description: Usuario y sesión; nunca devuelve PAT
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebLoginResponse' }
+        '401': { $ref: '#/components/responses/InvalidCredentials' }
+  /api/v1/mi-perfil:
+    get:
+      tags: [Autenticación]
+      summary: Recupera la identidad autenticada
+      security:
+        - bearerAuth: []
+        - sanctumCookie: []
+      responses:
+        '200':
+          description: Perfil y sesión actual
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MeResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /api/v1/autenticacion/cerrar-sesion:
+    post:
+      tags: [Autenticación]
+      summary: Cierra la sesión Bearer actual
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+  /api/v1/autenticacion/confirmar-password:
+    post:
+      tags: [Autenticación]
+      summary: Confirma nuevamente la contraseña de la sesión actual
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordConfirmation' }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '401': { $ref: '#/components/responses/InvalidCredentials' }
+  /api/v1/autenticacion/web/confirmar-password:
+    post:
+      tags: [Autenticación]
+      summary: Confirma nuevamente la contraseña de la sesión web
+      security: [{ sanctumCookie: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordConfirmation' }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '401': { $ref: '#/components/responses/InvalidCredentials' }
+  /api/v1/autenticacion/web/cerrar-sesion:
+    post:
+      tags: [Autenticación]
+      summary: Cierra la sesión web actual
+      security: [{ sanctumCookie: [], csrf: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+  /api/v1/mis-sesiones:
+    get:
+      tags: [Autenticación]
+      summary: Lista las sesiones personales vigentes del usuario actual
+      security:
+        - bearerAuth: []
+        - sanctumCookie: []
+      responses:
+        '200':
+          description: Sesiones sin secretos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Session' } }
+  /api/v1/mis-sesiones/{session}:
+    delete:
+      tags: [Autenticación]
+      summary: Revoca una sesión personal propia
+      security:
+        - bearerAuth: []
+        - sanctumCookie: []
+      parameters:
+        - name: session
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '404': { $ref: '#/components/responses/Unauthenticated' }
+  /api/v1/usuarios:
+    get:
+      tags: [Administración]
+      summary: Lista usuarios administrables incluyendo cuentas deshabilitadas
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Usuarios
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/User' } }
+                  meta: { type: object }
+    post:
+      tags: [Administración]
+      summary: Crea una cuenta sin autenticarla ni emitirle un token
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ManagedUserCreate' }
+      responses:
+        '201':
+          description: Usuario creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/User' } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/usuarios/{user}/estado:
+    patch:
+      tags: [Administración]
+      summary: Habilita o deshabilita una cuenta y revoca sus sesiones al deshabilitar
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: user, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [habilitado]
+              properties: { habilitado: { type: boolean } }
+      responses:
+        '200': { description: Usuario actualizado }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/usuarios/{user}/roles:
+    put:
+      tags: [Administración]
+      summary: Reemplaza los roles permitidos de una cuenta
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: user, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roles]
+              properties: { roles: { type: array, items: { type: string } } }
+      responses:
+        '200': { description: Roles actualizados }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/usuarios/{user}/password:
+    put:
+      tags: [Administración]
+      summary: Restablece una contraseña y revoca sesiones existentes
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: user, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordReset' }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/usuarios/{user}/pin:
+    put:
+      tags: [Administración]
+      summary: Configura un PIN operativo de cuatro dígitos
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: user, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PinUpdate' }
+      responses:
+        '200': { description: PIN actualizado; no devuelve el PIN }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Administración]
+      summary: Deshabilita un PIN y revoca sesiones compartidas
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: user, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+  /api/v1/usuarios/{user}/pin/desbloqueo:
+    post:
+      tags: [Administración]
+      summary: Desbloquea el presupuesto de intentos PIN de una cuenta
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: user, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+  /api/v1/usuarios/{user}/sesiones:
+    delete:
+      tags: [Administración]
+      summary: Revoca todas las sesiones y PAT de una cuenta
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: user, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+  /api/v1/dispositivos-compartidos:
+    get:
+      tags: [Dispositivos compartidos]
+      summary: Lista dispositivos compartidos sin secretos
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Dispositivos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { type: array, items: { $ref: '#/components/schemas/SharedDevice' } } }
+  /api/v1/dispositivos-compartidos/codigos:
+    post:
+      tags: [Dispositivos compartidos]
+      summary: Genera un código de vinculación de un solo uso
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre]
+              properties: { nombre: { type: string, maxLength: 100 } }
+      responses:
+        '201':
+          description: Código visible una sola vez
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string, pattern: '^[A-Z2-9]{10}$' }
+                  expires_at: { type: string, format: date-time }
+        '403': { $ref: '#/components/responses/Unauthenticated' }
+  /api/v1/dispositivos-compartidos/{sharedDevice}/vinculacion:
+    delete:
+      tags: [Dispositivos compartidos]
+      summary: Revoca un dispositivo y todas sus sesiones
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: sharedDevice, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+  /api/v1/dispositivos-compartidos/vinculacion:
+    post:
+      tags: [Dispositivos compartidos]
+      summary: Canjea un código para una instalación nativa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PairingRequest' }
+      responses:
+        '201':
+          description: Credencial de dispositivo entregada una sola vez
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NativePairingResponse' }
+        '422': { $ref: '#/components/responses/InvalidPairing' }
+  /api/v1/autenticacion/web/vinculacion:
+    post:
+      tags: [Dispositivos compartidos]
+      summary: Canjea un código y establece cookie HttpOnly de dispositivo
+      security: [{ csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PairingRequest' }
+      responses:
+        '201':
+          description: Dispositivo vinculado; el secreto no aparece en JSON
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebPairingResponse' }
+  /api/v1/dispositivo-compartido:
+    get:
+      tags: [Dispositivos compartidos]
+      summary: Consulta el estado de un dispositivo nativo
+      security: [{ sharedDeviceHeader: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/DeviceStatus' }
+        '401': { $ref: '#/components/responses/DeviceUnauthorized' }
+  /api/v1/dispositivo-compartido/usuarios:
+    get:
+      tags: [Dispositivos compartidos]
+      summary: Lista empleados elegibles para PIN
+      security: [{ sharedDeviceHeader: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/SharedUsers' }
+  /api/v1/dispositivo-compartido/inicio-sesion-pin:
+    post:
+      tags: [Dispositivos compartidos]
+      summary: Inicia sesión operativa nativa con PIN
+      security: [{ sharedDeviceHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PinLogin' }
+      responses:
+        '200': { $ref: '#/components/responses/SharedLogin' }
+        '401': { $ref: '#/components/responses/InvalidPin' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/dispositivo-compartido/web:
+    get:
+      tags: [Dispositivos compartidos]
+      summary: Consulta el estado del dispositivo web
+      security: [{ sharedDeviceCookie: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/DeviceStatus' }
+  /api/v1/dispositivo-compartido/web/usuarios:
+    get:
+      tags: [Dispositivos compartidos]
+      summary: Lista empleados elegibles para PIN en web
+      security: [{ sharedDeviceCookie: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/SharedUsers' }
+  /api/v1/dispositivo-compartido/web/inicio-sesion-pin:
+    post:
+      tags: [Dispositivos compartidos]
+      summary: Inicia sesión operativa web con PIN
+      security:
+        - sharedDeviceCookie: []
+          csrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PinLogin' }
+      responses:
+        '200':
+          description: Usuario y sesión cookie; nunca devuelve PAT
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebLoginResponse' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/dispositivo-compartido/actividad:
+    post:
+      tags: [Dispositivos compartidos]
+      summary: Registra actividad explícita de la sesión nativa
+      security:
+        - sharedDeviceHeader: []
+          bearerAuth: []
+          sharedSessionHeader: []
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+  /api/v1/dispositivo-compartido/web/actividad:
+    post:
+      tags: [Dispositivos compartidos]
+      summary: Registra actividad explícita de la sesión web
+      security:
+        - sharedDeviceCookie: []
+          sanctumCookie: []
+          csrf: []
+          sharedSessionHeader: []
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+  /api/v1/dispositivo-compartido/finalizar-sesion:
+    post:
+      tags: [Dispositivos compartidos]
+      summary: Finaliza una sesión nativa concreta
+      security:
+        - sharedDeviceHeader: []
+          bearerAuth: []
+          sharedSessionHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FinalizeSessionRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+  /api/v1/dispositivo-compartido/web/finalizar-sesion:
+    post:
+      tags: [Dispositivos compartidos]
+      summary: Finaliza una sesión web concreta
+      security:
+        - sharedDeviceCookie: []
+          sanctumCookie: []
+          csrf: []
+          sharedSessionHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FinalizeSessionRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+  /api/v1/dispositivo-compartido/vinculacion:
+    delete:
+      tags: [Dispositivos compartidos]
+      summary: Revoca localmente el dispositivo con credenciales administrativas
+      security: [{ sharedDeviceHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdministrativePassword' }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+  /api/v1/dispositivo-compartido/web/vinculacion:
+    delete:
+      tags: [Dispositivos compartidos]
+      summary: Revoca localmente el dispositivo web con credenciales administrativas
+      security:
+        - sharedDeviceCookie: []
+          csrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdministrativePassword' }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer }
+    sanctumCookie: { type: apiKey, in: cookie, name: gam_session }
+    sharedDeviceHeader: { type: apiKey, in: header, name: X-Shared-Device-Token }
+    sharedDeviceCookie: { type: apiKey, in: cookie, name: gam_shared_device }
+    sharedSessionHeader: { type: apiKey, in: header, name: X-GAM-Session }
+    csrf: { type: apiKey, in: header, name: X-XSRF-TOKEN }
+  schemas:
+    PasswordLogin:
+      type: object
+      required: [correo_electronico, password]
+      properties:
+        correo_electronico: { type: string, format: email }
+        password: { type: string, format: password }
+    PasswordConfirmation:
+      type: object
+      required: [password]
+      properties:
+        password: { type: string, format: password }
+    PasswordReset:
+      type: object
+      required: [password, password_confirmation]
+      properties:
+        password: { type: string, format: password, minLength: 8 }
+        password_confirmation: { type: string, format: password }
+    ManagedUserCreate:
+      type: object
+      required: [nombre, correo_electronico, password, password_confirmation, rol]
+      properties:
+        nombre: { type: string }
+        correo_electronico: { type: string, format: email }
+        password: { type: string, format: password, minLength: 8 }
+        password_confirmation: { type: string, format: password }
+        rol: { type: string, enum: [admin, employee, delivery] }
+    PinUpdate:
+      type: object
+      required: [pin, pin_confirmation]
+      properties:
+        pin: { type: string, pattern: '^[0-9]{4}$', example: '0007' }
+        pin_confirmation: { type: string, pattern: '^[0-9]{4}$' }
+    PairingRequest:
+      type: object
+      required: [codigo]
+      properties:
+        codigo: { type: string, pattern: '^[A-Z2-9]{10}$', example: ABC2345XYZ }
+        device_name: { type: string, maxLength: 100 }
+    PinLogin:
+      type: object
+      required: [usuario_id, pin]
+      properties:
+        usuario_id: { type: integer, format: int64 }
+        pin: { type: string, pattern: '^[0-9]{4}$', example: '0007' }
+    FinalizeSessionRequest:
+      type: object
+      required: [sesion_id]
+      properties:
+        sesion_id: { type: string, format: uuid }
+    AdministrativePassword:
+      type: object
+      required: [correo_electronico, password]
+      properties:
+        correo_electronico: { type: string, format: email }
+        password: { type: string, format: password }
+    User:
+      type: object
+      required: [id, nombre, correo_electronico, roles, permissions]
+      properties:
+        id: { type: integer }
+        nombre: { type: string }
+        correo_electronico: { type: string, format: email }
+        roles: { type: array, items: { type: string } }
+        permissions: { type: array, items: { type: string } }
+    Session:
+      type: object
+      required: [id, kind, auth_method, expires_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [personal, shared_user] }
+        auth_method: { type: string, enum: [password, pin] }
+        expires_at: { type: string, format: date-time, nullable: true }
+        idle_timeout_seconds: { type: integer, nullable: true }
+    PersonalLoginResponse:
+      type: object
+      required: [access_token, token_type, user, session]
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, example: Bearer }
+        expires_at: { type: string, format: date-time, nullable: true }
+        abilities: { type: array, items: { type: string } }
+        user: { $ref: '#/components/schemas/User' }
+        session: { $ref: '#/components/schemas/Session' }
+    WebLoginResponse:
+      type: object
+      required: [user, session]
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        session: { $ref: '#/components/schemas/Session' }
+    MeResponse:
+      type: object
+      required: [data, session]
+      properties:
+        data: { $ref: '#/components/schemas/User' }
+        session: { $ref: '#/components/schemas/Session' }
+    SharedDevice:
+      type: object
+      required: [id, nombre, expires_at]
+      properties:
+        id: { type: string, format: uuid }
+        nombre: { type: string }
+        expires_at: { type: string, format: date-time, nullable: true }
+        revoked_at: { type: string, format: date-time, nullable: true }
+        active_session_id: { type: string, format: uuid, nullable: true }
+    SharedUser:
+      type: object
+      required: [id, nombre]
+      properties:
+        id: { type: integer }
+        nombre: { type: string }
+    NativePairingResponse:
+      type: object
+      required: [device, device_token]
+      properties:
+        device: { $ref: '#/components/schemas/SharedDevice' }
+        device_token: { type: string }
+    WebPairingResponse:
+      type: object
+      required: [device]
+      properties:
+        device: { $ref: '#/components/schemas/SharedDevice' }
+    Problem:
+      type: object
+      required: [status, message]
+      properties:
+        status: { type: integer }
+        code: { type: string }
+        message: { type: string }
+        detail: { type: string }
+    Message:
+      type: object
+      properties:
+        message: { type: string }
+  responses:
+    InvalidCredentials:
+      description: Credenciales inválidas
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthenticated:
+      description: No autenticado
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ValidationError:
+      description: Datos inválidos
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    InvalidPairing:
+      description: Código inválido, vencido o ya consumido
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    DeviceUnauthorized:
+      description: Dispositivo inválido, vencido o revocado
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    InvalidPin:
+      description: PIN inválido
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    RateLimited:
+      description: Límite de intentos alcanzado
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Message:
+      description: Operación confirmada
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Message' }
+    DeviceStatus:
+      description: Estado del dispositivo
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/SharedDevice' }
+    SharedUsers:
+      description: Empleados elegibles
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { type: array, items: { $ref: '#/components/schemas/SharedUser' } }
+              meta: { type: object }
+    SharedLogin:
+      description: Sesión operativa nativa
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/PersonalLoginResponse'

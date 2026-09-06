@@ -14,9 +14,9 @@ final class RegisterUserAction
     /**
      * @param  array{name: string, email: string, password: string}  $data
      */
-    public function execute(array $data): User
+    public function execute(array $data, ?User $actor = null): User
     {
-        return DB::transaction(function () use ($data): User {
+        return DB::transaction(function () use ($data, $actor): User {
             $user = User::query()->create([
                 'name' => $data['name'],
                 'email' => $data['email'],
@@ -25,7 +25,7 @@ final class RegisterUserAction
 
             $this->auditRecorder->record(AuditEntryData::forSubject(
                 subject: $user,
-                actor: null,
+                actor: $actor,
                 logName: 'identity',
                 event: 'user_registered',
                 description: 'Usuario registrado',

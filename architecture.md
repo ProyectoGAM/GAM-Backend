@@ -201,6 +201,15 @@ Retiros y retornos operan con cantidades normalizadas. Nunca se crea un reparto 
 - Secrets permanecen fuera del repositorio.
 - Logs no incluyen secretos; permisos, stock, repartos, ventas y cobros quedan auditados.
 
+### Identidad multi-login implementada
+
+- La web personal usa sesión stateful de Sanctum en cookie HttpOnly con CSRF y un límite absoluto de 90 días.
+- El cliente nativo personal usa PAT Bearer individual con vencimiento de 90 días.
+- Un dispositivo compartido tiene su propio secreto, vencimiento de 365 días y sesiones de empleado de 8 horas con 120 segundos de inactividad.
+- El dispositivo y el empleado son contextos distintos: las operaciones compartidas validan credencial de dispositivo, sesión, usuario y generación.
+- El PIN de cuatro dígitos se almacena como hash Argon2id con pepper de despliegue; los administradores no pueden usar PIN operativo.
+- El contrato detallado, TTL, límites y recuperación están en identity-access-implementation.md y contracts/openapi/authentication.yaml.
+
 ## 11. Contrato API
 
 - La base es `/api/v1` y OpenAPI es la fuente del contrato.

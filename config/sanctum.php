@@ -50,7 +50,8 @@ return [
     |
     */
 
-    'expiration' => (int) env('SANCTUM_TOKEN_EXPIRATION', 10080),
+    // Cada token nuevo recibe su propia fecha en IssueAccessTokenAction.
+    'expiration' => null,
 
     /*
     |--------------------------------------------------------------------------
