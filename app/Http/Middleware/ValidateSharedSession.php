@@ -2,10 +2,10 @@
 
 namespace App\Http\Middleware;
 
+use App\Exceptions\IdentityAndAccess\IdentityException;
 use App\Models\IdentityAndAccess\AuthSession;
 use App\Models\SharedDevice;
-use App\Modules\IdentityAndAccess\Application\Services\AuthSessionService;
-use App\Modules\IdentityAndAccess\Http\Exceptions\IdentityException;
+use App\Services\IdentityAndAccess\AuthSessionService;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;

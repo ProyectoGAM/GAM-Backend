@@ -2,7 +2,7 @@
 
 namespace Tests\Unit\FarmStructure;
 
-use App\Modules\FarmStructure\Domain\ValueObjects\BirdCapacity;
+use App\ValueObjects\FarmStructure\BirdCapacity;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 

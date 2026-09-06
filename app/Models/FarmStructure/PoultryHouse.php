@@ -2,7 +2,7 @@
 
 namespace App\Models\FarmStructure;
 
-use App\Modules\FarmStructure\Domain\Enums\PoultryHouseStatus;
+use App\Enums\FarmStructure\PoultryHouseStatus;
 use Database\Factories\FarmStructure\PoultryHouseFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Casts\Attribute;

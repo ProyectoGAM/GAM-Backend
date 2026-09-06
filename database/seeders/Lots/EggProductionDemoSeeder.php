@@ -2,6 +2,11 @@
 
 namespace Database\Seeders\Lots;
 
+use App\Actions\Inventory\EnsureEggStockAccountAction;
+use App\Actions\Inventory\RecordManualEggStockAction;
+use App\Actions\Lots\CorrectEggCollectionAction;
+use App\Actions\Lots\CreateFlockAction;
+use App\Actions\Lots\RecordEggCollectionAction;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\EggStockCommand;
@@ -11,11 +16,6 @@ use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
 use App\Models\SuppliersAndCatalogs\Supplier;
 use App\Models\User;
-use App\Modules\Inventory\Application\PublicApi\Actions\EnsureEggStockAccountAction;
-use App\Modules\Inventory\Application\PublicApi\Actions\RecordManualEggStockAction;
-use App\Modules\Lots\Application\Actions\CorrectEggCollectionAction;
-use App\Modules\Lots\Application\Actions\CreateFlockAction;
-use App\Modules\Lots\Application\Actions\RecordEggCollectionAction;
 use Closure;
 use Illuminate\Database\Seeder;
 

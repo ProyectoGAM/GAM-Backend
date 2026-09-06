@@ -2,9 +2,9 @@
 
 namespace App\Models\Inventory;
 
+use App\Enums\Inventory\InventoryMovementType;
 use App\Models\SuppliersAndCatalogs\Supplier;
 use App\Models\User;
-use App\Modules\Inventory\Domain\Enums\InventoryMovementType;
 use Carbon\Carbon;
 use Database\Factories\Inventory\InventoryMovementFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;

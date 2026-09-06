@@ -1,0 +1,21 @@
+<?php
+
+namespace App\Http\Controllers\AuditAndTraceability;
+
+use App\Http\Requests\AuditAndTraceability\ListAuditEntriesRequest;
+use App\Http\Resources\AuditAndTraceability\AuditEntryResource;
+use App\Queries\AuditAndTraceability\ListAuditEntriesQuery;
+use App\Support\PublicInputMapper;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+
+final class AuditEntryController
+{
+    public function index(
+        ListAuditEntriesRequest $request,
+        ListAuditEntriesQuery $listAuditEntries,
+    ): AnonymousResourceCollection {
+        return AuditEntryResource::collection(
+            $listAuditEntries->execute(PublicInputMapper::toInternal($request->validated())),
+        );
+    }
+}

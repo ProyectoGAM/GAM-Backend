@@ -2,9 +2,9 @@
 
 namespace Tests\Feature\SuppliersAndCatalogs;
 
+use App\Actions\SuppliersAndCatalogs\CreateMedicineAction;
 use App\Models\SuppliersAndCatalogs\Supplier;
 use App\Models\User;
-use App\Modules\SuppliersAndCatalogs\Application\Actions\CreateMedicineAction;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\Concurrency;
 use Illuminate\Support\Facades\DB;

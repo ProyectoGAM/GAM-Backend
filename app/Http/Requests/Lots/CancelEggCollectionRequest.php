@@ -1,0 +1,20 @@
+<?php
+
+namespace App\Http\Requests\Lots;
+
+final class CancelEggCollectionRequest extends LotsRequest
+{
+    public function authorize(): bool
+    {
+        return $this->user()?->can('update', $this->route('recoleccion')) ?? false;
+    }
+
+    /** @return array<string, mixed> */
+    public function rules(): array
+    {
+        return [
+            ...$this->commandRules(),
+            'motivo_correccion' => ['required', 'string', 'max:500'],
+        ];
+    }
+}

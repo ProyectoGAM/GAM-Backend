@@ -2,8 +2,8 @@
 
 namespace Database\Factories\Inventory;
 
+use App\Enums\Inventory\StockLocationStatus;
 use App\Models\Inventory\StockLocation;
-use App\Modules\Inventory\Domain\Enums\StockLocationStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

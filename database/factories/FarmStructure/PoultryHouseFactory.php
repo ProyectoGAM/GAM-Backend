@@ -2,9 +2,9 @@
 
 namespace Database\Factories\FarmStructure;
 
+use App\Enums\FarmStructure\PoultryHouseStatus;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
-use App\Modules\FarmStructure\Domain\Enums\PoultryHouseStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

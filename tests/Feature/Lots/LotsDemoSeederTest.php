@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\Lots;
 
+use App\Actions\Lots\UpdateFlockAction;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\User;
-use App\Modules\Lots\Application\Actions\UpdateFlockAction;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\LocalDemoDataSeeder;
 use Database\Seeders\Lots\LotsDemoSeeder;

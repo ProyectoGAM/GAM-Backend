@@ -1,8 +1,8 @@
 <?php
 
-use App\Modules\IdentityAndAccess\Http\Controllers\AdminController;
-use App\Modules\IdentityAndAccess\Http\Controllers\AuthController;
-use App\Modules\IdentityAndAccess\Http\Controllers\SharedDeviceController;
+use App\Http\Controllers\IdentityAndAccess\AdminController;
+use App\Http\Controllers\IdentityAndAccess\AuthController;
+use App\Http\Controllers\IdentityAndAccess\SharedDeviceController;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Route;
 

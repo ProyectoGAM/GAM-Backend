@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\Lots;
 
+use App\Enums\Lots\FlockStatus;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockMovement;
 use App\Models\Lots\MortalityCategory;
-use App\Modules\Lots\Domain\Enums\FlockStatus;
 use Illuminate\Support\Str;
 
 final class MortalityEndpointTest extends LotsTestCase

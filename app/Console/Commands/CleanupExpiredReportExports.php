@@ -2,10 +2,10 @@
 
 namespace App\Console\Commands;
 
+use App\DTO\AuditAndTraceability\AuditEntryData;
+use App\Enums\ReportingAndAnalytics\ReportExportStatus;
+use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\ReportingAndAnalytics\ReportExport;
-use App\Modules\AuditAndTraceability\Application\Contracts\AuditRecorder;
-use App\Modules\AuditAndTraceability\Application\Data\AuditEntryData;
-use App\Modules\ReportingAndAnalytics\Domain\Enums\ReportExportStatus;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;

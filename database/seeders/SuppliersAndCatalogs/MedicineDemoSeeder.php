@@ -2,9 +2,9 @@
 
 namespace Database\Seeders\SuppliersAndCatalogs;
 
+use App\Actions\SuppliersAndCatalogs\CreateMedicineAction;
 use App\Models\SuppliersAndCatalogs\Supplier;
 use App\Models\User;
-use App\Modules\SuppliersAndCatalogs\Application\Actions\CreateMedicineAction;
 use Illuminate\Database\Seeder;
 
 final class MedicineDemoSeeder extends Seeder

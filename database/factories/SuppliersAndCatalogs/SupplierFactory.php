@@ -2,9 +2,9 @@
 
 namespace Database\Factories\SuppliersAndCatalogs;
 
+use App\Enums\SuppliersAndCatalogs\SupplierStatus;
 use App\Models\Geography\Locality;
 use App\Models\SuppliersAndCatalogs\Supplier;
-use App\Modules\SuppliersAndCatalogs\Domain\Enums\SupplierStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

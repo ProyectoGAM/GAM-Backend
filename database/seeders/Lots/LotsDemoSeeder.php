@@ -2,20 +2,20 @@
 
 namespace Database\Seeders\Lots;
 
+use App\Actions\FarmStructure\CreatePoultryHouseAction;
+use App\Actions\Lots\ChangeFlockStatusAction;
+use App\Actions\Lots\CreateFlockAction;
+use App\Actions\Lots\FinalizeFlockAction;
+use App\Actions\Lots\RecordMortalityAction;
+use App\Actions\Lots\RedistributeFlockAction;
+use App\Actions\Lots\SaveBreedAction;
+use App\Actions\Lots\SaveMortalityCategoryAction;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
 use App\Models\SuppliersAndCatalogs\Supplier;
 use App\Models\User;
-use App\Modules\FarmStructure\Application\Actions\CreatePoultryHouseAction;
-use App\Modules\Lots\Application\Actions\ChangeFlockStatusAction;
-use App\Modules\Lots\Application\Actions\CreateFlockAction;
-use App\Modules\Lots\Application\Actions\FinalizeFlockAction;
-use App\Modules\Lots\Application\Actions\RecordMortalityAction;
-use App\Modules\Lots\Application\Actions\RedistributeFlockAction;
-use App\Modules\Lots\Application\Actions\SaveBreedAction;
-use App\Modules\Lots\Application\Actions\SaveMortalityCategoryAction;
 use Closure;
 use Illuminate\Database\Seeder;
 

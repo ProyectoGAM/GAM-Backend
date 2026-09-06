@@ -2,11 +2,11 @@
 
 namespace Tests\Unit\ReportingAndAnalytics;
 
-use App\Modules\Inventory\Application\PublicApi\Reporting\InventoryMovementsReportSource;
-use App\Modules\Inventory\Application\PublicApi\Reporting\InventoryStockBalancesReportSource;
-use App\Modules\ReportingAndAnalytics\Application\Services\ReportQueryNormalizer;
-use App\Modules\ReportingAndAnalytics\Application\Services\ReportSourceRegistry;
-use App\Modules\ReportingAndAnalytics\Domain\Exceptions\ReportQueryValidationException;
+use App\Exceptions\ReportingAndAnalytics\ReportQueryValidationException;
+use App\Services\Inventory\InventoryMovementsReportSource;
+use App\Services\Inventory\InventoryStockBalancesReportSource;
+use App\Services\ReportingAndAnalytics\ReportQueryNormalizer;
+use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
 use PHPUnit\Framework\TestCase;
 
 final class ReportQueryNormalizerTest extends TestCase

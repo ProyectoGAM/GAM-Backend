@@ -2,7 +2,7 @@
 
 namespace Tests\Unit\Shared;
 
-use App\Shared\Money;
+use App\ValueObjects\Money;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;

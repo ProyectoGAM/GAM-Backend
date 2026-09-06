@@ -2,8 +2,8 @@
 
 namespace App\Models\Inventory;
 
+use App\Enums\Inventory\StockLocationStatus;
 use App\Models\FarmStructure\ProductionUnit;
-use App\Modules\Inventory\Domain\Enums\StockLocationStatus;
 use Database\Factories\Inventory\StockLocationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Casts\Attribute;

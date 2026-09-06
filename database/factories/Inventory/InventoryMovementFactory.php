@@ -2,9 +2,9 @@
 
 namespace Database\Factories\Inventory;
 
+use App\Enums\Inventory\InventoryMovementType;
 use App\Models\Inventory\InventoryMovement;
 use App\Models\User;
-use App\Modules\Inventory\Domain\Enums\InventoryMovementType;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 

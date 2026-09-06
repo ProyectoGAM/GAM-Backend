@@ -8,7 +8,7 @@ La unidad atómica es siempre un huevo genérico (`Huevo`), expresado como enter
 
 Es una ampliación coordinada de `Lots` e `Inventory`. Sus dependencias son Lotes y cría, Inventario y stock, unidades productivas, identidad y acceso, y auditoría y trazabilidad. No se agregan paquetes.
 
-La estructura sigue [module-structure-example.md](module-structure-example.md) y el nivel de detalle operativo de [lots-implementation.md](lots-implementation.md). El contrato público se encuentra en [contracts/openapi/lots.yaml](contracts/openapi/lots.yaml).
+La estructura sigue la arquitectura Laravel convencional descrita en `architecture.md` y el nivel de detalle operativo de [lots-implementation.md](lots-implementation.md). El contrato público se encuentra en [contracts/openapi/lots.yaml](contracts/openapi/lots.yaml).
 
 ### Límites de la entrega
 
@@ -20,7 +20,7 @@ La estructura sigue [module-structure-example.md](module-structure-example.md) y
 
 ## Implementación realizada
 
-- Las recolecciones viven en `app/Modules/Lots`, con Actions, Queries, FormRequests y Resources. El movimiento físico se solicita a la frontera pública de Inventario y nunca se escriben saldos desde Lotes.
+- Las recolecciones viven en `app/Actions/Lots`, `app/Queries/Lots`, `app/Http/Requests/Lots` y `app/Http/Resources/Lots`. El movimiento físico se solicita a la frontera pública de Inventario y nunca se escriben saldos desde Lotes.
 - La migración de `egg_collections` conserva lote, galpón y UP fotografiados, cantidad, fecha efectiva, observaciones, estado, versión y actor.
 - Inventario agrega `egg_stock_accounts`, `egg_stock_transactions`, `egg_stock_transaction_revisions` y `egg_stock_commands`.
 - `EnsureEggStockAccountAction` materializa de forma idempotente una cuenta técnica por UP, con el producto protegido `Huevo` (`system_key=generic_egg`, `kind=egg`, `base_unit=unit`) y una ubicación técnica exclusiva.

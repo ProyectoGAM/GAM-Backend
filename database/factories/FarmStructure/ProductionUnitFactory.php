@@ -2,9 +2,9 @@
 
 namespace Database\Factories\FarmStructure;
 
+use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Geography\Locality;
-use App\Modules\FarmStructure\Domain\Enums\ProductionUnitStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

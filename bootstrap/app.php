@@ -1,9 +1,9 @@
 <?php
 
+use App\Exceptions\IdentityAndAccess\IdentityException;
 use App\Http\Middleware\AssignTraceContext;
 use App\Http\Middleware\ResolveSharedDevice;
 use App\Http\Middleware\ValidateSharedSession;
-use App\Modules\IdentityAndAccess\Http\Exceptions\IdentityException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;

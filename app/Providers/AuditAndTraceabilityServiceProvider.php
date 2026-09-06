@@ -2,8 +2,8 @@
 
 namespace App\Providers;
 
-use App\Modules\AuditAndTraceability\Application\Contracts\AuditRecorder;
-use App\Modules\AuditAndTraceability\Infrastructure\Activitylog\SpatieAuditRecorder;
+use App\Infrastructure\AuditAndTraceability\SpatieAuditRecorder;
+use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use Illuminate\Support\ServiceProvider;
 
 final class AuditAndTraceabilityServiceProvider extends ServiceProvider

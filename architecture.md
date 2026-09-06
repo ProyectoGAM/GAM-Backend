@@ -1,258 +1,677 @@
-# GAM — Arquitectura objetivo
+# GAM — Backend Architecture
 
 ## 1. Objetivo
 
-GAM es un sistema de gestión avícola para administrar instalaciones, lotes, producción, manejo, sanidad, inventario de huevos, repartos, ventas y cuentas corrientes.
+GAM utiliza un backend Laravel orientado a casos de uso, siguiendo una estructura simple y cercana a las convenciones del framework.
 
-La arquitectura objetivo es un **monolito modular con API contract-first**:
+La arquitectura evita capas innecesarias, módulos DDD artificiales y abstracciones sin una necesidad concreta.
 
-- Laravel como fuente única de reglas de negocio y Angular organizado por funcionalidades;
-- PostgreSQL como base transaccional y Redis para colas, cache y rate limiting;
-- una API versionada compartida por web y futuros clientes móviles;
-- módulos internos con responsabilidades y datos claramente delimitados.
+Flujo principal:
 
-## 2. Principios
-
-1. **Dominio primero:** el código representa acciones del negocio, no solamente CRUDs.
-2. **Monolito modular:** una sola aplicación desplegable con límites internos fuertes.
-3. **Backend autoritativo:** permisos, stock, importes y estados se validan en Laravel.
-4. **Consistencia transaccional:** stock, reparto, ventas y saldos cambian de forma atómica.
-5. **Contrato único:** OpenAPI define la comunicación entre backend, web y móvil.
-6. **Seguridad por defecto:** toda ruta es privada salvo declaración explícita.
-7. **Efectos secundarios asíncronos:** alertas y reportes se ejecutan después del commit.
-8. **Modelado proporcional:** Value Objects y DTOs se usan sólo cuando protegen reglas o límites reales.
-
-## 3. Contexto del sistema
-
-```mermaid
-flowchart TB
-    WEB["Web Angular"] --> API["API Laravel"]
-    MOBILE["Móvil futuro"] --> API
-    API --> POSTGRES[(PostgreSQL)]
-    API --> REDIS[(Redis)]
-    WORKERS["Workers y scheduler"] --> POSTGRES
-    WORKERS --> REDIS
-    API -. eventos .-> WORKERS
+```text
+Request
+   ↓
+FormRequest
+   ↓
+Controller
+   ↓
+Action
+   ↓
+Model / Service
+   ↓
+Resource
+   ↓
+Response
 ```
 
-## 4. Organización del repositorio
+Principios:
 
-La estructura objetivo separa `apps/api`, `apps/web`, `contracts/openapi`, `infrastructure`, `docs/adr` y `docs/runbooks`. La aplicación móvil se agrega más adelante en `apps/mobile`.
+* Laravel concentra las reglas de negocio.
+* Controllers delgados.
+* Casos de uso en Actions.
+* Eloquent directo cuando sea suficiente.
+* Services, Interfaces y DTOs sólo cuando resuelvan una necesidad concreta.
+* PostgreSQL como fuente de verdad.
+* Redis para colas, cache y rate limiting.
+* Operaciones críticas dentro de transacciones.
+* Locks cuando exista concurrencia real.
+* Auditoría para operaciones sensibles.
 
-## 5. Módulos de dominio
+## 2. Stack
 
-| Código | Módulo | Responsabilidad y entidades principales |
-|---|---|---|
-| M01 | Identidad y acceso | Usuarios, roles, permisos y sesiones |
-| M02 | Auditoría y trazabilidad | Historial append-only, actor, operación, traza y cambios explícitos |
-| M03 | Ubicaciones y estructura de la granja | `Department`, `Locality`, `ProductionUnit`, `PoultryHouse`, estados y capacidad máxima |
-| M04 | Proveedores y catálogos | `Supplier`, `Product`, catálogos de artículos inventariables y `Medicine` como ficha sin stock |
-| M05 | Lotes y cría | `Flock`, `Breed`, `FlockMovement`, `MortalityCategory`, `MortalityRecord`, `EggCollection` y operaciones idempotentes |
-| M06 | Ejecución del manejo | `Manejo`, `Peso`, `DetallePeso` y tareas realizadas; mortalidad pertenece a M05 |
-| M07 | Planes de manejo | `PlanDeManejo`, versiones, asignaciones y ocurrencias |
-| M08 | Inventario | `StockLocation`, `StockBalance`, movimientos, stock disponible y stock mínimo |
-| M09 | Clientes y ventas | `Cliente`, `Venta`, `CuentaCorriente`, `Movimiento` y cobros |
-| M10 | Reportes y monitoreo | KPIs, alertas, proyecciones y exportaciones |
+* Laravel 13
+* PHP 8.x
+* PostgreSQL
+* Redis
+* Laravel Sanctum
+* Laravel Horizon
+* Docker Compose
+* OpenAPI
 
-### Módulo 2 de la hoja de ruta: auditoría y trazabilidad
-
-La auditoría es una capacidad transversal implementada en `AuditAndTraceability`. Su objetivo es reconstruir el historial de operaciones importantes sin depender del estado actual de una entidad.
-
-- Las Actions propietarias de Inventario, Clientes/Cuenta Corriente y Repartos deben registrar movimientos, modificaciones, cobros, retiros, retornos y conciliaciones.
-- También deben auditar fabricación de ración, aplicación de medicamentos, mantenimientos y cualquier transición con impacto operativo o financiero.
-- Cada entrada conserva `event`, `operation_id`, `trace_id`, actor, sujeto, módulo, UP cuando aplique, resultado y cambios explícitos.
-- El registro se escribe dentro de la misma transacción que la operación. Si falla la auditoría, falla la operación completa.
-- Las correcciones se representan con contramovimientos o eventos compensatorios; las entradas de auditoría no se editan ni eliminan.
-- Las consultas se exponen de forma paginada y sólo para usuarios con `audit.view`. Los snapshots se construyen mediante listas permitidas y nunca incluyen contraseñas, tokens ni secretos.
-
-### Reglas entre módulos
-
-- `SuppliersAndCatalogs` es dueño del catálogo `Medicine` (nombre, descripción y proveedor). Su implementación aporta un avance parcial al área funcional `06 — Manejo productivo y sanidad` de la hoja de ruta; no implementa aplicaciones de medicamentos ni planes de manejo.
-- Cada módulo es el único autorizado a modificar sus datos.
-- Un módulo no importa controllers, requests ni modelos Eloquent internos de otro.
-- La colaboración ocurre mediante Actions públicas, Queries, proyecciones o eventos.
-- M04 es dueño de la identidad, clasificación y unidad base de los artículos; M08 es dueño del ledger append-only, el saldo disponible y sus invariantes transaccionales.
-- El saldo sólo cambia mediante un movimiento de inventario auditado; una corrección crea un movimiento compensatorio y nunca edita el histórico.
-- M05 es dueño de cantidad viva, ubicación actual y estado del lote. Las redistribuciones no crean genealogía; un traslado total conserva identidad y la finalización registra un egreso sin borrar el lote.
-- Instalaciones expone `LockPoultryHousesQuery` y consume `PoultryHouseOccupancyProvider`, implementado por Lotes. La capacidad física nunca se usa como contador mutable de aves.
-- La recolección y su compensación de stock usan `RecordEggProductionAction`, frontera pública de Inventario, dentro de la transacción de Lotes. El fallo de cualquier auditoría revierte ambos módulos.
-- Un contrato público compuesto puede usar un DTO o read model inmutable, nunca un modelo Eloquent interno.
-- M10 puede leer proyecciones de todos los módulos, pero no modificar sus datos.
-- `Shared` contiene solamente elementos estables como `Money`, `Clock`, IDs y errores base; nunca negocio residual.
-
-## 6. Arquitectura Laravel
-
-```mermaid
-flowchart LR
-    HTTP["Request"] --> REQUEST["FormRequest"]
-    REQUEST --> CONTROLLER["Controller"]
-    CONTROLLER --> INPUT["validated() o DTO opcional"]
-    INPUT --> USECASE["Action o Query"]
-    USECASE --> DOMAIN["Reglas, estados y Value Objects"]
-    USECASE --> INFRA["Modelos y adaptadores"]
-    USECASE --> RESOURCE["API Resource"]
-```
+## 3. Estructura
 
 ```text
 app/
-├── Modules/
-│   └── NombreModulo/
-│       ├── Application/     # Actions, Queries y DTOs opcionales
-│       ├── Domain/          # Reglas, estados, eventos y Value Objects
-│       ├── Http/            # Controllers, Requests y Resources
-│       └── Infrastructure/  # Redis y servicios externos cuando apliquen
-├── Models/NombreModulo/     # Modelos Eloquent propiedad del módulo
-├── Casts/NombreModulo/      # Custom casts de Eloquent
-├── Policies/NombreModulo/   # Autorización Laravel
-├── Providers/               # Registro de módulos e integraciones
-└── Shared/                  # Money, Clock, IDs y errores base
-
-tests/
-├── Feature/NombreModulo/    # Contrato HTTP e integración
-└── Unit/NombreModulo/       # Actions, reglas y Value Objects
+├── Actions/
+│   ├── Auth/
+│   ├── Installations/
+│   ├── Flocks/
+│   ├── Management/
+│   ├── Health/
+│   ├── Inventory/
+│   ├── Deliveries/
+│   ├── Sales/
+│   └── Reports/
+│
+├── DTO/
+├── Enums/
+├── Exceptions/
+│
+├── Http/
+│   ├── Controllers/
+│   ├── Middleware/
+│   ├── Requests/
+│   └── Resources/
+│
+├── Interfaces/
+├── Models/
+├── Policies/
+├── Providers/
+├── Services/
+└── Infrastructure/
 ```
 
-### Reglas de implementación
+No todas las carpetas deben existir desde el inicio.
 
-- El controller sólo adapta HTTP y entrega a la Action datos validados, nunca el Request completo.
-- El `FormRequest` valida estructura y tipos.
-- La Action representa un único caso de uso y controla el límite transaccional.
-- Las invariantes viven en Domain/Application.
-- Los modelos Eloquent representan persistencia, identidad, relaciones y casts.
-- Los modelos viven en `app/Models/<Modulo>` siguiendo Laravel, nunca en `Http/Models`.
-- Los tests viven en `tests/Feature/<Modulo>` y `tests/Unit/<Modulo>`, nunca dentro de `app`.
-- Los Resources definen la salida JSON; no validan entradas ni reemplazan Value Objects o DTOs.
-- Los eventos se publican únicamente después del commit.
-- No se crea un repositorio genérico para cada tabla.
+Se crean cuando aparece una necesidad concreta.
 
-### Value Objects
+`Auth`, `Inventory`, `Sales`, `Flocks`, etc. son agrupaciones funcionales dentro de las carpetas normales de Laravel, no módulos independientes.
 
-- Un Value Object es inmutable, no tiene ID y encapsula reglas asociadas a un valor.
-- `Money` se usa para precios, totales, débitos, créditos y saldos.
-- `CantidadHuevos` puede normalizar unidades, docenas o bandejas a huevos individuales.
-- `Peso` y `Dosis` se usan sólo si existen conversiones o reglas que lo justifiquen.
-- Eloquent persiste el dato y puede exponer el Value Object mediante custom casts o accessors.
-- No se convierte cada string o entero en Value Object sin una invariante concreta.
+No se utiliza:
 
-`Money` pertenece a `Shared`; `CantidadHuevos`, `Peso` y `Dosis` permanecen en el módulo dueño de ese concepto.
+```text
+app/Modules/
+```
 
-### DTOs
+ni estructuras del tipo:
 
-- Los DTOs no se crean por defecto ni duplican cada `FormRequest` o modelo.
-- Una entrada simple puede pasar como array validado o parámetros tipados a la Action.
-- Se usan para comandos críticos con datos anidados, múltiples líneas o varios orígenes, y para contratos públicos entre módulos.
-- Deben ser inmutables, específicos del caso de uso y no espejos genéricos de tablas.
-- Aplican a casos como `RegistrarVentaData` o `CerrarRepartoData`, no a entradas simples como crear una UP.
+```text
+Application/
+Domain/
+Infrastructure/
+Http/
+```
 
-### Histórico de mantenimientos de instalaciones
+por cada área funcional.
 
-`FarmStructure` es propietario de `Maintenance`, asociado a un galpón. Se registran trabajos realizados con fecha, descripción, costo exacto mediante `Shared/Money` y responsable con snapshot de su nombre. No se programa trabajo futuro ni se comparte el modelo con mantenimiento vehicular.
+## 4. Controllers
 
-- El historial incluye registros realizados y cancelados; el último mantenimiento operacional excluye los cancelados.
-- Las correcciones y cancelaciones exigen motivo, versión vigente, bloqueo transaccional y auditoría síncrona con valores anteriores y nuevos.
-- Las entradas de auditoría son append-only. La cancelación conserva el registro; no hay endpoint de borrado ni reactivación.
-- El alta usa `Idempotency-Key` por actor para evitar duplicados. Los permisos reutilizados son `poultry-houses.view` y `poultry-houses.manage`, globales para toda la empresa.
-- Registrar mantenimiento no altera capacidad, ocupación ni estado del galpón. Se admite documentar trabajos pasados sobre instalaciones actualmente inactivas.
+Los Controllers adaptan HTTP al caso de uso.
 
-El contrato HTTP se encuentra en `contracts/openapi/maintenance.yaml` y las decisiones y validaciones de la implementación en `maintenance-implementation.md`.
+Responsabilidades:
 
-## 7. Arquitectura Angular
+* recibir un `FormRequest`;
+* obtener datos validados;
+* ejecutar una Action;
+* devolver un Resource o respuesta HTTP.
 
-Angular se divide en `core` para autenticación/API, `shared` para UI reutilizable y `features` alineados con los módulos de GAM.
+No deben contener reglas importantes de negocio.
 
-- Las rutas de features se cargan de forma lazy.
-- Angular consume un cliente tipado generado desde OpenAPI.
-- Guards y botones ocultos mejoran la UX, pero no reemplazan la autorización del backend.
-- Signals/RxJS manejan estado local; la UI no calcula saldos ni decide transiciones críticas.
-- La PWA puede cachear assets públicos, nunca respuestas privadas sin una política explícita.
+```php
+public function store(
+    StoreFlockRequest $request,
+    CreateFlockAction $action,
+): FlockResource {
+    $flock = $action($request->validated());
 
-## 8. Flujos e invariantes críticas
+    return new FlockResource($flock);
+}
+```
 
-### Recolección
+Un Controller no debe calcular stock, decidir transiciones de estado, calcular saldos ni manipular varias entidades directamente para ejecutar lógica de negocio.
 
-Registrar una recolección y aumentar el inventario debe ocurrir en la misma transacción. `CantidadHuevos` normaliza la cantidad antes de modificar stock. Un reintento con la misma clave idempotente no puede duplicar huevos.
+## 5. Actions
 
-### Reparto
+Las Actions representan casos de uso concretos.
 
-1. Crear el reparto en borrador.
-2. Bloquear el saldo relevante con `lockForUpdate`.
-3. Recalcular y validar la disponibilidad.
-4. Iniciar, conciliar y cerrar mediante transiciones explícitas.
+```text
+CreatePoultryHouseAction
+UpdatePoultryHouseAction
+CreateFlockAction
+MoveFlockAction
+RecordMortalityAction
+RecordEggCollectionAction
+AdjustStockAction
+CreateDeliveryAction
+CloseDeliveryAction
+ConfirmSaleAction
+RegisterPaymentAction
+```
 
-Retiros y retornos operan con cantidades normalizadas. Nunca se crea un reparto operativo con stock insuficiente o negativo.
+Una Action puede:
 
-### Venta y cuenta corriente
+* consultar Models;
+* validar invariantes;
+* usar Services;
+* iniciar transacciones;
+* utilizar `lockForUpdate()`;
+* registrar auditoría;
+* despachar Events;
+* despachar Jobs.
 
-- Una venta no supera lo disponible en su reparto.
-- Precios, totales, débitos, créditos y saldos se calculan en servidor usando `Money`.
-- Confirmar una venta genera un débito en cuenta corriente.
-- Registrar un cobro mayor que cero genera un crédito separado; el estado de pago deriva del saldo.
-- Una anulación crea contramovimientos y conserva el registro original.
+```php
+final class RecordEggCollectionAction
+{
+    public function __invoke(array $data): EggCollection
+    {
+        return DB::transaction(function () use ($data) {
+            // validar estado actual
+            // registrar recolección
+            // registrar movimiento de stock
+            // auditar operación
 
-### Plan y manejo
+            return $collection;
+        });
+    }
+}
+```
 
-- Un plan se asigna explícitamente a cada lote.
-- Una versión publicada del plan es inmutable.
-- M07 programa la actividad y M06 registra su ejecución sin modificar históricos.
+No se crea una Action automáticamente para cada operación CRUD trivial.
 
-## 9. Datos y concurrencia
+## 6. Models
 
-- Dinero se almacena como `DECIMAL` y se transporta como string o `Money`, nunca como `float`; sus casts conservan la precisión.
-- El inventario de huevos usa una unidad canónica; la unidad ingresada se conserva si es necesaria para auditoría.
-- Pesos y dosis usan `DECIMAL` y una unidad explícita; se normalizan sólo cuando el negocio lo requiere.
-- Inventario y cuenta corriente se basan en movimientos inmutables.
-- FKs, índices, uniques y checks protegen invariantes; el stock usa transacciones y locks.
-- Mutaciones críticas aceptan `Idempotency-Key`.
-- Los registros confirmados se corrigen mediante compensación, no eliminación.
-- Redis no reemplaza a PostgreSQL como fuente de verdad.
+Los Models son modelos Eloquent normales.
 
-## 10. Seguridad
+Contienen:
 
-- API: autenticación stateless con Sanctum Personal Access Tokens, expirables, revocables y con capacidades limitadas.
-- Clientes web y móviles envían `Authorization: Bearer <token>`; GAM no usa autenticación de Sanctum basada en sesión o cookies.
-- Autorización server-side mediante roles, permisos y Policies. Actualmente los permisos funcionales se aplican a todas las unidades productivas porque la empresa opera como una única organización pequeña.
-- Usuarios o permisos inactivos nunca conceden acceso.
-- CORS está limitado a la API y usa orígenes explícitos en `config/cors.php`, sin credenciales/cookies. Login y recuperación tienen rate limiting.
-- Secrets permanecen fuera del repositorio.
-- Logs no incluyen secretos; permisos, stock, repartos, ventas y cobros quedan auditados.
+* relaciones;
+* casts;
+* scopes;
+* atributos;
+* comportamiento pequeño directamente relacionado con la entidad.
 
-### Identidad multi-login implementada
+```text
+Models/
+├── User.php
+├── ProductionUnit.php
+├── PoultryHouse.php
+├── Flock.php
+├── MortalityRecord.php
+├── EggCollection.php
+├── Product.php
+├── StockMovement.php
+├── Customer.php
+├── Sale.php
+└── Payment.php
+```
 
-- La web personal usa sesión stateful de Sanctum en cookie HttpOnly con CSRF y un límite absoluto de 90 días.
-- El cliente nativo personal usa PAT Bearer individual con vencimiento de 90 días.
-- Un dispositivo compartido tiene su propio secreto, vencimiento de 365 días y sesiones de empleado de 8 horas con 120 segundos de inactividad.
-- El dispositivo y el empleado son contextos distintos: las operaciones compartidas validan credencial de dispositivo, sesión, usuario y generación.
-- El PIN de cuatro dígitos se almacena como hash Argon2id con pepper de despliegue; los administradores no pueden usar PIN operativo.
-- El contrato detallado, TTL, límites y recuperación están en identity-access-implementation.md y contracts/openapi/authentication.yaml.
+Los Models no deben convertirse en objetos gigantes que implementen casos de uso completos.
 
-## 11. Contrato API
+No se crean repositories genéricos únicamente para envolver Eloquent.
 
-- La base es `/api/v1` y OpenAPI es la fuente del contrato.
-- Errores homogéneos mediante `application/problem+json`.
-- Los Resources convierten modelos y Value Objects a tipos definidos por OpenAPI.
-- Listados paginados y con límites máximos.
-- Comandos expresan acciones: `POST /repartos/{id}/iniciar`.
-- Estados principales: `401`, `403`, `404`, `409`, `422` y `429`; los cambios incompatibles requieren nueva versión o deprecación.
+## 7. Form Requests
 
-## 12. Colas, operación y calidad
+Los `FormRequest` validan la entrada HTTP.
 
-- Outbox transaccional para publicar eventos confiablemente.
-- Colas separadas: `critical`, `default` y `reporting`.
-- Jobs idempotentes con timeout, reintentos, backoff y dead-letter.
-- Logs estructurados con `trace_id`, usuario, módulo, UP y resultado.
-- Health checks separados para liveness y readiness.
-- Métricas de HTTP, PostgreSQL, colas, stock, conciliaciones y tareas vencidas.
-- Backups cifrados con pruebas periódicas de restauración.
+Responsabilidades:
 
-## 13. Despliegue
+* campos requeridos;
+* tipos;
+* formatos;
+* rangos;
+* reglas estructurales.
 
-### Procesos desplegables
+Las invariantes dependientes del estado actual deben validarse dentro de la Action.
 
-- `gateway`: TLS, routing y rate limiting.
-- `web`: API stateless.
-- `worker`: colas asíncronas.
-- `scheduler`: tareas periódicas.
+Ejemplos:
 
-La infraestructura objetivo separa servidor HTTP, workers y scheduler. La imagen debe construirse en múltiples etapas, instalar dependencias desde lockfiles y ejecutarse sin privilegios.
+* stock disponible;
+* capacidad de una instalación;
+* estado de un lote;
+* estado de una venta;
+* saldo actual;
+* disponibilidad dentro de un reparto.
 
-Los despliegues usan migraciones expand/contract, health checks y artefactos inmutables. PostgreSQL es el motor transaccional objetivo; cambiar de motor requiere un ADR y una justificación concreta.
+## 8. Resources
+
+Los API Resources definen la representación pública de los datos.
+
+Se encargan de:
+
+* seleccionar campos expuestos;
+* transformar valores;
+* serializar relaciones;
+* mantener estable el contrato HTTP.
+
+Los Resources no contienen reglas de negocio.
+
+## 9. DTOs
+
+Los DTOs son opcionales.
+
+Se utilizan cuando simplifican inputs complejos.
+
+```text
+CreateSaleData
+CloseDeliveryData
+RegisterFlockMovementData
+```
+
+Son apropiados cuando existen estructuras anidadas, múltiples líneas, muchos parámetros o reutilización fuera de HTTP.
+
+Para inputs simples puede utilizarse directamente:
+
+```php
+$request->validated()
+```
+
+No se crea un DTO para duplicar cada `FormRequest`.
+
+## 10. Services
+
+Los Services contienen lógica reutilizable que no constituye por sí sola un caso de uso.
+
+```text
+StockService
+PricingService
+ReportService
+FileStorageService
+```
+
+Una lógica utilizada por una única Action puede permanecer en esa Action.
+
+No se crean Services únicamente para mover código de lugar.
+
+## 11. Interfaces e Infrastructure
+
+Las Interfaces se utilizan cuando existe una dependencia que realmente conviene desacoplar.
+
+Ejemplos:
+
+* proveedor meteorológico;
+* almacenamiento externo;
+* servicio externo;
+* integración con terceros.
+
+```text
+Interfaces/
+└── WeatherProvider.php
+
+Infrastructure/
+└── Weather/
+    └── OpenWeatherProvider.php
+```
+
+No se crea una Interface delante de cada Model, Action o Service.
+
+Eloquent puede utilizarse directamente desde las Actions.
+
+## 12. Transacciones
+
+Toda operación que deba ejecutarse atómicamente utiliza:
+
+```php
+DB::transaction(...)
+```
+
+Ejemplos:
+
+* mover un lote;
+* registrar mortalidad;
+* registrar producción y aumentar inventario;
+* ajustar stock;
+* cerrar un reparto;
+* confirmar una venta;
+* registrar un cobro;
+* anular una operación mediante contramovimientos.
+
+Si una parte falla, toda la operación se revierte.
+
+## 13. Concurrencia
+
+Cuando una operación depende de datos que pueden modificarse concurrentemente se utilizan locks.
+
+```php
+$stock = StockBalance::query()
+    ->where(...)
+    ->lockForUpdate()
+    ->firstOrFail();
+```
+
+Aplica especialmente a:
+
+* stock;
+* repartos;
+* saldos;
+* cantidades vivas;
+* operaciones financieras;
+* transiciones críticas.
+
+La validación importante se realiza después de adquirir el lock y dentro de la misma transacción.
+
+## 14. Inventario
+
+El inventario se basa en movimientos.
+
+```text
+PRODUCTION
+ENTRY
+EXIT
+SALE
+RETURN
+ADJUSTMENT
+```
+
+El stock no se modifica silenciosamente sin registrar el movimiento correspondiente.
+
+Las correcciones relevantes utilizan movimientos compensatorios cuando corresponde.
+
+PostgreSQL mantiene el estado autoritativo.
+
+Redis nunca sustituye la base transaccional.
+
+## 15. Dinero y cantidades
+
+Los valores que requieran precisión no utilizan `float`.
+
+Ejemplos:
+
+* precios;
+* totales;
+* saldos;
+* pesos;
+* dosis;
+* cantidades decimales.
+
+Se utiliza `DECIMAL` en PostgreSQL.
+
+Cuando una regla lo justifique pueden utilizarse casts, Enums o Value Objects específicos.
+
+No se crea un Value Object para cada string, entero o decimal.
+
+## 16. Auditoría
+
+Las operaciones sensibles deben dejar trazabilidad.
+
+Debe poder reconstruirse:
+
+* actor;
+* acción;
+* entidad;
+* fecha;
+* resultado;
+* valores relevantes anteriores;
+* valores relevantes nuevos;
+* `trace_id` cuando corresponda.
+
+Ejemplos:
+
+* cambios de permisos;
+* movimientos de stock;
+* movimientos de lotes;
+* mortalidad;
+* ventas;
+* cobros;
+* anulaciones;
+* cierres de reparto;
+* ajustes manuales.
+
+La auditoría nunca guarda contraseñas, tokens ni secretos.
+
+La auditoría es transversal y no necesita convertirse en un módulo arquitectónico independiente.
+
+## 17. Autenticación
+
+La API utiliza Laravel Sanctum con Personal Access Tokens.
+
+```http
+Authorization: Bearer <token>
+```
+
+Los tokens deben poder:
+
+* expirar;
+* revocarse;
+* asociarse al usuario;
+* limitarse mediante abilities cuando sea necesario.
+
+## 18. Autorización
+
+La autorización se ejecuta siempre en Laravel.
+
+Se utilizan:
+
+* Policies;
+* middleware;
+* roles;
+* permisos;
+* abilities cuando corresponda.
+
+Las Actions sensibles no deben asumir autorización únicamente por restricciones existentes del lado del consumidor de la API.
+
+## 19. API
+
+La API se versiona bajo:
+
+```text
+/api/v1
+```
+
+Para recursos normales se utiliza REST.
+
+```text
+GET    /api/v1/flocks
+POST   /api/v1/flocks
+GET    /api/v1/flocks/{flock}
+PATCH  /api/v1/flocks/{flock}
+```
+
+Para transiciones de negocio se utilizan endpoints explícitos.
+
+```text
+POST /api/v1/flocks/{flock}/move
+POST /api/v1/deliveries/{delivery}/start
+POST /api/v1/deliveries/{delivery}/close
+POST /api/v1/sales/{sale}/cancel
+```
+
+OpenAPI documenta el contrato público de la API.
+
+OpenAPI no determina la estructura interna de Laravel.
+
+## 20. Events
+
+Los Events se utilizan cuando aportan desacoplamiento real.
+
+```text
+EggCollectionRecorded
+SaleConfirmed
+PaymentRegistered
+DeliveryClosed
+```
+
+No se utilizan Events únicamente para evitar una llamada directa.
+
+Cuando dependen de información confirmada deben ejecutarse después del commit.
+
+## 21. Jobs y Horizon
+
+Los Jobs se utilizan para trabajo asíncrono.
+
+Ejemplos:
+
+* reportes;
+* exportaciones;
+* notificaciones;
+* procesamiento pesado;
+* integraciones externas.
+
+Cuando puedan reintentarse deben ser idempotentes.
+
+Deben definir cuando corresponda:
+
+* timeout;
+* retries;
+* backoff;
+* manejo de fallos.
+
+Horizon administra las queues basadas en Redis.
+
+Al mover un Job se debe drenar o reintentar la cola antes de desplegar el nuevo namespace. Los Jobs ya serializados conservan su FQCN; esta reorganización no agrega alias permanentes ni cambia el payload de los Jobs.
+
+## 22. PostgreSQL
+
+PostgreSQL es la fuente de verdad.
+
+Las migraciones utilizan correctamente:
+
+* foreign keys;
+* unique constraints;
+* indexes;
+* check constraints;
+* tipos de datos adecuados.
+
+Las invariantes que puedan protegerse también a nivel de base deben protegerse.
+
+## 23. Redis
+
+Redis se utiliza para:
+
+* queues;
+* Horizon;
+* cache;
+* rate limiting;
+* locks distribuidos cuando sean necesarios.
+
+Redis no almacena el estado transaccional autoritativo del negocio.
+
+## 24. Idempotencia
+
+Las operaciones críticas que puedan reintentarse deben soportar idempotencia cuando sea necesario.
+
+Ejemplos:
+
+* registrar producción;
+* cerrar un reparto;
+* confirmar una venta;
+* registrar un cobro.
+
+Una misma operación reintentada no debe producir movimientos duplicados.
+
+## 25. Errores
+
+Los errores utilizan una estructura homogénea.
+
+Estados principales:
+
+```text
+400 Bad Request
+401 Unauthorized
+403 Forbidden
+404 Not Found
+409 Conflict
+422 Unprocessable Entity
+429 Too Many Requests
+500 Internal Server Error
+```
+
+Los conflictos de estado utilizan preferentemente `409`.
+
+Las validaciones de entrada utilizan `422`.
+
+## 26. Logging y trazabilidad
+
+Los logs deben ser estructurados.
+
+Cuando corresponda incluyen:
+
+```text
+trace_id
+user_id
+action
+entity_type
+entity_id
+result
+```
+
+Nunca incluyen secretos ni tokens completos.
+
+Middleware como `AssignTraceContext` puede generar y propagar el contexto de trazabilidad de cada request.
+
+## 27. Tests
+
+```text
+tests/
+├── Feature/
+│   ├── Auth/
+│   ├── Installations/
+│   ├── Flocks/
+│   ├── Inventory/
+│   ├── Deliveries/
+│   └── Sales/
+│
+└── Unit/
+    ├── Actions/
+    ├── Services/
+    └── ...
+```
+
+Los Feature Tests cubren principalmente:
+
+* endpoints;
+* autenticación;
+* autorización;
+* validación;
+* persistencia;
+* transacciones;
+* respuestas JSON;
+* invariantes críticas.
+
+Los Unit Tests se utilizan cuando existe lógica suficientemente aislable.
+
+No se mockea Eloquent por sistema.
+
+## 28. Reglas de arquitectura
+
+1. No utilizar `app/Modules`.
+2. No implementar DDD por cada área funcional.
+3. No crear capas sólo por simetría.
+4. Mantener Controllers delgados.
+5. Colocar casos de uso importantes en Actions.
+6. Utilizar Eloquent directamente cuando sea suficiente.
+7. Crear Services sólo cuando exista una responsabilidad reutilizable.
+8. Crear Interfaces sólo cuando exista una dependencia que convenga desacoplar.
+9. Crear DTOs sólo cuando simplifiquen inputs complejos.
+10. Utilizar Form Requests para validación HTTP.
+11. Utilizar Resources para respuestas públicas.
+12. Mantener las reglas críticas en el backend.
+13. Utilizar transacciones para operaciones atómicas.
+14. Utilizar locks cuando exista concurrencia real.
+15. Mantener históricos para movimientos importantes.
+16. Auditar operaciones sensibles.
+17. No guardar secretos en logs.
+18. Evitar Helpers y Services genéricos sin responsabilidad clara.
+19. Preferir nombres relacionados con el negocio.
+20. No crear repositories genéricos para envolver Eloquent.
+21. No anticipar microservicios sin una necesidad real.
+22. No agregar una abstracción sin poder explicar qué problema concreto resuelve.
+
+## 29. Regla general
+
+La arquitectura preferida para GAM es:
+
+```text
+FormRequest
+     ↓
+Controller
+     ↓
+Action
+     ↓
+Eloquent / Service
+     ↓
+Resource
+```
+
+La solución más simple que preserve correctamente las reglas de negocio es la opción preferida.
+
+Si una nueva capa no mejora de forma tangible mantenibilidad, seguridad, testabilidad o integración, no se agrega.

@@ -2,13 +2,13 @@
 
 namespace Tests\Feature\Lots;
 
+use App\Enums\Lots\FlockStatus;
+use App\Interfaces\AuditAndTraceability\AuditRecorder;
+use App\Interfaces\FarmStructure\PoultryHouseOccupancyProvider;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\Lots\Breed;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockMovement;
-use App\Modules\AuditAndTraceability\Application\Contracts\AuditRecorder;
-use App\Modules\FarmStructure\Application\PublicApi\Contracts\PoultryHouseOccupancyProvider;
-use App\Modules\Lots\Domain\Enums\FlockStatus;
 use Illuminate\Support\Str;
 use RuntimeException;
 

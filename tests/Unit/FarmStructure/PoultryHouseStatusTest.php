@@ -2,7 +2,7 @@
 
 namespace Tests\Unit\FarmStructure;
 
-use App\Modules\FarmStructure\Domain\Enums\PoultryHouseStatus;
+use App\Enums\FarmStructure\PoultryHouseStatus;
 use PHPUnit\Framework\TestCase;
 
 final class PoultryHouseStatusTest extends TestCase

@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\AuditAndTraceability;
 
+use App\Actions\IdentityAndAccess\RegisterUserAction;
+use App\DTO\AuditAndTraceability\AuditEntryData;
+use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\User;
-use App\Modules\AuditAndTraceability\Application\Contracts\AuditRecorder;
-use App\Modules\AuditAndTraceability\Application\Data\AuditEntryData;
-use App\Modules\IdentityAndAccess\Application\Actions\RegisterUserAction;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;

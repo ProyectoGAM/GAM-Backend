@@ -2,10 +2,10 @@
 
 namespace Database\Factories\ReportingAndAnalytics;
 
+use App\Enums\ReportingAndAnalytics\ReportExportFormat;
+use App\Enums\ReportingAndAnalytics\ReportExportStatus;
 use App\Models\ReportingAndAnalytics\ReportExport;
 use App\Models\User;
-use App\Modules\ReportingAndAnalytics\Domain\Enums\ReportExportFormat;
-use App\Modules\ReportingAndAnalytics\Domain\Enums\ReportExportStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
