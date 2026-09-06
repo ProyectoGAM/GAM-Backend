@@ -36,7 +36,7 @@ La redistribución conserva el total de aves de los lotes involucrados. La canti
 
 El destinatario existente conserva su proveedor/origen, fecha de ingreso, edad administrativa y cantidad inicial. Puede recibir aves de otro proveedor si la raza coincide; la procedencia de las aves incorporadas queda identificada por el lote origen y las fotografías del movimiento. No se calcula una edad ponderada.
 
-Un destinatario nuevo hereda raza, procedencia y fecha de ingreso; `establecido_en` indica el instante de creación por redistribución. No tiene `parent_id` ni genealogía. El movimiento, no una jerarquía de lotes, expresa su origen.
+Un destinatario nuevo hereda raza, procedencia y fecha de ingreso; `established_at` indica el instante de creación por redistribución. No tiene `parent_id` ni genealogía. El movimiento, no una jerarquía de lotes, expresa su origen.
 
 La redistribución total no borra el lote ni lo fusiona con uno existente. Se indica solamente otro galpón, sin código ni ULID de destino. Para añadir aves a un lote existente se utiliza la redistribución parcial; no existe un PATCH libre de cantidad ni un ingreso externo adicional sobre un lote ya creado.
 
@@ -46,25 +46,25 @@ Las cantidades iniciales son fotografías por lote, no un contador global de ave
 
 Estados estables: `active`, `quarantined` y `finished`. Un lote abierto puede alternar entre activo y cuarentena. Ambos pueden finalizar; no se reabre un finalizado. La cuarentena impide redistribuir, pero admite mortalidad y recolección mientras haya aves para esta última.
 
-`edad_dias` son días calendario desde `fecha_ingreso` en `LOTS_TIMEZONE`; `semana_actual = floor(edad_dias / 7) + 1`. El día del ingreso es semana 1 y el séptimo día transcurrido es semana 2. No representa una edad biológica anterior al ingreso: no se modela fecha de nacimiento ni edad inicial adicional.
+`age_days` son días calendario desde `entry_date` en `LOTS_TIMEZONE`; `current_week = floor(age_days / 7) + 1`. El día del ingreso es semana 1 y el séptimo día transcurrido es semana 2. No representa una edad biológica anterior al ingreso: no se modela fecha de nacimiento ni edad inicial adicional.
 
 Los instantes usan PostgreSQL `timestamp with time zone` y se escriben con desplazamiento explícito. Esto evita que la zona del contenedor desplace movimientos, recolecciones y comparaciones. También se ajustó la serialización temporal de `InventoryMovement`, porque el ingreso de huevos debe conservar el mismo instante. No se reinterpretan ni migran registros previos de Inventario.
 
-`ocurrido_en` admite ISO 8601 con segundos y zona, por ejemplo `2026-08-30T12:00:00-03:00`; si se omite se usa el reloj del servidor. No admite fechas futuras, anteriores a la existencia de la agrupación ni anteriores al último movimiento de aves del lote. Es una política conservadora: la sincronización offline no reordena silenciosamente hechos incompatibles.
+`occurred_at` admite ISO 8601 con segundos y zona, por ejemplo `2026-08-30T12:00:00-03:00`; si se omite se usa el reloj del servidor. No admite fechas futuras, anteriores a la existencia de la agrupación ni anteriores al último movimiento de aves del lote. Es una política conservadora: la sincronización offline no reordena silenciosamente hechos incompatibles.
 
-Los movimientos contienen actor, operación, origen/destino, cantidad, fecha, motivo y fotografías `antes`/`despues`, indexadas por ULID. Se consultan por fecha de ocurrencia descendente y luego ID descendente; un lote finalizado sigue siendo consultable. Las fotografías guardan el estado de aquel momento, no recalculan la edad histórica.
+Los movimientos contienen actor, operación, origen/destino, cantidad, fecha, motivo y fotografías `before`/`after`, indexadas por ULID. Se consultan por fecha de ocurrencia descendente y luego ID descendente; un lote finalizado sigue siendo consultable. Las fotografías guardan el estado de aquel momento, no recalculan la edad histórica.
 
 No hay DELETE, `SoftDeletes` ni `isDeleted` para Lotes, mortalidad, recolección, razas o categorías. Una categoría o raza se desactiva sin romper referencias anteriores.
 
 ### Correcciones y compensaciones
 
-- Una redistribución puede revertirse únicamente si ninguno de los lotes involucrados tiene operaciones posteriores. Se verifican sus versiones, estado y la capacidad necesaria. El movimiento original queda intacto y se agrega `redistribution_reversal`, que expone `movimiento_revertido_id`.
+- Una redistribución puede revertirse únicamente si ninguno de los lotes involucrados tiene operaciones posteriores. Se verifican sus versiones, estado y la capacidad necesaria. El movimiento original queda intacto y se agrega `redistribution_reversal`, que expone `reversed_movement_id`.
 - Al revertir una redistribución a un lote nuevo, éste permanece consultable, vacío y finalizado. La reversión a uno existente restaura ambas cantidades sin cambiar sus metadatos. La reversión total restituye el galpón original.
 - Mortalidad admite corregir cantidad, categoría y observaciones. Cancelar no borra el registro; su estado pasa a `cancelled`. La cantidad viva se ajusta por la diferencia y la restitución vuelve a validar capacidad en el galpón actual del lote.
 - La mortalidad conserva el galpón y la fecha originales del hecho, aunque el lote se traslade después. Las rectificaciones se aplican ahora, mediante `mortality_correction` y auditoría; no se edita el movimiento original.
 - Recolección admite corregir cantidad, fecha efectiva y observaciones. No permite cambiar lote, galpón ni UP. La diferencia genera una compensación de inventario; una corrección sólo textual no genera movimientos de stock de cantidad cero.
 - Cancelar una recolección mantiene el hecho histórico y compensa su ingreso en la cuenta de huevos de la UP. La recolección no modifica aves ni la versión del lote.
-- Los registros cancelados y los lotes finalizados no se corrigen ni reactivan. Todas las correcciones y cancelaciones requieren `motivo`.
+- Los registros cancelados y los lotes finalizados no se corrigen ni reactivan. Todas las correcciones y cancelaciones requieren `reason`.
 - Un movimiento de corrección o finalización puede tener cantidad cero cuando no modifica aves; queda diferenciado por tipo y auditoría, sin fingir un ingreso.
 
 ### Transacciones, acceso y reintentos offline
@@ -73,7 +73,7 @@ Cada comando bloquea al actor para serializar sus claves de idempotencia, luego 
 
 Las escrituras exigen `Idempotency-Key` con UUID. Una clave queda asociada al actor y al contenido normalizado del comando. Repetir exactamente la solicitud devuelve la misma operación y sus fotografías originales, incluso si los recursos ya cambiaron. Reutilizar la clave con otro contenido devuelve `409`. Para una intención nueva se genera una clave nueva. No hay expiración automática del registro idempotente.
 
-`version` representa el lote en cambios de estado, finalización, redistribución y mortalidad. Las correcciones de mortalidad requieren `version` del registro y `version_lote`; las correcciones de recolección requieren la versión de la recolección y no alteran la versión del lote. La redistribución hacia un lote existente y las reversiones parciales requieren además `version_destino`.
+`version` representa el lote en cambios de estado, finalización, redistribución y mortalidad. Las correcciones de mortalidad requieren `version` del registro y `flock_version`; las correcciones de recolección requieren la versión de la recolección y no alteran la versión del lote. La redistribución hacia un lote existente y las reversiones parciales requieren además `destination_version`.
 
 Un cliente offline debe guardar ULID, payload, clave y versiones; enviar sus operaciones en orden; ante una pérdida de respuesta reintentar el mismo comando; y ante `409` consultar los recursos/histórico y pedir resolución al usuario. No debe modificar automáticamente la versión y reenviar una operación de cantidad. Esta entrega no implementa almacenamiento local mobile, colas del dispositivo, descarga incremental ni resolución visual de conflictos.
 
@@ -100,34 +100,34 @@ Eventos de dominio después del commit: `FlockCreated`, `FlockUpdated`, `FlockSt
 
 ## Contrato de integración
 
-Todas las rutas siguientes son relativas a `/api/v1`. Las altas, redistribuciones y registros de mortalidad/recolección responden `201`; modificaciones, finalizaciones, reversiones y cancelaciones responden `200`. Cada comando devuelve `data.id_operacion` y los recursos afectados (`lote`, `lote_destino`, `movimiento`, `mortalidad`, `recoleccion` o `catalogo`).
+Todas las rutas siguientes son relativas a `/api/v1`. Las altas, redistribuciones y registros de mortalidad/recolección responden `201`; modificaciones, finalizaciones, reversiones y cancelaciones responden `200`. Cada comando devuelve `data.operation_id` y los recursos afectados (`flock`, `lote_destino`, `movement`, `mortality`, `collection` o `catalog`).
 
 | Método | Ruta | Uso |
 |---|---|---|
-| GET / POST | `/lotes` | Listar / admitir un lote. |
-| GET / PATCH | `/lotes/{lote}` | Detalle / modificar código u observaciones. |
-| PATCH | `/lotes/{lote}/estado` | Activo o cuarentena. |
-| POST | `/lotes/{lote}/finalizacion` | Egreso y finalización. |
-| POST | `/lotes/{lote}/redistribuciones` | Parcial a nuevo/existente o traslado total. |
-| POST | `/redistribuciones/{redistribucion}/reversiones` | Compensar una redistribución. |
-| GET | `/lotes/{lote}/historial` | Movimientos y fotografías históricas. |
-| GET | `/galpones/{galpon}/lotes` | Lotes actualmente ubicados en el galpón. |
-| GET / POST | `/razas` | Listar / crear razas. |
-| PATCH | `/razas/{raza}` | Nombre o vigencia de raza. |
-| GET / POST | `/categorias-mortalidad` | Listar / crear categorías. |
-| PATCH | `/categorias-mortalidad/{categoria}` | Nombre o vigencia de categoría. |
-| GET | `/mortalidades` | Consulta consolidada. |
-| GET / PATCH | `/mortalidades/{mortalidad}` | Detalle / corrección. |
-| GET / POST | `/lotes/{lote}/mortalidades` | Histórico / registro. |
-| POST | `/mortalidades/{mortalidad}/cancelacion` | Cancelación auditada. |
-| GET / POST | `/lotes/{lote}/recolecciones` | Histórico / registro de huevo genérico con ingreso en la cuenta de la UP. |
-| GET / PATCH | `/recolecciones/{recoleccion}` | Detalle / corrección con compensaciones de stock. |
-| POST | `/recolecciones/{recoleccion}/cancelacion` | Cancelación con compensación de stock. |
-| GET | `/lotes/{lote}/metricas` | Totales, promedio, agrupaciones diarias y semanales. |
+| GET / POST | `/flocks` | Listar / admitir un lote. |
+| GET / PATCH | `/flocks/{flock}` | Detalle / modificar código u observaciones. |
+| PATCH | `/flocks/{flock}/status` | Activo o cuarentena. |
+| POST | `/flocks/{flock}/finalization` | Egreso y finalización. |
+| POST | `/flocks/{flock}/redistributions` | Parcial a nuevo/existente o traslado total. |
+| POST | `/redistributions/{redistribucion}/reversals` | Compensar una redistribución. |
+| GET | `/flocks/{flock}/history` | Movimientos y fotografías históricas. |
+| GET | `/poultry-houses/{poultry_house}/flocks` | Lotes actualmente ubicados en el galpón. |
+| GET / POST | `/breeds` | Listar / crear razas. |
+| PATCH | `/breeds/{raza}` | Nombre o vigencia de raza. |
+| GET / POST | `/mortality-categories` | Listar / crear categorías. |
+| PATCH | `/mortality-categories/{categoria}` | Nombre o vigencia de categoría. |
+| GET | `/mortalities` | Consulta consolidada. |
+| GET / PATCH | `/mortalities/{mortality}` | Detalle / corrección. |
+| GET / POST | `/flocks/{flock}/mortalities` | Histórico / registro. |
+| POST | `/mortalities/{mortality}/cancellation` | Cancelación auditada. |
+| GET / POST | `/flocks/{flock}/collections` | Histórico / registro de huevo genérico con ingreso en la cuenta de la UP. |
+| GET / PATCH | `/collections/{collection}` | Detalle / corrección con compensaciones de stock. |
+| POST | `/collections/{collection}/cancellation` | Cancelación con compensación de stock. |
+| GET | `/flocks/{flock}/metrics` | Totales, promedio, agrupaciones diarias y semanales. |
 
-Listados: `pagina` de 1 a 100000 y `por_pagina` de 1 a 100, por defecto 50. El listado de lotes admite búsqueda por código, estado, raza, proveedor, galpón, UP y fechas de ingreso. El histórico admite `tipo` y fechas. Mortalidad admite lote, galpón histórico, estado y fechas; recolección admite lote, galpón, UP, estado y fechas. La cuenta corriente de huevos admite tipo, estado y fechas. Las consultas incluyen finalizados/cancelados por defecto salvo filtro explícito.
+Listados: `page` de 1 a 100000 y `per_page` de 1 a 100, por defecto 50. El listado de lotes admite búsqueda por código, estado, raza, proveedor, galpón, UP y fechas de ingreso. El histórico admite `type` y fechas. Mortalidad admite lote, galpón histórico, estado y fechas; recolección admite lote, galpón, UP, estado y fechas. La cuenta corriente de huevos admite tipo, estado y fechas. Las consultas incluyen finalizados/cancelados por defecto salvo filtro explícito.
 
-Métricas: por defecto últimos 30 días calendario, con máximo 366 días por consulta. `fecha_desde`/`fecha_hasta` son inclusivas. Sólo cuentan recolecciones vigentes con su cantidad corregida; las entradas manuales, salidas y pérdidas de stock no se suman a producción. El promedio incluye días sin producción; las series omiten días/semanas sin registros. `por_semana` agrupa por semana calendario iniciada en lunes, no por semana de edad del lote. No se publica porcentaje de postura o mortalidad con denominadores históricos inventados.
+Métricas: por defecto últimos 30 días calendario, con máximo 366 días por consulta. `date_from`/`date_to` son inclusivas. Sólo cuentan recolecciones vigentes con su cantidad corregida; las entradas manuales, salidas y pérdidas de stock no se suman a producción. El promedio incluye días sin producción; las series omiten días/semanas sin registros. `by_week` agrupa por semana calendario iniciada en lunes, no por semana de edad del lote. No se publica porcentaje de postura o mortalidad con denominadores históricos inventados.
 
 Errores: `401` sin sesión, `403` sin permiso, `404` recurso inexistente, `422` formato/campo no permitido y `409` conflicto de negocio o versión. Se conserva el formato transversal `application/problem+json`; los identificadores de estado/evento/permisos y metadatos técnicos siguen siendo estables en inglés.
 
@@ -202,49 +202,49 @@ Responsable: una persona diferente de quien implementó, con ambiente local o QA
 
 1. Levantar el stack según README y aplicar la migración aditiva y semillas locales anteriores.
 2. Importar `contracts/openapi/lots.yaml` en Postman/Insomnia. Definir `base_url` con el origen real del ambiente, sin `/api/v1`. Todas las rutas de este recorrido añaden `/api/v1`.
-3. Iniciar sesión con `POST /api/v1/autenticacion/inicio-sesion`: `correo_electronico`, `password` y `device_name: "do-test-lotes"`. Usar las credenciales configuradas con `ADMIN_EMAIL`/`ADMIN_PASSWORD`; no hay una contraseña nueva creada por este módulo.
+3. Iniciar sesión con `POST /api/v1/auth/login`: `email`, `password` y `device_name: "do-test-lotes"`. Usar las credenciales configuradas con `ADMIN_EMAIL`/`ADMIN_PASSWORD`; no hay una contraseña nueva creada por este módulo.
 4. Guardar el `access_token` como variable secreta y usar `Authorization: Bearer <token>`, `Accept: application/json` y `Content-Type: application/json`.
 5. Para cada comando generar un UUID (`New-Guid` en PowerShell), copiarlo en `Idempotency-Key` y conservarlo junto al payload y resultado. No usar una variable aleatoria que cambie automáticamente al probar un reintento.
 6. Usar un sufijo único para códigos/nombres, por ejemplo `QA-20260830-01`. Conservar las variables de IDs y versiones devueltas. Las plantillas JSON siguientes requieren sustituir los marcadores; no enviar sus nombres literalmente.
-7. Crear o elegir tres galpones operativos `G1`, `G2`, `G3`, con al menos 200 plazas disponibles cada uno. Para crearlos usar `POST /api/v1/unidades-productivas/{id}/galpones` con `{"nombre":"QA-G1-<sufijo>","capacidad_aves":200}` y repetir. Pueden pertenecer a UP diferentes, que deben estar activas.
-8. Elegir un proveedor activo, un producto activo de tipo `egg`, unidad `unit`, `controla_stock=true`, y una ubicación activa de stock. Guardar los IDs numéricos. Anotar el saldo físico inicial del producto en esa ubicación como `S0` con `GET /api/v1/inventario/saldos?producto_id=<id>&ubicacion_stock_id=<id>`; si no existe fila, `S0=0`.
+7. Crear o elegir tres galpones operativos `G1`, `G2`, `G3`, con al menos 200 plazas disponibles cada uno. Para crearlos usar `POST /api/v1/production-units/{id}/poultry-houses` con `{"name":"QA-G1-<sufijo>","bird_capacity":200}` y repetir. Pueden pertenecer a UP diferentes, que deben estar activas.
+8. Elegir un proveedor activo, un producto activo de tipo `egg`, unidad `unit`, `stock_tracked=true`, y una ubicación activa de stock. Guardar los IDs numéricos. Anotar el saldo físico inicial del producto en esa ubicación como `S0` con `GET /api/v1/inventory/balances?product_id=<id>&stock_location_id=<id>`; si no existe fila, `S0=0`.
 
-Por cada caso guardar: método/ruta, cuerpo sin credenciales, clave, estado HTTP, respuesta, `data.id_operacion`, cantidades/versiones antes y después, y evidencia de auditoría. En errores confirmar mediante GET que no cambió ninguna cantidad ni versión.
+Por cada caso guardar: método/ruta, cuerpo sin credenciales, clave, estado HTTP, respuesta, `data.operation_id`, cantidades/versiones antes y después, y evidencia de auditoría. En errores confirmar mediante GET que no cambió ninguna cantidad ni versión.
 
 ### 2. Catálogos, alta, lectura y reintento
 
-Crear una raza con `POST /razas` y `{"nombre":"QA Ponedoras <sufijo>"}`. Crear otra raza para incompatibilidad. Crear una categoría con `POST /categorias-mortalidad` y `{"nombre":"QA Observación <sufijo>"}`. Todas las rutas de aquí en adelante son bajo `/api/v1`.
+Crear una raza con `POST /breeds` y `{"name":"QA Ponedoras <sufijo>"}`. Crear otra raza para incompatibilidad. Crear una categoría con `POST /mortality-categories` y `{"name":"QA Observación <sufijo>"}`. Todas las rutas de aquí en adelante son bajo `/api/v1`.
 
-Esperado: `201`, `data.catalogo.id`, estado `active`, versión 1. Repetir mismo nombre variando espacios/mayúsculas con otra clave: `409`. Probar listar y filtrar por nombre/estado; luego renombrar una categoría con PATCH y su versión, y comprobar nueva versión y auditoría. Reservar la raza principal activa para el resto del recorrido.
+Esperado: `201`, `data.catalog.id`, estado `active`, versión 1. Repetir mismo nombre variando espacios/mayúsculas con otra clave: `409`. Probar listar y filtrar por nombre/status; luego renombrar una categoría con PATCH y su versión, y comprobar nueva versión y auditoría. Reservar la raza principal activa para el resto del recorrido.
 
 Crear A en G1:
 
 ```json
 {
-  "codigo": "QA-A-<sufijo>",
-  "raza_id": 1,
-  "proveedor_id": 1,
-  "cantidad_inicial": 100,
-  "fecha_ingreso": "2026-08-23",
-  "galpon_id": 1,
-  "observaciones": "Lote origen de Do Test"
+  "code": "QA-A-<sufijo>",
+  "breed_id": 1,
+  "supplier_id": 1,
+  "initial_quantity": 100,
+  "entry_date": "2026-08-23",
+  "poultry_house_id": 1,
+  "notes": "Lote origen de Do Test"
 }
 ```
 
-Sustituir IDs por los seleccionados y fecha por hoy menos siete días en Montevideo. Esperado: `201`, cantidad inicial/viva 100, versión 1, semana 2 y movimiento `admission`. Guardar A=`data.lote.id` (ULID), clave, payload y operación. La capacidad de G1 sigue siendo 200.
+Sustituir IDs por los seleccionados y fecha por hoy menos siete días en Montevideo. Esperado: `201`, cantidad inicial/viva 100, versión 1, semana 2 y movimiento `admission`. Guardar A=`data.flock.id` (ULID), clave, payload y operación. La capacidad de G1 sigue siendo 200.
 
 Repetir exactamente el alta de A con su misma clave: respuesta idéntica y un único lote/movimiento/auditoría. Repetir con la misma clave pero cantidad 99: `409`, A sigue con 100.
 
-Crear B con 40 aves, la misma raza, G2 y fecha hoy menos catorce días; usar otro proveedor si está disponible. Guardar todos sus metadatos originales. Alternativamente usar `origen: "Cría propia QA"` sin `proveedor_id`. Esperado: semana 3, versión 1. Esta diferencia de fechas debe conservarse al incorporar aves a B.
+Crear B con 40 aves, la misma raza, G2 y fecha hoy menos catorce días; usar otro proveedor si está disponible. Guardar todos sus metadatos originales. Alternativamente usar `origin: "Cría propia QA"` sin `supplier_id`. Esperado: semana 3, versión 1. Esta diferencia de fechas debe conservarse al incorporar aves a B.
 
-Consultar `GET /lotes`, `GET /lotes/{A}`, `/galpones/{G1}/lotes` y `/lotes?buscar=QA-A-<sufijo>&por_pagina=1`. Comprobar ULID, datos en español, filtros, metadatos de paginación y acceso a distintas UP con el mismo permiso funcional.
+Consultar `GET /flocks`, `GET /flocks/{A}`, `/poultry-houses/{G1}/flocks` y `/flocks?search=QA-A-<sufijo>&per_page=1`. Comprobar ULID, datos en español, filtros, metadatos de paginación y acceso a distintas UP con el mismo permiso funcional.
 
 ### 3. Redistribución parcial hacia un lote nuevo
 
-`POST /lotes/{A}/redistribuciones` con clave nueva:
+`POST /flocks/{A}/redistributions` con clave nueva:
 
 ```json
-{"version":1,"cantidad":20,"galpon_destino_id":2,"codigo_destino":"QA-C-<sufijo>","motivo":"Redistribución parcial QA"}
+{"version":1,"quantity":20,"destination_poultry_house_id":2,"destination_code":"QA-C-<sufijo>","reason":"Redistribución parcial QA"}
 ```
 
 Sustituir G2 y versión actual de A. Esperado: A=80 y versión 2; C=20, cantidad inicial 20, versión 1; C tiene otro ULID, hereda raza/procedencia/fecha de A y no expone padre/hijo. Total A+B+C=140. Las capacidades físicas de los galpones no cambian.
@@ -253,41 +253,41 @@ Guardar C=`data.lote_destino.id` y el ULID de movimiento. Consultar el históric
 
 ### 4. Incorporación a un lote existente
 
-`POST /lotes/{A}/redistribuciones` con clave nueva:
+`POST /flocks/{A}/redistributions` con clave nueva:
 
 ```json
-{"version":2,"cantidad":10,"lote_destino_id":"<ULID B>","version_destino":1,"motivo":"Agregar aves a B"}
+{"version":2,"quantity":10,"destination_flock_id":"<ULID B>","destination_version":1,"reason":"Agregar aves a B"}
 ```
 
-Esperado: A=70/version 3, B=50/version 2, C=20. B conserva cantidad inicial 40, código, proveedor/origen y fecha original; no recibe la edad de A. Total 140. Hay un movimiento `partial_existing` y auditoría de los dos lotes con el mismo `id_operacion`.
+Esperado: A=70/version 3, B=50/version 2, C=20. B conserva cantidad inicial 40, código, proveedor/origen y fecha original; no recibe la edad de A. Total 140. Hay un movimiento `partial_existing` y auditoría de los dos lotes con el mismo `operation_id`.
 
-Probar otro destinatario de raza diferente: `409`. Repetir con versión obsoleta de A o B y clave nueva: `409`. Sin `version_destino`: `422`. Enviar simultáneamente galpón y lote destino: `422`. Indicar A como su propio destino: `409`.
+Probar otro destinatario de raza diferente: `409`. Repetir con versión obsoleta de A o B y clave nueva: `409`. Sin `destination_version`: `422`. Enviar simultáneamente galpón y lote destino: `422`. Indicar A como su propio destino: `409`.
 
 ### 5. Traslado total sin borrar
 
-`POST /lotes/{A}/redistribuciones` con clave nueva:
+`POST /flocks/{A}/redistributions` con clave nueva:
 
 ```json
-{"version":3,"cantidad":70,"galpon_destino_id":3,"motivo":"Traslado íntegro a G3"}
+{"version":3,"quantity":70,"destination_poultry_house_id":3,"reason":"Traslado íntegro a G3"}
 ```
 
 Esperado: A conserva ULID, código, cantidad inicial 100 y cantidad viva 70; ahora está en G3, con versión 4 y la UP de G3. No aparece un lote nuevo, A no desaparece del listado y su historial incluye `total` desde G1 a G3. G1 queda libre de A.
 
-Probar un total hacia B, un total al mismo galpón o un total con `codigo_destino`: `409`. No se interpreta como fusión ni borrado.
+Probar un total hacia B, un total al mismo galpón o un total con `destination_code`: `409`. No se interpreta como fusión ni borrado.
 
 ### 6. Reversiones y capacidad
 
 Crear un lote separado R de 30 aves en G1. Trasladar parcialmente 5 a un lote nuevo S en G3 y guardar el movimiento. Sin ninguna otra operación sobre R/S, enviar:
 
 ```text
-POST /redistribuciones/{movimiento}/reversiones
+POST /redistributions/{movimiento}/reversals
 ```
 
 ```json
-{"version":2,"version_destino":1,"motivo":"Galpón seleccionado por error"}
+{"version":2,"destination_version":1,"reason":"Galpón seleccionado por error"}
 ```
 
-Esperado: `200`, R vuelve a 30, S permanece consultable con 0 y `finished`. El movimiento original no cambia. Aparece `redistribution_reversal` con `movimiento_revertido_id` apuntando al original. Repetir la misma clave devuelve la misma respuesta; repetir con clave nueva no vuelve a restituir aves.
+Esperado: `200`, R vuelve a 30, S permanece consultable con 0 y `finished`. El movimiento original no cambia. Aparece `redistribution_reversal` con `reversed_movement_id` apuntando al original. Repetir la misma clave devuelve la misma respuesta; repetir con clave nueva no vuelve a restituir aves.
 
 Repetir el caso de reversión con traslado total: R vuelve a su galpón original manteniendo el ULID. Repetir con destinatario existente: se restauran ambas cantidades y metadatos. En una tercera redistribución, editar observaciones de uno de los lotes antes de revertir: ahora debe responder `409` por operaciones posteriores.
 
@@ -298,40 +298,40 @@ Crear un galpón QA de capacidad 5, admitir 5 y comprobar: alta adicional de 1 o
 Sobre B (50 aves/version 2), registrar:
 
 ```text
-POST /lotes/{B}/mortalidades
+POST /flocks/{B}/mortalities
 ```
 
 ```json
-{"version":2,"cantidad":2,"categoria_mortalidad_id":1,"observaciones":"Recuento QA"}
+{"version":2,"quantity":2,"mortality_category_id":1,"notes":"Recuento QA"}
 ```
 
-Esperado: `201`, B=48/version 3, mortalidad M versión 1 y movimiento `mortality`. La cantidad inicial de B sigue siendo 40. Guardar M=`data.mortalidad.id`.
+Esperado: `201`, B=48/version 3, mortalidad M versión 1 y movimiento `mortality`. La cantidad inicial de B sigue siendo 40. Guardar M=`data.mortality.id`.
 
-Corregir `PATCH /mortalidades/{M}`:
+Corregir `PATCH /mortalities/{M}`:
 
 ```json
-{"version":1,"version_lote":3,"cantidad":1,"motivo":"Se confirmó una sola baja"}
+{"version":1,"flock_version":3,"quantity":1,"reason":"Se confirmó una sola baja"}
 ```
 
-Esperado: `200`, B=49/version 4, M cantidad 1/version 2. El primer movimiento de 2 bajas permanece intacto; se agrega compensación por 1 ave. Cancelar `POST /mortalidades/{M}/cancelacion` con `version:2`, `version_lote:4`, motivo y nueva clave: B=50/version 5, M=`cancelled`/version 3, sin borrado.
+Esperado: `200`, B=49/version 4, M cantidad 1/version 2. El primer movimiento de 2 bajas permanece intacto; se agrega compensación por 1 ave. Cancelar `POST /mortalities/{M}/cancellation` con `version:2`, `flock_version:4`, motivo y nueva clave: B=50/version 5, M=`cancelled`/version 3, sin borrado.
 
-Consultar `/mortalidades?lote_id={B}&galpon_id={G2}&estado=cancelled&fecha_desde=<hoy>&fecha_hasta=<hoy>` y el histórico de B. Si B se traslada después, M debe continuar asociado al galpón original G2.
+Consultar `/mortalities?flock_id={B}&poultry_house_id={G2}&status=cancelled&date_from=<hoy>&date_to=<hoy>` y el histórico de B. Si B se traslada después, M debe continuar asociado al galpón original G2.
 
 En otro lote/galpón pequeño: registrar bajas, ocupar las plazas liberadas con otro lote e intentar cancelar las bajas. Debe dar `409` y conservar mortalidad, cantidad viva y versiones. También probar categoría inactiva, cantidad mayor que aves vivas, doble cancelación y versiones viejas: nunca deben producir cantidades negativas ni auditorías de éxito adicionales.
 
 ### 8. Recolección y métricas
 
-Consultar de nuevo B y registrar en `/lotes/{B}/recolecciones`:
+Consultar de nuevo B y registrar en `/flocks/{B}/collections`:
 
 ```json
-{"cantidad":12,"observaciones":"Turno QA"}
+{"quantity":12,"notes":"Turno QA"}
 ```
 
-Esperado: `201`, recolección E versión 1; B conserva 50 aves y su versión; la cuenta de huevos de la UP aumenta en 12 mediante `collection_receipt` y el movimiento físico comparte `id_operacion` con la recolección. La cantidad viva nunca aumenta por producir huevos.
+Esperado: `201`, recolección E versión 1; B conserva 50 aves y su versión; la cuenta de huevos de la UP aumenta en 12 mediante `collection_receipt` y el movimiento físico comparte `operation_id` con la recolección. La cantidad viva nunca aumenta por producir huevos.
 
-Reintentar la misma clave no aumenta el saldo. Corregir `PATCH /recolecciones/{E}` con `version:1`, `cantidad:10`, `motivo_correccion` y clave nueva: saldo `S0 + 10`, E versión 2 y una compensación por la diferencia. Corregir sólo observaciones incrementa la versión y la auditoría, pero no crea un ajuste de stock cero.
+Reintentar la misma clave no aumenta el saldo. Corregir `PATCH /collections/{E}` con `version:1`, `quantity:10`, `correction_reason` y clave nueva: saldo `S0 + 10`, E versión 2 y una compensación por la diferencia. Corregir sólo observaciones incrementa la versión y la auditoría, pero no crea un ajuste de stock cero.
 
-Consultar `/lotes/{B}/metricas?fecha_desde=<hoy>&fecha_hasta=<hoy>`: total 10 para este escenario sin otras recolecciones vigentes, promedio 10 y series consistentes. Cancelar E con `POST /recolecciones/{E}/cancelacion`, versión y `motivo_correccion`: el saldo vuelve a `S0`; E permanece `cancelled`; métricas excluyen sus huevos. No se borra ningún movimiento previo.
+Consultar `/flocks/{B}/metrics?date_from=<hoy>&date_to=<hoy>`: total 10 para este escenario sin otras recolecciones vigentes, promedio 10 y series consistentes. Cancelar E con `POST /collections/{E}/cancellation`, versión y `correction_reason`: el saldo vuelve a `S0`; E permanece `cancelled`; métricas excluyen sus huevos. No se borra ningún movimiento previo.
 
 Las entradas manuales, salidas para reparto y pérdidas se validan en el recorrido de [egg-production-implementation.md](egg-production-implementation.md); no deben alterar la producción histórica. Un lote vacío o finalizado no puede registrar recolecciones.
 
@@ -339,22 +339,22 @@ Las entradas manuales, salidas para reparto y pérdidas se validan en el recorri
 
 | Caso | Cómo probar | Esperado |
 |---|---|---|
-| Cuarentena | PATCH `/lotes/{B}/estado` con versión actual, `estado:quarantined` y motivo. | `200`; conserva aves y ocupación. Redistribuir B devuelve `409`; mortalidad/recolección válida sigue permitida. |
+| Cuarentena | PATCH `/flocks/{B}/status` con versión actual, `status:quarantined` y motivo. | `200`; conserva aves y ocupación. Redistribuir B devuelve `409`; mortalidad/recolección válida sigue permitida. |
 | Reactivación | PATCH de B a `active` con nueva clave/versión y motivo. | `200`, nueva versión. |
-| Finalización | POST `/lotes/{C}/finalizacion` con versión 1 y motivo, si C no fue modificado. | `200`, C=0/`finished`, egreso 20, no mortalidad extra, consulta e histórico disponibles. |
+| Finalización | POST `/flocks/{C}/finalization` con versión 1 y motivo, si C no fue modificado. | `200`, C=0/`finished`, egreso 20, no mortalidad extra, consulta e histórico disponibles. |
 | Reapertura | Intentar cambiar C finalizado a `active`. | `409`, sin cambios. |
-| Sin autenticación | GET `/lotes` sin token. | `401`. |
+| Sin autenticación | GET `/flocks` sin token. | `401`. |
 | Sin permiso | Usuario activo sin `flocks.view` consulta lotes; sin permiso de escritura intenta un comando. | `403`; no hay escrituras. Repetir para mortalidad, recolección y catálogos. |
-| Auditoría restringida | Usuario sin `audit.view` consulta `/auditoria/entradas`. | `403`, aunque tenga permisos de producción. |
+| Auditoría restringida | Usuario sin `audit.view` consulta `/audit/entries`. | `403`, aunque tenga permisos de producción. |
 | Referencia inexistente | GET de un ULID de lote inexistente. | `404`. |
-| Campos protegidos | PATCH de lote con `cantidad_viva`, `cantidad_inicial`, `estado` o identificadores internos. | `422`; las cantidades sólo cambian por Actions específicas. |
+| Campos protegidos | PATCH de lote con `current_quantity`, `initial_quantity`, `status` o identificadores internos. | `422`; las cantidades sólo cambian por Actions específicas. |
 | Enteros positivos | En altas/registros enviar 0, negativos, fracciones o más de 2147483647. | `422` y ningún cambio. |
 | Clave obligatoria | Omitir Idempotency-Key o enviar una cadena que no sea UUID. | `422`. |
 | Código duplicado | Otra alta con el código de A y clave nueva. | `409`. |
-| Fecha futura | Ingreso de mañana o `ocurrido_en` posterior a ahora. | `409`; un formato o fecha imposible da `422`. |
+| Fecha futura | Ingreso de mañana o `occurred_at` posterior a ahora. | `409`; un formato o fecha imposible da `422`. |
 | Orden histórico | Registrar mortalidad/recolección anterior a la última redistribución del lote. | `409`; no se reasigna al galpón incorrecto. |
 | Zona local | En un lote sin movimientos posteriores, registrar un instante pasado a `01:00:00+00:00`. | Se consulta en el día anterior de Montevideo; misma interpretación en métricas y filtros. |
-| Paginación | `por_pagina=101`, `pagina=0` o fechas invertidas. | `422`. Los enlaces válidos conservan filtros. |
+| Paginación | `per_page=101`, `page=0` o fechas invertidas. | `422`. Los enlaces válidos conservan filtros. |
 | Métricas acotadas | Solicitar más de 366 días. | `409`; no ejecuta una consulta ilimitada. |
 | Baja de catálogo | Desactivar la raza principal después del recorrido e intentar otra admisión. | Referencias existentes siguen consultables; alta nueva con raza inactiva da `409`. |
 
@@ -365,8 +365,8 @@ Ejecutar `LotsConcurrencyTest` con el comando aislado documentado, o coordinar d
 Para cada operación significativa consultar:
 
 ```text
-GET /api/v1/auditoria/entradas?operation_id=<data.id_operacion>&por_pagina=100
-GET /api/v1/auditoria/entradas?log_name=lots&por_pagina=100
+GET /api/v1/audit/entries?operation_id=<data.id_operacion>&per_page=100
+GET /api/v1/audit/entries?log_name=lots&per_page=100
 ```
 
 Revisar actor, módulo, UP, resultado, traza, snapshot y valores anteriores/nuevos. Redistribuciones con dos lotes tienen entradas de ambos; recolecciones comparten operación con Inventario. No debe aparecer información sensible. Las correcciones agregan entradas, nunca alteran las anteriores. Para fallas de auditoría utilizar las pruebas automatizadas de rollback; no deshabilitar auditoría ni manipular servicios de producción para simularlas.

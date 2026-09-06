@@ -16,9 +16,9 @@ final class StoreReportPresetRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'nombre' => ['required', 'string', 'max:160'],
-            'clave_fuente' => ['required', 'string', 'max:100'],
-            'configuracion' => ['required', 'array'],
+            'name' => ['required', 'string', 'max:160'],
+            'source_key' => ['required', 'string', 'max:100'],
+            'configuration' => ['required', 'array'],
         ];
     }
 }

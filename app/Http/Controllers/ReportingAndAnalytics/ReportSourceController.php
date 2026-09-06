@@ -9,7 +9,6 @@ use App\Http\Resources\ReportingAndAnalytics\ReportSourceResource;
 use App\Models\User;
 use App\Queries\ReportingAndAnalytics\ListReportSourcesQuery;
 use App\Queries\ReportingAndAnalytics\PreviewReportQuery;
-use App\Support\PublicInputMapper;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 final readonly class ReportSourceController
@@ -27,6 +26,6 @@ final readonly class ReportSourceController
         /** @var User $actor */
         $actor = $request->user();
 
-        return new ReportResultResource($query->execute($source, PublicInputMapper::toInternal($request->safe()->all(), 'report-query'), $actor));
+        return new ReportResultResource($query->execute($source, $request->safe()->all(), $actor));
     }
 }

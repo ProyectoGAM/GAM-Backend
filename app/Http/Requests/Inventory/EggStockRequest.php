@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Inventory;
 
 use App\Models\User;
-use App\Support\PublicInputMapper;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -27,7 +26,7 @@ abstract class EggStockRequest extends FormRequest
     /** @return array<string, mixed> */
     public function attributesForAction(): array
     {
-        $data = PublicInputMapper::toInternal($this->validated(), 'egg-stock');
+        $data = $this->validated();
         foreach (['quantity', 'version', 'production_unit_id', 'page', 'per_page'] as $key) {
             if (isset($data[$key])) {
                 $data[$key] = (int) $data[$key];
@@ -70,7 +69,7 @@ abstract class EggStockRequest extends FormRequest
         return [
             'idempotency_key.required' => 'El encabezado Idempotency-Key es obligatorio.',
             'idempotency_key.uuid' => 'El encabezado Idempotency-Key debe ser un UUID válido.',
-            'cantidad.min' => 'La cantidad debe ser mayor que cero.',
+            'quantity.min' => 'La cantidad debe ser mayor que cero.',
         ];
     }
 }

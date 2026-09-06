@@ -15,7 +15,6 @@ use App\Http\Resources\ReportingAndAnalytics\ReportExportResource;
 use App\Models\ReportingAndAnalytics\ReportExport;
 use App\Models\User;
 use App\Queries\ReportingAndAnalytics\ListReportExportsQuery;
-use App\Support\PublicInputMapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Symfony\Component\HttpFoundation\Response;
@@ -26,14 +25,11 @@ final readonly class ReportExportController
     {
         /** @var User $actor */
         $actor = $request->user();
-        $attributes = PublicInputMapper::toInternal(
-            $request->safe()->except(['formato', 'idempotency_key']),
-            'report-query',
-        );
+        $attributes = $request->safe()->except(['format', 'idempotency_key']);
         $result = $action->execute(
             sourceKey: $source,
             input: $attributes,
-            format: ReportExportFormat::from((string) $request->validated('formato')),
+            format: ReportExportFormat::from((string) $request->validated('format')),
             idempotencyKey: (string) $request->validated('idempotency_key'),
             actor: $actor,
         );
@@ -48,7 +44,7 @@ final readonly class ReportExportController
         /** @var User $actor */
         $actor = $request->user();
 
-        return ReportExportResource::collection($query->execute($actor, PublicInputMapper::toInternal($request->validated(), 'report')));
+        return ReportExportResource::collection($query->execute($actor, $request->validated()));
     }
 
     public function show(ViewReportExportRequest $request, ReportExport $reportExport): ReportExportResource

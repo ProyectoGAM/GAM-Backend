@@ -13,6 +13,6 @@ final class FinalizeSharedSessionRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['sesion_id' => ['required', 'uuid']];
+        return ['session_id' => ['required', 'uuid']];
     }
 }

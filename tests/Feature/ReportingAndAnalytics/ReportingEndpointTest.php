@@ -32,10 +32,10 @@ final class ReportingEndpointTest extends TestCase
         Sanctum::actingAs($this->userWithPermissions(['reports.view', 'inventory.view']), ['*']);
 
         // Acción: consulta el catálogo público de fuentes.
-        $response = $this->getJson('/api/v1/reportes/fuentes');
+        $response = $this->getJson('/api/v1/reports/fuentes');
 
         // Verificación: confirma que la fuente real de inventario está publicada.
-        $response->assertOk()->assertJsonPath('data.0.key', 'inventario.saldos-stock');
+        $response->assertOk()->assertJsonPath('data.0.key', 'inventory.stock-balances');
     }
 
     // Flujo: valida una consulta inválida sin ejecutar SQL de la fuente.
@@ -45,12 +45,12 @@ final class ReportingEndpointTest extends TestCase
         Sanctum::actingAs($this->userWithPermissions(['reports.view', 'inventory.view']), ['*']);
 
         // Acción: solicita una columna interna que no está en el contrato.
-        $response = $this->postJson('/api/v1/reportes/inventario.saldos-stock/previsualizaciones', [
-            'columnas' => ['saldos_stock.password'],
+        $response = $this->postJson('/api/v1/reports/inventory.stock-balances/previews', [
+            'columns' => ['stock_balances.password'],
         ]);
 
         // Verificación: confirma un problema de validación en español.
-        $response->assertUnprocessable()->assertJsonPath('tipo', 'https://httpstatuses.com/422');
+        $response->assertUnprocessable()->assertJsonPath('type', 'https://httpstatuses.com/422');
     }
 
     // Flujo: acepta la paginación pública sin convertirla al vocabulario interno antes de normalizar.
@@ -60,11 +60,11 @@ final class ReportingEndpointTest extends TestCase
         Sanctum::actingAs($this->userWithPermissions(['reports.view', 'inventory.view']), ['*']);
 
         // Acción: envía la consulta con las claves públicas usadas por el frontend.
-        $response = $this->postJson('/api/v1/reportes/inventario.saldos-stock/previsualizaciones', [
-            'agrupaciones' => ['producto'],
-            'metricas' => ['stock_disponible'],
-            'pagina' => 1,
-            'por_pagina' => 50,
+        $response = $this->postJson('/api/v1/reports/inventory.stock-balances/previews', [
+            'groupings' => ['product'],
+            'metrics' => ['available_stock'],
+            'page' => 1,
+            'per_page' => 50,
         ]);
 
         // Verificación: confirma que la consulta llega al normalizador y produce resultado.
@@ -85,16 +85,16 @@ final class ReportingEndpointTest extends TestCase
         ]);
 
         // Acción: agrupa por producto sin marcar ninguna métrica en la solicitud.
-        $response = $this->postJson('/api/v1/reportes/inventario.saldos-stock/previsualizaciones', [
-            'agrupaciones' => ['producto'],
+        $response = $this->postJson('/api/v1/reports/inventory.stock-balances/previews', [
+            'groupings' => ['product'],
         ]);
 
         // Verificación: devuelve una sola fila con la suma del stock disponible.
         $response->assertOk()
-            ->assertJsonPath('data.columnas.2', 'stock_disponible')
+            ->assertJsonPath('data.columns.2', 'available_stock')
             ->assertJsonPath('data.pagination.total', 1)
-            ->assertJsonPath('data.rows.0.producto', 'Maíz agrupado')
-            ->assertJsonPath('data.rows.0.stock_disponible', '10.000000');
+            ->assertJsonPath('data.rows.0.product', 'Maíz agrupado')
+            ->assertJsonPath('data.rows.0.available_stock', '10.000000');
     }
 
     // Flujo: agrupa los movimientos por día y tipo, como el indicador de inventario.
@@ -104,18 +104,18 @@ final class ReportingEndpointTest extends TestCase
         Sanctum::actingAs($this->userWithPermissions(['reports.view', 'inventory.view']), ['*']);
 
         // Acción: solicita la agrupación usada por el indicador de movimientos.
-        $response = $this->postJson('/api/v1/reportes/inventario.movimientos/previsualizaciones', [
-            'agrupaciones' => ['dia', 'tipo'],
-            'metricas' => ['cantidad_movimientos'],
-            'pagina' => 1,
-            'por_pagina' => 100,
+        $response = $this->postJson('/api/v1/reports/inventory.movimientos/previews', [
+            'groupings' => ['day', 'type'],
+            'metrics' => ['movement_count'],
+            'page' => 1,
+            'per_page' => 100,
         ]);
 
         // Verificación: el orden por defecto usa la primera agrupación sin lanzar una excepción.
         $response->assertOk()
-            ->assertJsonPath('data.columnas.0', 'dia')
-            ->assertJsonPath('data.columnas.1', 'tipo')
-            ->assertJsonPath('data.columnas.2', 'cantidad_movimientos');
+            ->assertJsonPath('data.columns.0', 'day')
+            ->assertJsonPath('data.columns.1', 'type')
+            ->assertJsonPath('data.columns.2', 'movement_count');
     }
 
     // Flujo: crea un preset y verifica que solo el propietario pueda consultarlo.
@@ -126,24 +126,24 @@ final class ReportingEndpointTest extends TestCase
         Sanctum::actingAs($owner, ['*']);
 
         // Acción: crea una configuración válida para la fuente de saldos.
-        $created = $this->postJson('/api/v1/configuraciones-reportes', [
-            'nombre' => 'Stock mensual',
-            'clave_fuente' => 'inventario.saldos-stock',
-            'configuracion' => [
-                'agrupaciones' => ['producto'],
-                'metricas' => ['stock_disponible'],
-                'pagina' => 2,
-                'por_pagina' => 25,
+        $created = $this->postJson('/api/v1/report-presets', [
+            'name' => 'Stock mensual',
+            'source_key' => 'inventory.stock-balances',
+            'configuration' => [
+                'groupings' => ['product'],
+                'metrics' => ['available_stock'],
+                'page' => 2,
+                'per_page' => 25,
             ],
         ])->assertCreated();
 
         // Verificación: confirma el preset y su normalización de unidad.
-        $created->assertJsonPath('data.configuracion.agrupaciones.1', 'unidad_base');
+        $created->assertJsonPath('data.configuration.groupings.1', 'base_unit');
         $preset = ReportPreset::query()->firstOrFail();
 
         // Acción: autentica a otro usuario e intenta leer el preset ajeno.
         Sanctum::actingAs($this->userWithPermissions(['reports.presets.manage']), ['*']);
-        $this->getJson('/api/v1/configuraciones-reportes/'.$preset->getKey())->assertForbidden();
+        $this->getJson('/api/v1/report-presets/'.$preset->getKey())->assertForbidden();
     }
 
     // Flujo: solicita una exportación y verifica idempotencia, cola y auditoría inicial.
@@ -154,15 +154,15 @@ final class ReportingEndpointTest extends TestCase
         Sanctum::actingAs($actor, ['*']);
         Queue::fake();
         $key = (string) Str::uuid();
-        $payload = ['formato' => 'xlsx', 'agrupaciones' => ['producto'], 'metricas' => ['stock_disponible']];
+        $payload = ['format' => 'xlsx', 'groupings' => ['product'], 'metrics' => ['available_stock']];
 
         // Acción 1: solicita la generación del archivo.
-        $first = $this->postJson('/api/v1/reportes/inventario.saldos-stock/exportaciones', $payload, [
+        $first = $this->postJson('/api/v1/reports/inventory.stock-balances/exports', $payload, [
             'Idempotency-Key' => $key,
         ])->assertAccepted();
 
         // Acción 2: repite la solicitud con la misma clave y contenido.
-        $second = $this->postJson('/api/v1/reportes/inventario.saldos-stock/exportaciones', $payload, [
+        $second = $this->postJson('/api/v1/reports/inventory.stock-balances/exports', $payload, [
             'Idempotency-Key' => $key,
         ])->assertAccepted();
 
@@ -183,7 +183,7 @@ final class ReportingEndpointTest extends TestCase
         $token = $owner->createToken('download-test')->plainTextToken;
 
         // Acción 1: descarga el archivo usando la autenticación Sanctum.
-        $this->withToken($token)->get('/api/v1/exportaciones-reportes/'.$export->getKey().'/descarga')
+        $this->withToken($token)->get('/api/v1/report-exports/'.$export->getKey().'/descarga')
             ->assertOk()
             ->assertHeader('Content-Disposition', 'attachment; filename=test.xlsx');
     }
@@ -216,7 +216,7 @@ final class ReportingEndpointTest extends TestCase
         Sanctum::actingAs($owner, ['*']);
 
         // Acción 1: solicita el enlace temporal mediante el endpoint existente.
-        $link = $this->postJson('/api/v1/exportaciones-reportes/'.$export->getKey().'/enlaces-temporales', [
+        $link = $this->postJson('/api/v1/report-exports/'.$export->getKey().'/temporary-links', [
             'expires_in' => 5,
         ])->assertCreated()->json('url');
 
@@ -236,7 +236,7 @@ final class ReportingEndpointTest extends TestCase
     {
         // Preparación: construye un resultado con cantidades en la escala de PostgreSQL.
         $source = app(ReportSourceRegistry::class)
-            ->get('inventario.saldos-stock')
+            ->get('inventory.stock-balances')
             ->definition();
         $result = new ReportResultData(
             sourceKey: $source->key,
@@ -244,7 +244,7 @@ final class ReportingEndpointTest extends TestCase
             columns: ['cantidad_disponible'],
             rows: [['cantidad_disponible' => '48.000000'], ['cantidad_disponible' => '95.650000']],
             aggregates: [],
-            units: ['cantidad_disponible' => 'unidad_base'],
+            units: ['cantidad_disponible' => 'base_unit'],
             currentPage: 1,
             perPage: 50,
             total: 2,

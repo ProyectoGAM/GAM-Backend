@@ -18,7 +18,6 @@ parameters:
         - app/Services/SystemClock.php
         - app/Providers/LotsServiceProvider.php
         - app/Providers/FarmStructureServiceProvider.php
-        - app/Support/PublicInputMapper.php
         - app/Queries/FarmStructure/LockPoultryHousesQuery.php
         - app/DTO/FarmStructure/LockedPoultryHouseData.php
         - app/Actions/Inventory/RecordEggProductionAction.php

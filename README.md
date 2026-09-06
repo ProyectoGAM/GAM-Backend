@@ -1,6 +1,6 @@
 GAM: http://localhost:8080
 
-Estado de la aplicación: http://localhost:8080/estado
+Estado de la aplicación: http://localhost:8080/status
 
 Mailpit: http://localhost:8025
 

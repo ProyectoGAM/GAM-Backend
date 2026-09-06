@@ -8,7 +8,7 @@ final class SaveMortalityCategoryRequest extends LotsRequest
 {
     public function authorize(): bool
     {
-        return $this->isMethod('POST') ? ($this->user()?->can('create', MortalityCategory::class) ?? false) : ($this->user()?->can('update', $this->route('categoria')) ?? false);
+        return $this->isMethod('POST') ? ($this->user()?->can('create', MortalityCategory::class) ?? false) : ($this->user()?->can('update', $this->route('mortalityCategory')) ?? false);
     }
 
     /** @return array<string, mixed> */
@@ -16,8 +16,8 @@ final class SaveMortalityCategoryRequest extends LotsRequest
     {
         return [
             ...$this->commandRules(! $this->isMethod('POST')),
-            'nombre' => [$this->isMethod('POST') ? 'required' : 'sometimes', 'string', 'max:120'],
-            'estado' => ['sometimes', 'in:active,inactive'],
+            'name' => [$this->isMethod('POST') ? 'required' : 'sometimes', 'string', 'max:120'],
+            'status' => ['sometimes', 'in:active,inactive'],
         ];
     }
 }

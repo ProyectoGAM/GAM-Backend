@@ -11,13 +11,13 @@ use App\Models\Lots\Flock;
 
 final readonly class FlockStatusController
 {
-    public function update(ChangeFlockStatusRequest $request, Flock $lote, ChangeFlockStatusAction $action): LotsOperationResource
+    public function update(ChangeFlockStatusRequest $request, Flock $flock, ChangeFlockStatusAction $action): LotsOperationResource
     {
-        return new LotsOperationResource($action->execute($lote, $request->attributesForAction(), $request->actor()));
+        return new LotsOperationResource($action->execute($flock, $request->attributesForAction(), $request->actor()));
     }
 
-    public function finalize(FinalizeFlockRequest $request, Flock $lote, FinalizeFlockAction $action): LotsOperationResource
+    public function finalize(FinalizeFlockRequest $request, Flock $flock, FinalizeFlockAction $action): LotsOperationResource
     {
-        return new LotsOperationResource($action->execute($lote, $request->attributesForAction(), $request->actor()));
+        return new LotsOperationResource($action->execute($flock, $request->attributesForAction(), $request->actor()));
     }
 }

@@ -27,11 +27,11 @@ final readonly class CancelEggStockTransactionAction
             if ($current->version !== (int) $data['version'] || $current->status !== 'recorded') {
                 throw new LotsConflict('El movimiento cambió de versión o ya fue cancelado.');
             }
-            $before = ['id' => $current->public_id, 'estado' => $current->status, 'cantidad' => $current->quantity, 'ocurrido_en' => $current->occurred_at->toIso8601String()];
+            $before = ['id' => $current->public_id, 'status' => $current->status, 'quantity' => $current->quantity, 'occurred_at' => $current->occurred_at->toIso8601String()];
             $sign = $current->type === 'manual_receipt' ? 1 : -1;
             $this->stock->adjust($current, -$current->quantity * $sign, (string) Str::uuid(), $actor, $current->occurred_at->toIso8601String(), (string) $data['correction_reason'], $source);
             $current->forceFill(['status' => 'cancelled', 'version' => $current->version + 1])->save();
-            $after = ['id' => $current->public_id, 'estado' => $current->status, 'cantidad' => $current->quantity, 'ocurrido_en' => $current->occurred_at->toIso8601String()];
+            $after = ['id' => $current->public_id, 'status' => $current->status, 'quantity' => $current->quantity, 'occurred_at' => $current->occurred_at->toIso8601String()];
             EggStockTransactionRevision::query()->create(['public_id' => (string) Str::ulid(), 'egg_stock_transaction_id' => $current->id, 'operation_id' => $operationId, 'action' => 'cancel', 'before' => $before, 'after' => $after, 'correction_reason' => $data['correction_reason'], 'created_by' => $actor->id]);
             $this->audit->record(AuditEntryData::forSubject(subject: $current, actor: $actor, logName: 'inventory', event: 'egg_stock_transaction_cancelled', description: 'Movimiento de huevos cancelado', operationId: $operationId, upId: $current->production_unit_id, source: $source, properties: ['result' => 'success'], attributeChanges: ['old' => $before, 'new' => $after]));
 

@@ -18,15 +18,15 @@ final class ReportQueryNormalizerTest extends TestCase
         $normalizer = $this->normalizer();
 
         // Acción: normaliza una agrupación y una métrica cuantitativa.
-        $query = $normalizer->normalize('inventario.saldos-stock', [
-            'agrupaciones' => ['producto'],
-            'metricas' => ['stock_disponible'],
+        $query = $normalizer->normalize('inventory.stock-balances', [
+            'groupings' => ['product'],
+            'metrics' => ['available_stock'],
         ]);
 
         // Verificación: confirma que los resultados quedan separados por unidad.
-        $this->assertSame(['producto', 'unidad_base'], $query->groupings);
-        $this->assertSame(['stock_disponible'], $query->metrics);
-        $this->assertSame([['field' => 'producto', 'direction' => 'asc']], $query->sorts);
+        $this->assertSame(['product', 'base_unit'], $query->groupings);
+        $this->assertSame(['available_stock'], $query->metrics);
+        $this->assertSame([['field' => 'product', 'direction' => 'asc']], $query->sorts);
     }
 
     // Flujo: agrupa sin medir; verifica que la fuente elija su métrica principal automáticamente.
@@ -36,13 +36,13 @@ final class ReportQueryNormalizerTest extends TestCase
         $normalizer = $this->normalizer();
 
         // Acción: normaliza únicamente una dimensión.
-        $query = $normalizer->normalize('inventario.saldos-stock', [
-            'agrupaciones' => ['producto'],
+        $query = $normalizer->normalize('inventory.stock-balances', [
+            'groupings' => ['product'],
         ]);
 
         // Verificación: conserva una agrupación útil y añade la medida publicada por defecto.
-        $this->assertSame(['producto', 'unidad_base'], $query->groupings);
-        $this->assertSame(['stock_disponible'], $query->metrics);
+        $this->assertSame(['product', 'base_unit'], $query->groupings);
+        $this->assertSame(['available_stock'], $query->metrics);
     }
 
     // Flujo: normaliza filtros, fechas y ordenamiento usando solo valores permitidos.
@@ -52,19 +52,19 @@ final class ReportQueryNormalizerTest extends TestCase
         $normalizer = $this->normalizer();
 
         // Acción: normaliza una consulta de movimientos con filtros acotados.
-        $query = $normalizer->normalize('inventario.movimientos', [
-            'filtros' => [['campo' => 'tipo', 'operador' => 'eq', 'valor' => 'receipt']],
-            'desde' => '2026-01-01',
-            'hasta' => '2026-01-31',
-            'ordenamientos' => [['campo' => 'fecha', 'direccion' => 'desc']],
-            'pagina' => 2,
-            'por_pagina' => 25,
+        $query = $normalizer->normalize('inventory.movements', [
+            'filters' => [['field' => 'type', 'operator' => 'eq', 'value' => 'receipt']],
+            'from' => '2026-01-01',
+            'to' => '2026-01-31',
+            'sorts' => [['field' => 'date', 'direction' => 'desc']],
+            'page' => 2,
+            'per_page' => 25,
         ]);
 
         // Verificación: confirma que la representación canónica es estable para presets y exportaciones.
-        $this->assertSame('inventario.movimientos', $query->sourceKey);
+        $this->assertSame('inventory.movements', $query->sourceKey);
         $this->assertSame('1.1', $query->definitionVersion);
-        $this->assertSame([['field' => 'tipo', 'operator' => 'eq', 'value' => 'receipt']], $query->filters);
+        $this->assertSame([['field' => 'type', 'operator' => 'eq', 'value' => 'receipt']], $query->filters);
         $this->assertSame(2, $query->page);
         $this->assertSame(25, $query->perPage);
     }
@@ -77,8 +77,8 @@ final class ReportQueryNormalizerTest extends TestCase
         $this->expectException(ReportQueryValidationException::class);
 
         // Acción: envía una columna que no pertenece al contrato de la fuente.
-        $normalizer->normalize('inventario.saldos-stock', [
-            'columnas' => ['productos.secret_column'],
+        $normalizer->normalize('inventory.stock-balances', [
+            'columns' => ['products.secret_column'],
         ]);
     }
 
@@ -90,8 +90,8 @@ final class ReportQueryNormalizerTest extends TestCase
         $this->expectException(ReportQueryValidationException::class);
 
         // Acción: solicita un tipo de movimiento no declarado por la fuente.
-        $normalizer->normalize('inventario.movimientos', [
-            'filtros' => [['campo' => 'tipo', 'operador' => 'eq', 'valor' => 'drop-table']],
+        $normalizer->normalize('inventory.movements', [
+            'filters' => [['field' => 'type', 'operator' => 'eq', 'value' => 'drop-table']],
         ]);
     }
 

@@ -14,7 +14,7 @@ final class ListFlockHistoryRequest extends LotsRequest
     {
         return [
             ...$this->filterRules(),
-            'tipo' => ['sometimes', 'in:admission,partial_new,partial_existing,total,departure,mortality,mortality_correction,redistribution_reversal'],
+            'type' => ['sometimes', 'in:admission,partial_new,partial_existing,total,departure,mortality,mortality_correction,redistribution_reversal'],
         ];
     }
 }

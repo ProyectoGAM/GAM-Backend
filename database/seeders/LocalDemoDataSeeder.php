@@ -290,17 +290,17 @@ final class LocalDemoDataSeeder extends Seeder
 
     private function seedReports(User $admin): void
     {
-        $sourceKey = 'inventario.saldos-stock';
+        $sourceKey = 'inventory.stock-balances';
         $query = app(ReportQueryNormalizer::class)->normalize($sourceKey, [
-            'columnas' => ['producto', 'unidad_base', 'ubicacion_stock', 'cantidad_disponible', 'cantidad_minima'],
-            'filtros' => [],
-            'desde' => null,
-            'hasta' => null,
-            'ordenamientos' => [['campo' => 'producto', 'direccion' => 'asc']],
-            'agrupaciones' => [],
-            'metricas' => [],
-            'pagina' => 1,
-            'por_pagina' => 50,
+            'columns' => ['product', 'base_unit', 'stock_location', 'available_quantity', 'minimum_quantity'],
+            'filters' => [],
+            'from' => null,
+            'to' => null,
+            'sorts' => [['field' => 'product', 'direction' => 'asc']],
+            'groupings' => [],
+            'metrics' => [],
+            'page' => 1,
+            'per_page' => 50,
         ]);
         $configuration = $query->toArray();
 

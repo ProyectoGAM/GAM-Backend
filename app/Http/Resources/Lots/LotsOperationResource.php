@@ -20,14 +20,14 @@ final class LotsOperationResource extends JsonResource
     {
         /** @var FlockOperation $operation */
         $operation = $this->resource;
-        $result = ['id_operacion' => $operation->operation_id];
+        $result = ['operation_id' => $operation->operation_id];
         $resources = [
-            'flock' => ['lote', FlockResource::class],
-            'destination' => ['lote_destino', FlockResource::class],
-            'movement' => ['movimiento', FlockMovementResource::class],
-            'mortality' => ['mortalidad', MortalityResource::class],
-            'collection' => ['recoleccion', EggCollectionResource::class],
-            'catalog' => ['catalogo', LotsCatalogResource::class],
+            'flock' => ['flock', FlockResource::class],
+            'destination' => ['destination_flock', FlockResource::class],
+            'movement' => ['movement', FlockMovementResource::class],
+            'mortality' => ['mortality', MortalityResource::class],
+            'collection' => ['collection', EggCollectionResource::class],
+            'catalog' => ['catalog', LotsCatalogResource::class],
         ];
         foreach ($resources as $key => [$public, $resource]) {
             if (isset($operation->result[$key])) {

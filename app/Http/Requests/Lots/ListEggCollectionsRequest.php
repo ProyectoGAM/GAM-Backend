@@ -16,10 +16,10 @@ final class ListEggCollectionsRequest extends LotsRequest
     {
         return [
             ...$this->filterRules(),
-            'lote_id' => ['sometimes', 'ulid'],
-            'galpon_id' => ['sometimes', 'integer', 'exists:poultry_houses,id'],
-            'unidad_productiva_id' => ['sometimes', 'integer', 'exists:production_units,id'],
-            'estado' => ['sometimes', 'in:recorded,cancelled'],
+            'flock_id' => ['sometimes', 'ulid'],
+            'poultry_house_id' => ['sometimes', 'integer', 'exists:poultry_houses,id'],
+            'production_unit_id' => ['sometimes', 'integer', 'exists:production_units,id'],
+            'status' => ['sometimes', 'in:recorded,cancelled'],
         ];
     }
 }

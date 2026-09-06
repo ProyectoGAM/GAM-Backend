@@ -22,9 +22,9 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 final readonly class EggCollectionController
 {
-    public function index(ListEggCollectionsRequest $request, Flock $lote, ListEggCollectionsQuery $query): AnonymousResourceCollection
+    public function index(ListEggCollectionsRequest $request, Flock $flock, ListEggCollectionsQuery $query): AnonymousResourceCollection
     {
-        return EggCollectionResource::collection($query->execute($request->attributesForAction(), $lote));
+        return EggCollectionResource::collection($query->execute($request->attributesForAction(), $flock));
     }
 
     public function indexAll(ListEggCollectionsRequest $request, ListEggCollectionsQuery $query): AnonymousResourceCollection
@@ -32,29 +32,29 @@ final readonly class EggCollectionController
         return EggCollectionResource::collection($query->execute($request->attributesForAction()));
     }
 
-    public function show(ListEggCollectionsRequest $request, EggCollection $recoleccion, LotsSnapshots $snapshots): EggCollectionResource
+    public function show(ListEggCollectionsRequest $request, EggCollection $collection, LotsSnapshots $snapshots): EggCollectionResource
     {
-        return new EggCollectionResource($snapshots->collection($recoleccion, $recoleccion->flock));
+        return new EggCollectionResource($snapshots->collection($collection, $collection->flock));
     }
 
-    public function store(StoreEggCollectionRequest $request, Flock $lote, RecordEggCollectionAction $action): JsonResponse
+    public function store(StoreEggCollectionRequest $request, Flock $flock, RecordEggCollectionAction $action): JsonResponse
     {
-        return (new LotsOperationResource($action->execute($lote, $request->attributesForAction(), $request->actor())))->response()->setStatusCode(201);
+        return (new LotsOperationResource($action->execute($flock, $request->attributesForAction(), $request->actor())))->response()->setStatusCode(201);
     }
 
-    public function update(CorrectEggCollectionRequest $request, EggCollection $recoleccion, CorrectEggCollectionAction $action): LotsOperationResource
+    public function update(CorrectEggCollectionRequest $request, EggCollection $collection, CorrectEggCollectionAction $action): LotsOperationResource
     {
-        return new LotsOperationResource($action->execute($recoleccion, $request->attributesForAction(), $request->actor()));
+        return new LotsOperationResource($action->execute($collection, $request->attributesForAction(), $request->actor()));
     }
 
-    public function cancel(CancelEggCollectionRequest $request, EggCollection $recoleccion, CorrectEggCollectionAction $action): LotsOperationResource
+    public function cancel(CancelEggCollectionRequest $request, EggCollection $collection, CorrectEggCollectionAction $action): LotsOperationResource
     {
-        return new LotsOperationResource($action->execute($recoleccion, $request->attributesForAction(), $request->actor(), cancel: true));
+        return new LotsOperationResource($action->execute($collection, $request->attributesForAction(), $request->actor(), cancel: true));
     }
 
-    public function metrics(FlockMetricsRequest $request, Flock $lote, GetFlockMetricsQuery $query): JsonResponse
+    public function metrics(FlockMetricsRequest $request, Flock $flock, GetFlockMetricsQuery $query): JsonResponse
     {
-        return response()->json(['data' => $query->execute($lote, $request->attributesForAction())]);
+        return response()->json(['data' => $query->execute($flock, $request->attributesForAction())]);
     }
 
     public function metricsAll(FlockMetricsRequest $request, GetEggProductionMetricsQuery $query): JsonResponse

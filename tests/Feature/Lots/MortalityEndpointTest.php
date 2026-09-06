@@ -20,22 +20,22 @@ final class MortalityEndpointTest extends LotsTestCase
         $category = MortalityCategory::factory()->create();
 
         // Request: registra cinco bajas y conserva la cantidad inicial.
-        $created = $this->command('POST', "/lotes/{$flock->public_id}/mortalidades", [
-            'version' => 1, 'cantidad' => 5, 'categoria_mortalidad_id' => $category->id,
-        ])->assertCreated()->assertJsonPath('data.lote.cantidad_viva', 95)->assertJsonPath('data.lote.cantidad_inicial', 100);
-        $id = $created->json('data.mortalidad.id');
+        $created = $this->command('POST', "/flocks/{$flock->public_id}/mortalities", [
+            'version' => 1, 'quantity' => 5, 'mortality_category_id' => $category->id,
+        ])->assertCreated()->assertJsonPath('data.flock.current_quantity', 95)->assertJsonPath('data.flock.initial_quantity', 100);
+        $id = $created->json('data.mortality.id');
         $original = FlockMovement::query()->firstOrFail()->getAttributes();
 
         // Request: corrige a tres bajas mediante un movimiento compensatorio de dos aves.
-        $this->command('PATCH', "/mortalidades/{$id}", [
-            'version' => 1, 'version_lote' => 2, 'cantidad' => 3, 'motivo' => 'Recuento verificado',
-        ])->assertOk()->assertJsonPath('data.lote.cantidad_viva', 97)->assertJsonPath('data.mortalidad.cantidad', 3)
-            ->assertJsonPath('data.movimiento.cantidad', 2);
+        $this->command('PATCH', "/mortalities/{$id}", [
+            'version' => 1, 'flock_version' => 2, 'quantity' => 3, 'reason' => 'Recuento verificado',
+        ])->assertOk()->assertJsonPath('data.flock.current_quantity', 97)->assertJsonPath('data.mortality.quantity', 3)
+            ->assertJsonPath('data.movement.quantity', 2);
 
         // Request: cancela la anotación y restaura el total sin borrar el registro.
-        $this->command('POST', "/mortalidades/{$id}/cancelacion", [
-            'version' => 2, 'version_lote' => 3, 'motivo' => 'Registro duplicado en la libreta',
-        ])->assertOk()->assertJsonPath('data.lote.cantidad_viva', 100)->assertJsonPath('data.mortalidad.estado', 'cancelled');
+        $this->command('POST', "/mortalities/{$id}/cancellation", [
+            'version' => 2, 'flock_version' => 3, 'reason' => 'Registro duplicado en la libreta',
+        ])->assertOk()->assertJsonPath('data.flock.current_quantity', 100)->assertJsonPath('data.mortality.status', 'cancelled');
         $this->assertDatabaseCount('mortality_records', 1);
         $this->assertDatabaseCount('flock_movements', 3);
         $this->assertEquals($original, FlockMovement::query()->firstOrFail()->getAttributes());
@@ -53,9 +53,9 @@ final class MortalityEndpointTest extends LotsTestCase
         $category = MortalityCategory::factory()->create();
 
         // Request: registra todas las bajas sin una finalización implícita.
-        $this->command('POST', "/lotes/{$flock->public_id}/mortalidades", [
-            'version' => 1, 'cantidad' => 3, 'categoria_mortalidad_id' => $category->id,
-        ])->assertCreated()->assertJsonPath('data.lote.cantidad_viva', 0)->assertJsonPath('data.lote.estado', 'quarantined');
+        $this->command('POST', "/flocks/{$flock->public_id}/mortalities", [
+            'version' => 1, 'quantity' => 3, 'mortality_category_id' => $category->id,
+        ])->assertCreated()->assertJsonPath('data.flock.current_quantity', 0)->assertJsonPath('data.flock.status', 'quarantined');
         $this->assertSame(FlockStatus::Quarantined, $flock->fresh()->status);
     }
 
@@ -66,12 +66,12 @@ final class MortalityEndpointTest extends LotsTestCase
         $this->signIn();
         $flock = $this->flock(10);
         $category = MortalityCategory::factory()->create();
-        $payload = ['version' => 1, 'cantidad' => 11, 'categoria_mortalidad_id' => $category->id];
+        $payload = ['version' => 1, 'quantity' => 11, 'mortality_category_id' => $category->id];
 
         // Requests: comprueba cantidades y vigencia del catálogo sin efectos parciales.
-        $this->command('POST', "/lotes/{$flock->public_id}/mortalidades", $payload)->assertConflict();
+        $this->command('POST', "/flocks/{$flock->public_id}/mortalities", $payload)->assertConflict();
         $category->forceFill(['status' => 'inactive'])->save();
-        $this->command('POST', "/lotes/{$flock->public_id}/mortalidades", [...$payload, 'cantidad' => 1])->assertConflict();
+        $this->command('POST', "/flocks/{$flock->public_id}/mortalities", [...$payload, 'quantity' => 1])->assertConflict();
         $this->assertDatabaseCount('mortality_records', 0);
         $this->assertSame(10, $flock->fresh()->current_quantity);
     }
@@ -84,14 +84,14 @@ final class MortalityEndpointTest extends LotsTestCase
         $house = PoultryHouse::factory()->create(['bird_capacity' => 10]);
         $flock = $this->flock(10, house: $house);
         $category = MortalityCategory::factory()->create();
-        $created = $this->command('POST', "/lotes/{$flock->public_id}/mortalidades", [
-            'version' => 1, 'cantidad' => 2, 'categoria_mortalidad_id' => $category->id,
+        $created = $this->command('POST', "/flocks/{$flock->public_id}/mortalities", [
+            'version' => 1, 'quantity' => 2, 'mortality_category_id' => $category->id,
         ])->assertCreated();
         $this->flock(2, house: $house);
 
         // Request: no restaura aves cuando la capacidad ya está ocupada.
-        $this->command('POST', '/mortalidades/'.$created->json('data.mortalidad.id').'/cancelacion', [
-            'version' => 1, 'version_lote' => 2, 'motivo' => 'Corrección sin plazas disponibles',
+        $this->command('POST', '/mortalities/'.$created->json('data.mortality.id').'/cancellation', [
+            'version' => 1, 'flock_version' => 2, 'reason' => 'Corrección sin plazas disponibles',
         ])->assertConflict();
         $this->assertSame(8, $flock->fresh()->current_quantity);
         $this->assertDatabaseHas('mortality_records', ['status' => 'recorded', 'version' => 1]);
@@ -105,14 +105,14 @@ final class MortalityEndpointTest extends LotsTestCase
         $this->signIn();
         $flock = $this->flock();
         $category = MortalityCategory::factory()->create();
-        $created = $this->command('POST', "/lotes/{$flock->public_id}/mortalidades", [
-            'version' => 1, 'cantidad' => 2, 'categoria_mortalidad_id' => $category->id,
+        $created = $this->command('POST', "/flocks/{$flock->public_id}/mortalities", [
+            'version' => 1, 'quantity' => 2, 'mortality_category_id' => $category->id,
         ])->assertCreated();
-        $url = '/mortalidades/'.$created->json('data.mortalidad.id');
+        $url = '/mortalities/'.$created->json('data.mortality.id');
 
         // Requests: rechaza cada versión desactualizada por separado.
-        $this->command('PATCH', $url, ['version' => 1, 'version_lote' => 1, 'cantidad' => 1, 'motivo' => 'Versión anterior'])->assertConflict();
-        $this->command('PATCH', $url, ['version' => 2, 'version_lote' => 2, 'cantidad' => 1, 'motivo' => 'Versión incorrecta'])->assertConflict();
+        $this->command('PATCH', $url, ['version' => 1, 'flock_version' => 1, 'quantity' => 1, 'reason' => 'Versión anterior'])->assertConflict();
+        $this->command('PATCH', $url, ['version' => 2, 'flock_version' => 2, 'quantity' => 1, 'reason' => 'Versión incorrecta'])->assertConflict();
         $this->assertSame(98, $flock->fresh()->current_quantity);
     }
 
@@ -125,19 +125,19 @@ final class MortalityEndpointTest extends LotsTestCase
         $flock = $this->flock(10);
         $oldHouse = $flock->poultry_house_id;
         $category = MortalityCategory::factory()->create();
-        $created = $this->command('POST', "/lotes/{$flock->public_id}/mortalidades", [
-            'version' => 1, 'cantidad' => 1, 'categoria_mortalidad_id' => $category->id, 'ocurrido_en' => '2026-08-25T01:00:00+00:00',
+        $created = $this->command('POST', "/flocks/{$flock->public_id}/mortalities", [
+            'version' => 1, 'quantity' => 1, 'mortality_category_id' => $category->id, 'occurred_at' => '2026-08-25T01:00:00+00:00',
         ])->assertCreated();
         $newHouse = PoultryHouse::factory()->create();
-        $this->command('POST', "/lotes/{$flock->public_id}/redistribuciones", [
-            'version' => 2, 'cantidad' => 9, 'galpon_destino_id' => $newHouse->id,
+        $this->command('POST', "/flocks/{$flock->public_id}/redistributions", [
+            'version' => 2, 'quantity' => 9, 'destination_poultry_house_id' => $newHouse->id,
         ])->assertCreated();
 
         // Consultas: a las 01 UTC todavía es el día anterior en Montevideo.
-        $this->getJson("/api/v1/mortalidades?lote_id={$flock->public_id}&galpon_id={$oldHouse}&fecha_desde=2026-08-24&fecha_hasta=2026-08-24")
-            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $created->json('data.mortalidad.id'));
-        $this->getJson("/api/v1/mortalidades?galpon_id={$newHouse->id}")->assertOk()->assertJsonCount(0, 'data');
-        $this->getJson('/api/v1/mortalidades?fecha_desde=2026-08-25&fecha_hasta=2026-08-24')->assertUnprocessable();
+        $this->getJson("/api/v1/mortalities?flock_id={$flock->public_id}&poultry_house_id={$oldHouse}&date_from=2026-08-24&date_to=2026-08-24")
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $created->json('data.mortality.id'));
+        $this->getJson("/api/v1/mortalities?poultry_house_id={$newHouse->id}")->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/mortalities?date_from=2026-08-25&date_to=2026-08-24')->assertUnprocessable();
     }
 
     // Flujo: no acepta hechos futuros ni anteriores a la presencia del lote.
@@ -147,11 +147,11 @@ final class MortalityEndpointTest extends LotsTestCase
         $this->signIn();
         $flock = $this->flock();
         $category = MortalityCategory::factory()->create();
-        $payload = ['version' => 1, 'cantidad' => 1, 'categoria_mortalidad_id' => $category->id];
+        $payload = ['version' => 1, 'quantity' => 1, 'mortality_category_id' => $category->id];
 
         // Requests: rechaza ambos extremos incompatibles de la línea temporal.
-        $this->command('POST', "/lotes/{$flock->public_id}/mortalidades", [...$payload, 'ocurrido_en' => now()->addDay()->toIso8601String()])->assertConflict();
-        $this->command('POST', "/lotes/{$flock->public_id}/mortalidades", [...$payload, 'ocurrido_en' => $flock->established_at->subDay()->toIso8601String()])->assertConflict();
+        $this->command('POST', "/flocks/{$flock->public_id}/mortalities", [...$payload, 'occurred_at' => now()->addDay()->toIso8601String()])->assertConflict();
+        $this->command('POST', "/flocks/{$flock->public_id}/mortalities", [...$payload, 'occurred_at' => $flock->established_at->subDay()->toIso8601String()])->assertConflict();
         $this->assertDatabaseCount('mortality_records', 0);
     }
 
@@ -162,12 +162,12 @@ final class MortalityEndpointTest extends LotsTestCase
         $this->signIn();
         $flock = $this->flock(10);
         $category = MortalityCategory::factory()->create();
-        $payload = ['version' => 1, 'cantidad' => 2, 'categoria_mortalidad_id' => $category->id];
+        $payload = ['version' => 1, 'quantity' => 2, 'mortality_category_id' => $category->id];
         $key = (string) Str::uuid();
 
         // Requests: ambos envíos obtienen la misma respuesta persistida.
-        $first = $this->command('POST', "/lotes/{$flock->public_id}/mortalidades", $payload, $key)->assertCreated();
-        $second = $this->command('POST', "/lotes/{$flock->public_id}/mortalidades", $payload, $key)->assertCreated();
+        $first = $this->command('POST', "/flocks/{$flock->public_id}/mortalities", $payload, $key)->assertCreated();
+        $second = $this->command('POST', "/flocks/{$flock->public_id}/mortalities", $payload, $key)->assertCreated();
         $this->assertSame($first->json(), $second->json());
         $this->assertSame(8, $flock->fresh()->current_quantity);
         $this->assertDatabaseCount('mortality_records', 1);
@@ -180,17 +180,17 @@ final class MortalityEndpointTest extends LotsTestCase
         $this->signIn();
         $flock = $this->flock();
         $category = MortalityCategory::factory()->create();
-        $created = $this->command('POST', "/lotes/{$flock->public_id}/mortalidades", [
-            'version' => 1, 'cantidad' => 1, 'categoria_mortalidad_id' => $category->id,
+        $created = $this->command('POST', "/flocks/{$flock->public_id}/mortalities", [
+            'version' => 1, 'quantity' => 1, 'mortality_category_id' => $category->id,
         ])->assertCreated();
-        $url = '/mortalidades/'.$created->json('data.mortalidad.id').'/cancelacion';
-        $this->command('POST', $url, ['version' => 1, 'version_lote' => 2, 'motivo' => 'Error'])->assertOk();
+        $url = '/mortalities/'.$created->json('data.mortality.id').'/cancellation';
+        $this->command('POST', $url, ['version' => 1, 'flock_version' => 2, 'reason' => 'Error'])->assertOk();
 
         // Requests: no duplica la compensación ni permite registrar en un lote finalizado.
-        $this->command('POST', $url, ['version' => 2, 'version_lote' => 3, 'motivo' => 'Otra cancelación'])->assertConflict();
-        $this->command('POST', "/lotes/{$flock->public_id}/finalizacion", ['version' => 3, 'motivo' => 'Fin de ciclo'])->assertOk();
-        $this->command('POST', "/lotes/{$flock->public_id}/mortalidades", [
-            'version' => 4, 'cantidad' => 1, 'categoria_mortalidad_id' => $category->id,
+        $this->command('POST', $url, ['version' => 2, 'flock_version' => 3, 'reason' => 'Otra cancelación'])->assertConflict();
+        $this->command('POST', "/flocks/{$flock->public_id}/finalization", ['version' => 3, 'reason' => 'Fin de ciclo'])->assertOk();
+        $this->command('POST', "/flocks/{$flock->public_id}/mortalities", [
+            'version' => 4, 'quantity' => 1, 'mortality_category_id' => $category->id,
         ])->assertConflict();
         $this->assertDatabaseCount('mortality_records', 1);
     }

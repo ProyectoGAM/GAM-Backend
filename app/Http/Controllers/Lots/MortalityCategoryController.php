@@ -24,8 +24,8 @@ final readonly class MortalityCategoryController
         return (new LotsOperationResource($action->execute(null, $request->attributesForAction(), $request->actor())))->response()->setStatusCode(201);
     }
 
-    public function update(SaveMortalityCategoryRequest $request, MortalityCategory $categoria, SaveMortalityCategoryAction $action): LotsOperationResource
+    public function update(SaveMortalityCategoryRequest $request, MortalityCategory $mortalityCategory, SaveMortalityCategoryAction $action): LotsOperationResource
     {
-        return new LotsOperationResource($action->execute($categoria, $request->attributesForAction(), $request->actor()));
+        return new LotsOperationResource($action->execute($mortalityCategory, $request->attributesForAction(), $request->actor()));
     }
 }

@@ -53,6 +53,6 @@ final readonly class CorrectEggStockTransactionAction
     /** @return array<string, mixed> */
     private function snapshot(EggStockTransaction $transaction): array
     {
-        return ['id' => $transaction->public_id, 'tipo' => $transaction->type, 'cantidad' => $transaction->quantity, 'ocurrido_en' => $transaction->occurred_at->toIso8601String(), 'motivo' => $transaction->reason, 'observaciones' => $transaction->notes, 'estado' => $transaction->status, 'version' => $transaction->version];
+        return ['id' => $transaction->public_id, 'type' => $transaction->type, 'quantity' => $transaction->quantity, 'occurred_at' => $transaction->occurred_at->toIso8601String(), 'reason' => $transaction->reason, 'notes' => $transaction->notes, 'status' => $transaction->status, 'version' => $transaction->version];
     }
 }

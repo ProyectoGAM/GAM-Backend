@@ -17,61 +17,61 @@ final class InventoryMovementsReportSource implements ReportSource
     public function definition(): ReportSourceDefinition
     {
         return new ReportSourceDefinition(
-            key: 'inventario.movimientos',
+            key: 'inventory.movements',
             definitionVersion: '1.1',
             label: 'Movimientos de inventario',
             description: 'Ingresos, salidas, pérdidas, ajustes y transferencias por fecha y unidad base.',
             permission: 'inventory.view',
             columns: [
-                'fecha' => ['label' => 'Fecha', 'tipo' => 'datetime'],
-                'tipo' => ['label' => 'Tipo', 'tipo' => 'string'],
-                'producto_id' => ['label' => 'ID de producto', 'tipo' => 'integer'],
-                'producto' => ['label' => 'Producto', 'tipo' => 'string'],
-                'unidad_base' => ['label' => 'Unidad base', 'tipo' => 'string'],
-                'ubicacion_stock_id' => ['label' => 'ID de ubicación', 'tipo' => 'integer'],
-                'ubicacion_stock' => ['label' => 'Ubicación', 'tipo' => 'string'],
-                'unidad_productiva_id' => ['label' => 'ID de unidad productiva', 'tipo' => 'integer'],
-                'unidad_productiva' => ['label' => 'Unidad productiva', 'tipo' => 'string'],
-                'proveedor_id' => ['label' => 'ID de proveedor', 'tipo' => 'integer'],
-                'proveedor' => ['label' => 'Proveedor', 'tipo' => 'string'],
-                'tipo_referencia' => ['label' => 'Tipo de referencia', 'tipo' => 'string'],
-                'referencia_id' => ['label' => 'Referencia', 'tipo' => 'string'],
-                'variacion_fisica' => ['label' => 'Variación física', 'tipo' => 'number', 'unit' => 'unidad_base'],
+                'date' => ['label' => 'Fecha', 'type' => 'datetime'],
+                'type' => ['label' => 'Tipo', 'type' => 'string'],
+                'product_id' => ['label' => 'ID de producto', 'type' => 'integer'],
+                'product' => ['label' => 'Producto', 'type' => 'string'],
+                'base_unit' => ['label' => 'Unidad base', 'type' => 'string'],
+                'stock_location_id' => ['label' => 'ID de ubicación', 'type' => 'integer'],
+                'stock_location' => ['label' => 'Ubicación', 'type' => 'string'],
+                'production_unit_id' => ['label' => 'ID de unidad productiva', 'type' => 'integer'],
+                'production_unit' => ['label' => 'Unidad productiva', 'type' => 'string'],
+                'supplier_id' => ['label' => 'ID de proveedor', 'type' => 'integer'],
+                'supplier' => ['label' => 'Proveedor', 'type' => 'string'],
+                'reference_type' => ['label' => 'Tipo de referencia', 'type' => 'string'],
+                'reference_id' => ['label' => 'Referencia', 'type' => 'string'],
+                'physical_delta' => ['label' => 'Variación física', 'type' => 'number', 'unit' => 'base_unit'],
             ],
             filters: [
-                'tipo' => ['label' => 'Tipo', 'tipo' => 'enum', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options' => array_map(static fn (InventoryMovementType $type): string => $type->value, InventoryMovementType::cases()), 'options_source' => 'movementTypes'],
-                'producto_id' => ['label' => 'Producto', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'products'],
-                'ubicacion_stock_id' => ['label' => 'Ubicación', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'stockLocations'],
-                'unidad_productiva_id' => ['label' => 'Unidad productiva', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'productionUnits'],
-                'proveedor_id' => ['label' => 'Proveedor', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'suppliers'],
+                'type' => ['label' => 'Tipo', 'type' => 'enum', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options' => array_map(static fn (InventoryMovementType $type): string => $type->value, InventoryMovementType::cases()), 'options_source' => 'movementTypes'],
+                'product_id' => ['label' => 'Producto', 'type' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'products'],
+                'stock_location_id' => ['label' => 'Ubicación', 'type' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'stockLocations'],
+                'production_unit_id' => ['label' => 'Unidad productiva', 'type' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'productionUnits'],
+                'supplier_id' => ['label' => 'Proveedor', 'type' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'suppliers'],
             ],
             groupings: [
-                'dia' => ['label' => 'Día', 'tipo' => 'fecha'],
-                'semana' => ['label' => 'Semana', 'tipo' => 'fecha'],
-                'mes' => ['label' => 'Mes', 'tipo' => 'fecha'],
-                'tipo' => ['label' => 'Tipo', 'tipo' => 'dimension'],
-                'producto' => ['label' => 'Producto', 'tipo' => 'dimension'],
-                'ubicacion_stock' => ['label' => 'Ubicación', 'tipo' => 'dimension'],
-                'unidad_productiva' => ['label' => 'Unidad productiva', 'tipo' => 'dimension'],
-                'unidad_base' => ['label' => 'Unidad base', 'tipo' => 'dimension'],
+                'day' => ['label' => 'Día', 'type' => 'date'],
+                'week' => ['label' => 'Semana', 'type' => 'date'],
+                'month' => ['label' => 'Mes', 'type' => 'date'],
+                'type' => ['label' => 'Tipo', 'type' => 'dimension'],
+                'product' => ['label' => 'Producto', 'type' => 'dimension'],
+                'stock_location' => ['label' => 'Ubicación', 'type' => 'dimension'],
+                'production_unit' => ['label' => 'Unidad productiva', 'type' => 'dimension'],
+                'base_unit' => ['label' => 'Unidad base', 'type' => 'dimension'],
             ],
             metrics: [
-                'cantidad_movimientos' => ['label' => 'Cantidad de movimientos', 'tipo' => 'count'],
-                'cantidad_ingresos' => ['label' => 'Cantidad de ingresos', 'tipo' => 'quantity', 'unit' => 'unidad_base'],
-                'cantidad_salidas' => ['label' => 'Cantidad de salidas', 'tipo' => 'quantity', 'unit' => 'unidad_base'],
-                'cantidad_perdidas' => ['label' => 'Cantidad de pérdidas', 'tipo' => 'quantity', 'unit' => 'unidad_base'],
-                'cantidad_ajustes' => ['label' => 'Cantidad de ajustes', 'tipo' => 'quantity', 'unit' => 'unidad_base'],
+                'movement_count' => ['label' => 'Cantidad de movimientos', 'type' => 'count'],
+                'received_quantity' => ['label' => 'Cantidad de ingresos', 'type' => 'quantity', 'unit' => 'base_unit'],
+                'issued_quantity' => ['label' => 'Cantidad de salidas', 'type' => 'quantity', 'unit' => 'base_unit'],
+                'lost_quantity' => ['label' => 'Cantidad de pérdidas', 'type' => 'quantity', 'unit' => 'base_unit'],
+                'adjusted_quantity' => ['label' => 'Cantidad de ajustes', 'type' => 'quantity', 'unit' => 'base_unit'],
             ],
             sorts: [
-                'fecha' => ['label' => 'Fecha', 'direccion' => 'both'],
-                'tipo' => ['label' => 'Tipo', 'direccion' => 'asc'],
-                'producto' => ['label' => 'Producto', 'direccion' => 'asc'],
-                'ubicacion_stock' => ['label' => 'Ubicación', 'direccion' => 'asc'],
-                'unidad_base' => ['label' => 'Unidad base', 'direccion' => 'asc'],
+                'date' => ['label' => 'Fecha', 'direction' => 'both'],
+                'type' => ['label' => 'Tipo', 'direction' => 'asc'],
+                'product' => ['label' => 'Producto', 'direction' => 'asc'],
+                'stock_location' => ['label' => 'Ubicación', 'direction' => 'asc'],
+                'base_unit' => ['label' => 'Unidad base', 'direction' => 'asc'],
             ],
             formats: ['xlsx', 'pdf'],
             limits: ['max_page_size' => 100, 'max_range_days' => 366, 'max_export_rows' => 50000],
-            defaultSort: 'fecha:desc',
+            defaultSort: 'date:desc',
         );
     }
 
@@ -143,31 +143,31 @@ final class InventoryMovementsReportSource implements ReportSource
     private function detailSelects(): array
     {
         return [
-            'inventory_movements.occurred_at as fecha',
-            'inventory_movements.type as tipo',
-            'products.id as producto_id',
-            'products.name as producto',
-            'products.base_unit as unidad_base',
-            'stock_locations.id as ubicacion_stock_id',
-            'stock_locations.name as ubicacion_stock',
-            'production_units.id as unidad_productiva_id',
-            'production_units.name as unidad_productiva',
-            'suppliers.id as proveedor_id',
-            'suppliers.name as proveedor',
-            'inventory_movements.reference_type as tipo_referencia',
-            'inventory_movements.reference_id as referencia_id',
-            'inventory_movement_lines.on_hand_delta as variacion_fisica',
+            'inventory_movements.occurred_at as date',
+            'inventory_movements.type as type',
+            'products.id as product_id',
+            'products.name as product',
+            'products.base_unit as base_unit',
+            'stock_locations.id as stock_location_id',
+            'stock_locations.name as stock_location',
+            'production_units.id as production_unit_id',
+            'production_units.name as production_unit',
+            'suppliers.id as supplier_id',
+            'suppliers.name as supplier',
+            'inventory_movements.reference_type as reference_type',
+            'inventory_movements.reference_id as reference_id',
+            'inventory_movement_lines.on_hand_delta as physical_delta',
         ];
     }
 
     private function applyFilters(QueryBuilder $builder, ReportQueryData $query): QueryBuilder
     {
         $fields = [
-            'tipo' => 'inventory_movements.type',
-            'producto_id' => 'products.id',
-            'ubicacion_stock_id' => 'stock_locations.id',
-            'unidad_productiva_id' => 'production_units.id',
-            'proveedor_id' => 'inventory_movements.supplier_id',
+            'type' => 'inventory_movements.type',
+            'product_id' => 'products.id',
+            'stock_location_id' => 'stock_locations.id',
+            'production_unit_id' => 'production_units.id',
+            'supplier_id' => 'inventory_movements.supplier_id',
         ];
 
         foreach ($query->filters as $filter) {
@@ -192,24 +192,24 @@ final class InventoryMovementsReportSource implements ReportSource
     private function applyGrouping(QueryBuilder $builder, ReportQueryData $query): QueryBuilder
     {
         $groupFields = [
-            'dia' => ["DATE_TRUNC('day', inventory_movements.occurred_at)", "DATE_TRUNC('day', inventory_movements.occurred_at)"],
-            'semana' => ["DATE_TRUNC('week', inventory_movements.occurred_at)", "DATE_TRUNC('week', inventory_movements.occurred_at)"],
-            'mes' => ["DATE_TRUNC('month', inventory_movements.occurred_at)", "DATE_TRUNC('month', inventory_movements.occurred_at)"],
-            'tipo' => ['inventory_movements.type', 'inventory_movements.type'],
-            'producto' => ['products.name', 'products.name'],
-            'ubicacion_stock' => ['stock_locations.name', 'stock_locations.name'],
-            'unidad_productiva' => ['production_units.name', 'production_units.name'],
-            'unidad_base' => ['products.base_unit', 'products.base_unit'],
+            'day' => ["DATE_TRUNC('day', inventory_movements.occurred_at)", "DATE_TRUNC('day', inventory_movements.occurred_at)"],
+            'week' => ["DATE_TRUNC('week', inventory_movements.occurred_at)", "DATE_TRUNC('week', inventory_movements.occurred_at)"],
+            'month' => ["DATE_TRUNC('month', inventory_movements.occurred_at)", "DATE_TRUNC('month', inventory_movements.occurred_at)"],
+            'type' => ['inventory_movements.type', 'inventory_movements.type'],
+            'product' => ['products.name', 'products.name'],
+            'stock_location' => ['stock_locations.name', 'stock_locations.name'],
+            'production_unit' => ['production_units.name', 'production_units.name'],
+            'base_unit' => ['products.base_unit', 'products.base_unit'],
         ];
         $aliases = [
-            'dia' => 'dia',
-            'semana' => 'semana',
-            'mes' => 'mes',
-            'tipo' => 'tipo',
-            'producto' => 'producto',
-            'ubicacion_stock' => 'ubicacion_stock',
-            'unidad_productiva' => 'unidad_productiva',
-            'unidad_base' => 'unidad_base',
+            'day' => 'day',
+            'week' => 'week',
+            'month' => 'month',
+            'type' => 'type',
+            'product' => 'product',
+            'stock_location' => 'stock_location',
+            'production_unit' => 'production_unit',
+            'base_unit' => 'base_unit',
         ];
         $selects = [];
         $groupBy = [];
@@ -220,11 +220,11 @@ final class InventoryMovementsReportSource implements ReportSource
         }
 
         $metricExpressions = [
-            'cantidad_movimientos' => 'COUNT(DISTINCT inventory_movements.id)',
-            'cantidad_ingresos' => "SUM(CASE WHEN inventory_movements.type = 'receipt' THEN inventory_movement_lines.on_hand_delta ELSE 0 END)",
-            'cantidad_salidas' => "SUM(CASE WHEN inventory_movements.type = 'issue' THEN ABS(inventory_movement_lines.on_hand_delta) ELSE 0 END)",
-            'cantidad_perdidas' => "SUM(CASE WHEN inventory_movements.type = 'loss' THEN ABS(inventory_movement_lines.on_hand_delta) ELSE 0 END)",
-            'cantidad_ajustes' => "SUM(CASE WHEN inventory_movements.type = 'adjustment' THEN inventory_movement_lines.on_hand_delta ELSE 0 END)",
+            'movement_count' => 'COUNT(DISTINCT inventory_movements.id)',
+            'received_quantity' => "SUM(CASE WHEN inventory_movements.type = 'receipt' THEN inventory_movement_lines.on_hand_delta ELSE 0 END)",
+            'issued_quantity' => "SUM(CASE WHEN inventory_movements.type = 'issue' THEN ABS(inventory_movement_lines.on_hand_delta) ELSE 0 END)",
+            'lost_quantity' => "SUM(CASE WHEN inventory_movements.type = 'loss' THEN ABS(inventory_movement_lines.on_hand_delta) ELSE 0 END)",
+            'adjusted_quantity' => "SUM(CASE WHEN inventory_movements.type = 'adjustment' THEN inventory_movement_lines.on_hand_delta ELSE 0 END)",
         ];
         foreach ($query->metrics as $metric) {
             $selects[] = DB::raw("{$metricExpressions[$metric]} as {$metric}");
@@ -236,14 +236,14 @@ final class InventoryMovementsReportSource implements ReportSource
     private function applySorts(QueryBuilder $builder, ReportQueryData $query, bool $grouped): QueryBuilder
     {
         $aliases = [
-            'dia' => 'dia',
-            'semana' => 'semana',
-            'mes' => 'mes',
-            'fecha' => 'fecha',
-            'tipo' => 'tipo',
-            'producto' => 'producto',
-            'ubicacion_stock' => 'ubicacion_stock',
-            'unidad_base' => 'unidad_base',
+            'day' => 'day',
+            'week' => 'week',
+            'month' => 'month',
+            'date' => 'date',
+            'type' => 'type',
+            'product' => 'product',
+            'stock_location' => 'stock_location',
+            'base_unit' => 'base_unit',
         ];
         foreach ($query->sorts as $sort) {
             if ($grouped && ! in_array($sort['field'], [...$query->groupings, ...$query->metrics], true)) {
@@ -252,7 +252,7 @@ final class InventoryMovementsReportSource implements ReportSource
             $builder->orderBy($aliases[$sort['field']], $sort['direction']);
         }
 
-        return $builder->orderBy($grouped ? $query->groupings[0] ?? $query->metrics[0] ?? 'fecha' : 'fecha');
+        return $builder->orderBy($grouped ? $query->groupings[0] ?? $query->metrics[0] ?? 'date' : 'date');
     }
 
     /** @param list<string> $columns @return array<string, mixed> */
@@ -261,7 +261,7 @@ final class InventoryMovementsReportSource implements ReportSource
         $result = [];
         foreach ($columns as $column) {
             $value = $row->{$column} ?? null;
-            if (in_array($column, ['variacion_fisica', 'cantidad_ingresos', 'cantidad_salidas', 'cantidad_perdidas', 'cantidad_ajustes'], true)) {
+            if (in_array($column, ['physical_delta', 'received_quantity', 'issued_quantity', 'lost_quantity', 'adjusted_quantity'], true)) {
                 $value = (string) $value;
             }
             $result[$column] = $value;
@@ -275,8 +275,8 @@ final class InventoryMovementsReportSource implements ReportSource
     {
         $units = [];
         foreach ($columns as $column) {
-            if (in_array($column, ['variacion_fisica', 'cantidad_ingresos', 'cantidad_salidas', 'cantidad_perdidas', 'cantidad_ajustes'], true)) {
-                $units[$column] = 'unidad_base';
+            if (in_array($column, ['physical_delta', 'received_quantity', 'issued_quantity', 'lost_quantity', 'adjusted_quantity'], true)) {
+                $units[$column] = 'base_unit';
             }
         }
 

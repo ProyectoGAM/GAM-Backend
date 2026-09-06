@@ -5,7 +5,6 @@ namespace App\Http\Controllers\AuditAndTraceability;
 use App\Http\Requests\AuditAndTraceability\ListAuditEntriesRequest;
 use App\Http\Resources\AuditAndTraceability\AuditEntryResource;
 use App\Queries\AuditAndTraceability\ListAuditEntriesQuery;
-use App\Support\PublicInputMapper;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 final class AuditEntryController
@@ -15,7 +14,7 @@ final class AuditEntryController
         ListAuditEntriesQuery $listAuditEntries,
     ): AnonymousResourceCollection {
         return AuditEntryResource::collection(
-            $listAuditEntries->execute(PublicInputMapper::toInternal($request->validated())),
+            $listAuditEntries->execute($request->validated()),
         );
     }
 }

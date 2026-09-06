@@ -12,6 +12,6 @@ final class StoreEggStockReceiptRequest extends EggStockRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        return [...$this->commandRules(), 'cantidad' => $this->quantityRules(), 'ocurrido_en' => ['sometimes', 'date'], 'motivo' => ['required', 'string', 'max:500'], 'observaciones' => ['sometimes', 'nullable', 'string', 'max:5000']];
+        return [...$this->commandRules(), 'quantity' => $this->quantityRules(), 'occurred_at' => ['sometimes', 'date'], 'reason' => ['required', 'string', 'max:500'], 'notes' => ['sometimes', 'nullable', 'string', 'max:5000']];
     }
 }

@@ -6,7 +6,7 @@ final class CancelMortalityRequest extends LotsRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('update', $this->route('mortalidad')) ?? false;
+        return $this->user()?->can('update', $this->route('mortality')) ?? false;
     }
 
     /** @return array<string, mixed> */
@@ -14,8 +14,8 @@ final class CancelMortalityRequest extends LotsRequest
     {
         return [
             ...$this->commandRules(),
-            'version_lote' => ['required', 'integer', 'min:1'],
-            'motivo' => ['required', 'string', 'max:500'],
+            'flock_version' => ['required', 'integer', 'min:1'],
+            'reason' => ['required', 'string', 'max:500'],
         ];
     }
 }

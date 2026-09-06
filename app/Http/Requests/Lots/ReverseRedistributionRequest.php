@@ -14,8 +14,8 @@ final class ReverseRedistributionRequest extends LotsRequest
     {
         return [
             ...$this->commandRules(),
-            'version_destino' => ['sometimes', 'integer', 'min:1'],
-            'motivo' => ['required', 'string', 'max:500'],
+            'destination_version' => ['sometimes', 'integer', 'min:1'],
+            'reason' => ['required', 'string', 'max:500'],
         ];
     }
 }

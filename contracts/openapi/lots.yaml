@@ -2,7 +2,7 @@ openapi: "3.1.0"
 info:
   title: "09 — Producción y stock de huevos"
   version: "2.0.0"
-  description: "Contrato de Lotes y producción de huevos para web y mobile. La recolección de huevo genérico ingresa atómicamente a una cuenta corriente por unidad productiva; las correcciones son compensaciones auditadas. No hay borrado ni interfaz mobile en esta entrega. Los valores de estado, eventos, tipos y permisos son identificadores estables en inglés."
+  description: "Contrato de Lotes y producción de huevos para web y mobile. La recolección de huevo genérico ingresa atómicamente a una cuenta corriente por unidad productiva; las correcciones son compensaciones auditadas. No hay borrado ni interfaz mobile en esta entrega. Los valores de status, eventos, tipos y permisos son identificadores estables en inglés."
   license:
     name: "Proprietary"
     identifier: "Proprietary"
@@ -32,7 +32,7 @@ tags:
     name: "Stock de huevos"
     description: "Cuenta corriente por unidad productiva, movimientos y correcciones."
 paths:
-  "/lotes":
+  "/flocks":
     get:
       tags: ["Lotes"]
       operationId: "listFlocks"
@@ -107,7 +107,7 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/lotes/{lote}":
+  "/flocks/{flock}":
     get:
       tags: ["Lotes"]
       operationId: "showFlock"
@@ -116,7 +116,7 @@ paths:
       x-permission: "flocks.view"
       parameters:
         -
-          "$ref": "#/components/parameters/Lote"
+          "$ref": "#/components/parameters/Flock"
       responses:
         "200":
           description: "Consulta u operación completada."
@@ -135,12 +135,12 @@ paths:
     patch:
       tags: ["Lotes"]
       operationId: "updateFlock"
-      summary: "Modifica código u observaciones del lote"
+      summary: "Modifica el código o las notas del lote"
       description: "Permiso requerido: flocks.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "flocks.manage"
       parameters:
         -
-          "$ref": "#/components/parameters/Lote"
+          "$ref": "#/components/parameters/Flock"
         -
           "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -166,7 +166,7 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/lotes/{lote}/estado":
+  "/flocks/{flock}/status":
     patch:
       tags: ["Lotes"]
       operationId: "changeFlockStatus"
@@ -175,7 +175,7 @@ paths:
       x-permission: "flocks.manage"
       parameters:
         -
-          "$ref": "#/components/parameters/Lote"
+          "$ref": "#/components/parameters/Flock"
         -
           "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -201,7 +201,7 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/lotes/{lote}/finalizacion":
+  "/flocks/{flock}/finalization":
     post:
       tags: ["Lotes"]
       operationId: "finalizeFlock"
@@ -210,7 +210,7 @@ paths:
       x-permission: "flocks.finalize"
       parameters:
         -
-          "$ref": "#/components/parameters/Lote"
+          "$ref": "#/components/parameters/Flock"
         -
           "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -236,7 +236,7 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/lotes/{lote}/redistribuciones":
+  "/flocks/{flock}/redistributions":
     post:
       tags: ["Redistribuciones"]
       operationId: "redistributeFlock"
@@ -245,7 +245,7 @@ paths:
       x-permission: "flocks.redistribute"
       parameters:
         -
-          "$ref": "#/components/parameters/Lote"
+          "$ref": "#/components/parameters/Flock"
         -
           "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -271,7 +271,7 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/redistribuciones/{redistribucion}/reversiones":
+  "/redistributions/{redistribution}/reversals":
     post:
       tags: ["Redistribuciones"]
       operationId: "reverseRedistribution"
@@ -280,7 +280,7 @@ paths:
       x-permission: "flocks.redistribute"
       parameters:
         -
-          "$ref": "#/components/parameters/Redistribucion"
+          "$ref": "#/components/parameters/Redistribution"
         -
           "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -306,7 +306,7 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/lotes/{lote}/historial":
+  "/flocks/{flock}/history":
     get:
       tags: ["Redistribuciones"]
       operationId: "listFlockHistory"
@@ -315,7 +315,7 @@ paths:
       x-permission: "flocks.view"
       parameters:
         -
-          "$ref": "#/components/parameters/Lote"
+          "$ref": "#/components/parameters/Flock"
         -
           "$ref": "#/components/parameters/Page"
         -
@@ -341,7 +341,7 @@ paths:
           "$ref": "#/components/responses/NotFound"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/galpones/{galpon}/lotes":
+  "/poultry-houses/{poultryHouse}/flocks":
     get:
       tags: ["Lotes"]
       operationId: "listHouseFlocks"
@@ -350,7 +350,7 @@ paths:
       x-permission: "flocks.view"
       parameters:
         -
-          "$ref": "#/components/parameters/Galpon"
+          "$ref": "#/components/parameters/PoultryHouse"
         -
           "$ref": "#/components/parameters/Page"
         -
@@ -384,7 +384,7 @@ paths:
           "$ref": "#/components/responses/NotFound"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/razas":
+  "/breeds":
     get:
       tags: ["Catálogos"]
       operationId: "listBreeds"
@@ -447,7 +447,7 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/razas/{raza}":
+  "/breeds/{breed}":
     patch:
       tags: ["Catálogos"]
       operationId: "updateBreed"
@@ -456,7 +456,7 @@ paths:
       x-permission: "breeds.manage"
       parameters:
         -
-          "$ref": "#/components/parameters/Raza"
+          "$ref": "#/components/parameters/Breed"
         -
           "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -482,7 +482,7 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/categorias-mortalidad":
+  "/mortality-categories":
     get:
       tags: ["Catálogos"]
       operationId: "listMortalityCategories"
@@ -545,7 +545,7 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/categorias-mortalidad/{categoria}":
+  "/mortality-categories/{mortalityCategory}":
     patch:
       tags: ["Catálogos"]
       operationId: "updateMortalityCategory"
@@ -554,7 +554,7 @@ paths:
       x-permission: "mortality-categories.manage"
       parameters:
         -
-          "$ref": "#/components/parameters/Categoria"
+          "$ref": "#/components/parameters/MortalityCategory"
         -
           "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -580,7 +580,7 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/mortalidades":
+  "/mortalities":
     get:
       tags: ["Mortalidad"]
       operationId: "listMortality"
@@ -617,7 +617,7 @@ paths:
           "$ref": "#/components/responses/NotFound"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/mortalidades/{mortalidad}":
+  "/mortalities/{mortality}":
     get:
       tags: ["Mortalidad"]
       operationId: "showMortality"
@@ -626,7 +626,7 @@ paths:
       x-permission: "mortality.view"
       parameters:
         -
-          "$ref": "#/components/parameters/Mortalidad"
+          "$ref": "#/components/parameters/Mortality"
       responses:
         "200":
           description: "Consulta u operación completada."
@@ -645,12 +645,12 @@ paths:
     patch:
       tags: ["Mortalidad"]
       operationId: "correctMortality"
-      summary: "Rectifica cantidad, categoría u observaciones con auditoría"
+      summary: "Rectifica cantidad, categoría o notas con auditoría"
       description: "Permiso requerido: mortality.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "mortality.manage"
       parameters:
         -
-          "$ref": "#/components/parameters/Mortalidad"
+          "$ref": "#/components/parameters/Mortality"
         -
           "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -676,7 +676,7 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/lotes/{lote}/mortalidades":
+  "/flocks/{flock}/mortalities":
     get:
       tags: ["Mortalidad"]
       operationId: "listFlockMortality"
@@ -685,7 +685,7 @@ paths:
       x-permission: "mortality.view"
       parameters:
         -
-          "$ref": "#/components/parameters/Lote"
+          "$ref": "#/components/parameters/Flock"
         -
           "$ref": "#/components/parameters/Page"
         -
@@ -723,7 +723,7 @@ paths:
       x-permission: "mortality.manage"
       parameters:
         -
-          "$ref": "#/components/parameters/Lote"
+          "$ref": "#/components/parameters/Flock"
         -
           "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -749,16 +749,16 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/mortalidades/{mortalidad}/cancelacion":
+  "/mortalities/{mortality}/cancellation":
     post:
       tags: ["Mortalidad"]
       operationId: "cancelMortality"
-      summary: "Cancela y restituye aves si capacidad y estado lo permiten"
+      summary: "Cancela y restituye aves si la capacidad y el estado lo permiten"
       description: "Permiso requerido: mortality.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "mortality.manage"
       parameters:
         -
-          "$ref": "#/components/parameters/Mortalidad"
+          "$ref": "#/components/parameters/Mortality"
         -
           "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -784,7 +784,7 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/lotes/{lote}/recolecciones":
+  "/flocks/{flock}/collections":
     get:
       tags: ["Recolección"]
       operationId: "listEggCollections"
@@ -793,7 +793,7 @@ paths:
       x-permission: "egg-collections.view"
       parameters:
         -
-          "$ref": "#/components/parameters/Lote"
+          "$ref": "#/components/parameters/Flock"
         -
           "$ref": "#/components/parameters/Page"
         -
@@ -831,7 +831,7 @@ paths:
       x-permission: "egg-collections.manage"
       parameters:
         -
-          "$ref": "#/components/parameters/Lote"
+          "$ref": "#/components/parameters/Flock"
         -
           "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -857,7 +857,7 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/recolecciones":
+  "/collections":
     get:
       tags: ["Recolección"]
       operationId: "listAllEggCollections"
@@ -882,7 +882,7 @@ paths:
         "401": {"$ref": "#/components/responses/Unauthenticated"}
         "403": {"$ref": "#/components/responses/Forbidden"}
         "422": {"$ref": "#/components/responses/InvalidInput"}
-  "/recolecciones/metricas":
+  "/collections/metrics":
     get:
       tags: ["Recolección"]
       operationId: "showEggProductionMetrics"
@@ -905,7 +905,7 @@ paths:
         "403": {"$ref": "#/components/responses/Forbidden"}
         "409": {"$ref": "#/components/responses/Conflict"}
         "422": {"$ref": "#/components/responses/InvalidInput"}
-  "/recolecciones/{recoleccion}":
+  "/collections/{collection}":
     get:
       tags: ["Recolección"]
       operationId: "showEggCollection"
@@ -914,7 +914,7 @@ paths:
       x-permission: "egg-collections.view"
       parameters:
         -
-          "$ref": "#/components/parameters/Recoleccion"
+          "$ref": "#/components/parameters/EggCollection"
       responses:
         "200":
           description: "Consulta u operación completada."
@@ -938,7 +938,7 @@ paths:
       x-permission: "egg-collections.manage"
       parameters:
         -
-          "$ref": "#/components/parameters/Recoleccion"
+          "$ref": "#/components/parameters/EggCollection"
         -
           "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -964,7 +964,7 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/recolecciones/{recoleccion}/cancelacion":
+  "/collections/{collection}/cancellation":
     post:
       tags: ["Recolección"]
       operationId: "cancelEggCollection"
@@ -973,7 +973,7 @@ paths:
       x-permission: "egg-collections.manage"
       parameters:
         -
-          "$ref": "#/components/parameters/Recoleccion"
+          "$ref": "#/components/parameters/EggCollection"
         -
           "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -999,7 +999,7 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/lotes/{lote}/metricas":
+  "/flocks/{flock}/metrics":
     get:
       tags: ["Recolección"]
       operationId: "showFlockMetrics"
@@ -1008,7 +1008,7 @@ paths:
       x-permission: "egg-collections.view"
       parameters:
         -
-          "$ref": "#/components/parameters/Lote"
+          "$ref": "#/components/parameters/Flock"
         -
           "$ref": "#/components/parameters/From"
         -
@@ -1030,15 +1030,15 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/unidades-productivas/{unidadProductiva}/stock-huevos":
+  "/production-units/{productionUnit}/egg-stock":
     get:
       tags: ["Stock de huevos"]
       operationId: "showEggStockBalance"
-      summary: "Consulta el saldo de huevos de una unidad productiva"
-      description: "Permiso requerido: egg-stock.view. Una unidad sin movimientos devuelve saldo cero."
+      summary: "Consulta el balance de huevos de una unidad productiva"
+      description: "Permiso requerido: egg-stock.view. Una unidad sin movimientos devuelve balance cero."
       x-permission: "egg-stock.view"
       parameters:
-        - "$ref": "#/components/parameters/UnidadProductiva"
+        - "$ref": "#/components/parameters/ProductionUnit"
       responses:
         "200":
           description: "Saldo actual, incluso negativo."
@@ -1049,7 +1049,7 @@ paths:
         "401": {"$ref": "#/components/responses/Unauthenticated"}
         "403": {"$ref": "#/components/responses/Forbidden"}
         "404": {"$ref": "#/components/responses/NotFound"}
-  "/unidades-productivas/{unidadProductiva}/stock-huevos/movimientos":
+  "/production-units/{productionUnit}/egg-stock/movements":
     get:
       tags: ["Stock de huevos"]
       operationId: "listEggStockTransactions"
@@ -1057,7 +1057,7 @@ paths:
       description: "Permiso requerido: egg-stock.view. Filtra por tipo, estado y fechas."
       x-permission: "egg-stock.view"
       parameters:
-        - "$ref": "#/components/parameters/UnidadProductiva"
+        - "$ref": "#/components/parameters/ProductionUnit"
         - "$ref": "#/components/parameters/Page"
         - "$ref": "#/components/parameters/PerPage"
         - "$ref": "#/components/parameters/StockType"
@@ -1075,7 +1075,7 @@ paths:
         "403": {"$ref": "#/components/responses/Forbidden"}
         "404": {"$ref": "#/components/responses/NotFound"}
         "422": {"$ref": "#/components/responses/InvalidInput"}
-  "/unidades-productivas/{unidadProductiva}/stock-huevos/ingresos":
+  "/production-units/{productionUnit}/egg-stock/receipts":
     post:
       tags: ["Stock de huevos"]
       operationId: "recordEggStockReceipt"
@@ -1083,7 +1083,7 @@ paths:
       description: "Permiso requerido: egg-stock.move. Sólo opera la cuenta técnica de la unidad productiva."
       x-permission: "egg-stock.move"
       parameters:
-        - "$ref": "#/components/parameters/UnidadProductiva"
+        - "$ref": "#/components/parameters/ProductionUnit"
         - "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
@@ -1103,15 +1103,15 @@ paths:
         "404": {"$ref": "#/components/responses/NotFound"}
         "409": {"$ref": "#/components/responses/Conflict"}
         "422": {"$ref": "#/components/responses/InvalidInput"}
-  "/unidades-productivas/{unidadProductiva}/stock-huevos/salidas":
+  "/production-units/{productionUnit}/egg-stock/issues":
     post:
       tags: ["Stock de huevos"]
       operationId: "recordEggStockIssue"
       summary: "Registra una salida de huevos"
-      description: "Permiso requerido: egg-stock.move. tipo admite distribution_preparation o loss y puede dejar saldo negativo."
+      description: "Permiso requerido: egg-stock.move. El tipo admite distribution_preparation o loss y puede dejar balance negativo."
       x-permission: "egg-stock.move"
       parameters:
-        - "$ref": "#/components/parameters/UnidadProductiva"
+        - "$ref": "#/components/parameters/ProductionUnit"
         - "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
@@ -1131,7 +1131,7 @@ paths:
         "404": {"$ref": "#/components/responses/NotFound"}
         "409": {"$ref": "#/components/responses/Conflict"}
         "422": {"$ref": "#/components/responses/InvalidInput"}
-  "/stock-huevos/movimientos/{movimiento}":
+  "/egg-stock/movements/{movement}":
     get:
       tags: ["Stock de huevos"]
       operationId: "showEggStockTransaction"
@@ -1139,7 +1139,7 @@ paths:
       description: "Permiso requerido: egg-stock.view. Incluye revisiones y referencias a Inventario."
       x-permission: "egg-stock.view"
       parameters:
-        - "$ref": "#/components/parameters/MovimientoStock"
+        - "$ref": "#/components/parameters/StockMovement"
       responses:
         "200":
           description: "Detalle del movimiento lógico."
@@ -1157,7 +1157,7 @@ paths:
       description: "Permiso requerido: egg-stock.adjust. Las operaciones originadas por recolecciones se corrigen desde Lotes."
       x-permission: "egg-stock.adjust"
       parameters:
-        - "$ref": "#/components/parameters/MovimientoStock"
+        - "$ref": "#/components/parameters/StockMovement"
         - "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
@@ -1177,7 +1177,7 @@ paths:
         "404": {"$ref": "#/components/responses/NotFound"}
         "409": {"$ref": "#/components/responses/Conflict"}
         "422": {"$ref": "#/components/responses/InvalidInput"}
-  "/stock-huevos/movimientos/{movimiento}/cancelacion":
+  "/egg-stock/movements/{movement}/cancellation":
     post:
       tags: ["Stock de huevos"]
       operationId: "cancelEggStockTransaction"
@@ -1185,7 +1185,7 @@ paths:
       description: "Permiso requerido: egg-stock.adjust. Agrega una compensación inversa y conserva la revisión."
       x-permission: "egg-stock.adjust"
       parameters:
-        - "$ref": "#/components/parameters/MovimientoStock"
+        - "$ref": "#/components/parameters/StockMovement"
         - "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
@@ -1212,8 +1212,8 @@ components:
       scheme: "bearer"
       bearerFormat: "Sanctum"
   parameters:
-    Lote:
-      name: "lote"
+    Flock:
+      name: "flock"
       in: "path"
       required: true
       description: "ULID público del lote, incluidos los finalizados."
@@ -1221,8 +1221,8 @@ components:
         type: "string"
         pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
         example: "01J00000000000000000000000"
-    Redistribucion:
-      name: "redistribucion"
+    Redistribution:
+      name: "redistribution"
       in: "path"
       required: true
       description: "ULID público del movimiento original de redistribución."
@@ -1230,32 +1230,32 @@ components:
         type: "string"
         pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
         example: "01J00000000000000000000000"
-    Mortalidad:
-      name: "mortalidad"
+    Mortality:
+      name: "mortality"
       in: "path"
       required: true
       schema:
         type: "string"
         pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
         example: "01J00000000000000000000000"
-    Recoleccion:
-      name: "recoleccion"
+    EggCollection:
+      name: "collection"
       in: "path"
       required: true
       schema:
         type: "string"
         pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
         example: "01J00000000000000000000000"
-    UnidadProductiva:
-      name: "unidadProductiva"
+    ProductionUnit:
+      name: "productionUnit"
       in: "path"
       required: true
       description: "Identificador numérico de la unidad productiva."
       schema:
         type: "integer"
         minimum: 1
-    MovimientoStock:
-      name: "movimiento"
+    StockMovement:
+      name: "movement"
       in: "path"
       required: true
       description: "ULID público del movimiento lógico de huevos."
@@ -1263,22 +1263,22 @@ components:
         type: "string"
         pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
         example: "01J00000000000000000000000"
-    Galpon:
-      name: "galpon"
+    PoultryHouse:
+      name: "poultryHouse"
       in: "path"
       required: true
       schema:
         type: "integer"
         minimum: 1
-    Raza:
-      name: "raza"
+    Breed:
+      name: "breed"
       in: "path"
       required: true
       schema:
         type: "integer"
         minimum: 1
-    Categoria:
-      name: "categoria"
+    MortalityCategory:
+      name: "mortalityCategory"
       in: "path"
       required: true
       schema:
@@ -1293,7 +1293,7 @@ components:
         type: "string"
         format: "uuid"
     Page:
-      name: "pagina"
+      name: "page"
       in: "query"
       schema:
         type: "integer"
@@ -1301,7 +1301,7 @@ components:
         maximum: 100000
         default: 1
     PerPage:
-      name: "por_pagina"
+      name: "per_page"
       in: "query"
       schema:
         type: "integer"
@@ -1309,82 +1309,82 @@ components:
         maximum: 100
         default: 50
     From:
-      name: "fecha_desde"
+      name: "date_from"
       in: "query"
       description: "Día inclusivo en la zona LOTS_TIMEZONE; en listado de lotes filtra fecha de ingreso."
       schema:
         type: "string"
         format: "date"
     To:
-      name: "fecha_hasta"
+      name: "date_to"
       in: "query"
-      description: "Día inclusivo y no anterior a fecha_desde."
+      description: "Día inclusivo y no anterior a date_from."
       schema:
         type: "string"
         format: "date"
     Search:
-      name: "buscar"
+      name: "search"
       in: "query"
       schema:
         type: "string"
         maxLength: 120
     HouseFilter:
-      name: "galpon_id"
+      name: "poultry_house_id"
       in: "query"
       schema:
         type: "integer"
         minimum: 1
     UnitFilter:
-      name: "unidad_productiva_id"
+      name: "production_unit_id"
       in: "query"
       schema:
         type: "integer"
         minimum: 1
     BreedFilter:
-      name: "raza_id"
+      name: "breed_id"
       in: "query"
       schema:
         type: "integer"
         minimum: 1
     SupplierFilter:
-      name: "proveedor_id"
+      name: "supplier_id"
       in: "query"
       schema:
         type: "integer"
         minimum: 1
     FlockFilter:
-      name: "lote_id"
+      name: "flock_id"
       in: "query"
       schema:
         type: "string"
         pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
         example: "01J00000000000000000000000"
     FlockStatus:
-      name: "estado"
+      name: "status"
       in: "query"
       schema:
         type: "string"
         enum: ["active", "quarantined", "finished"]
     RecordStatus:
-      name: "estado"
+      name: "status"
       in: "query"
       schema:
         type: "string"
         enum: ["recorded", "cancelled"]
     StockType:
-      name: "tipo"
+      name: "type"
       in: "query"
       schema:
         type: "string"
         enum: ["collection_receipt", "manual_receipt", "distribution_preparation", "loss"]
     CatalogStatus:
-      name: "estado"
+      name: "status"
       in: "query"
       schema:
         type: "string"
         enum: ["active", "inactive"]
     MovementType:
-      name: "tipo"
+      name: "type"
       in: "query"
       schema:
         type: "string"
@@ -1403,7 +1403,7 @@ components:
           schema:
             "$ref": "#/components/schemas/Problem"
     NotFound:
-      description: "No existe el recurso o una referencia requerida."
+      description: "No existe el recurso o una reference requerida."
       content:
         "application/problem+json":
           schema:
@@ -1415,7 +1415,7 @@ components:
           schema:
             "$ref": "#/components/schemas/Problem"
     InvalidInput:
-      description: "Entrada inválida, campo desconocido o encabezado obligatorio ausente."
+      description: "Entrada inválida, field desconocido o encabezado obligatorio ausente."
       content:
         "application/problem+json":
           schema:
@@ -1424,56 +1424,56 @@ components:
     Flock:
       type: "object"
       additionalProperties: false
-      required: ["id", "codigo", "raza_id", "proveedor_id", "proveedor_nombre", "origen", "galpon_id", "unidad_productiva_id", "cantidad_inicial", "cantidad_viva", "fecha_ingreso", "establecido_en", "edad_dias", "semana_actual", "estado", "version", "observaciones", "finalizado_en", "motivo_finalizacion"]
+      required: ["id", "code", "breed_id", "supplier_id", "supplier_name", "origin", "poultry_house_id", "production_unit_id", "initial_quantity", "current_quantity", "entry_date", "established_at", "age_days", "current_week", "status", "version", "notes", "finalized_at", "finalization_reason"]
       properties:
         id:
           type: "string"
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
           example: "01J00000000000000000000000"
-        codigo:
+        code:
           type: "string"
           minLength: 1
           maxLength: 60
           pattern: "^[A-Za-z0-9][A-Za-z0-9_-]*$"
-        raza_id:
+        breed_id:
           type: "integer"
           minimum: 1
-        proveedor_id:
+        supplier_id:
           type: ["integer", "null"]
           minimum: 1
-        proveedor_nombre:
+        supplier_name:
           type: ["string", "null"]
-        origen:
+        origin:
           type: ["string", "null"]
-        galpon_id:
+        poultry_house_id:
           type: "integer"
           minimum: 1
-        unidad_productiva_id:
+        production_unit_id:
           type: "integer"
           minimum: 1
-        cantidad_inicial:
+        initial_quantity:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        cantidad_viva:
+        current_quantity:
           type: "integer"
           minimum: 0
-        fecha_ingreso:
+        entry_date:
           type: "string"
           format: "date"
-        establecido_en:
+        established_at:
           type: "string"
           format: "date-time"
           pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
           description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
-        edad_dias:
+        age_days:
           type: "integer"
           minimum: 0
-        semana_actual:
+        current_week:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        estado:
+        status:
           type: "string"
           enum: ["active", "quarantined", "finished"]
         version:
@@ -1481,15 +1481,15 @@ components:
           minimum: 1
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
-        observaciones:
+        notes:
           type: ["string", "null"]
           maxLength: 5000
-        finalizado_en:
+        finalized_at:
           type: ["string", "null"]
           format: "date-time"
           pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
           description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
-        motivo_finalizacion:
+        finalization_reason:
           type: ["string", "null"]
           minLength: 1
           maxLength: 500
@@ -1501,56 +1501,56 @@ components:
           type: "string"
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
           example: "01J00000000000000000000000"
-        id_operacion:
+        operation_id:
           type: "string"
           format: "uuid"
-        tipo:
+        type:
           type: "string"
           enum: ["admission", "partial_new", "partial_existing", "total", "departure", "mortality", "mortality_correction", "redistribution_reversal"]
-        cantidad:
+        quantity:
           type: "integer"
           minimum: 0
-        lote_origen_id:
+        source_flock_id:
           type: ["string", "null"]
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
           example: "01J00000000000000000000000"
-        lote_destino_id:
+        destination_flock_id:
           type: ["string", "null"]
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
           example: "01J00000000000000000000000"
-        movimiento_revertido_id:
+        reversed_movement_id:
           type: ["string", "null"]
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
           example: "01J00000000000000000000000"
-        galpon_origen_id:
+        source_poultry_house_id:
           type: ["integer", "null"]
           minimum: 1
-        galpon_destino_id:
+        destination_poultry_house_id:
           type: ["integer", "null"]
           minimum: 1
-        ocurrido_en:
+        occurred_at:
           type: "string"
           format: "date-time"
           pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
           description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
-        registrado_en:
+        created_at:
           type: "string"
           format: "date-time"
           pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
           description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
-        motivo:
+        reason:
           type: ["string", "null"]
           minLength: 1
           maxLength: 500
-        registrado_por:
+        created_by:
           type: "integer"
           minimum: 1
-        antes:
+        before:
           type: "object"
           description: "Fotografías previas indexadas por ULID; objeto vacío para una admisión."
           additionalProperties:
             "$ref": "#/components/schemas/Flock"
-        despues:
+        after:
           type: "object"
           description: "Fotografías posteriores indexadas por ULID."
           additionalProperties:
@@ -1558,35 +1558,35 @@ components:
     Mortality:
       type: "object"
       additionalProperties: false
-      required: ["id", "lote_id", "galpon_id", "unidad_productiva_id", "cantidad", "ocurrido_en", "observaciones", "estado", "version", "registrado_por", "categoria_mortalidad_id"]
+      required: ["id", "flock_id", "poultry_house_id", "production_unit_id", "quantity", "occurred_at", "notes", "status", "version", "created_by", "mortality_category_id"]
       properties:
         id:
           type: "string"
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
           example: "01J00000000000000000000000"
-        lote_id:
+        flock_id:
           type: "string"
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
           example: "01J00000000000000000000000"
-        galpon_id:
+        poultry_house_id:
           type: "integer"
           minimum: 1
-        unidad_productiva_id:
+        production_unit_id:
           type: "integer"
           minimum: 1
-        cantidad:
+        quantity:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        ocurrido_en:
+        occurred_at:
           type: "string"
           format: "date-time"
           pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
           description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
-        observaciones:
+        notes:
           type: ["string", "null"]
           maxLength: 5000
-        estado:
+        status:
           type: "string"
           enum: ["recorded", "cancelled"]
         version:
@@ -1594,66 +1594,66 @@ components:
           minimum: 1
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
-        registrado_por:
+        created_by:
           type: "integer"
           minimum: 1
-        categoria_mortalidad_id:
+        mortality_category_id:
           type: "integer"
           minimum: 1
     EggCollection:
       type: "object"
       additionalProperties: false
-      required: ["id", "lote_id", "galpon_id", "unidad_productiva_id", "cantidad", "ocurrido_en", "observaciones", "estado", "version", "registrado_por"]
+      required: ["id", "flock_id", "poultry_house_id", "production_unit_id", "quantity", "occurred_at", "notes", "status", "version", "created_by"]
       properties:
         id:
           type: "string"
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
           example: "01J00000000000000000000000"
-        lote_id:
+        flock_id:
           type: "string"
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
           example: "01J00000000000000000000000"
-        galpon_id:
+        poultry_house_id:
           type: "integer"
           minimum: 1
-        unidad_productiva_id:
+        production_unit_id:
           type: "integer"
           minimum: 1
-        cantidad:
+        quantity:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        ocurrido_en:
+        occurred_at:
           type: "string"
           format: "date-time"
           pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
           description: "Instante ISO 8601 con segundos y zona explícita."
-        observaciones:
+        notes:
           type: ["string", "null"]
           maxLength: 5000
-        estado:
+        status:
           type: "string"
           enum: ["recorded", "cancelled"]
         version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        registrado_por:
+        created_by:
           type: "integer"
           minimum: 1
     Catalog:
       type: "object"
       additionalProperties: false
-      required: ["id", "nombre", "estado", "version"]
+      required: ["id", "name", "status", "version"]
       properties:
         id:
           type: "integer"
           minimum: 1
-        nombre:
+        name:
           type: "string"
           minLength: 1
           maxLength: 120
-        estado:
+        status:
           type: "string"
           enum: ["active", "inactive"]
         version:
@@ -1664,71 +1664,71 @@ components:
     Operation:
       type: "object"
       additionalProperties: false
-      required: ["id_operacion"]
+      required: ["operation_id"]
       properties:
-        id_operacion:
+        operation_id:
           type: "string"
           format: "uuid"
-        lote:
+        flock:
           "$ref": "#/components/schemas/Flock"
-        lote_destino:
+        destination_flock:
           "$ref": "#/components/schemas/Flock"
-        movimiento:
+        movement:
           "$ref": "#/components/schemas/Movement"
-        mortalidad:
+        mortality:
           "$ref": "#/components/schemas/Mortality"
-        recoleccion:
+        collection:
           "$ref": "#/components/schemas/EggCollection"
-        catalogo:
+        catalog:
           "$ref": "#/components/schemas/Catalog"
     CreateFlock:
       type: "object"
       additionalProperties: false
-      required: ["codigo", "raza_id", "galpon_id", "cantidad_inicial", "fecha_ingreso"]
+      required: ["code", "breed_id", "poultry_house_id", "initial_quantity", "entry_date"]
       properties:
         id:
           type: "string"
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
           example: "01J00000000000000000000000"
-        codigo:
+        code:
           type: "string"
           minLength: 1
           maxLength: 60
           pattern: "^[A-Za-z0-9][A-Za-z0-9_-]*$"
-        raza_id:
+        breed_id:
           type: "integer"
           minimum: 1
-        proveedor_id:
+        supplier_id:
           type: ["integer", "null"]
           minimum: 1
-        origen:
+        origin:
           type: ["string", "null"]
           minLength: 1
           maxLength: 255
-        galpon_id:
+        poultry_house_id:
           type: "integer"
           minimum: 1
-        cantidad_inicial:
+        initial_quantity:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        fecha_ingreso:
+        entry_date:
           type: "string"
           format: "date"
-        observaciones:
+        notes:
           type: ["string", "null"]
           maxLength: 5000
       anyOf:
         -
-          required: ["proveedor_id"]
+          required: ["supplier_id"]
           properties:
-            proveedor_id:
+            supplier_id:
               type: "integer"
               minimum: 1
         -
-          required: ["origen"]
+          required: ["origin"]
           properties:
-            origen:
+            origin:
               type: "string"
               minLength: 1
     UpdateFlock:
@@ -1741,132 +1741,132 @@ components:
           minimum: 1
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
-        codigo:
+        code:
           type: "string"
           minLength: 1
           maxLength: 60
           pattern: "^[A-Za-z0-9][A-Za-z0-9_-]*$"
-        observaciones:
+        notes:
           type: ["string", "null"]
           maxLength: 5000
     ChangeFlockStatus:
       type: "object"
       additionalProperties: false
-      required: ["version", "estado", "motivo"]
+      required: ["version", "status", "reason"]
       properties:
         version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
-        estado:
+        status:
           type: "string"
           enum: ["active", "quarantined"]
-        motivo:
+        reason:
           type: "string"
           minLength: 1
           maxLength: 500
     FinalizeFlock:
       type: "object"
       additionalProperties: false
-      required: ["version", "motivo"]
+      required: ["version", "reason"]
       properties:
         version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
-        motivo:
+        reason:
           type: "string"
           minLength: 1
           maxLength: 500
     RedistributeFlock:
       type: "object"
       additionalProperties: false
-      required: ["version", "cantidad"]
+      required: ["version", "quantity"]
       properties:
         version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
-        cantidad:
+        quantity:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        galpon_destino_id:
+        destination_poultry_house_id:
           type: "integer"
           minimum: 1
-        lote_destino_id:
+        destination_flock_id:
           type: "string"
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
           example: "01J00000000000000000000000"
-        version_destino:
+        destination_version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
-        codigo_destino:
+        destination_code:
           type: "string"
           minLength: 1
           maxLength: 60
           pattern: "^[A-Za-z0-9][A-Za-z0-9_-]*$"
-        id_destino:
+        destination_public_id:
           type: "string"
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
           example: "01J00000000000000000000000"
-        ocurrido_en:
+        occurred_at:
           type: "string"
           format: "date-time"
           pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
           description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
-        motivo:
+        reason:
           type: ["string", "null"]
           minLength: 1
           maxLength: 500
-      description: "Parcial: galpón y código nuevos, o lote existente de igual raza y su versión. Total: sólo otro galpón, conservando identidad. Nunca permite fusionar todas las aves con otro lote. El código destino es obligatorio si la cantidad es menor que las aves vivas y no se indica lote existente."
+      description: "Parcial: galpón y código nuevos, o lote existente de igual raza y su versión. Total: sólo otro galpón, conservando identidad. Nunca permite fusionar todas las aves con otro lote. El código destino es obligatorio si la cantidad es menor que las aves vivas y no se indica un lote existente."
       oneOf:
         -
-          required: ["galpon_destino_id"]
+          required: ["destination_poultry_house_id"]
           not:
             anyOf:
               -
-                required: ["lote_destino_id"]
+                required: ["destination_flock_id"]
               -
-                required: ["version_destino"]
+                required: ["destination_version"]
         -
-          required: ["lote_destino_id", "version_destino"]
+          required: ["destination_flock_id", "destination_version"]
           not:
             anyOf:
               -
-                required: ["galpon_destino_id"]
+                required: ["destination_poultry_house_id"]
               -
-                required: ["codigo_destino"]
+                required: ["destination_code"]
               -
-                required: ["id_destino"]
+                required: ["destination_public_id"]
     ReverseRedistribution:
       type: "object"
       additionalProperties: false
-      required: ["version", "motivo"]
+      required: ["version", "reason"]
       properties:
         version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
-        version_destino:
+        destination_version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
-        motivo:
+        reason:
           type: "string"
           minLength: 1
           maxLength: 500
     RecordMortality:
       type: "object"
       additionalProperties: false
-      required: ["version", "cantidad", "categoria_mortalidad_id"]
+      required: ["version", "quantity", "mortality_category_id"]
       properties:
         id:
           type: "string"
@@ -1877,311 +1877,311 @@ components:
           minimum: 1
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
-        cantidad:
+        quantity:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        categoria_mortalidad_id:
+        mortality_category_id:
           type: "integer"
           minimum: 1
-        ocurrido_en:
+        occurred_at:
           type: "string"
           format: "date-time"
           pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
           description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
-        observaciones:
+        notes:
           type: ["string", "null"]
           maxLength: 5000
     CorrectMortality:
       type: "object"
       additionalProperties: false
-      required: ["version", "version_lote", "motivo"]
+      required: ["version", "flock_version", "reason"]
       properties:
         version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
-        version_lote:
+        flock_version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
-        motivo:
+        reason:
           type: "string"
           minLength: 1
           maxLength: 500
-        cantidad:
+        quantity:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        categoria_mortalidad_id:
+        mortality_category_id:
           type: "integer"
           minimum: 1
-        observaciones:
+        notes:
           type: ["string", "null"]
           maxLength: 5000
     CancelRecord:
       type: "object"
       additionalProperties: false
-      required: ["version", "version_lote", "motivo"]
+      required: ["version", "flock_version", "reason"]
       properties:
         version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
-        version_lote:
+        flock_version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
-        motivo:
+        reason:
           type: "string"
           minLength: 1
           maxLength: 500
     RecordEggCollection:
       type: "object"
       additionalProperties: false
-      required: ["cantidad"]
+      required: ["quantity"]
       properties:
         id:
           type: "string"
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
           description: "ULID opcional para reintentos controlados."
-        cantidad:
+        quantity:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        ocurrido_en:
+        occurred_at:
           type: "string"
           format: "date-time"
           pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
           description: "Instante ISO 8601 con segundos y zona explícita; si se omite usa el servidor."
-        observaciones:
+        notes:
           type: ["string", "null"]
           maxLength: 5000
     CorrectEggCollection:
       type: "object"
       additionalProperties: false
-      required: ["version", "motivo_correccion"]
+      required: ["version", "correction_reason"]
       properties:
         version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
           description: "Versión actual de la recolección."
-        cantidad:
+        quantity:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        ocurrido_en:
+        occurred_at:
           type: "string"
           format: "date-time"
           pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
-        observaciones:
+        notes:
           type: ["string", "null"]
           maxLength: 5000
-        motivo_correccion:
+        correction_reason:
           type: "string"
           minLength: 1
           maxLength: 500
     CancelEggCollection:
       type: "object"
       additionalProperties: false
-      required: ["version", "motivo_correccion"]
+      required: ["version", "correction_reason"]
       properties:
         version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        motivo_correccion:
+        correction_reason:
           type: "string"
           minLength: 1
           maxLength: 500
     EggStockBalance:
       type: "object"
       additionalProperties: false
-      required: ["unidad_productiva_id", "saldo"]
+      required: ["production_unit_id", "balance"]
       properties:
-        unidad_productiva_id:
+        production_unit_id:
           type: "integer"
           minimum: 1
-        saldo:
+        balance:
           type: "integer"
           description: "Saldo actual de huevos; puede ser negativo."
     EggStockTransaction:
       type: "object"
       additionalProperties: false
-      required: ["id", "unidad_productiva_id", "tipo", "cantidad", "ocurrido_en", "motivo", "observaciones", "estado", "version", "referencia", "referencias_inventario", "revisiones"]
+      required: ["id", "production_unit_id", "type", "quantity", "occurred_at", "reason", "notes", "status", "version", "reference", "inventory_references", "revisions"]
       properties:
         id:
           type: "string"
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
-        unidad_productiva_id:
+        production_unit_id:
           type: "integer"
           minimum: 1
-        tipo:
+        type:
           type: "string"
           enum: ["collection_receipt", "manual_receipt", "distribution_preparation", "loss"]
-        cantidad:
+        quantity:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        ocurrido_en:
+        occurred_at:
           type: "string"
           format: "date-time"
-        motivo:
+        reason:
           type: ["string", "null"]
           maxLength: 500
-        observaciones:
+        notes:
           type: ["string", "null"]
           maxLength: 5000
-        estado:
+        status:
           type: "string"
           enum: ["recorded", "cancelled"]
         version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        referencia:
+        reference:
           type: ["object", "null"]
           additionalProperties: false
-          required: ["tipo", "id"]
+          required: ["type", "id"]
           properties:
-            tipo:
+            type:
               type: "string"
             id:
               type: "string"
-        referencias_inventario:
+        inventory_references:
           type: "array"
           items:
             type: "object"
             additionalProperties: true
-        saldo:
+        balance:
           type: ["integer", "null"]
-        revisiones:
+        revisions:
           type: "array"
           items:
             "$ref": "#/components/schemas/EggStockTransactionRevision"
     EggStockTransactionRevision:
       type: "object"
       additionalProperties: false
-      required: ["id", "accion", "antes", "despues", "motivo_correccion", "operacion_id", "realizado_por", "realizado_en"]
+      required: ["id", "action", "before", "after", "correction_reason", "operation_id", "created_by", "created_at"]
       properties:
         id:
           type: "string"
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
-        accion:
+        action:
           type: "string"
           enum: ["correct", "cancel"]
-        antes:
+        before:
           type: "object"
           additionalProperties: true
-        despues:
+        after:
           type: "object"
           additionalProperties: true
-        motivo_correccion:
+        correction_reason:
           type: "string"
-        operacion_id:
+        operation_id:
           type: "string"
           format: "uuid"
-        realizado_por:
+        created_by:
           type: "integer"
           minimum: 1
-        realizado_en:
+        created_at:
           type: "string"
           format: "date-time"
     RecordEggStockReceipt:
       type: "object"
       additionalProperties: false
-      required: ["cantidad", "motivo"]
+      required: ["quantity", "reason"]
       properties:
-        cantidad:
+        quantity:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        ocurrido_en:
+        occurred_at:
           type: "string"
           format: "date-time"
-        motivo:
+        reason:
           type: "string"
           minLength: 1
           maxLength: 500
-        observaciones:
+        notes:
           type: ["string", "null"]
           maxLength: 5000
     RecordEggStockIssue:
       type: "object"
       additionalProperties: false
-      required: ["cantidad", "tipo", "motivo"]
+      required: ["quantity", "type", "reason"]
       properties:
-        cantidad:
+        quantity:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        tipo:
+        type:
           type: "string"
           enum: ["distribution_preparation", "loss"]
-        ocurrido_en:
+        occurred_at:
           type: "string"
           format: "date-time"
-        motivo:
+        reason:
           type: "string"
           minLength: 1
           maxLength: 500
-        observaciones:
+        notes:
           type: ["string", "null"]
           maxLength: 5000
     CorrectEggStockTransaction:
       type: "object"
       additionalProperties: false
-      required: ["version", "motivo_correccion"]
+      required: ["version", "correction_reason"]
       properties:
         version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        cantidad:
+        quantity:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        ocurrido_en:
+        occurred_at:
           type: "string"
           format: "date-time"
-        motivo:
+        reason:
           type: ["string", "null"]
           maxLength: 500
-        observaciones:
+        notes:
           type: ["string", "null"]
           maxLength: 5000
-        motivo_correccion:
+        correction_reason:
           type: "string"
           minLength: 1
           maxLength: 500
     CancelEggStockTransaction:
       type: "object"
       additionalProperties: false
-      required: ["version", "motivo_correccion"]
+      required: ["version", "correction_reason"]
       properties:
         version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        motivo_correccion:
+        correction_reason:
           type: "string"
           minLength: 1
           maxLength: 500
     CreateCatalog:
       type: "object"
       additionalProperties: false
-      required: ["nombre"]
+      required: ["name"]
       properties:
-        nombre:
+        name:
           type: "string"
           minLength: 1
           maxLength: 120
-        estado:
+        status:
           type: "string"
           enum: ["active", "inactive"]
     UpdateCatalog:
@@ -2189,11 +2189,11 @@ components:
       additionalProperties: false
       required: ["version"]
       properties:
-        nombre:
+        name:
           type: "string"
           minLength: 1
           maxLength: 120
-        estado:
+        status:
           type: "string"
           enum: ["active", "inactive"]
         version:
@@ -2204,81 +2204,81 @@ components:
     Metrics:
       type: "object"
       additionalProperties: false
-      required: ["fecha_desde", "fecha_hasta", "zona_horaria", "huevos_totales", "huevos_recolectados", "promedio_diario", "por_dia", "por_semana", "por_mes"]
+      required: ["date_from", "date_to", "timezone", "total_eggs", "collected_eggs", "daily_average", "by_day", "by_week", "by_month"]
       properties:
-        lote_id:
+        flock_id:
           type: "string"
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
-        fecha_desde:
+        date_from:
           type: "string"
           format: "date"
-        fecha_hasta:
+        date_to:
           type: "string"
           format: "date"
-        zona_horaria:
+        timezone:
           type: "string"
           example: "America/Montevideo"
-        huevos_totales:
+        total_eggs:
           type: "integer"
           minimum: 0
-        huevos_recolectados:
+        collected_eggs:
           type: "integer"
           minimum: 0
-        promedio_diario:
+        daily_average:
           type: "number"
           description: "Total dividido por todos los días del período inclusivo, redondeado a dos decimales."
-        por_dia:
+        by_day:
           type: "array"
           items:
             "$ref": "#/components/schemas/DailyEggMetric"
-        por_semana:
+        by_week:
           type: "array"
           items:
             "$ref": "#/components/schemas/WeeklyEggMetric"
-        por_mes:
+        by_month:
           type: "array"
           items:
             "$ref": "#/components/schemas/MonthlyEggMetric"
     DailyEggMetric:
       type: "object"
       additionalProperties: false
-      required: ["fecha", "cantidad", "huevos_recolectados"]
+      required: ["date", "quantity", "collected_eggs"]
       properties:
-        fecha:
+        date:
           type: "string"
           format: "date"
-        cantidad:
+        quantity:
           type: "integer"
           minimum: 0
-        huevos_recolectados:
+        collected_eggs:
           type: "integer"
           minimum: 0
     WeeklyEggMetric:
       type: "object"
       additionalProperties: false
-      required: ["inicio_semana", "cantidad", "huevos_recolectados"]
+      required: ["week_start", "quantity", "collected_eggs"]
       properties:
-        inicio_semana:
+        week_start:
           type: "string"
           format: "date"
-        cantidad:
+        quantity:
           type: "integer"
           minimum: 0
-        huevos_recolectados:
+        collected_eggs:
           type: "integer"
           minimum: 0
     MonthlyEggMetric:
       type: "object"
       additionalProperties: false
-      required: ["inicio_mes", "cantidad", "huevos_recolectados"]
+      required: ["month_start", "quantity", "collected_eggs"]
       properties:
-        inicio_mes:
+        month_start:
           type: "string"
           format: "date"
-        cantidad:
+        quantity:
           type: "integer"
           minimum: 0
-        huevos_recolectados:
+        collected_eggs:
           type: "integer"
           minimum: 0
     PageMeta:

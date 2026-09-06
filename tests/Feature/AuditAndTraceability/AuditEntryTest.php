@@ -25,12 +25,12 @@ final class AuditEntryTest extends TestCase
         $admin = User::factory()->create();
         $admin->givePermissionTo(Permission::findOrCreate('identity.users.manage', 'web'));
         Sanctum::actingAs($admin, ['api:access']);
-        $response = $this->postJson('/api/v1/usuarios', [
-            'nombre' => 'Audited User',
-            'correo_electronico' => 'audited.user@example.test',
+        $response = $this->postJson('/api/v1/users', [
+            'name' => 'Audited User',
+            'email' => 'audited.user@example.test',
             'password' => 'correct-password',
             'password_confirmation' => 'correct-password',
-            'rol' => 'employee',
+            'role' => 'employee',
         ]);
 
         // Verificación: confirma respuesta, usuario creado y entrada de auditoría.
@@ -65,7 +65,7 @@ final class AuditEntryTest extends TestCase
 
         // Acción: cierra la sesión autenticada.
         $this->withToken($token->plainTextToken)
-            ->postJson('/api/v1/autenticacion/cerrar-sesion')
+            ->postJson('/api/v1/auth/logout')
             ->assertOk();
 
         // Verificación: confirma revocación del token y auditoría del actor.
@@ -105,7 +105,7 @@ final class AuditEntryTest extends TestCase
         // Acción: autentica al usuario y consulta las entradas filtradas.
         Sanctum::actingAs($user, ['*']);
 
-        $this->getJson('/api/v1/auditoria/entradas?event=stock_moved&por_pagina=10')
+        $this->getJson('/api/v1/audit/entries?event=stock_moved&per_page=10')
             ->assertOk()
             ->assertJsonPath('data.0.event', 'stock_moved')
             ->assertJsonPath('data.0.description', 'Movimiento de stock realizado')
@@ -119,7 +119,7 @@ final class AuditEntryTest extends TestCase
         // Acción: intenta consultar la auditoría sin autorización.
         Sanctum::actingAs(User::factory()->create(), ['*']);
 
-        $this->getJson('/api/v1/auditoria/entradas')->assertForbidden();
+        $this->getJson('/api/v1/audit/entries')->assertForbidden();
     }
 
     // Flujo: fuerza un fallo de auditoría; verifica que la operación de negocio se revierte.

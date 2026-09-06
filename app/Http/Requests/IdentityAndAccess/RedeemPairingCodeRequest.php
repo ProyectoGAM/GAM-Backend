@@ -14,7 +14,7 @@ final class RedeemPairingCodeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'codigo' => ['required', 'string', 'size:10', 'regex:/\A[A-Z2-9]+\z/D'],
+            'code' => ['required', 'string', 'size:10', 'regex:/\A[A-Z2-9]+\z/D'],
             'device_name' => ['sometimes', 'string', 'max:100'],
         ];
     }

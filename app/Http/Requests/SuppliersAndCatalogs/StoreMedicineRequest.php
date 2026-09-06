@@ -25,9 +25,9 @@ final class StoreMedicineRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'nombre' => ['required', 'string', 'max:160'],
-            'descripcion' => ['required', 'string', 'max:5000'],
-            'proveedor_id' => ['required', 'integer', 'min:1', 'max:9223372036854775807'],
+            'name' => ['required', 'string', 'max:160'],
+            'description' => ['required', 'string', 'max:5000'],
+            'supplier_id' => ['required', 'integer', 'min:1', 'max:9223372036854775807'],
             'idempotency_key' => ['required', 'uuid'],
         ];
     }
@@ -51,16 +51,16 @@ final class StoreMedicineRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'nombre.required' => 'Debes indicar el nombre del medicamento.',
-            'nombre.string' => 'El nombre debe ser texto.',
-            'nombre.max' => 'El nombre no puede superar los 160 caracteres.',
-            'descripcion.required' => 'Debes indicar la descripción del medicamento.',
-            'descripcion.string' => 'La descripción debe ser texto.',
-            'descripcion.max' => 'La descripción no puede superar los 5000 caracteres.',
-            'proveedor_id.required' => 'Debes seleccionar un proveedor.',
-            'proveedor_id.integer' => 'El proveedor debe ser un identificador entero.',
-            'proveedor_id.min' => 'El proveedor debe ser un identificador positivo.',
-            'proveedor_id.max' => 'El identificador del proveedor supera el límite permitido.',
+            'name.required' => 'Debes indicar el nombre del medicamento.',
+            'name.string' => 'El nombre debe ser texto.',
+            'name.max' => 'El nombre no puede superar los 160 caracteres.',
+            'description.required' => 'Debes indicar la descripción del medicamento.',
+            'description.string' => 'La descripción debe ser texto.',
+            'description.max' => 'La descripción no puede superar los 5000 caracteres.',
+            'supplier_id.required' => 'Debes seleccionar un proveedor.',
+            'supplier_id.integer' => 'El proveedor debe ser un identificador entero.',
+            'supplier_id.min' => 'El proveedor debe ser un identificador positivo.',
+            'supplier_id.max' => 'El identificador del proveedor supera el límite permitido.',
             'idempotency_key.required' => 'El encabezado Idempotency-Key es obligatorio.',
             'idempotency_key.uuid' => 'El encabezado Idempotency-Key debe ser un UUID válido.',
         ];

@@ -10,12 +10,12 @@ final class ChangeSupplierStatusRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('changeStatus', $this->route('proveedor')) ?? false;
+        return $this->user()?->can('changeStatus', $this->route('supplier')) ?? false;
     }
 
     /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
-        return ['estado' => ['required', Rule::enum(SupplierStatus::class)]];
+        return ['status' => ['required', Rule::enum(SupplierStatus::class)]];
     }
 }

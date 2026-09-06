@@ -12,6 +12,6 @@ final class CancelEggStockTransactionRequest extends EggStockRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        return [...$this->commandRules(true), 'motivo_correccion' => ['required', 'string', 'max:500']];
+        return [...$this->commandRules(true), 'correction_reason' => ['required', 'string', 'max:500']];
     }
 }

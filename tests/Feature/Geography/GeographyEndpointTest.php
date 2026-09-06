@@ -18,7 +18,7 @@ final class GeographyEndpointTest extends TestCase
     public function test_returns_401_when_departamentos_are_requested_without_authentication(): void
     {
         // Acción: consulta el catálogo de departamentos sin autenticación.
-        $this->getJson('/api/v1/departamentos')->assertUnauthorized();
+        $this->getJson('/api/v1/departments')->assertUnauthorized();
     }
 
     // Flujo: autentica un usuario sin permiso y verifica que no puede crear geografías.
@@ -28,7 +28,7 @@ final class GeographyEndpointTest extends TestCase
         Sanctum::actingAs(User::factory()->create(), ['*']);
 
         // Acción: intenta crear un departamento.
-        $this->postJson('/api/v1/departamentos', ['nombre' => 'Montevideo'])
+        $this->postJson('/api/v1/departments', ['name' => 'Montevideo'])
             ->assertForbidden();
     }
 
@@ -40,18 +40,18 @@ final class GeographyEndpointTest extends TestCase
         Sanctum::actingAs($actor, ['*']);
 
         // Acción 1: crea el departamento.
-        $departmentResponse = $this->postJson('/api/v1/departamentos', [
-            'nombre' => 'Montevideo',
-        ])->assertCreated()->assertJsonPath('data.nombre', 'Montevideo');
+        $departmentResponse = $this->postJson('/api/v1/departments', [
+            'name' => 'Montevideo',
+        ])->assertCreated()->assertJsonPath('data.name', 'Montevideo');
 
         $departmentId = (int) $departmentResponse->json('data.id');
 
         // Acción 2: crea una localidad dentro del departamento.
-        $this->postJson("/api/v1/departamentos/{$departmentId}/localidades", [
-            'nombre' => 'Santiago Vázquez',
+        $this->postJson("/api/v1/departments/{$departmentId}/localities", [
+            'name' => 'Santiago Vázquez',
         ])->assertCreated()
-            ->assertJsonPath('data.departamento_id', $departmentId)
-            ->assertJsonPath('data.nombre', 'Santiago Vázquez');
+            ->assertJsonPath('data.department_id', $departmentId)
+            ->assertJsonPath('data.name', 'Santiago Vázquez');
 
         // Verificación: confirma registros normalizados y sus auditorías.
         $this->assertDatabaseHas('departments', [
@@ -80,10 +80,10 @@ final class GeographyEndpointTest extends TestCase
         Sanctum::actingAs($this->userWithPermissions(['geography.manage']), ['*']);
 
         // Acción: intenta registrar el mismo nombre con espacios y mayúsculas.
-        $this->postJson('/api/v1/departamentos', ['nombre' => '  CANELONES  '])
+        $this->postJson('/api/v1/departments', ['name' => '  CANELONES  '])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['nombre'])
-            ->assertJsonPath('errors.nombre.0', 'El nombre ya está registrado.');
+            ->assertJsonValidationErrors(['name'])
+            ->assertJsonPath('errors.name.0', 'El nombre ya está registrado.');
     }
 
     // Flujo: consulta departamentos y localidades con permiso, búsqueda y paginación.
@@ -95,17 +95,17 @@ final class GeographyEndpointTest extends TestCase
         Sanctum::actingAs($this->userWithPermissions(['geography.view']), ['*']);
 
         // Acción 1: lista departamentos aplicando búsqueda y paginación.
-        $this->getJson('/api/v1/departamentos?buscar=roch&por_pagina=10')
+        $this->getJson('/api/v1/departments?search=roch&per_page=10')
             ->assertOk()
-            ->assertJsonPath('data.0.nombre', 'Rocha')
-            ->assertJsonPath('data.0.localidades_count', 1)
+            ->assertJsonPath('data.0.name', 'Rocha')
+            ->assertJsonPath('data.0.localities_count', 1)
             ->assertJsonPath('meta.per_page', 10);
 
         // Acción 2: consulta las localidades anidadas del departamento.
-        $this->getJson("/api/v1/departamentos/{$departamento->getKey()}/localidades")
+        $this->getJson("/api/v1/departments/{$departamento->getKey()}/localities")
             ->assertOk()
-            ->assertJsonPath('data.0.nombre', 'Chuy')
-            ->assertJsonPath('data.0.departamento.nombre', 'Rocha');
+            ->assertJsonPath('data.0.name', 'Chuy')
+            ->assertJsonPath('data.0.departamento.name', 'Rocha');
     }
 
     /** @param list<string> $permissions */

@@ -13,13 +13,13 @@ use Illuminate\Http\JsonResponse;
 
 final readonly class FlockRedistributionController
 {
-    public function store(RedistributeFlockRequest $request, Flock $lote, RedistributeFlockAction $action): JsonResponse
+    public function store(RedistributeFlockRequest $request, Flock $flock, RedistributeFlockAction $action): JsonResponse
     {
-        return (new LotsOperationResource($action->execute($lote, $request->attributesForAction(), $request->actor())))->response()->setStatusCode(201);
+        return (new LotsOperationResource($action->execute($flock, $request->attributesForAction(), $request->actor())))->response()->setStatusCode(201);
     }
 
-    public function reverse(ReverseRedistributionRequest $request, FlockMovement $redistribucion, ReverseRedistributionAction $action): JsonResponse
+    public function reverse(ReverseRedistributionRequest $request, FlockMovement $redistribution, ReverseRedistributionAction $action): JsonResponse
     {
-        return (new LotsOperationResource($action->execute($redistribucion, $request->attributesForAction(), $request->actor())))->response()->setStatusCode(200);
+        return (new LotsOperationResource($action->execute($redistribution, $request->attributesForAction(), $request->actor())))->response()->setStatusCode(200);
     }
 }

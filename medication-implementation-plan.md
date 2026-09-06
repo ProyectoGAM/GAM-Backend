@@ -20,22 +20,22 @@ Fuente: [medication.yaml](contracts/openapi/medication.yaml).
 
 | Método y ruta | Comportamiento |
 | --- | --- |
-| POST /api/v1/medicamentos | Registra una ficha y devuelve su representación completa con 201. |
-| GET /api/v1/medicamentos | Lista fichas completas con paginación, búsqueda por nombre y filtro de proveedor. |
+| POST /api/v1/medicines | Registra una ficha y devuelve su representación completa con 201. |
+| GET /api/v1/medicines | Lista fichas completas con paginación, búsqueda por nombre y filtro de proveedor. |
 
-Alta: nombre —texto obligatorio, máximo 160 caracteres—, descripcion —texto obligatorio, máximo 5000— y proveedor_id —identificador entero positivo—. Nombre y descripción no pueden quedar vacíos después de recortar espacios exteriores.
+Alta: name —texto obligatorio, máximo 160 caracteres—, description —texto obligatorio, máximo 5000— y supplier_id —identificador entero positivo—. Nombre y descripción no pueden quedar vacíos después de recortar espacios exteriores.
 
 El encabezado Idempotency-Key debe contener un UUID. No se admite como campo del cuerpo. Mismo actor, clave y contenido normalizado devuelven exactamente la ficha original con 201; otro contenido produce 409. Otra clave o actor permite otra ficha, incluso con el mismo nombre.
 
-Consulta: buscar, proveedor_id, pagina —1 a 100000— y por_pagina —1 a 100, por defecto 50—. Búsqueda parcial literal sin distinguir mayúsculas; los símbolos de porcentaje y guion bajo no actúan como comodines suministrados por el usuario. Orden descendente por creación e ID interno; enlaces conservan filtros. Un proveedor sin coincidencias devuelve una página vacía.
+Consulta: search, supplier_id, page —1 a 100000— y per_page —1 a 100, por defecto 50—. Búsqueda parcial literal sin distinguir mayúsculas; los símbolos de porcentaje y guion bajo no actúan como comodines suministrados por el usuario. Orden descendente por creación e ID interno; enlaces conservan filtros. Un proveedor sin coincidencias devuelve una página vacía.
 
 Salida allowlist:
 
-- id, nombre, descripcion;
-- proveedor.id y proveedor.nombre_al_registrar;
-- registrado_por.id y registrado_por.nombre_al_registrar;
-- registrado_en, expresado siempre en UTC;
-- id_operacion, compartido con auditoría.
+- id, name, description;
+- supplier.id y supplier.name_at_registration;
+- created_by.id y created_by.name_at_registration;
+- created_at, expresado siempre en UTC;
+- operation_id, compartido con auditoría.
 
 Los nombres conservados se identifican como tales; no representan necesariamente el nombre actual de la referencia. No se exponen claves de idempotencia, hashes, correos ni otros atributos del usuario.
 

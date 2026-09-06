@@ -20,9 +20,9 @@ final class FlockEndpointTest extends LotsTestCase
     private function payload(): array
     {
         return [
-            'codigo' => 'TEST-A', 'raza_id' => Breed::factory()->create()->id,
-            'proveedor_id' => Supplier::factory()->create()->id, 'galpon_id' => PoultryHouse::factory()->create(['bird_capacity' => 100])->id,
-            'cantidad_inicial' => 100, 'fecha_ingreso' => now(config('lots.timezone'))->subDays(7)->toDateString(),
+            'code' => 'TEST-A', 'breed_id' => Breed::factory()->create()->id,
+            'supplier_id' => Supplier::factory()->create()->id, 'poultry_house_id' => PoultryHouse::factory()->create(['bird_capacity' => 100])->id,
+            'initial_quantity' => 100, 'entry_date' => now(config('lots.timezone'))->subDays(7)->toDateString(),
         ];
     }
 
@@ -35,13 +35,13 @@ final class FlockEndpointTest extends LotsTestCase
         Event::fake([FlockCreated::class]);
 
         // Request: registra una admisión de cien aves.
-        $response = $this->command('POST', '/lotes', $payload)->assertCreated()
-            ->assertJsonPath('data.lote.cantidad_viva', 100)
-            ->assertJsonPath('data.lote.semana_actual', 2);
-        $this->assertTrue(Str::isUlid($response->json('data.lote.id')));
-        $this->assertDatabaseHas('poultry_houses', ['id' => $payload['galpon_id'], 'bird_capacity' => 100]);
-        $this->assertSame(100, $this->app->make(PoultryHouseOccupancyProvider::class)->occupancyFor($payload['galpon_id']));
-        $this->assertDatabaseHas('activity_log', ['event' => 'flock_created', 'operation_id' => $response->json('data.id_operacion')]);
+        $response = $this->command('POST', '/flocks', $payload)->assertCreated()
+            ->assertJsonPath('data.flock.current_quantity', 100)
+            ->assertJsonPath('data.flock.current_week', 2);
+        $this->assertTrue(Str::isUlid($response->json('data.flock.id')));
+        $this->assertDatabaseHas('poultry_houses', ['id' => $payload['poultry_house_id'], 'bird_capacity' => 100]);
+        $this->assertSame(100, $this->app->make(PoultryHouseOccupancyProvider::class)->occupancyFor($payload['poultry_house_id']));
+        $this->assertDatabaseHas('activity_log', ['event' => 'flock_created', 'operation_id' => $response->json('data.operation_id')]);
         Event::assertDispatched(FlockCreated::class);
     }
 
@@ -51,11 +51,11 @@ final class FlockEndpointTest extends LotsTestCase
         // Preparación: sustituye el proveedor por una procedencia descriptiva.
         $this->signIn();
         $payload = $this->payload();
-        unset($payload['proveedor_id']);
-        $payload['origen'] = 'Cría propia';
+        unset($payload['supplier_id']);
+        $payload['origin'] = 'Cría propia';
 
         // Request: registra el origen independiente del catálogo de proveedores.
-        $this->command('POST', '/lotes', $payload)->assertCreated()->assertJsonPath('data.lote.origen', 'Cría propia');
+        $this->command('POST', '/flocks', $payload)->assertCreated()->assertJsonPath('data.flock.origin', 'Cría propia');
     }
 
     // Flujo: reintenta el alta tras cambiar el lote y verifica ausencia de duplicados.
@@ -65,38 +65,38 @@ final class FlockEndpointTest extends LotsTestCase
         $this->signIn();
         $payload = $this->payload();
         $key = (string) Str::uuid();
-        $first = $this->command('POST', '/lotes', $payload, $key)->assertCreated();
+        $first = $this->command('POST', '/flocks', $payload, $key)->assertCreated();
 
         // Mutación: modifica el lote antes del reintento.
-        $this->command('PATCH', '/lotes/'.$first->json('data.lote.id'), ['version' => 1, 'observaciones' => 'Revisado'])->assertOk();
-        $replay = $this->command('POST', '/lotes', $payload, $key)->assertCreated();
+        $this->command('PATCH', '/flocks/'.$first->json('data.flock.id'), ['version' => 1, 'notes' => 'Revisado'])->assertOk();
+        $replay = $this->command('POST', '/flocks', $payload, $key)->assertCreated();
         $this->assertSame($first->json(), $replay->json());
         $this->assertDatabaseCount('flocks', 1);
         $this->assertDatabaseCount('flock_movements', 1);
 
         // Request: la misma clave con otro contenido no puede crear otro ingreso.
-        $this->command('POST', '/lotes', [...$payload, 'cantidad_inicial' => 99], $key)->assertConflict();
+        $this->command('POST', '/flocks', [...$payload, 'initial_quantity' => 99], $key)->assertConflict();
     }
 
     // Flujo: comprueba fronteras de acceso sin permisos implícitos.
     public function test_authentication_and_functional_permissions_are_required(): void
     {
         // Request: sin sesión no permite acceder.
-        $this->getJson('/api/v1/lotes')->assertUnauthorized();
+        $this->getJson('/api/v1/flocks')->assertUnauthorized();
         $this->signIn([]);
-        $this->getJson('/api/v1/lotes')->assertForbidden();
-        $this->command('POST', '/lotes', [])->assertForbidden();
+        $this->getJson('/api/v1/flocks')->assertForbidden();
+        $this->command('POST', '/flocks', [])->assertForbidden();
     }
 
     /** @return array<string, array{string, mixed}> */
     public static function invalidFields(): array
     {
         return [
-            'cero' => ['cantidad_inicial', 0],
-            'fracción' => ['cantidad_inicial', 1.5],
-            'fuera de rango' => ['cantidad_inicial', 2147483648],
-            'código vacío' => ['codigo', ''],
-            'fecha inválida' => ['fecha_ingreso', '2026-02-30'],
+            'cero' => ['initial_quantity', 0],
+            'fracción' => ['initial_quantity', 1.5],
+            'fuera de rango' => ['initial_quantity', 2147483648],
+            'código vacío' => ['code', ''],
+            'fecha inválida' => ['entry_date', '2026-02-30'],
         ];
     }
 
@@ -109,7 +109,7 @@ final class FlockEndpointTest extends LotsTestCase
         $payload = $this->payload();
 
         // Request: verifica el error del campo y ausencia de lotes.
-        $this->command('POST', '/lotes', [...$payload, $field => $value])->assertUnprocessable()->assertJsonValidationErrors($field);
+        $this->command('POST', '/flocks', [...$payload, $field => $value])->assertUnprocessable()->assertJsonValidationErrors($field);
         $this->assertDatabaseCount('flocks', 0);
     }
 
@@ -121,8 +121,8 @@ final class FlockEndpointTest extends LotsTestCase
         $flock = $this->flock();
 
         // Request: intenta cambiar cantidades fuera de sus operaciones.
-        $this->command('PATCH', "/lotes/{$flock->public_id}", ['version' => 1, 'cantidad_inicial' => 500, 'current_quantity' => 500])
-            ->assertUnprocessable()->assertJsonValidationErrors(['cantidad_inicial', 'current_quantity']);
+        $this->command('PATCH', "/flocks/{$flock->public_id}", ['version' => 1, 'initial_quantity' => 500, 'current_quantity' => 500])
+            ->assertUnprocessable()->assertJsonValidationErrors(['initial_quantity', 'current_quantity']);
         $this->assertSame(100, $flock->fresh()->current_quantity);
     }
 
@@ -132,11 +132,11 @@ final class FlockEndpointTest extends LotsTestCase
         // Preparación: crea un galpón con capacidad insuficiente.
         $this->signIn();
         $payload = $this->payload();
-        $this->command('POST', '/lotes', [...$payload, 'cantidad_inicial' => 101])->assertConflict();
+        $this->command('POST', '/flocks', [...$payload, 'initial_quantity' => 101])->assertConflict();
 
         // Mutación: retira el galpón de operación.
-        PoultryHouse::query()->whereKey($payload['galpon_id'])->update(['status' => 'maintenance']);
-        $this->command('POST', '/lotes', $payload)->assertConflict();
+        PoultryHouse::query()->whereKey($payload['poultry_house_id'])->update(['status' => 'maintenance']);
+        $this->command('POST', '/flocks', $payload)->assertConflict();
         $this->assertDatabaseCount('flocks', 0);
     }
 
@@ -150,7 +150,7 @@ final class FlockEndpointTest extends LotsTestCase
         $this->mock(AuditRecorder::class)->shouldReceive('record')->once()->andThrow(new RuntimeException('Fallo controlado de auditoría'));
 
         // Request: comprueba rollback completo.
-        $this->command('POST', '/lotes', $payload)->assertStatus(500);
+        $this->command('POST', '/flocks', $payload)->assertStatus(500);
         $this->assertDatabaseCount('flocks', 0);
         $this->assertDatabaseCount('flock_movements', 0);
         $this->assertDatabaseCount('flock_operations', 0);
@@ -165,17 +165,17 @@ final class FlockEndpointTest extends LotsTestCase
         $flock = $this->flock(20);
 
         // Request: finaliza mediante egreso explícito.
-        $this->command('POST', "/lotes/{$flock->public_id}/finalizacion", ['version' => 1, 'motivo' => 'Retiro al terminar el ciclo'])
-            ->assertOk()->assertJsonPath('data.lote.estado', 'finished')->assertJsonPath('data.movimiento.cantidad', 20);
+        $this->command('POST', "/flocks/{$flock->public_id}/finalization", ['version' => 1, 'reason' => 'Retiro al terminar el ciclo'])
+            ->assertOk()->assertJsonPath('data.flock.status', 'finished')->assertJsonPath('data.movement.quantity', 20);
         $this->assertSame(0, $flock->fresh()->current_quantity);
         $this->assertSame(0, $this->app->make(PoultryHouseOccupancyProvider::class)->occupancyFor($flock->poultry_house_id));
         $this->assertDatabaseCount('mortality_records', 0);
         $this->assertDatabaseHas('flock_movements', ['type' => 'departure', 'quantity' => 20]);
-        $this->getJson("/api/v1/lotes/{$flock->public_id}")->assertOk()->assertJsonPath('data.cantidad_inicial', 20);
+        $this->getJson("/api/v1/flocks/{$flock->public_id}")->assertOk()->assertJsonPath('data.initial_quantity', 20);
 
         // Request: una nueva finalización o reapertura no está permitida.
-        $this->command('POST', "/lotes/{$flock->public_id}/finalizacion", ['version' => 2, 'motivo' => 'Duplicado'])->assertConflict();
-        $this->command('PATCH', "/lotes/{$flock->public_id}/estado", ['version' => 2, 'estado' => 'active', 'motivo' => 'Reabrir'])->assertConflict();
+        $this->command('POST', "/flocks/{$flock->public_id}/finalization", ['version' => 2, 'reason' => 'Duplicado'])->assertConflict();
+        $this->command('PATCH', "/flocks/{$flock->public_id}/status", ['version' => 2, 'status' => 'active', 'reason' => 'Reabrir'])->assertConflict();
     }
 
     // Flujo: la cuarentena conserva ocupación y las versiones evitan sobrescrituras.
@@ -186,9 +186,9 @@ final class FlockEndpointTest extends LotsTestCase
         $flock = $this->flock();
 
         // Request: cambia el estado e intenta una escritura obsoleta.
-        $this->command('PATCH', "/lotes/{$flock->public_id}/estado", ['version' => 1, 'estado' => 'quarantined', 'motivo' => 'Observación'])->assertOk();
+        $this->command('PATCH', "/flocks/{$flock->public_id}/status", ['version' => 1, 'status' => 'quarantined', 'reason' => 'Observación'])->assertOk();
         $this->assertSame(100, $this->app->make(PoultryHouseOccupancyProvider::class)->occupancyFor($flock->poultry_house_id));
-        $this->command('PATCH', "/lotes/{$flock->public_id}", ['version' => 1, 'observaciones' => 'Desactualizado'])->assertConflict();
+        $this->command('PATCH', "/flocks/{$flock->public_id}", ['version' => 1, 'notes' => 'Desactualizado'])->assertConflict();
         $this->assertSame(FlockStatus::Quarantined, $flock->fresh()->status);
     }
 
@@ -201,9 +201,9 @@ final class FlockEndpointTest extends LotsTestCase
         $b = $this->flock();
 
         // Consulta: los permisos funcionales permiten ambas unidades.
-        $this->getJson('/api/v1/lotes?por_pagina=1')->assertOk()->assertJsonPath('meta.total', 2);
-        $this->getJson("/api/v1/galpones/{$a->poultry_house_id}/lotes")->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $a->public_id);
-        $this->getJson('/api/v1/lotes?buscar='.$b->code)->assertOk()->assertJsonPath('data.0.id', $b->public_id);
-        $this->getJson('/api/v1/lotes?por_pagina=101')->assertUnprocessable();
+        $this->getJson('/api/v1/flocks?per_page=1')->assertOk()->assertJsonPath('meta.total', 2);
+        $this->getJson("/api/v1/poultry-houses/{$a->poultry_house_id}/flocks")->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $a->public_id);
+        $this->getJson('/api/v1/flocks?search='.$b->code)->assertOk()->assertJsonPath('data.0.id', $b->public_id);
+        $this->getJson('/api/v1/flocks?per_page=101')->assertUnprocessable();
     }
 }

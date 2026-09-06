@@ -67,7 +67,7 @@ final class LotsContractTest extends TestCase
             'EggCollection' => EggCollectionResource::class,
             'Catalog' => LotsCatalogResource::class,
         ];
-        $request = Request::create('/api/v1/lotes');
+        $request = Request::create('/api/v1/flocks');
 
         // Consulta: serializa sólo las claves y las compara con sus esquemas.
         foreach ($resources as $name => $resource) {

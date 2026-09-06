@@ -30,14 +30,14 @@ final class ProductionUnitEndpointTest extends TestCase
         Sanctum::actingAs($actor, ['*']);
 
         // Acción: registra la unidad productiva mediante la API.
-        $response = $this->postJson('/api/v1/unidades-productivas', [
-            'localidad_id' => $localidad->getKey(),
-            'nombre' => 'North Farm',
-            'latitud' => '-34.901100',
-            'longitud' => '-56.164500',
+        $response = $this->postJson('/api/v1/production-units', [
+            'locality_id' => $localidad->getKey(),
+            'name' => 'North Farm',
+            'latitude' => '-34.901100',
+            'longitude' => '-56.164500',
         ])->assertCreated()
-            ->assertJsonPath('data.nombre', 'North Farm')
-            ->assertJsonPath('data.estado', 'active');
+            ->assertJsonPath('data.name', 'North Farm')
+            ->assertJsonPath('data.status', 'active');
 
         $productionUnitId = (int) $response->json('data.id');
 
@@ -66,19 +66,19 @@ final class ProductionUnitEndpointTest extends TestCase
         Sanctum::actingAs($actor, ['*']);
 
         // Acción 1: lista todas las unidades productivas accesibles.
-        $this->getJson('/api/v1/unidades-productivas')
+        $this->getJson('/api/v1/production-units')
             ->assertOk()
             ->assertJsonCount(2, 'data')
-            ->assertJsonFragment(['nombre' => 'North Farm'])
-            ->assertJsonFragment(['nombre' => 'South Farm']);
+            ->assertJsonFragment(['name' => 'North Farm'])
+            ->assertJsonFragment(['name' => 'South Farm']);
 
         // Acción 2: consulta la primera unidad por identificador.
-        $this->getJson("/api/v1/unidades-productivas/{$firstProductionUnit->getKey()}")
+        $this->getJson("/api/v1/production-units/{$firstProductionUnit->getKey()}")
             ->assertOk()
             ->assertJsonPath('data.id', $firstProductionUnit->getKey());
 
         // Acción 3: consulta la segunda unidad por identificador.
-        $this->getJson("/api/v1/unidades-productivas/{$secondProductionUnit->getKey()}")
+        $this->getJson("/api/v1/production-units/{$secondProductionUnit->getKey()}")
             ->assertOk()
             ->assertJsonPath('data.id', $secondProductionUnit->getKey());
     }
@@ -91,7 +91,7 @@ final class ProductionUnitEndpointTest extends TestCase
         Sanctum::actingAs(User::factory()->create(), ['*']);
 
         // Acción: intenta listar las unidades productivas.
-        $this->getJson('/api/v1/unidades-productivas')->assertForbidden();
+        $this->getJson('/api/v1/production-units')->assertForbidden();
     }
 
     // Flujo: autentica a un lector y consulta una unidad inexistente para obtener 404.
@@ -101,7 +101,7 @@ final class ProductionUnitEndpointTest extends TestCase
         Sanctum::actingAs($this->userWithPermissions(['production-units.view']), ['*']);
 
         // Acción: consulta un identificador inexistente.
-        $this->getJson('/api/v1/unidades-productivas/999999')
+        $this->getJson('/api/v1/production-units/999999')
             ->assertNotFound()
             ->assertJsonPath('message', 'El recurso solicitado no existe.');
     }
@@ -113,13 +113,13 @@ final class ProductionUnitEndpointTest extends TestCase
         Sanctum::actingAs($this->userWithPermissions(['production-units.manage']), ['*']);
 
         // Acción: intenta crear una unidad con coordenadas fuera de rango.
-        $this->postJson('/api/v1/unidades-productivas', [
-            'localidad_id' => Locality::factory()->create()->getKey(),
-            'nombre' => 'Invalid Coordinates',
-            'latitud' => 91,
-            'longitud' => -181,
+        $this->postJson('/api/v1/production-units', [
+            'locality_id' => Locality::factory()->create()->getKey(),
+            'name' => 'Invalid Coordinates',
+            'latitude' => 91,
+            'longitude' => -181,
         ])->assertUnprocessable()
-            ->assertJsonValidationErrors(['latitud', 'longitud']);
+            ->assertJsonValidationErrors(['latitude', 'longitude']);
 
         // Verificación: confirma que la unidad inválida no se guardó.
         $this->assertDatabaseMissing('production_units', ['normalized_name' => 'invalid coordinates']);
@@ -151,8 +151,8 @@ final class ProductionUnitEndpointTest extends TestCase
         Sanctum::actingAs($actor, ['*']);
 
         // Acción: solicita la desactivación de la unidad productiva.
-        $this->patchJson("/api/v1/unidades-productivas/{$unidadProductiva->getKey()}/estado", [
-            'estado' => 'inactive',
+        $this->patchJson("/api/v1/production-units/{$unidadProductiva->getKey()}/status", [
+            'status' => 'inactive',
         ])->assertConflict()
             ->assertJsonPath('message', 'Una unidad productiva con galpones activos no puede desactivarse.');
 
@@ -175,10 +175,10 @@ final class ProductionUnitEndpointTest extends TestCase
         Sanctum::actingAs($actor, ['*']);
 
         // Acción: cambia la unidad productiva a estado inactivo.
-        $this->patchJson("/api/v1/unidades-productivas/{$unidadProductiva->getKey()}/estado", [
-            'estado' => 'inactive',
+        $this->patchJson("/api/v1/production-units/{$unidadProductiva->getKey()}/status", [
+            'status' => 'inactive',
         ])->assertOk()
-            ->assertJsonPath('data.estado', 'inactive');
+            ->assertJsonPath('data.status', 'inactive');
 
         // Verificación: confirma la auditoría del cambio de estado.
         $this->assertDatabaseHas('activity_log', [

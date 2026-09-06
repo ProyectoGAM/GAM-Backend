@@ -15,7 +15,7 @@ final readonly class GetFlockMetricsQuery
     public function execute(Flock $flock, array $filters): array
     {
         $metrics = $this->metrics->execute([...$filters, 'flock_id' => $flock->public_id]);
-        $metrics['lote_id'] = $flock->public_id;
+        $metrics['flock_id'] = $flock->public_id;
 
         return $metrics;
     }

@@ -15,19 +15,18 @@ use App\Models\User;
 use App\Queries\Inventory\GetInventoryMovementQuery;
 use App\Queries\Inventory\ListInventoryMovementsQuery;
 use App\Queries\Inventory\ListStockBalancesQuery;
-use App\Support\PublicInputMapper;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 final readonly class InventoryReadController
 {
     public function balances(ListStockBalancesRequest $request, ListStockBalancesQuery $query): AnonymousResourceCollection
     {
-        return StockBalanceResource::collection($query->execute(PublicInputMapper::toInternal($request->validated(), 'inventory')));
+        return StockBalanceResource::collection($query->execute($request->validated()));
     }
 
-    public function movimientos(ListInventoryMovementsRequest $request, ListInventoryMovementsQuery $query): AnonymousResourceCollection
+    public function movements(ListInventoryMovementsRequest $request, ListInventoryMovementsQuery $query): AnonymousResourceCollection
     {
-        return InventoryMovementResource::collection($query->execute(PublicInputMapper::toInternal($request->validated(), 'inventory')));
+        return InventoryMovementResource::collection($query->execute($request->validated()));
     }
 
     public function movement(ViewInventoryMovementRequest $request, InventoryMovement $inventoryMovement, GetInventoryMovementQuery $query): InventoryMovementResource
@@ -40,6 +39,6 @@ final readonly class InventoryReadController
         /** @var User $actor */
         $actor = $request->user();
 
-        return new StockBalanceResource($action->execute($stockBalance, (string) PublicInputMapper::toInternal(['cantidad_minima' => $request->validated('cantidad_minima')], 'inventory')['minimum_quantity'], $actor));
+        return new StockBalanceResource($action->execute($stockBalance, (string) $request->validated('minimum_quantity'), $actor));
     }
 }

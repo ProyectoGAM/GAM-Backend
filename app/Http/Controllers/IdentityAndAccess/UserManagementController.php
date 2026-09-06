@@ -15,7 +15,6 @@ use App\Http\Requests\IdentityAndAccess\UpdateUserRolesRequest;
 use App\Http\Requests\IdentityAndAccess\UpdateUserStatusRequest;
 use App\Http\Resources\IdentityAndAccess\UserResource;
 use App\Models\User;
-use App\Support\PublicInputMapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -32,16 +31,16 @@ final class UserManagementController
     {
         /** @var User $actor */
         $actor = $request->user();
-        $data = PublicInputMapper::toInternal($request->validated(), 'identity');
+        $data = $request->validated();
         $user = $register->execute($data, $actor);
-        $user->assignRole(Role::findOrCreate($data['rol'], 'web'));
+        $user->assignRole(Role::findOrCreate($data['role'], 'web'));
 
         return response()->json(['data' => new UserResource($user->refresh())], Response::HTTP_CREATED);
     }
 
     public function status(UpdateUserStatusRequest $request, User $user): JsonResponse
     {
-        if ($request->boolean('habilitado')) {
+        if ($request->boolean('enabled')) {
             $user->restore();
         } else {
             $user->authSessions()->whereNull('revoked_at')->update(['revoked_at' => now(), 'revoked_reason' => 'user_disabled']);

@@ -65,7 +65,7 @@ final readonly class DownloadReportExportAction
         if ($asHtml) {
             $source = $this->registry->get($export->source_key);
             $storedQuery = is_array($export->query) ? $export->query : [];
-            unset($storedQuery['clave_fuente'], $storedQuery['version_definicion']);
+            unset($storedQuery['source_key'], $storedQuery['definition_version']);
             $result = $source->preview($this->normalizer->normalize($export->source_key, $storedQuery));
 
             return response()->view('reporting.report-export', [

@@ -16,10 +16,10 @@ final class ListLotsCatalogRequest extends LotsRequest
     public function rules(): array
     {
         return [
-            'buscar' => ['sometimes', 'string', 'max:120'],
-            'estado' => ['sometimes', 'in:active,inactive'],
-            'pagina' => ['sometimes', 'integer', 'min:1', 'max:100000'],
-            'por_pagina' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'search' => ['sometimes', 'string', 'max:120'],
+            'status' => ['sometimes', 'in:active,inactive'],
+            'page' => ['sometimes', 'integer', 'min:1', 'max:100000'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }
 }

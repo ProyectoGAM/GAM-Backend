@@ -29,17 +29,17 @@ final readonly class ListReferenceOptionsQuery
     public function execute(User $actor): array
     {
         $options = [
-            'departamentos' => [],
-            'localidades' => [],
-            'unidades_productivas' => [],
-            'galpones' => [],
-            'proveedores' => [],
-            'productos' => [],
-            'ubicaciones_stock' => [],
-            'saldos_inventario' => [],
-            'movimientos' => [],
-            'tipos' => [
-                'productos' => $this->enumOptions(ProductKind::cases(), [
+            'departments' => [],
+            'localities' => [],
+            'production_units' => [],
+            'poultry_houses' => [],
+            'suppliers' => [],
+            'products' => [],
+            'stock_locations' => [],
+            'inventory_balances' => [],
+            'movements' => [],
+            'types' => [
+                'products' => $this->enumOptions(ProductKind::cases(), [
                     'raw_material' => 'Materia prima',
                     'supply' => 'Suministro',
                     'finished_feed' => 'Alimento terminado',
@@ -48,7 +48,7 @@ final readonly class ListReferenceOptionsQuery
                     'vaccine' => 'Vacuna',
                     'other' => 'Otro',
                 ]),
-                'unidades_base' => $this->enumOptions(BaseUnit::cases(), [
+                'base_units' => $this->enumOptions(BaseUnit::cases(), [
                     'unit' => 'Unidad',
                     'kg' => 'Kilogramo',
                     'g' => 'Gramo',
@@ -56,7 +56,7 @@ final readonly class ListReferenceOptionsQuery
                     'ml' => 'Mililitro',
                     'dose' => 'Dosis',
                 ]),
-                'movimientos' => $this->enumOptions(InventoryMovementType::cases(), [
+                'movements' => $this->enumOptions(InventoryMovementType::cases(), [
                     'opening_balance' => 'Saldo inicial',
                     'receipt' => 'Ingreso',
                     'issue' => 'Salida',
@@ -65,72 +65,72 @@ final readonly class ListReferenceOptionsQuery
                     'transfer' => 'Transferencia',
                     'reversal' => 'Reversión',
                 ]),
-                'booleanos' => [
+                'booleans' => [
                     $this->option('true', 'Sí'),
                     $this->option('false', 'No'),
                 ],
             ],
-            'estados' => [
-                'unidades_productivas' => $this->enumOptions(ProductionUnitStatus::cases(), [
+            'statuses' => [
+                'production_units' => $this->enumOptions(ProductionUnitStatus::cases(), [
                     'active' => 'Activo',
                     'inactive' => 'Inactivo',
                 ]),
-                'galpones' => $this->enumOptions(PoultryHouseStatus::cases(), [
+                'poultry_houses' => $this->enumOptions(PoultryHouseStatus::cases(), [
                     'operational' => 'Operativo',
                     'maintenance' => 'Mantenimiento',
                     'out_of_service' => 'Fuera de servicio',
                     'inactive' => 'Inactivo',
                 ]),
-                'proveedores' => $this->enumOptions(SupplierStatus::cases(), [
+                'suppliers' => $this->enumOptions(SupplierStatus::cases(), [
                     'active' => 'Activo',
                     'inactive' => 'Inactivo',
                 ]),
-                'productos' => $this->enumOptions(ProductStatus::cases(), [
+                'products' => $this->enumOptions(ProductStatus::cases(), [
                     'active' => 'Activo',
                     'inactive' => 'Inactivo',
                 ]),
-                'ubicaciones_stock' => $this->enumOptions(StockLocationStatus::cases(), [
+                'stock_locations' => $this->enumOptions(StockLocationStatus::cases(), [
                     'active' => 'Activo',
                     'inactive' => 'Inactivo',
                 ]),
             ],
-            'auditoria' => [
-                'eventos' => [],
-                'origenes' => [],
+            'audit' => [
+                'events' => [],
+                'sources' => [],
             ],
         ];
 
         if ($this->allowedAny($actor, ['geography.view', 'geography.manage'])) {
-            $options['departamentos'] = $this->departments();
-            $options['localidades'] = $this->localities();
+            $options['departments'] = $this->departments();
+            $options['localities'] = $this->localities();
         }
 
         if ($this->allowedAny($actor, ['production-units.view', 'production-units.manage', 'inventory.manage'])) {
-            $options['unidades_productivas'] = $this->productionUnits();
+            $options['production_units'] = $this->productionUnits();
         }
 
         if ($this->allowedAny($actor, ['poultry-houses.view', 'poultry-houses.manage'])) {
-            $options['galpones'] = $this->poultryHouses();
+            $options['poultry_houses'] = $this->poultryHouses();
         }
 
         if ($this->allowedAny($actor, ['suppliers.view', 'suppliers.manage', 'inventory.move'])) {
-            $options['proveedores'] = $this->suppliers();
+            $options['suppliers'] = $this->suppliers();
         }
 
         if ($this->allowedAny($actor, ['products.view', 'products.manage', 'inventory.move', 'inventory.adjust'])) {
-            $options['productos'] = $this->products();
+            $options['products'] = $this->products();
         }
 
         if ($this->allowedAny($actor, ['inventory.view', 'inventory.move', 'inventory.adjust', 'inventory.manage'])) {
-            $options['ubicaciones_stock'] = $this->stockLocations();
-            $options['saldos_inventario'] = $this->stockBalances();
-            $options['movimientos'] = $this->movements();
+            $options['stock_locations'] = $this->stockLocations();
+            $options['inventory_balances'] = $this->stockBalances();
+            $options['movements'] = $this->movements();
         }
 
         if ($this->allowed($actor, 'audit.view')) {
-            $options['auditoria'] = [
-                'eventos' => $this->distinctAuditOptions('event'),
-                'origenes' => $this->distinctAuditOptions('source'),
+            $options['audit'] = [
+                'events' => $this->distinctAuditOptions('event'),
+                'sources' => $this->distinctAuditOptions('source'),
             ];
         }
 

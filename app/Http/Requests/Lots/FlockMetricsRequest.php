@@ -15,11 +15,11 @@ final class FlockMetricsRequest extends LotsRequest
     public function rules(): array
     {
         return [
-            'fecha_desde' => ['sometimes', 'date_format:Y-m-d'],
-            'fecha_hasta' => ['sometimes', 'date_format:Y-m-d', ...($this->filled('fecha_desde') ? ['after_or_equal:fecha_desde'] : [])],
-            'lote_id' => ['sometimes', 'ulid'],
-            'galpon_id' => ['sometimes', 'integer', 'exists:poultry_houses,id'],
-            'unidad_productiva_id' => ['sometimes', 'integer', 'exists:production_units,id'],
+            'date_from' => ['sometimes', 'date_format:Y-m-d'],
+            'date_to' => ['sometimes', 'date_format:Y-m-d', ...($this->filled('date_from') ? ['after_or_equal:date_from'] : [])],
+            'flock_id' => ['sometimes', 'ulid'],
+            'poultry_house_id' => ['sometimes', 'integer', 'exists:poultry_houses,id'],
+            'production_unit_id' => ['sometimes', 'integer', 'exists:production_units,id'],
         ];
     }
 }

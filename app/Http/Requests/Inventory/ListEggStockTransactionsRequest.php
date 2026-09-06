@@ -12,6 +12,6 @@ final class ListEggStockTransactionsRequest extends EggStockRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        return ['pagina' => ['sometimes', 'integer', 'min:1'], 'por_pagina' => ['sometimes', 'integer', 'min:1', 'max:100'], 'estado' => ['sometimes', 'in:recorded,cancelled'], 'tipo' => ['sometimes', 'in:collection_receipt,manual_receipt,distribution_preparation,loss'], 'fecha_desde' => ['sometimes', 'date_format:Y-m-d'], 'fecha_hasta' => ['sometimes', 'date_format:Y-m-d']];
+        return ['page' => ['sometimes', 'integer', 'min:1'], 'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'], 'status' => ['sometimes', 'in:recorded,cancelled'], 'type' => ['sometimes', 'in:collection_receipt,manual_receipt,distribution_preparation,loss'], 'date_from' => ['sometimes', 'date_format:Y-m-d'], 'date_to' => ['sometimes', 'date_format:Y-m-d']];
     }
 }

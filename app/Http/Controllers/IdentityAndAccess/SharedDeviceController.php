@@ -34,7 +34,7 @@ final class SharedDeviceController
         /** @var User $user */
         $user = $request->user();
         $this->requireRecentPassword($request);
-        $result = $generate->execute($user, $request->string('nombre')->toString());
+        $result = $generate->execute($user, $request->string('name')->toString());
 
         return response()->json($result, Response::HTTP_CREATED)->header('Cache-Control', 'no-store');
     }
@@ -43,14 +43,14 @@ final class SharedDeviceController
     {
         $data = $request->validated();
         $result = $redeem->execute(
-            $data['codigo'],
+            $data['code'],
             $data['device_name'] ?? 'shared-device',
         );
 
         return response()->json([
             'device' => [
                 'id' => $result['device']->getKey(),
-                'nombre' => $result['device']->name,
+                'name' => $result['device']->name,
                 'expires_at' => $result['device']->credential_expires_at?->toIso8601String(),
             ],
             'device_token' => $result['token'],
@@ -62,7 +62,7 @@ final class SharedDeviceController
         RedeemPairingCodeAction $redeem,
     ): JsonResponse {
         $data = $request->validated();
-        $result = $redeem->execute($data['codigo'], $data['device_name'] ?? 'shared-web');
+        $result = $redeem->execute($data['code'], $data['device_name'] ?? 'shared-web');
 
         Auth::guard('web')->logout();
         $request->session()->invalidate();
@@ -71,7 +71,7 @@ final class SharedDeviceController
         return response()->json([
             'device' => [
                 'id' => $result['device']->getKey(),
-                'nombre' => $result['device']->name,
+                'name' => $result['device']->name,
                 'expires_at' => $result['device']->credential_expires_at?->toIso8601String(),
             ],
         ], Response::HTTP_CREATED)
@@ -97,7 +97,7 @@ final class SharedDeviceController
         return response()->json([
             'data' => [
                 'id' => $device->getKey(),
-                'nombre' => $device->name,
+                'name' => $device->name,
                 'expires_at' => $device->credential_expires_at?->toIso8601String(),
                 'revoked_at' => $device->revoked_at?->toIso8601String(),
                 'active_session_id' => $device->sessions()->whereNull('revoked_at')->where('kind', 'shared_user')->latest('issued_at')->value('id'),
@@ -110,7 +110,7 @@ final class SharedDeviceController
         return response()->json([
             'data' => SharedDevice::query()->latest('enrolled_at')->get()->map(fn (SharedDevice $device): array => [
                 'id' => $device->getKey(),
-                'nombre' => $device->name,
+                'name' => $device->name,
                 'expires_at' => $device->credential_expires_at?->toIso8601String(),
                 'revoked_at' => $device->revoked_at?->toIso8601String(),
                 'last_seen_at' => $device->last_seen_at?->toIso8601String(),
@@ -138,7 +138,7 @@ final class SharedDeviceController
         /** @var SharedDevice $device */
         $device = $request->attributes->get('shared_device');
         $data = $request->validated();
-        $actor = User::query()->where('email', $data['correo_electronico'])->first();
+        $actor = User::query()->where('email', $data['email'])->first();
 
         if (! $actor instanceof User
             || ! Hash::check($data['password'], $actor->password)
@@ -164,7 +164,7 @@ final class SharedDeviceController
             ->whereDoesntHave('roles', fn ($query) => $query->where('name', 'admin'))
             ->whereHas('roles', fn ($query) => $query->where('name', 'employee'))
             ->orderBy('name')
-            ->paginate(min($request->integer('por_pagina', 50), 100));
+            ->paginate(min($request->integer('per_page', 50), 100));
 
         return response()->json([
             'data' => SharedUserResource::collection($users)->resolve($request),
@@ -184,7 +184,7 @@ final class SharedDeviceController
         /** @var SharedDevice $device */
         $device = $request->attributes->get('shared_device');
         $data = $request->validated();
-        $result = $authenticate->execute($device, (int) $data['usuario_id'], $data['pin']);
+        $result = $authenticate->execute($device, (int) $data['user_id'], $data['pin']);
 
         return response()->json([
             ...(new AccessTokenResource($result['token']))->resolve($request),
@@ -200,7 +200,7 @@ final class SharedDeviceController
         /** @var SharedDevice $device */
         $device = $request->attributes->get('shared_device');
         $data = $request->validated();
-        $session = $authenticate->executeWeb($device, (int) $data['usuario_id'], $data['pin']);
+        $session = $authenticate->executeWeb($device, (int) $data['user_id'], $data['pin']);
 
         // La duración la controla la sesión del servidor; no emitimos un recaller indefinido.
         Auth::guard('web')->login($session->user, false);
@@ -226,7 +226,7 @@ final class SharedDeviceController
     {
         /** @var SharedDevice $device */
         $device = $request->attributes->get('shared_device');
-        $sessionId = $request->string('sesion_id')->toString();
+        $sessionId = $request->string('session_id')->toString();
 
         DB::transaction(function () use ($device, $sessionId): void {
             $lockedDevice = SharedDevice::query()->whereKey($device->getKey())->lockForUpdate()->firstOrFail();

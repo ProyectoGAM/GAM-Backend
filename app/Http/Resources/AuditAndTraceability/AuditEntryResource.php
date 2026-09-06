@@ -23,11 +23,11 @@ final class AuditEntryResource extends JsonResource
             'event' => $entry->event,
             'description' => $entry->description,
             'actor' => [
-                'tipo' => $entry->causer_type,
+                'type' => $entry->causer_type,
                 'id' => $entry->causer_id,
             ],
             'subject' => [
-                'tipo' => $entry->subject_type,
+                'type' => $entry->subject_type,
                 'id' => $entry->subject_id,
             ],
             'operation_id' => $entry->operation_id,

@@ -16,7 +16,7 @@ class AuthenticationTest extends TestCase
     public function test_returns_401_when_no_token_is_provided_for_the_profile(): void
     {
         // Acción: solicita el perfil sin autenticación.
-        $this->getJson('/api/v1/mi-perfil')
+        $this->getJson('/api/v1/me')
             ->assertUnauthorized()
             ->assertJsonPath('message', 'No estás autenticado.');
     }
@@ -25,7 +25,7 @@ class AuthenticationTest extends TestCase
     public function test_api_method_not_allowed_message_is_in_spanish(): void
     {
         // Acción: envía GET a un endpoint que requiere otro método.
-        $this->getJson('/api/v1/autenticacion/inicio-sesion')
+        $this->getJson('/api/v1/auth/login')
             ->assertMethodNotAllowed()
             ->assertJsonPath('message', 'El método HTTP no está permitido.');
     }
@@ -33,7 +33,7 @@ class AuthenticationTest extends TestCase
     // Flujo: confirma que el autorregistro público fue retirado.
     public function test_public_registration_is_not_available(): void
     {
-        $this->postJson('/api/v1/autenticacion/registro', [])->assertNotFound();
+        $this->postJson('/api/v1/auth/register', [])->assertNotFound();
         $this->assertDatabaseMissing('users', ['email' => 'new.user@example.test']);
     }
 
@@ -48,8 +48,8 @@ class AuthenticationTest extends TestCase
         $user->givePermissionTo(Permission::findOrCreate('identity.personal.login', 'web'));
 
         // Acción: inicia sesión con las credenciales válidas.
-        $response = $this->postJson('/api/v1/autenticacion/inicio-sesion', [
-            'correo_electronico' => 'login@example.test',
+        $response = $this->postJson('/api/v1/auth/login', [
+            'email' => 'login@example.test',
             'password' => 'correct-password',
             'device_name' => 'browser',
         ]);
@@ -78,8 +78,8 @@ class AuthenticationTest extends TestCase
 
         // Acción: inicia la sesión stateful desde el origen permitido.
         $this->withHeader('Origin', 'http://localhost:4200')
-            ->postJson('/api/v1/autenticacion/web/inicio-sesion', [
-                'correo_electronico' => 'web-login@example.test',
+            ->postJson('/api/v1/auth/web/login', [
+                'email' => 'web-login@example.test',
                 'password' => 'correct-password',
             ])
             ->assertOk()
@@ -88,7 +88,7 @@ class AuthenticationTest extends TestCase
 
         // Verificación: la cookie conserva la sesión al consultar el perfil.
         $this->withHeader('Origin', 'http://localhost:4200')
-            ->getJson('/api/v1/mi-perfil')
+            ->getJson('/api/v1/me')
             ->assertOk()
             ->assertJsonPath('data.id', $user->id)
             ->assertJsonPath('session.kind', 'personal');
@@ -104,8 +104,8 @@ class AuthenticationTest extends TestCase
         ]);
 
         // Acción: intenta iniciar sesión con credenciales inválidas.
-        $response = $this->postJson('/api/v1/autenticacion/inicio-sesion', [
-            'correo_electronico' => 'login@example.test',
+        $response = $this->postJson('/api/v1/auth/login', [
+            'email' => 'login@example.test',
             'password' => 'wrong-password',
         ]);
 
@@ -128,8 +128,8 @@ class AuthenticationTest extends TestCase
         $user->delete();
 
         // Acción: intenta iniciar sesión con el usuario eliminado.
-        $this->postJson('/api/v1/autenticacion/inicio-sesion', [
-            'correo_electronico' => 'inactive@example.test',
+        $this->postJson('/api/v1/auth/login', [
+            'email' => 'inactive@example.test',
             'password' => 'correct-password',
         ])->assertUnauthorized();
 
@@ -157,7 +157,7 @@ class AuthenticationTest extends TestCase
     // Flujo: confirma que un registro inválido tampoco reactiva el endpoint retirado.
     public function test_public_registration_does_not_validate_or_create(): void
     {
-        $this->postJson('/api/v1/autenticacion/registro', [])->assertNotFound();
+        $this->postJson('/api/v1/auth/register', [])->assertNotFound();
     }
 
     // Flujo: confirma que el registro duplicado sigue cerrado.
@@ -166,9 +166,9 @@ class AuthenticationTest extends TestCase
         // Preparación: crea el usuario que ya posee el correo.
         User::factory()->create(['email' => 'existing@example.test']);
 
-        $this->postJson('/api/v1/autenticacion/registro', [
-            'nombre' => 'Another User',
-            'correo_electronico' => 'existing@example.test',
+        $this->postJson('/api/v1/auth/register', [
+            'name' => 'Another User',
+            'email' => 'existing@example.test',
             'password' => 'correct-password',
             'password_confirmation' => 'correct-password',
         ])->assertNotFound();
@@ -185,10 +185,10 @@ class AuthenticationTest extends TestCase
 
         // Acción: consulta el perfil usando el token.
         $this->withToken($token->plainTextToken)
-            ->getJson('/api/v1/mi-perfil')
+            ->getJson('/api/v1/me')
             ->assertOk()
             ->assertJsonPath('data.id', $user->id)
-            ->assertJsonPath('data.correo_electronico', 'profile@example.test')
+            ->assertJsonPath('data.email', 'profile@example.test')
             ->assertJsonPath('data.deleted_at', null)
             ->assertJsonPath('data.roles', [])
             ->assertJsonPath('data.permissions', []);
@@ -203,7 +203,7 @@ class AuthenticationTest extends TestCase
 
         // Acción 1: cierra la sesión con el token actual.
         $this->withToken($token->plainTextToken)
-            ->postJson('/api/v1/autenticacion/cerrar-sesion')
+            ->postJson('/api/v1/auth/logout')
             ->assertOk()
             ->assertJsonPath('message', 'La sesión se cerró correctamente.');
 
@@ -216,7 +216,7 @@ class AuthenticationTest extends TestCase
 
         // Acción 2: intenta reutilizar el token revocado.
         $this->withToken($token->plainTextToken)
-            ->getJson('/api/v1/mi-perfil')
+            ->getJson('/api/v1/me')
             ->assertUnauthorized();
     }
 
@@ -229,7 +229,7 @@ class AuthenticationTest extends TestCase
 
         // Acción: solicita el perfil utilizando el token expirado.
         $this->withToken($token->plainTextToken)
-            ->getJson('/api/v1/mi-perfil')
+            ->getJson('/api/v1/me')
             ->assertUnauthorized();
 
         // Verificación: confirma que el token vencido permanece registrado.

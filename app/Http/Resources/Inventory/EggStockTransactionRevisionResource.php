@@ -12,13 +12,13 @@ final class EggStockTransactionRevisionResource extends JsonResource
     {
         return [
             'id' => $this->public_id,
-            'accion' => $this->action,
-            'antes' => $this->before,
-            'despues' => $this->after,
-            'motivo_correccion' => $this->correction_reason,
-            'operacion_id' => $this->operation_id,
-            'realizado_por' => $this->created_by,
-            'realizado_en' => $this->created_at,
+            'action' => $this->action,
+            'before' => $this->before,
+            'after' => $this->after,
+            'correction_reason' => $this->correction_reason,
+            'operation_id' => $this->operation_id,
+            'created_by' => $this->created_by,
+            'created_at' => $this->created_at,
         ];
     }
 }

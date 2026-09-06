@@ -15,8 +15,8 @@ final class LotsCatalogResource extends JsonResource
 
         return [
             'id' => $data['id'] ?? null,
-            'nombre' => $data['name'] ?? null,
-            'estado' => $data['status'] ?? null,
+            'name' => $data['name'] ?? null,
+            'status' => $data['status'] ?? null,
             'version' => $data['version'] ?? null,
         ];
     }

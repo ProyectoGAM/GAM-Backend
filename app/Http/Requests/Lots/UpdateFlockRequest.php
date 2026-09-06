@@ -14,8 +14,8 @@ final class UpdateFlockRequest extends LotsRequest
     {
         return [
             ...$this->commandRules(),
-            'codigo' => ['sometimes', 'string', 'max:60', 'regex:/^[A-Za-z0-9][A-Za-z0-9_-]*$/'],
-            'observaciones' => ['sometimes', 'nullable', 'string', 'max:5000'],
+            'code' => ['sometimes', 'string', 'max:60', 'regex:/^[A-Za-z0-9][A-Za-z0-9_-]*$/'],
+            'notes' => ['sometimes', 'nullable', 'string', 'max:5000'],
         ];
     }
 }

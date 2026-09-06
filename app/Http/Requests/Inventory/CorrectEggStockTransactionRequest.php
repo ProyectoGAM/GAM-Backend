@@ -12,6 +12,6 @@ final class CorrectEggStockTransactionRequest extends EggStockRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        return [...$this->commandRules(true), 'cantidad' => ['sometimes', ...$this->quantityRules()], 'ocurrido_en' => ['sometimes', 'date'], 'motivo_correccion' => ['required', 'string', 'max:500'], 'motivo' => ['sometimes', 'nullable', 'string', 'max:500'], 'observaciones' => ['sometimes', 'nullable', 'string', 'max:5000']];
+        return [...$this->commandRules(true), 'quantity' => ['sometimes', ...$this->quantityRules()], 'occurred_at' => ['sometimes', 'date'], 'correction_reason' => ['required', 'string', 'max:500'], 'reason' => ['sometimes', 'nullable', 'string', 'max:500'], 'notes' => ['sometimes', 'nullable', 'string', 'max:5000']];
     }
 }

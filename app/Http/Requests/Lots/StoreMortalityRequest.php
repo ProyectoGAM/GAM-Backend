@@ -17,10 +17,10 @@ final class StoreMortalityRequest extends LotsRequest
         return [
             ...$this->commandRules(),
             'id' => ['sometimes', 'ulid'],
-            'cantidad' => $this->quantityRules(),
-            'categoria_mortalidad_id' => ['required', 'integer', 'min:1'],
-            'ocurrido_en' => $this->timeRules(),
-            'observaciones' => ['nullable', 'string', 'max:5000'],
+            'quantity' => $this->quantityRules(),
+            'mortality_category_id' => ['required', 'integer', 'min:1'],
+            'occurred_at' => $this->timeRules(),
+            'notes' => ['nullable', 'string', 'max:5000'],
         ];
     }
 }

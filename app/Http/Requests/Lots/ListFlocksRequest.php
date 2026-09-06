@@ -14,12 +14,12 @@ final class ListFlocksRequest extends LotsRequest
     {
         return [
             ...$this->filterRules(),
-            'buscar' => ['sometimes', 'string', 'max:120'],
-            'galpon_id' => ['sometimes', 'integer', 'exists:poultry_houses,id'],
-            'unidad_productiva_id' => ['sometimes', 'integer', 'exists:production_units,id'],
-            'raza_id' => ['sometimes', 'integer', 'exists:breeds,id'],
-            'proveedor_id' => ['sometimes', 'integer', 'exists:suppliers,id'],
-            'estado' => ['sometimes', 'in:active,quarantined,finished'],
+            'search' => ['sometimes', 'string', 'max:120'],
+            'poultry_house_id' => ['sometimes', 'integer', 'exists:poultry_houses,id'],
+            'production_unit_id' => ['sometimes', 'integer', 'exists:production_units,id'],
+            'breed_id' => ['sometimes', 'integer', 'exists:breeds,id'],
+            'supplier_id' => ['sometimes', 'integer', 'exists:suppliers,id'],
+            'status' => ['sometimes', 'in:active,quarantined,finished'],
         ];
     }
 }
