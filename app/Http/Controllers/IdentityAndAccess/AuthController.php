@@ -20,7 +20,6 @@ use App\Http\Resources\IdentityAndAccess\UserResource;
 use App\Models\IdentityAndAccess\AuthSession;
 use App\Models\User;
 use App\Services\IdentityAndAccess\AuthSessionService;
-use App\Support\PublicInputMapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -35,7 +34,7 @@ final class AuthController
         RegisterUserAction $registerUser,
         IssueAccessTokenAction $issueToken,
     ): JsonResponse {
-        $data = PublicInputMapper::toInternal($request->validated(), 'identity');
+        $data = $request->validated();
         $user = $registerUser->execute($data);
         $token = $issueToken->execute($user, $data['device_name'] ?? 'registration');
 
@@ -50,7 +49,7 @@ final class AuthController
         IssueAccessTokenAction $issueToken,
         AuthSessionService $sessions,
     ): JsonResponse {
-        $data = PublicInputMapper::toInternal($request->validated(), 'identity');
+        $data = $request->validated();
         $result = $loginUser->execute([
             'email' => $data['email'],
             'password' => $data['password'],
@@ -83,7 +82,7 @@ final class AuthController
         LoginUserAction $loginUser,
         AuthSessionService $sessions,
     ): JsonResponse {
-        $data = PublicInputMapper::toInternal($request->validated(), 'identity');
+        $data = $request->validated();
         $result = $loginUser->execute(['email' => $data['email'], 'password' => $data['password']]);
 
         if (! $result->isSuccessful() || ! $result->user()->can('identity.web.login')) {

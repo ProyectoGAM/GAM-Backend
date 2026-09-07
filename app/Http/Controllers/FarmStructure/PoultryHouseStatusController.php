@@ -21,7 +21,7 @@ final readonly class PoultryHouseStatusController
 
         return new PoultryHouseResource($action->execute(
             $poultryHouse,
-            PoultryHouseStatus::from($request->string('estado')->toString()),
+            PoultryHouseStatus::from($request->string('status')->toString()),
             $actor,
         ));
     }

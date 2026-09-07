@@ -13,10 +13,10 @@ final class EggCollectionEndpointTest extends LotsTestCase
         $version = $flock->version;
 
         // Request: registra huevos genéricos sin clasificaciones ni ubicaciones públicas.
-        $response = $this->command('POST', "/lotes/{$flock->public_id}/recolecciones", ['cantidad' => 12])->assertCreated();
+        $response = $this->command('POST', "/flocks/{$flock->public_id}/collections", ['quantity' => 12])->assertCreated();
 
         // Verificación: la producción histórica es independiente de la versión del lote.
-        $response->assertJsonPath('data.recoleccion.cantidad', 12);
+        $response->assertJsonPath('data.collection.quantity', 12);
         $this->assertSame($version, $flock->fresh()->version);
         $this->assertDatabaseHas('egg_stock_transactions', ['type' => 'collection_receipt', 'quantity' => 12]);
         $this->assertDatabaseHas('stock_balances', ['on_hand_quantity' => '12.000000', 'allow_negative' => true]);
@@ -28,11 +28,11 @@ final class EggCollectionEndpointTest extends LotsTestCase
         // Preparación: registra la captura inicial y conserva su versión.
         $this->signIn(['egg-collections.view', 'egg-collections.manage', 'egg-stock.view', 'egg-stock.move', 'egg-stock.adjust']);
         $flock = $this->flock();
-        $created = $this->command('POST', "/lotes/{$flock->public_id}/recolecciones", ['cantidad' => 4000])->assertCreated();
-        $collectionId = $created->json('data.recoleccion.id');
+        $created = $this->command('POST', "/flocks/{$flock->public_id}/collections", ['quantity' => 4000])->assertCreated();
+        $collectionId = $created->json('data.collection.id');
 
         // Request: corrige la cantidad con el motivo obligatorio.
-        $this->command('PATCH', "/recolecciones/{$collectionId}", ['version' => 1, 'cantidad' => 400, 'motivo_correccion' => 'Error de digitación'])->assertOk();
+        $this->command('PATCH', "/collections/{$collectionId}", ['version' => 1, 'quantity' => 400, 'correction_reason' => 'Error de digitación'])->assertOk();
 
         // Verificación: el saldo queda en cuatrocientas unidades y existe una revisión append-only.
         $this->assertDatabaseHas('egg_collections', ['public_id' => $collectionId, 'quantity' => 400, 'version' => 2]);
@@ -47,11 +47,11 @@ final class EggCollectionEndpointTest extends LotsTestCase
         // Preparación: registra una recolección en un lote válido.
         $this->signIn(['egg-collections.view', 'egg-collections.manage', 'egg-stock.view', 'egg-stock.move', 'egg-stock.adjust']);
         $flock = $this->flock();
-        $created = $this->command('POST', "/lotes/{$flock->public_id}/recolecciones", ['cantidad' => 12])->assertCreated();
-        $collectionId = $created->json('data.recoleccion.id');
+        $created = $this->command('POST', "/flocks/{$flock->public_id}/collections", ['quantity' => 12])->assertCreated();
+        $collectionId = $created->json('data.collection.id');
 
         // Request: cancela la operación sin eliminar el registro histórico.
-        $this->command('POST', "/recolecciones/{$collectionId}/cancelacion", ['version' => 1, 'motivo_correccion' => 'Captura inválida'])->assertOk();
+        $this->command('POST', "/collections/{$collectionId}/cancellation", ['version' => 1, 'correction_reason' => 'Captura inválida'])->assertOk();
 
         // Verificación: la transacción queda cancelada y el movimiento inverso conserva auditoría.
         $this->assertDatabaseHas('egg_collections', ['public_id' => $collectionId, 'status' => 'cancelled']);
@@ -66,9 +66,9 @@ final class EggCollectionEndpointTest extends LotsTestCase
         // Preparación: registra una única recolección.
         $this->signIn(['egg-collections.view', 'egg-collections.manage']);
         $flock = $this->flock();
-        $this->command('POST', "/lotes/{$flock->public_id}/recolecciones", ['cantidad' => 9])->assertCreated();
+        $this->command('POST', "/flocks/{$flock->public_id}/collections", ['quantity' => 9])->assertCreated();
 
         // Consulta: solicita métricas diarias, semanales y mensuales.
-        $this->getJson('/api/v1/recolecciones/metricas')->assertOk()->assertJsonPath('data.huevos_recolectados', 9);
+        $this->getJson('/api/v1/collections/metrics')->assertOk()->assertJsonPath('data.collected_eggs', 9);
     }
 }

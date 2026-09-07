@@ -26,8 +26,8 @@ final class LotsConcurrencyTest extends TestCase
     /** Los procesos secundarios necesitan datos confirmados, nunca la base de desarrollo. */
     public function runDatabaseMigrations(): void
     {
-        if (! app()->environment('testing') || config('database.default') !== 'pgsql' || DB::connection()->getDatabaseName() !== 'gam_lots_test') {
-            $this->markTestSkipped('La concurrencia real requiere la base PostgreSQL aislada gam_lots_test.');
+        if (! app()->environment('testing') || config('database.default') !== 'pgsql' || ! str_ends_with(DB::connection()->getDatabaseName(), '_testing')) {
+            $this->markTestSkipped('La concurrencia real requiere una base PostgreSQL aislada con sufijo _testing.');
         }
         $this->migrateIsolatedDatabase();
     }

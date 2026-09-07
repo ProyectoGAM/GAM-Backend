@@ -11,7 +11,6 @@ use App\Http\Resources\Geography\DepartmentResource;
 use App\Models\Geography\Department;
 use App\Models\User;
 use App\Queries\Geography\ListDepartmentsQuery;
-use App\Support\PublicInputMapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Symfony\Component\HttpFoundation\Response;
@@ -22,7 +21,7 @@ final readonly class DepartmentController
         ListDepartmentsRequest $request,
         ListDepartmentsQuery $query,
     ): AnonymousResourceCollection {
-        return DepartmentResource::collection($query->execute(PublicInputMapper::toInternal($request->validated())));
+        return DepartmentResource::collection($query->execute($request->validated()));
     }
 
     public function store(
@@ -31,24 +30,24 @@ final readonly class DepartmentController
     ): JsonResponse {
         /** @var User $actor */
         $actor = $request->user();
-        $departamento = $action->execute(PublicInputMapper::toInternal($request->safe()->only(['nombre'])), $actor);
+        $department = $action->execute($request->safe()->only(['name']), $actor);
 
-        return (new DepartmentResource($departamento))
+        return (new DepartmentResource($department))
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
     }
 
     public function update(
         UpdateDepartmentRequest $request,
-        Department $departamento,
+        Department $department,
         UpdateDepartmentAction $action,
     ): DepartmentResource {
         /** @var User $actor */
         $actor = $request->user();
 
         return new DepartmentResource($action->execute(
-            $departamento,
-            PublicInputMapper::toInternal($request->safe()->only(['nombre'])),
+            $department,
+            $request->safe()->only(['name']),
             $actor,
         ));
     }

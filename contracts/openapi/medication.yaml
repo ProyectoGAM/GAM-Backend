@@ -14,7 +14,7 @@ tags:
   - name: Medicamentos
     description: Fichas del catálogo de medicamentos.
 paths:
-  /medicamentos:
+  /medicines:
     get:
       tags: [Medicamentos]
       operationId: listMedicines
@@ -25,16 +25,16 @@ paths:
         La búsqueda por nombre es parcial, literal y sin distinción de mayúsculas.
         Un proveedor sin coincidencias devuelve una página vacía. Los filtros desconocidos se rechazan.
       parameters:
-        - name: buscar
+        - name: search
           in: query
           schema: { type: string, minLength: 1, maxLength: 160 }
-        - name: proveedor_id
+        - name: supplier_id
           in: query
           schema: { type: integer, format: int64, minimum: 1, maximum: 9223372036854775807 }
-        - name: pagina
+        - name: page
           in: query
           schema: { type: integer, minimum: 1, maximum: 100000, default: 1 }
-        - name: por_pagina
+        - name: per_page
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
       responses:
@@ -76,9 +76,9 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CreateMedicine' }
             example:
-              nombre: Medicamento A
-              descripcion: Descripción de catálogo
-              proveedor_id: 1
+              name: Medicamento A
+              description: Descripción de catálogo
+              supplier_id: 1
       responses:
         '201':
           description: Medicamento registrado o respuesta original de un reintento.
@@ -103,45 +103,45 @@ components:
     CreateMedicine:
       type: object
       additionalProperties: false
-      required: [nombre, descripcion, proveedor_id]
+      required: [name, description, supplier_id]
       properties:
-        nombre: { type: string, minLength: 1, maxLength: 160 }
-        descripcion: { type: string, minLength: 1, maxLength: 5000 }
-        proveedor_id: { type: integer, format: int64, minimum: 1, maximum: 9223372036854775807 }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, minLength: 1, maxLength: 5000 }
+        supplier_id: { type: integer, format: int64, minimum: 1, maximum: 9223372036854775807 }
     Medicine:
       type: object
       additionalProperties: false
-      required: [id, nombre, descripcion, proveedor, registrado_por, registrado_en, id_operacion]
+      required: [id, name, description, supplier, created_by, created_at, operation_id]
       properties:
         id:
           type: string
           pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'
           description: Identificador público ULID generado por el servidor.
-        nombre: { type: string, minLength: 1, maxLength: 160 }
-        descripcion: { type: string, minLength: 1, maxLength: 5000 }
-        proveedor:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, minLength: 1, maxLength: 5000 }
+        supplier:
           type: object
           additionalProperties: false
-          required: [id, nombre_al_registrar]
+          required: [id, name_at_registration]
           properties:
             id: { type: integer, format: int64 }
-            nombre_al_registrar:
+            name_at_registration:
               type: string
               description: Nombre conservado al registrar, no el nombre actual del proveedor.
-        registrado_por:
+        created_by:
           type: object
           additionalProperties: false
-          required: [id, nombre_al_registrar]
+          required: [id, name_at_registration]
           properties:
             id: { type: integer, format: int64 }
-            nombre_al_registrar:
+            name_at_registration:
               type: string
               description: Nombre del administrador conservado al registrar.
-        registrado_en:
+        created_at:
           type: string
           format: date-time
           description: Fecha automática de creación de la ficha, no de aplicación del medicamento.
-        id_operacion: { type: string, format: uuid }
+        operation_id: { type: string, format: uuid }
     Problem:
       type: object
       required: [title, status, detail, message]

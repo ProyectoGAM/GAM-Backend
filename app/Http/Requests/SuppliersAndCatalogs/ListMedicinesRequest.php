@@ -17,10 +17,10 @@ final class ListMedicinesRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'buscar' => ['sometimes', 'required', 'string', 'max:160'],
-            'proveedor_id' => ['sometimes', 'integer', 'min:1', 'max:9223372036854775807'],
-            'por_pagina' => ['sometimes', 'integer', 'between:1,100'],
-            'pagina' => ['sometimes', 'integer', 'between:1,100000'],
+            'search' => ['sometimes', 'required', 'string', 'max:160'],
+            'supplier_id' => ['sometimes', 'integer', 'min:1', 'max:9223372036854775807'],
+            'per_page' => ['sometimes', 'integer', 'between:1,100'],
+            'page' => ['sometimes', 'integer', 'between:1,100000'],
         ];
     }
 
@@ -39,6 +39,6 @@ final class ListMedicinesRequest extends FormRequest
     /** @return array<string, string> */
     public function attributes(): array
     {
-        return ['buscar' => 'búsqueda', 'proveedor_id' => 'proveedor', 'por_pagina' => 'registros por página', 'pagina' => 'página'];
+        return ['search' => 'búsqueda', 'supplier_id' => 'proveedor', 'per_page' => 'registros por página', 'page' => 'página'];
     }
 }

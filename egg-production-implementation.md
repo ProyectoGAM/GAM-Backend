@@ -12,7 +12,7 @@ La estructura sigue la arquitectura Laravel convencional descrita en `architectu
 
 ### Límites de la entrega
 
-- Las recolecciones sólo reciben `cantidad`, `ocurrido_en` opcional y `observaciones` opcionales.
+- Las recolecciones sólo reciben `quantity`, `occurred_at` opcional y `notes` opcionales.
 - Una recolección no modifica cantidad viva, versión, estado ni ubicación actual del lote.
 - Las divisiones, agrupaciones, fusiones y finalizaciones de lotes no eliminan ni reatribuyen recolecciones existentes.
 - Las entradas manuales, preparaciones de reparto y pérdidas se registran directamente en la cuenta de stock de la UP; no modifican la producción histórica.
@@ -35,7 +35,7 @@ La estructura sigue la arquitectura Laravel convencional descrita en `architectu
 
 El encabezado de la recolección conserva el galpón y la UP fotografiados al momento del hecho. La fecha efectiva usa la zona horaria de `LOTS_TIMEZONE` (por defecto `America/Montevideo`) y no puede estar en el futuro ni antes de la existencia del lote o de su último movimiento de aves. Si no se envía, se utiliza el reloj del servidor.
 
-La Action crea una transacción lógica de tipo `collection_receipt` y un movimiento físico `receipt` por la misma cantidad. Ambos comparten `id_operacion` y se confirman junto con la recolección y su auditoría. Un fallo de validación, bloqueo, inventario o auditoría revierte todo el comando.
+La Action crea una transacción lógica de tipo `collection_receipt` y un movimiento físico `receipt` por la misma cantidad. Ambos comparten `operation_id` y se confirman junto con la recolección y su auditoría. Un fallo de validación, bloqueo, inventario o auditoría revierte todo el comando.
 
 Corregir o cancelar una recolección no cambia aves ni versión del lote. La recolección continúa disponible aunque el lote se divida, fusione o finalice; sólo se exige una UP operativa para registrar operaciones nuevas.
 
@@ -59,13 +59,13 @@ Una UP inactiva o finalizada no admite movimientos nuevos, pero sus operaciones 
 Las transacciones lógicas son append-only desde el punto de vista histórico. `egg_stock_transaction_revisions` conserva `before`, `after`, motivo obligatorio, actor, fecha real y `operation_id`; `egg_stock_commands` conserva la clave de idempotencia, hash y respuesta.
 
 - En una corrección de cantidad en la misma fecha se registra sólo la diferencia.
-- Si cambia explícitamente `ocurrido_en`, se compensa el efecto completo en la fecha anterior y se registra el efecto completo en la nueva. La transacción muestra la nueva fecha y la revisión conserva ambas.
-- Si no se envía `ocurrido_en`, se conserva exactamente la fecha efectiva anterior.
+- Si cambia explícitamente `occurred_at`, se compensa el efecto completo en la fecha anterior y se registra el efecto completo en la nueva. La transacción muestra la nueva fecha y la revisión conserva ambas.
+- Si no se envía `occurred_at`, se conserva exactamente la fecha efectiva anterior.
 - Una corrección textual incrementa versión y auditoría, pero no crea movimientos de cantidad cero.
 - Una cancelación mantiene el estado `cancelled`, agrega una compensación inversa y excluye la transacción de la proyección vigente.
 - UP, dirección y tipo son inmutables. Para cambiar alguno se cancela la operación y se crea otra.
 - Las transacciones originadas por una recolección sólo se corrigen o cancelan desde los endpoints de recolecciones. Las operaciones manuales usan los endpoints de stock.
-- Todas las correcciones requieren `version` vigente, `motivo_correccion` y una nueva `Idempotency-Key`.
+- Todas las correcciones requieren `version` vigente, `correction_reason` y una nueva `Idempotency-Key`.
 
 La concurrencia se serializa por actor, UP, cuenta y transacción. Los deadlocks se reintentan hasta tres veces. Repetir una clave con el mismo payload devuelve la respuesta original; reutilizarla con otro contenido responde `409` sin aplicar efectos parciales.
 
@@ -91,23 +91,23 @@ Todas las rutas son relativas a `/api/v1`, usan Bearer token y mantienen errores
 
 | Método | Ruta | Uso | Permiso |
 |---|---|---|---|
-| POST | `/lotes/{lote}/recolecciones` | Registrar cantidad de huevos e ingreso automático en la UP. | `egg-collections.manage` |
-| PATCH | `/recolecciones/{recoleccion}` | Corregir cantidad, fecha u observaciones. | `egg-collections.manage` |
-| POST | `/recolecciones/{recoleccion}/cancelacion` | Cancelar y compensar el ingreso. | `egg-collections.manage` |
-| GET | `/lotes/{lote}/recolecciones` | Histórico del lote. | `egg-collections.view` |
-| GET | `/recolecciones` | Histórico global filtrable. | `egg-collections.view` |
-| GET | `/recolecciones/{recoleccion}` | Detalle de la recolección. | `egg-collections.view` |
-| GET | `/recolecciones/metricas` | Producción diaria, semanal y mensual. | `egg-collections.view` |
-| GET | `/lotes/{lote}/metricas` | Métricas acotadas al lote. | `egg-collections.view` |
-| GET | `/unidades-productivas/{up}/stock-huevos` | Saldo entero actual, incluso negativo. | `egg-stock.view` |
-| GET | `/unidades-productivas/{up}/stock-huevos/movimientos` | Cuenta corriente paginada. | `egg-stock.view` |
-| GET | `/stock-huevos/movimientos/{movimiento}` | Detalle, revisiones y referencias físicas. | `egg-stock.view` |
-| POST | `/unidades-productivas/{up}/stock-huevos/ingresos` | Entrada manual. | `egg-stock.move` |
-| POST | `/unidades-productivas/{up}/stock-huevos/salidas` | Preparación de reparto o pérdida. | `egg-stock.move` |
-| PATCH | `/stock-huevos/movimientos/{movimiento}` | Corrección de una operación manual. | `egg-stock.adjust` |
-| POST | `/stock-huevos/movimientos/{movimiento}/cancelacion` | Cancelación de una operación manual. | `egg-stock.adjust` |
+| POST | `/flocks/{flock}/collections` | Registrar cantidad de huevos e ingreso automático en la UP. | `egg-collections.manage` |
+| PATCH | `/collections/{collection}` | Corregir cantidad, fecha u observaciones. | `egg-collections.manage` |
+| POST | `/collections/{collection}/cancellation` | Cancelar y compensar el ingreso. | `egg-collections.manage` |
+| GET | `/flocks/{flock}/collections` | Histórico del lote. | `egg-collections.view` |
+| GET | `/collections` | Histórico global filtrable. | `egg-collections.view` |
+| GET | `/collections/{collection}` | Detalle de la recolección. | `egg-collections.view` |
+| GET | `/collections/metrics` | Producción diaria, semanal y mensual. | `egg-collections.view` |
+| GET | `/flocks/{flock}/metrics` | Métricas acotadas al lote. | `egg-collections.view` |
+| GET | `/production-units/{up}/egg-stock` | Saldo entero actual, incluso negativo. | `egg-stock.view` |
+| GET | `/production-units/{up}/egg-stock/movements` | Cuenta corriente paginada. | `egg-stock.view` |
+| GET | `/egg-stock/movements/{movement}` | Detalle, revisiones y referencias físicas. | `egg-stock.view` |
+| POST | `/production-units/{up}/egg-stock/receipts` | Entrada manual. | `egg-stock.move` |
+| POST | `/production-units/{up}/egg-stock/issues` | Preparación de reparto o pérdida. | `egg-stock.move` |
+| PATCH | `/egg-stock/movements/{movement}` | Corrección de una operación manual. | `egg-stock.adjust` |
+| POST | `/egg-stock/movements/{movement}/cancellation` | Cancelación de una operación manual. | `egg-stock.adjust` |
 
-Las cantidades aceptan sólo enteros entre 1 y `2147483647`. Las salidas requieren `tipo=distribution_preparation|loss`; motivo y observaciones son texto controlado. Para cambios de UP, dirección o tipo se debe cancelar y registrar una operación nueva.
+Las cantidades aceptan sólo enteros entre 1 y `2147483647`. Las salidas requieren `kind=distribution_preparation|loss`; motivo y observaciones son texto controlado. Para cambios de UP, dirección o tipo se debe cancelar y registrar una operación nueva.
 
 ## Datos demo y despliegue
 

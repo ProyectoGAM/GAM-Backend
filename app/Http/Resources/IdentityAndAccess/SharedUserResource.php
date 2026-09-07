@@ -16,7 +16,7 @@ final class SharedUserResource extends JsonResource
 
         return [
             'id' => $user->getKey(),
-            'nombre' => $user->name,
+            'name' => $user->name,
         ];
     }
 }

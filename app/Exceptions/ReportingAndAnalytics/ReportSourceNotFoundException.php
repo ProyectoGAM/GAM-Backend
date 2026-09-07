@@ -17,9 +17,9 @@ final class ReportSourceNotFoundException extends RuntimeException implements Sh
     public function render(Request $request): JsonResponse
     {
         return response()->json([
-            'tipo' => 'https://httpstatuses.com/404',
+            'type' => 'https://httpstatuses.com/404',
             'title' => 'Fuente de reporte no encontrada',
-            'estado' => 404,
+            'status' => 404,
             'detail' => $this->getMessage(),
         ], 404, ['Content-Type' => 'application/problem+json']);
     }

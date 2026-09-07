@@ -40,27 +40,27 @@ final class ReferenceOptionsEndpointTest extends TestCase
         Sanctum::actingAs($actor, ['*']);
 
         // Acción: solicita el catálogo de opciones de referencia.
-        $response = $this->getJson('/api/v1/referencias/opciones');
+        $response = $this->getJson('/api/v1/reference/options');
 
         // Verificación: devuelve valores actuales y etiquetas sin exponer inputs para adivinar IDs.
         $response->assertOk()
-            ->assertJsonPath('data.localidades.0.value', $locality->getKey())
-            ->assertJsonPath('data.localidades.0.label', 'Chuy — Rocha')
-            ->assertJsonPath('data.productos.0.value', $product->getKey())
-            ->assertJsonPath('data.productos.0.label', 'ALIMENTO-001 — Ración inicial')
-            ->assertJsonPath('data.ubicaciones_stock.0.value', $location->getKey())
-            ->assertJsonPath('data.saldos_inventario.0.value', $balance->getKey())
+            ->assertJsonPath('data.localities.0.value', $locality->getKey())
+            ->assertJsonPath('data.localities.0.label', 'Chuy — Rocha')
+            ->assertJsonPath('data.products.0.value', $product->getKey())
+            ->assertJsonPath('data.products.0.label', 'ALIMENTO-001 — Ración inicial')
+            ->assertJsonPath('data.stock_locations.0.value', $location->getKey())
+            ->assertJsonPath('data.inventory_balances.0.value', $balance->getKey())
             ->assertJsonMissingPath('data.reservas')
             ->assertJsonMissingPath('data.lineas_reserva')
-            ->assertJsonPath('data.tipos.unidades_base.0.value', 'unit')
-            ->assertJsonPath('data.tipos.booleanos.0.value', 'true');
+            ->assertJsonPath('data.types.base_units.0.value', 'unit')
+            ->assertJsonPath('data.types.booleans.0.value', 'true');
     }
 
     // Flujo: intenta consultar referencias sin sesión y confirma el límite de autenticación.
     public function test_unauthenticated_user_cannot_read_reference_options(): void
     {
         // Acción: solicita el catálogo sin un token Bearer.
-        $response = $this->getJson('/api/v1/referencias/opciones');
+        $response = $this->getJson('/api/v1/reference/options');
 
         // Verificación: la ruta protegida no revela ningún catálogo.
         $response->assertUnauthorized();

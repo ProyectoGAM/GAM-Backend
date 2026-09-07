@@ -15,9 +15,9 @@ final class UpdateReportPresetRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'nombre' => ['sometimes', 'string', 'max:160'],
-            'clave_fuente' => ['sometimes', 'string', 'max:100'],
-            'configuracion' => ['sometimes', 'array'],
+            'name' => ['sometimes', 'string', 'max:160'],
+            'source_key' => ['sometimes', 'string', 'max:100'],
+            'configuration' => ['sometimes', 'array'],
         ];
     }
 }

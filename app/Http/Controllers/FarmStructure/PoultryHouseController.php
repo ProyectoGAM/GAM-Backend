@@ -14,7 +14,6 @@ use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
 use App\Queries\FarmStructure\GetPoultryHouseQuery;
 use App\Queries\FarmStructure\ListPoultryHousesQuery;
-use App\Support\PublicInputMapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Symfony\Component\HttpFoundation\Response;
@@ -23,24 +22,24 @@ final readonly class PoultryHouseController
 {
     public function index(
         ListPoultryHousesRequest $request,
-        ProductionUnit $unidadProductiva,
+        ProductionUnit $productionUnit,
         ListPoultryHousesQuery $query,
     ): AnonymousResourceCollection {
         return PoultryHouseResource::collection(
-            $query->execute($unidadProductiva, PublicInputMapper::toInternal($request->validated())),
+            $query->execute($productionUnit, $request->validated()),
         );
     }
 
     public function store(
         StorePoultryHouseRequest $request,
-        ProductionUnit $unidadProductiva,
+        ProductionUnit $productionUnit,
         CreatePoultryHouseAction $action,
     ): JsonResponse {
         /** @var User $actor */
         $actor = $request->user();
-        $data = PublicInputMapper::toInternal($request->safe()->only(['nombre', 'capacidad_aves']));
+        $data = $request->safe()->only(['name', 'bird_capacity']);
         $data['bird_capacity'] = (int) $data['bird_capacity'];
-        $poultryHouse = $action->execute($unidadProductiva, $data, $actor);
+        $poultryHouse = $action->execute($productionUnit, $data, $actor);
 
         return (new PoultryHouseResource($poultryHouse))
             ->response()
@@ -62,7 +61,7 @@ final readonly class PoultryHouseController
     ): PoultryHouseResource {
         /** @var User $actor */
         $actor = $request->user();
-        $data = PublicInputMapper::toInternal($request->safe()->only(['nombre', 'capacidad_aves']));
+        $data = $request->safe()->only(['name', 'bird_capacity']);
 
         if (array_key_exists('bird_capacity', $data)) {
             $data['bird_capacity'] = (int) $data['bird_capacity'];

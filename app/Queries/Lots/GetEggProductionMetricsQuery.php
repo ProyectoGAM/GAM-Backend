@@ -32,17 +32,17 @@ final readonly class GetEggProductionMetricsQuery
         $periods = [];
         foreach ($rows as $row) {
             $date = (string) $row->period;
-            $periods[$date] = ['fecha' => $date, 'cantidad' => (int) $row->total, 'huevos_recolectados' => (int) $row->total];
+            $periods[$date] = ['date' => $date, 'quantity' => (int) $row->total, 'collected_eggs' => (int) $row->total];
         }
         ksort($periods);
         $weekly = $this->group($periods, 'week');
         $monthly = $this->group($periods, 'month');
-        $total = array_sum(array_column($periods, 'cantidad'));
+        $total = array_sum(array_column($periods, 'quantity'));
 
         return [
-            'fecha_desde' => $from->toDateString(), 'fecha_hasta' => $until->toDateString(), 'zona_horaria' => $timezone,
-            'huevos_totales' => $total, 'huevos_recolectados' => $total, 'promedio_diario' => round($total / $days, 2),
-            'por_dia' => array_values($periods), 'por_semana' => array_values($weekly), 'por_mes' => array_values($monthly),
+            'date_from' => $from->toDateString(), 'date_to' => $until->toDateString(), 'timezone' => $timezone,
+            'total_eggs' => $total, 'collected_eggs' => $total, 'daily_average' => round($total / $days, 2),
+            'by_day' => array_values($periods), 'by_week' => array_values($weekly), 'by_month' => array_values($monthly),
         ];
     }
 
@@ -65,11 +65,11 @@ final readonly class GetEggProductionMetricsQuery
     {
         $result = [];
         foreach ($daily as $row) {
-            $date = CarbonImmutable::parse($row['fecha'], config('lots.timezone'));
+            $date = CarbonImmutable::parse($row['date'], config('lots.timezone'));
             $key = $unit === 'week' ? $date->startOfWeek()->toDateString() : $date->startOfMonth()->toDateString();
-            $result[$key] ??= [$unit === 'week' ? 'inicio_semana' : 'inicio_mes' => $key, 'cantidad' => 0, 'huevos_recolectados' => 0];
-            $result[$key]['cantidad'] += $row['cantidad'];
-            $result[$key]['huevos_recolectados'] += $row['huevos_recolectados'];
+            $result[$key] ??= [$unit === 'week' ? 'week_start' : 'month_start' => $key, 'quantity' => 0, 'collected_eggs' => 0];
+            $result[$key]['quantity'] += $row['quantity'];
+            $result[$key]['collected_eggs'] += $row['collected_eggs'];
         }
         ksort($result);
 

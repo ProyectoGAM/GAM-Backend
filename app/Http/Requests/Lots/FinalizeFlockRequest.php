@@ -14,7 +14,7 @@ final class FinalizeFlockRequest extends LotsRequest
     {
         return [
             ...$this->commandRules(),
-            'motivo' => ['required', 'string', 'max:500'],
+            'reason' => ['required', 'string', 'max:500'],
         ];
     }
 }

@@ -17,9 +17,9 @@ final class StoreEggCollectionRequest extends LotsRequest
         return [
             ...$this->commandRules(false),
             'id' => ['sometimes', 'ulid'],
-            'cantidad' => $this->quantityRules(),
-            'ocurrido_en' => $this->timeRules(),
-            'observaciones' => ['sometimes', 'nullable', 'string', 'max:5000'],
+            'quantity' => $this->quantityRules(),
+            'occurred_at' => $this->timeRules(),
+            'notes' => ['sometimes', 'nullable', 'string', 'max:5000'],
         ];
     }
 }

@@ -13,6 +13,6 @@ final class UpdateUserStatusRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['habilitado' => ['required', 'boolean']];
+        return ['enabled' => ['required', 'boolean']];
     }
 }

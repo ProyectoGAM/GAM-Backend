@@ -12,7 +12,6 @@ use App\Models\Geography\Department;
 use App\Models\Geography\Locality;
 use App\Models\User;
 use App\Queries\Geography\ListLocalitiesQuery;
-use App\Support\PublicInputMapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Symfony\Component\HttpFoundation\Response;
@@ -21,37 +20,37 @@ final readonly class LocalityController
 {
     public function index(
         ListLocalitiesRequest $request,
-        Department $departamento,
+        Department $department,
         ListLocalitiesQuery $query,
     ): AnonymousResourceCollection {
-        return LocalityResource::collection($query->execute($departamento, PublicInputMapper::toInternal($request->validated())));
+        return LocalityResource::collection($query->execute($department, $request->validated()));
     }
 
     public function store(
         StoreLocalityRequest $request,
-        Department $departamento,
+        Department $department,
         CreateLocalityAction $action,
     ): JsonResponse {
         /** @var User $actor */
         $actor = $request->user();
-        $localidad = $action->execute($departamento, PublicInputMapper::toInternal($request->safe()->only(['nombre'])), $actor);
+        $locality = $action->execute($department, $request->safe()->only(['name']), $actor);
 
-        return (new LocalityResource($localidad))
+        return (new LocalityResource($locality))
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
     }
 
     public function update(
         UpdateLocalityRequest $request,
-        Locality $localidad,
+        Locality $locality,
         UpdateLocalityAction $action,
     ): LocalityResource {
         /** @var User $actor */
         $actor = $request->user();
 
         return new LocalityResource($action->execute(
-            $localidad,
-            PublicInputMapper::toInternal($request->safe()->only(['departamento_id', 'nombre'])),
+            $locality,
+            $request->safe()->only(['department_id', 'name']),
             $actor,
         ));
     }

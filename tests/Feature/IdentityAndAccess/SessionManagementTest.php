@@ -17,8 +17,8 @@ final class SessionManagementTest extends TestCase
     {
         $user = User::factory()->create(['password' => 'correct-password']);
         $user->givePermissionTo(Permission::findOrCreate('identity.personal.login', 'web'));
-        $response = $this->postJson('/api/v1/autenticacion/inicio-sesion', [
-            'correo_electronico' => $user->email,
+        $response = $this->postJson('/api/v1/auth/login', [
+            'email' => $user->email,
             'password' => 'correct-password',
             'device_name' => 'session-test',
         ])->assertOk();
@@ -27,12 +27,12 @@ final class SessionManagementTest extends TestCase
         $sessionId = $response->json('session.id');
 
         $this->withToken($token)
-            ->getJson('/api/v1/mis-sesiones')
+            ->getJson('/api/v1/sessions')
             ->assertOk()
             ->assertJsonPath('data.0.id', $sessionId);
 
         $this->withToken($token)
-            ->deleteJson('/api/v1/mis-sesiones/'.$sessionId)
+            ->deleteJson('/api/v1/sessions/'.$sessionId)
             ->assertOk();
 
         $this->assertDatabaseHas('auth_sessions', [
@@ -61,15 +61,15 @@ final class SessionManagementTest extends TestCase
         ]);
 
         Sanctum::actingAs($admin, ['api:access']);
-        $this->putJson('/api/v1/usuarios/'.$user->getKey().'/password', [
+        $this->putJson('/api/v1/users/'.$user->getKey().'/password', [
             'password' => 'new-password',
             'password_confirmation' => 'new-password',
         ])->assertOk();
 
         $this->assertNotNull($session->fresh()->revoked_at);
         $this->assertDatabaseMissing('personal_access_tokens', ['id' => $token->accessToken->getKey()]);
-        $this->postJson('/api/v1/autenticacion/inicio-sesion', [
-            'correo_electronico' => $user->email,
+        $this->postJson('/api/v1/auth/login', [
+            'email' => $user->email,
             'password' => 'new-password',
         ])->assertOk();
     }
@@ -92,7 +92,7 @@ final class SessionManagementTest extends TestCase
         ]);
 
         Sanctum::actingAs($admin, ['api:access']);
-        $this->deleteJson('/api/v1/usuarios/'.$user->getKey().'/sesiones')->assertOk();
+        $this->deleteJson('/api/v1/users/'.$user->getKey().'/sessions')->assertOk();
 
         $this->assertSame('admin_revoked', $session->fresh()->revoked_reason);
         $this->assertDatabaseMissing('personal_access_tokens', ['id' => $token->accessToken->getKey()]);

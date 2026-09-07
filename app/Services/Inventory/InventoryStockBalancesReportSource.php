@@ -17,49 +17,49 @@ final class InventoryStockBalancesReportSource implements ReportSource
     public function definition(): ReportSourceDefinition
     {
         return new ReportSourceDefinition(
-            key: 'inventario.saldos-stock',
+            key: 'inventory.stock-balances',
             definitionVersion: '2.1',
             label: 'Saldos de inventario',
             description: 'Stock disponible y mínimo por producto y ubicación.',
             permission: 'inventory.view',
             columns: [
-                'producto_id' => ['label' => 'ID de producto', 'tipo' => 'integer'],
-                'producto' => ['label' => 'Producto', 'tipo' => 'string'],
-                'unidad_base' => ['label' => 'Unidad base', 'tipo' => 'string'],
-                'ubicacion_stock_id' => ['label' => 'ID de ubicación', 'tipo' => 'integer'],
-                'ubicacion_stock' => ['label' => 'Ubicación', 'tipo' => 'string'],
-                'unidad_productiva_id' => ['label' => 'ID de unidad productiva', 'tipo' => 'integer'],
-                'unidad_productiva' => ['label' => 'Unidad productiva', 'tipo' => 'string'],
-                'cantidad_disponible' => ['label' => 'Stock disponible', 'tipo' => 'number', 'unit' => 'unidad_base'],
-                'cantidad_minima' => ['label' => 'Stock mínimo', 'tipo' => 'number', 'unit' => 'unidad_base'],
-                'bajo_minimo' => ['label' => 'Bajo mínimo', 'tipo' => 'boolean', 'options_source' => 'booleanValues'],
+                'product_id' => ['label' => 'ID de producto', 'type' => 'integer'],
+                'product' => ['label' => 'Producto', 'type' => 'string'],
+                'base_unit' => ['label' => 'Unidad base', 'type' => 'string'],
+                'stock_location_id' => ['label' => 'ID de ubicación', 'type' => 'integer'],
+                'stock_location' => ['label' => 'Ubicación', 'type' => 'string'],
+                'production_unit_id' => ['label' => 'ID de unidad productiva', 'type' => 'integer'],
+                'production_unit' => ['label' => 'Unidad productiva', 'type' => 'string'],
+                'available_quantity' => ['label' => 'Stock disponible', 'type' => 'number', 'unit' => 'base_unit'],
+                'minimum_quantity' => ['label' => 'Stock mínimo', 'type' => 'number', 'unit' => 'base_unit'],
+                'below_minimum' => ['label' => 'Bajo mínimo', 'type' => 'boolean', 'options_source' => 'booleanValues'],
             ],
             filters: [
-                'producto_id' => ['label' => 'Producto', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'products'],
-                'ubicacion_stock_id' => ['label' => 'Ubicación', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'stockLocations'],
-                'unidad_productiva_id' => ['label' => 'Unidad productiva', 'tipo' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'productionUnits'],
-                'unidad_base' => ['label' => 'Unidad base', 'tipo' => 'enum', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options' => array_map(static fn (BaseUnit $unit): string => $unit->value, BaseUnit::cases()), 'options_source' => 'baseUnits'],
-                'bajo_minimo' => ['label' => 'Bajo mínimo', 'tipo' => 'boolean', 'operators' => ['eq'], 'options_source' => 'booleanValues'],
+                'product_id' => ['label' => 'Producto', 'type' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'products'],
+                'stock_location_id' => ['label' => 'Ubicación', 'type' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'stockLocations'],
+                'production_unit_id' => ['label' => 'Unidad productiva', 'type' => 'integer', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'productionUnits'],
+                'base_unit' => ['label' => 'Unidad base', 'type' => 'enum', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options' => array_map(static fn (BaseUnit $unit): string => $unit->value, BaseUnit::cases()), 'options_source' => 'baseUnits'],
+                'below_minimum' => ['label' => 'Bajo mínimo', 'type' => 'boolean', 'operators' => ['eq'], 'options_source' => 'booleanValues'],
             ],
             groupings: [
-                'producto' => ['label' => 'Producto', 'tipo' => 'dimension'],
-                'ubicacion_stock' => ['label' => 'Ubicación', 'tipo' => 'dimension'],
-                'unidad_productiva' => ['label' => 'Unidad productiva', 'tipo' => 'dimension'],
-                'unidad_base' => ['label' => 'Unidad base', 'tipo' => 'dimension'],
+                'product' => ['label' => 'Producto', 'type' => 'dimension'],
+                'stock_location' => ['label' => 'Ubicación', 'type' => 'dimension'],
+                'production_unit' => ['label' => 'Unidad productiva', 'type' => 'dimension'],
+                'base_unit' => ['label' => 'Unidad base', 'type' => 'dimension'],
             ],
             metrics: [
-                'cantidad_bajo_minimo' => ['label' => 'Cantidad bajo mínimo', 'tipo' => 'count'],
-                'stock_disponible' => ['label' => 'Stock disponible', 'tipo' => 'quantity', 'unit' => 'unidad_base'],
+                'below_minimum_count' => ['label' => 'Cantidad bajo mínimo', 'type' => 'count'],
+                'available_stock' => ['label' => 'Stock disponible', 'type' => 'quantity', 'unit' => 'base_unit'],
             ],
             sorts: [
-                'producto' => ['label' => 'Producto', 'direccion' => 'asc'],
-                'ubicacion_stock' => ['label' => 'Ubicación', 'direccion' => 'asc'],
-                'unidad_base' => ['label' => 'Unidad base', 'direccion' => 'asc'],
-                'cantidad_disponible' => ['label' => 'Stock disponible', 'direccion' => 'both'],
+                'product' => ['label' => 'Producto', 'direction' => 'asc'],
+                'stock_location' => ['label' => 'Ubicación', 'direction' => 'asc'],
+                'base_unit' => ['label' => 'Unidad base', 'direction' => 'asc'],
+                'available_quantity' => ['label' => 'Stock disponible', 'direction' => 'both'],
             ],
             formats: ['xlsx', 'pdf'],
             limits: ['max_page_size' => 100, 'max_range_days' => 366, 'max_export_rows' => 50000],
-            defaultSort: 'producto:asc',
+            defaultSort: 'product:asc',
         );
     }
 
@@ -130,30 +130,30 @@ final class InventoryStockBalancesReportSource implements ReportSource
     private function detailSelects(): array
     {
         return [
-            'products.id as producto_id',
-            'products.name as producto',
-            'products.base_unit as unidad_base',
-            'stock_locations.id as ubicacion_stock_id',
-            'stock_locations.name as ubicacion_stock',
-            'production_units.id as unidad_productiva_id',
-            'production_units.name as unidad_productiva',
-            'stock_balances.on_hand_quantity as cantidad_disponible',
-            'stock_balances.minimum_quantity as cantidad_minima',
-            DB::raw('stock_balances.on_hand_quantity < stock_balances.minimum_quantity as bajo_minimo'),
+            'products.id as product_id',
+            'products.name as product',
+            'products.base_unit as base_unit',
+            'stock_locations.id as stock_location_id',
+            'stock_locations.name as stock_location',
+            'production_units.id as production_unit_id',
+            'production_units.name as production_unit',
+            'stock_balances.on_hand_quantity as available_quantity',
+            'stock_balances.minimum_quantity as minimum_quantity',
+            DB::raw('stock_balances.on_hand_quantity < stock_balances.minimum_quantity as below_minimum'),
         ];
     }
 
     private function applyFilters(QueryBuilder $builder, ReportQueryData $query): QueryBuilder
     {
         $fields = [
-            'producto_id' => 'products.id',
-            'ubicacion_stock_id' => 'stock_locations.id',
-            'unidad_productiva_id' => 'production_units.id',
-            'unidad_base' => 'products.base_unit',
+            'product_id' => 'products.id',
+            'stock_location_id' => 'stock_locations.id',
+            'production_unit_id' => 'production_units.id',
+            'base_unit' => 'products.base_unit',
         ];
 
         foreach ($query->filters as $filter) {
-            if ($filter['field'] === 'bajo_minimo') {
+            if ($filter['field'] === 'below_minimum') {
                 $operator = $filter['value'] ? '<' : '>=';
                 $builder->whereRaw("stock_balances.on_hand_quantity {$operator} stock_balances.minimum_quantity");
 
@@ -175,10 +175,10 @@ final class InventoryStockBalancesReportSource implements ReportSource
     private function applyGrouping(QueryBuilder $builder, ReportQueryData $query): QueryBuilder
     {
         $groupFields = [
-            'producto' => ['products.name as producto', 'products.name'],
-            'ubicacion_stock' => ['stock_locations.name as ubicacion_stock', 'stock_locations.name'],
-            'unidad_productiva' => ['production_units.name as unidad_productiva', 'production_units.name'],
-            'unidad_base' => ['products.base_unit as unidad_base', 'products.base_unit'],
+            'product' => ['products.name as product', 'products.name'],
+            'stock_location' => ['stock_locations.name as stock_location', 'stock_locations.name'],
+            'production_unit' => ['production_units.name as production_unit', 'production_units.name'],
+            'base_unit' => ['products.base_unit as base_unit', 'products.base_unit'],
         ];
         $selects = [];
         $groupBy = [];
@@ -189,8 +189,8 @@ final class InventoryStockBalancesReportSource implements ReportSource
         }
 
         $metricExpressions = [
-            'cantidad_bajo_minimo' => 'COUNT(*) FILTER (WHERE stock_balances.on_hand_quantity < stock_balances.minimum_quantity)',
-            'stock_disponible' => 'SUM(stock_balances.on_hand_quantity)',
+            'below_minimum_count' => 'COUNT(*) FILTER (WHERE stock_balances.on_hand_quantity < stock_balances.minimum_quantity)',
+            'available_stock' => 'SUM(stock_balances.on_hand_quantity)',
         ];
         foreach ($query->metrics as $metric) {
             $selects[] = DB::raw("{$metricExpressions[$metric]} as {$metric}");
@@ -202,11 +202,11 @@ final class InventoryStockBalancesReportSource implements ReportSource
     private function applySorts(QueryBuilder $builder, ReportQueryData $query, bool $grouped): QueryBuilder
     {
         $aliases = [
-            'producto' => 'producto',
-            'ubicacion_stock' => 'ubicacion_stock',
-            'unidad_productiva' => 'unidad_productiva',
-            'unidad_base' => 'unidad_base',
-            'cantidad_disponible' => 'cantidad_disponible',
+            'product' => 'product',
+            'stock_location' => 'stock_location',
+            'production_unit' => 'production_unit',
+            'base_unit' => 'base_unit',
+            'available_quantity' => 'available_quantity',
         ];
         foreach ($query->sorts as $sort) {
             if ($grouped && ! in_array($sort['field'], [...$query->groupings, ...$query->metrics], true)) {
@@ -215,7 +215,7 @@ final class InventoryStockBalancesReportSource implements ReportSource
             $builder->orderBy($aliases[$sort['field']], $sort['direction']);
         }
 
-        return $builder->orderBy($grouped ? $query->groupings[0] ?? $query->metrics[0] ?? 'unidad_base' : 'producto_id');
+        return $builder->orderBy($grouped ? $query->groupings[0] ?? $query->metrics[0] ?? 'base_unit' : 'product_id');
     }
 
     /** @param list<string> $columns @return array<string, mixed> */
@@ -224,10 +224,10 @@ final class InventoryStockBalancesReportSource implements ReportSource
         $result = [];
         foreach ($columns as $column) {
             $value = $row->{$column} ?? null;
-            if (in_array($column, ['cantidad_disponible', 'cantidad_minima', 'stock_disponible'], true)) {
+            if (in_array($column, ['available_quantity', 'minimum_quantity', 'available_stock'], true)) {
                 $value = (string) $value;
             }
-            if ($column === 'bajo_minimo') {
+            if ($column === 'below_minimum') {
                 $value = (bool) $value;
             }
             $result[$column] = $value;
@@ -241,8 +241,8 @@ final class InventoryStockBalancesReportSource implements ReportSource
     {
         $units = [];
         foreach ($columns as $column) {
-            if (in_array($column, ['cantidad_disponible', 'cantidad_minima', 'stock_disponible'], true)) {
-                $units[$column] = 'unidad_base';
+            if (in_array($column, ['available_quantity', 'minimum_quantity', 'available_stock'], true)) {
+                $units[$column] = 'base_unit';
             }
         }
 

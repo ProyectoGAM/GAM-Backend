@@ -22,7 +22,7 @@ final readonly class ListLotsCatalogQuery
             $query->where('status', $filters['status']);
         }
 
-        return $query->orderBy('name')->orderBy('id')->paginate($filters['per_page'] ?? 50, ['*'], 'pagina', $filters['page'] ?? 1)
+        return $query->orderBy('name')->orderBy('id')->paginate($filters['per_page'] ?? 50, ['*'], 'page', $filters['page'] ?? 1)
             ->withQueryString()->through(fn (Breed|MortalityCategory $record): array => $record->only(['id', 'name', 'status', 'version']));
     }
 }

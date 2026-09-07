@@ -15,16 +15,16 @@ final class MortalityResource extends JsonResource
 
         return [
             'id' => $data['public_id'] ?? null,
-            'lote_id' => $data['flock_id'] ?? null,
-            'galpon_id' => $data['poultry_house_id'] ?? null,
-            'unidad_productiva_id' => $data['production_unit_id'] ?? null,
-            'categoria_mortalidad_id' => $data['mortality_category_id'] ?? null,
-            'cantidad' => $data['quantity'] ?? null,
-            'ocurrido_en' => $data['occurred_at'] ?? null,
-            'observaciones' => $data['notes'] ?? null,
-            'estado' => $data['status'] ?? null,
+            'flock_id' => $data['flock_id'] ?? null,
+            'poultry_house_id' => $data['poultry_house_id'] ?? null,
+            'production_unit_id' => $data['production_unit_id'] ?? null,
+            'mortality_category_id' => $data['mortality_category_id'] ?? null,
+            'quantity' => $data['quantity'] ?? null,
+            'occurred_at' => $data['occurred_at'] ?? null,
+            'notes' => $data['notes'] ?? null,
+            'status' => $data['status'] ?? null,
             'version' => $data['version'] ?? null,
-            'registrado_por' => $data['created_by'] ?? null,
+            'created_by' => $data['created_by'] ?? null,
         ];
     }
 }

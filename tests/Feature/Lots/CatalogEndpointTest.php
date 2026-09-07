@@ -11,7 +11,7 @@ final class CatalogEndpointTest extends LotsTestCase
     /** @return array<string, array{string, string}> */
     public static function catalogs(): array
     {
-        return ['razas' => ['/razas', 'breeds'], 'categorías' => ['/categorias-mortalidad', 'mortality_categories']];
+        return ['razas' => ['/breeds', 'breeds'], 'categorías' => ['/mortality-categories', 'mortality_categories']];
     }
 
     // Flujo: crea, consulta, renombra y desactiva catálogos sin eliminar referencias.
@@ -23,17 +23,17 @@ final class CatalogEndpointTest extends LotsTestCase
         $key = (string) Str::uuid();
 
         // Requests: crea y repite el alta sin duplicar el catálogo.
-        $first = $this->command('POST', $path, ['nombre' => 'Catálogo de prueba'], $key)->assertCreated();
-        $replay = $this->command('POST', $path, ['nombre' => 'Catálogo de prueba'], $key)->assertCreated();
+        $first = $this->command('POST', $path, ['name' => 'Catálogo de prueba'], $key)->assertCreated();
+        $replay = $this->command('POST', $path, ['name' => 'Catálogo de prueba'], $key)->assertCreated();
         $this->assertSame($first->json(), $replay->json());
-        $id = $first->json('data.catalogo.id');
+        $id = $first->json('data.catalog.id');
         $this->assertDatabaseCount($table, 1);
 
         // Mutaciones: renombra y cambia estado, manteniendo identidad y versiones.
-        $this->command('PATCH', "{$path}/{$id}", ['nombre' => 'Nombre revisado', 'version' => 1])->assertOk()->assertJsonPath('data.catalogo.version', 2);
-        $this->command('PATCH', "{$path}/{$id}", ['estado' => 'inactive', 'version' => 2])->assertOk()->assertJsonPath('data.catalogo.estado', 'inactive');
-        $this->command('PATCH', "{$path}/{$id}", ['estado' => 'active', 'version' => 2])->assertConflict();
-        $this->getJson('/api/v1'.$path.'?estado=inactive&buscar=revisado')->assertOk()->assertJsonCount(1, 'data');
+        $this->command('PATCH', "{$path}/{$id}", ['name' => 'Nombre revisado', 'version' => 1])->assertOk()->assertJsonPath('data.catalog.version', 2);
+        $this->command('PATCH', "{$path}/{$id}", ['status' => 'inactive', 'version' => 2])->assertOk()->assertJsonPath('data.catalog.status', 'inactive');
+        $this->command('PATCH', "{$path}/{$id}", ['status' => 'active', 'version' => 2])->assertConflict();
+        $this->getJson('/api/v1'.$path.'?status=inactive&search=revisado')->assertOk()->assertJsonCount(1, 'data');
         $this->assertDatabaseCount('activity_log', 3);
     }
 
@@ -43,10 +43,10 @@ final class CatalogEndpointTest extends LotsTestCase
     {
         // Preparación: registra el nombre original.
         $this->signIn();
-        $this->command('POST', $path, ['nombre' => 'Ponedoras'])->assertCreated();
+        $this->command('POST', $path, ['name' => 'Ponedoras'])->assertCreated();
 
         // Request: el nombre equivalente no genera un registro nuevo.
-        $this->command('POST', $path, ['nombre' => '  PONEDORAS  '])->assertConflict();
+        $this->command('POST', $path, ['name' => '  PONEDORAS  '])->assertConflict();
         $this->assertDatabaseCount($table, 1);
     }
 
@@ -57,13 +57,13 @@ final class CatalogEndpointTest extends LotsTestCase
         $this->signIn();
         $breed = Breed::factory()->create();
         $flock = $this->flock(10, $breed);
-        $this->command('PATCH', "/razas/{$breed->id}", ['version' => 1, 'estado' => 'inactive'])->assertOk();
+        $this->command('PATCH', "/breeds/{$breed->id}", ['version' => 1, 'status' => 'inactive'])->assertOk();
 
         // Requests: preserva el lote existente y rechaza nuevas aves con esa raza.
-        $this->getJson("/api/v1/lotes/{$flock->public_id}")->assertOk()->assertJsonPath('data.raza_id', $breed->id);
-        $this->command('POST', '/lotes', [
-            'codigo' => 'RAZA-INACTIVA', 'raza_id' => $breed->id, 'origen' => 'Propio', 'cantidad_inicial' => 1,
-            'fecha_ingreso' => now()->toDateString(), 'galpon_id' => $flock->poultry_house_id,
+        $this->getJson("/api/v1/flocks/{$flock->public_id}")->assertOk()->assertJsonPath('data.breed_id', $breed->id);
+        $this->command('POST', '/flocks', [
+            'code' => 'RAZA-INACTIVA', 'breed_id' => $breed->id, 'origin' => 'Propio', 'initial_quantity' => 1,
+            'entry_date' => now()->toDateString(), 'poultry_house_id' => $flock->poultry_house_id,
         ])->assertConflict();
     }
 
@@ -74,9 +74,9 @@ final class CatalogEndpointTest extends LotsTestCase
         $this->signIn(['breeds.view', 'mortality-categories.view']);
 
         // Requests: permite listar y prohíbe crear con los mismos permisos.
-        $this->getJson('/api/v1/razas')->assertOk();
-        $this->getJson('/api/v1/categorias-mortalidad')->assertOk();
-        $this->command('POST', '/razas', ['nombre' => 'Prohibido'])->assertForbidden();
-        $this->command('POST', '/categorias-mortalidad', ['nombre' => 'Prohibido'])->assertForbidden();
+        $this->getJson('/api/v1/breeds')->assertOk();
+        $this->getJson('/api/v1/mortality-categories')->assertOk();
+        $this->command('POST', '/breeds', ['name' => 'Prohibido'])->assertForbidden();
+        $this->command('POST', '/mortality-categories', ['name' => 'Prohibido'])->assertForbidden();
     }
 }

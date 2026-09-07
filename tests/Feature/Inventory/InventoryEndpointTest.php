@@ -25,15 +25,15 @@ final class InventoryEndpointTest extends TestCase
         $receiveKey = (string) Str::uuid();
 
         // Acción 1: registra el ingreso de 10,5 unidades al almacén.
-        $this->postJson('/api/v1/inventario/ingresos', [
-            'proveedor_id' => $proveedor->getKey(),
-            'lineas' => [['producto_id' => $producto->getKey(), 'ubicacion_stock_id' => $location->getKey(), 'cantidad' => '10.500000']],
-            'ocurrido_en' => '2026-08-31T17:00',
+        $this->postJson('/api/v1/inventory/receipts', [
+            'supplier_id' => $proveedor->getKey(),
+            'lines' => [['product_id' => $producto->getKey(), 'stock_location_id' => $location->getKey(), 'quantity' => '10.500000']],
+            'occurred_at' => '2026-08-31T17:00',
         ], ['Idempotency-Key' => $receiveKey])->assertCreated();
 
         // Acción 2: registra la salida de 2,5 unidades.
-        $this->postJson('/api/v1/inventario/salidas', [
-            'lineas' => [['producto_id' => $producto->getKey(), 'ubicacion_stock_id' => $location->getKey(), 'cantidad' => '2.500000']],
+        $this->postJson('/api/v1/inventory/issues', [
+            'lines' => [['product_id' => $producto->getKey(), 'stock_location_id' => $location->getKey(), 'quantity' => '2.500000']],
         ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated();
 
         // Verificación: confirma saldo proyectado, movimientos y auditoría.
@@ -46,11 +46,11 @@ final class InventoryEndpointTest extends TestCase
         $this->assertDatabaseHas('activity_log', ['event' => 'inventory_movement_recorded', 'causer_id' => $actor->getKey()]);
 
         // Verificación: la API expone únicamente el saldo disponible y no campos de reservas.
-        $this->getJson('/api/v1/inventario/saldos')
+        $this->getJson('/api/v1/inventory/balances')
             ->assertOk()
-            ->assertJsonPath('data.0.cantidad_disponible', '8.000000')
-            ->assertJsonMissingPath('data.0.cantidad_fisica')
-            ->assertJsonMissingPath('data.0.cantidad_reservada');
+            ->assertJsonPath('data.0.available_quantity', '8.000000')
+            ->assertJsonMissingPath('data.0.physical_quantity')
+            ->assertJsonMissingPath('data.0.reserved_quantity');
     }
 
     // Flujo: repite el mismo ingreso; verifica que la idempotencia evita duplicados.
@@ -59,15 +59,15 @@ final class InventoryEndpointTest extends TestCase
         [, $producto, $location, $proveedor] = $this->inventoryScenario();
         $key = (string) Str::uuid();
         $payload = [
-            'proveedor_id' => $proveedor->getKey(),
-            'lineas' => [['producto_id' => $producto->getKey(), 'ubicacion_stock_id' => $location->getKey(), 'cantidad' => '4.000000']],
+            'supplier_id' => $proveedor->getKey(),
+            'lines' => [['product_id' => $producto->getKey(), 'stock_location_id' => $location->getKey(), 'quantity' => '4.000000']],
         ];
 
         // Acción 1: procesa el ingreso y guarda su resultado idempotente.
-        $first = $this->postJson('/api/v1/inventario/ingresos', $payload, ['Idempotency-Key' => $key])->assertCreated();
+        $first = $this->postJson('/api/v1/inventory/receipts', $payload, ['Idempotency-Key' => $key])->assertCreated();
 
         // Acción 2: repite exactamente la misma solicitud.
-        $second = $this->postJson('/api/v1/inventario/ingresos', $payload, ['Idempotency-Key' => $key])->assertCreated();
+        $second = $this->postJson('/api/v1/inventory/receipts', $payload, ['Idempotency-Key' => $key])->assertCreated();
 
         // Verificación: confirma replay del mismo movimiento sin duplicar efectos.
         $this->assertSame($first->json('data.id'), $second->json('data.id'));
@@ -82,17 +82,17 @@ final class InventoryEndpointTest extends TestCase
         [, $producto, $location, $proveedor] = $this->inventoryScenario();
         $key = (string) Str::uuid();
         $basePayload = [
-            'proveedor_id' => $proveedor->getKey(),
-            'lineas' => [['producto_id' => $producto->getKey(), 'ubicacion_stock_id' => $location->getKey(), 'cantidad' => '4.000000']],
+            'supplier_id' => $proveedor->getKey(),
+            'lines' => [['product_id' => $producto->getKey(), 'stock_location_id' => $location->getKey(), 'quantity' => '4.000000']],
         ];
 
         // Acción 1: procesa el payload original con la clave.
-        $this->postJson('/api/v1/inventario/ingresos', $basePayload, ['Idempotency-Key' => $key])->assertCreated();
+        $this->postJson('/api/v1/inventory/receipts', $basePayload, ['Idempotency-Key' => $key])->assertCreated();
 
         // Acción 2: reutiliza la clave con una cantidad distinta.
-        $this->postJson('/api/v1/inventario/ingresos', [
+        $this->postJson('/api/v1/inventory/receipts', [
             ...$basePayload,
-            'lineas' => [['producto_id' => $producto->getKey(), 'ubicacion_stock_id' => $location->getKey(), 'cantidad' => '5.000000']],
+            'lines' => [['product_id' => $producto->getKey(), 'stock_location_id' => $location->getKey(), 'quantity' => '5.000000']],
         ], ['Idempotency-Key' => $key])->assertConflict();
 
         // Verificación: confirma conflicto y conserva el primer saldo.
@@ -106,8 +106,8 @@ final class InventoryEndpointTest extends TestCase
         [, $producto, $location] = $this->inventoryScenario();
 
         // Acción: intenta retirar una cantidad superior al stock disponible.
-        $this->postJson('/api/v1/inventario/salidas', [
-            'lineas' => [['producto_id' => $producto->getKey(), 'ubicacion_stock_id' => $location->getKey(), 'cantidad' => '1.000000']],
+        $this->postJson('/api/v1/inventory/issues', [
+            'lines' => [['product_id' => $producto->getKey(), 'stock_location_id' => $location->getKey(), 'quantity' => '1.000000']],
         ], ['Idempotency-Key' => (string) Str::uuid()])->assertConflict();
 
         // Verificación: confirma que el conflicto no crea movimientos.
@@ -124,14 +124,14 @@ final class InventoryEndpointTest extends TestCase
         $destination = StockLocation::factory()->create();
 
         // Acción 1: recibe diez unidades en la ubicación de origen.
-        $this->postJson('/api/v1/inventario/ingresos', [
-            'proveedor_id' => $proveedor->getKey(),
-            'lineas' => [['producto_id' => $producto->getKey(), 'ubicacion_stock_id' => $origin->getKey(), 'cantidad' => '10.000000']],
+        $this->postJson('/api/v1/inventory/receipts', [
+            'supplier_id' => $proveedor->getKey(),
+            'lines' => [['product_id' => $producto->getKey(), 'stock_location_id' => $origin->getKey(), 'quantity' => '10.000000']],
         ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated();
 
         // Acción 2: transfiere tres unidades a la ubicación destino.
-        $transfer = $this->postJson('/api/v1/inventario/transferencias', [
-            'lineas' => [['producto_id' => $producto->getKey(), 'ubicacion_stock_origen_id' => $origin->getKey(), 'ubicacion_stock_destino_id' => $destination->getKey(), 'cantidad' => '3.000000']],
+        $transfer = $this->postJson('/api/v1/inventory/transfers', [
+            'lines' => [['product_id' => $producto->getKey(), 'from_stock_location_id' => $origin->getKey(), 'to_stock_location_id' => $destination->getKey(), 'quantity' => '3.000000']],
         ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated();
 
         // Verificación intermedia: confirma la distribución tras la transferencia.
@@ -139,17 +139,17 @@ final class InventoryEndpointTest extends TestCase
         $this->assertDatabaseHas('stock_balances', ['product_id' => $producto->getKey(), 'stock_location_id' => $destination->getKey(), 'on_hand_quantity' => '3.000000']);
 
         // Acción 3: ajusta el saldo de origen al conteo físico.
-        $this->postJson('/api/v1/inventario/ajustes', [
-            'lineas' => [['producto_id' => $producto->getKey(), 'ubicacion_stock_id' => $origin->getKey(), 'cantidad_contada' => '6.000000']],
-            'motivo' => 'Conteo físico',
+        $this->postJson('/api/v1/inventory/adjustments', [
+            'lines' => [['product_id' => $producto->getKey(), 'stock_location_id' => $origin->getKey(), 'counted_quantity' => '6.000000']],
+            'reason' => 'Conteo físico',
         ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated();
 
         // Verificación intermedia: confirma el conteo ajustado en origen.
         $this->assertDatabaseHas('stock_balances', ['product_id' => $producto->getKey(), 'stock_location_id' => $origin->getKey(), 'on_hand_quantity' => '6.000000']);
 
         // Acción 4: revierte la transferencia original.
-        $this->postJson('/api/v1/inventario/movimientos/'.$transfer->json('data.id').'/reversiones', [
-            'motivo' => 'Corrección de transferencia',
+        $this->postJson('/api/v1/inventory/movements/'.$transfer->json('data.id').'/reversals', [
+            'reason' => 'Corrección de transferencia',
         ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated();
 
         // Verificación final: confirma que la reversión conserva una proyección coherente.
@@ -160,12 +160,12 @@ final class InventoryEndpointTest extends TestCase
     // Flujo: intenta usar un endpoint retirado y verifica que no existe ningún flujo de reservas.
     public function test_reservation_endpoints_are_not_available(): void
     {
-        $this->getJson('/api/v1/inventario/reservas')->assertNotFound();
-        $this->postJson('/api/v1/inventario/reservas')->assertNotFound();
+        $this->getJson('/api/v1/inventory/reservas')->assertNotFound();
+        $this->postJson('/api/v1/inventory/reservas')->assertNotFound();
     }
 
     // Flujo: intenta fraccionar un producto por unidad; verifica rechazo sin movimiento.
-    public function test_fractional_quantity_is_rejected_for_unit_productos(): void
+    public function test_fractional_quantity_is_rejected_for_unit_products(): void
     {
         [, $producto, $location, $proveedor] = $this->inventoryScenario();
 
@@ -173,9 +173,9 @@ final class InventoryEndpointTest extends TestCase
         $producto->update(['base_unit' => BaseUnit::Unit]);
 
         // Acción 2: intenta ingresar una cantidad fraccionaria.
-        $this->postJson('/api/v1/inventario/ingresos', [
-            'proveedor_id' => $proveedor->getKey(),
-            'lineas' => [['producto_id' => $producto->getKey(), 'ubicacion_stock_id' => $location->getKey(), 'cantidad' => '1.500000']],
+        $this->postJson('/api/v1/inventory/receipts', [
+            'supplier_id' => $proveedor->getKey(),
+            'lines' => [['product_id' => $producto->getKey(), 'stock_location_id' => $location->getKey(), 'quantity' => '1.500000']],
         ], ['Idempotency-Key' => (string) Str::uuid()])->assertConflict();
 
         // Verificación: confirma que la validación no crea movimientos.
@@ -188,17 +188,17 @@ final class InventoryEndpointTest extends TestCase
         [, $producto, $location, $proveedor] = $this->inventoryScenario();
 
         // Acción 1: recibe stock para crear el saldo administrable.
-        $this->postJson('/api/v1/inventario/ingresos', [
-            'proveedor_id' => $proveedor->getKey(),
-            'lineas' => [['producto_id' => $producto->getKey(), 'ubicacion_stock_id' => $location->getKey(), 'cantidad' => '5.000000']],
+        $this->postJson('/api/v1/inventory/receipts', [
+            'supplier_id' => $proveedor->getKey(),
+            'lines' => [['product_id' => $producto->getKey(), 'stock_location_id' => $location->getKey(), 'quantity' => '5.000000']],
         ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated();
 
         // Acción 2: consulta el saldo creado.
         $balance = StockBalance::query()->firstOrFail();
 
         // Acción 3: actualiza el stock mínimo mediante su endpoint de política.
-        $this->patchJson('/api/v1/inventario/saldos/'.$balance->getKey().'/stock-minimo', [
-            'cantidad_minima' => '6.000000',
+        $this->patchJson('/api/v1/inventory/balances/'.$balance->getKey().'/minimum-stock', [
+            'minimum_quantity' => '6.000000',
         ])->assertOk();
 
         // Verificación: confirma el nuevo mínimo persistido.

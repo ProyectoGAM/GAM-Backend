@@ -24,8 +24,8 @@ final readonly class BreedController
         return (new LotsOperationResource($action->execute(null, $request->attributesForAction(), $request->actor())))->response()->setStatusCode(201);
     }
 
-    public function update(SaveBreedRequest $request, Breed $raza, SaveBreedAction $action): LotsOperationResource
+    public function update(SaveBreedRequest $request, Breed $breed, SaveBreedAction $action): LotsOperationResource
     {
-        return new LotsOperationResource($action->execute($raza, $request->attributesForAction(), $request->actor()));
+        return new LotsOperationResource($action->execute($breed, $request->attributesForAction(), $request->actor()));
     }
 }

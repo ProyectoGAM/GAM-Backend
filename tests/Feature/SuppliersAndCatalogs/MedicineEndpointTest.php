@@ -42,20 +42,20 @@ final class MedicineEndpointTest extends TestCase
 
         // Acción: registra sin fechas operativas ni dosis.
         $response = $this->withHeader('Idempotency-Key', (string) Str::uuid())
-            ->postJson('/api/v1/medicamentos', $this->payload($supplier))->assertCreated()
-            ->assertJsonPath('data.nombre', 'Medicamento A')
-            ->assertJsonPath('data.descripcion', 'Descripción de catálogo')
-            ->assertJsonPath('data.proveedor.id', $supplier->id)
-            ->assertJsonPath('data.proveedor.nombre_al_registrar', 'Proveedor original')
-            ->assertJsonPath('data.registrado_por.id', $admin->id)
-            ->assertJsonPath('data.registrado_en', '2026-09-05T12:00:00+00:00');
+            ->postJson('/api/v1/medicines', $this->payload($supplier))->assertCreated()
+            ->assertJsonPath('data.name', 'Medicamento A')
+            ->assertJsonPath('data.description', 'Descripción de catálogo')
+            ->assertJsonPath('data.supplier.id', $supplier->id)
+            ->assertJsonPath('data.supplier.name_at_registration', 'Proveedor original')
+            ->assertJsonPath('data.created_by.id', $admin->id)
+            ->assertJsonPath('data.created_at', '2026-09-05T12:00:00+00:00');
 
         // Consulta: comprueba la persistencia, la correlación y la ausencia de efectos ajenos.
         $medicine = Medicine::query()->sole();
         $audit = AuditEntry::query()->where('event', 'medicine_created')->sole();
         $this->assertSame($medicine->public_id, $response->json('data.id'));
         $this->assertTrue(Str::isUlid($medicine->public_id));
-        $this->assertSame($medicine->operation_id, $response->json('data.id_operacion'));
+        $this->assertSame($medicine->operation_id, $response->json('data.operation_id'));
         $this->assertSame($medicine->operation_id, $audit->operation_id);
         $this->assertSame($admin->id, $audit->causer_id);
         $this->assertSame('suppliers_and_catalogs', $audit->log_name);
@@ -70,15 +70,15 @@ final class MedicineEndpointTest extends TestCase
             $this->assertDatabaseCount($table, 0);
         }
         $response->assertJsonMissingPath('data.request_hash')->assertJsonMissingPath('data.idempotency_key')
-            ->assertJsonMissingPath('data.registrado_por.email');
+            ->assertJsonMissingPath('data.created_by.email');
     }
 
     // Flujo: exige autenticación en ambas operaciones y rechaza gestores sin rol administrador.
     public function test_endpoints_return_401_without_token_and_403_for_non_admin(): void
     {
         // Consulta: intenta acceder sin sesión.
-        $this->getJson('/api/v1/medicamentos')->assertUnauthorized();
-        $this->postJson('/api/v1/medicamentos', [])->assertUnauthorized();
+        $this->getJson('/api/v1/medicines')->assertUnauthorized();
+        $this->postJson('/api/v1/medicines', [])->assertUnauthorized();
 
         // Preparación: concede permisos de catálogo sin conceder el rol administrador.
         $user = User::factory()->create();
@@ -86,8 +86,8 @@ final class MedicineEndpointTest extends TestCase
         Sanctum::actingAs($user, ['*']);
 
         // Acción: ambos endpoints deben aplicar la policy específica.
-        $this->getJson('/api/v1/medicamentos')->assertForbidden();
-        $this->postJson('/api/v1/medicamentos', [])->assertForbidden();
+        $this->getJson('/api/v1/medicines')->assertForbidden();
+        $this->postJson('/api/v1/medicines', [])->assertForbidden();
         $this->assertDatabaseCount('medicines', 0);
     }
 
@@ -107,8 +107,8 @@ final class MedicineEndpointTest extends TestCase
             $this->assertFalse(Gate::forUser($user)->allows($ability, Medicine::class));
         }
         Sanctum::actingAs($inactive, ['*']);
-        $this->getJson('/api/v1/medicamentos')->assertForbidden();
-        $this->postJson('/api/v1/medicamentos', [])->assertForbidden();
+        $this->getJson('/api/v1/medicines')->assertForbidden();
+        $this->postJson('/api/v1/medicines', [])->assertForbidden();
     }
 
     // Flujo: protege el caso de uso cuando se invoca directamente sin autorización.
@@ -132,7 +132,7 @@ final class MedicineEndpointTest extends TestCase
         $data[$field] = $value;
 
         // Acción: valida estructura y restricciones de entrada.
-        $this->withHeader('Idempotency-Key', (string) Str::uuid())->postJson('/api/v1/medicamentos', $data)
+        $this->withHeader('Idempotency-Key', (string) Str::uuid())->postJson('/api/v1/medicines', $data)
             ->assertUnprocessable()->assertHeader('Content-Type', 'application/problem+json')
             ->assertJsonPath('errors.'.$field.'.0', $message);
         $this->assertDatabaseCount('medicines', 0);
@@ -145,24 +145,24 @@ final class MedicineEndpointTest extends TestCase
         $unknown = 'El campo no está permitido en esta operación.';
 
         return [
-            'nombre vacío' => ['nombre', '   ', 'Debes indicar el nombre del medicamento.'],
-            'nombre largo' => ['nombre', str_repeat('a', 161), 'El nombre no puede superar los 160 caracteres.'],
-            'nombre no textual' => ['nombre', 42, 'El nombre debe ser texto.'],
-            'descripción vacía' => ['descripcion', '', 'Debes indicar la descripción del medicamento.'],
-            'descripción larga' => ['descripcion', str_repeat('a', 5001), 'La descripción no puede superar los 5000 caracteres.'],
-            'descripción no textual' => ['descripcion', [], 'Debes indicar la descripción del medicamento.'],
-            'proveedor ausente' => ['proveedor_id', null, 'Debes seleccionar un proveedor.'],
-            'proveedor negativo' => ['proveedor_id', -1, 'El proveedor debe ser un identificador positivo.'],
-            'proveedor no entero' => ['proveedor_id', 'abc', 'El proveedor debe ser un identificador entero.'],
-            'proveedor fuera de rango' => ['proveedor_id', '9223372036854775808', 'El proveedor debe ser un identificador entero.'],
-            'fecha pasada' => ['ocurrido_en', '2020-01-01', $unknown],
-            'fecha futura' => ['programado_para', '2030-01-01', $unknown],
+            'nombre vacío' => ['name', '   ', 'Debes indicar el nombre del medicamento.'],
+            'nombre largo' => ['name', str_repeat('a', 161), 'El nombre no puede superar los 160 caracteres.'],
+            'nombre no textual' => ['name', 42, 'El nombre debe ser texto.'],
+            'descripción vacía' => ['description', '', 'Debes indicar la descripción del medicamento.'],
+            'descripción larga' => ['description', str_repeat('a', 5001), 'La descripción no puede superar los 5000 caracteres.'],
+            'descripción no textual' => ['description', [], 'Debes indicar la descripción del medicamento.'],
+            'proveedor ausente' => ['supplier_id', null, 'Debes seleccionar un proveedor.'],
+            'proveedor negativo' => ['supplier_id', -1, 'El proveedor debe ser un identificador positivo.'],
+            'proveedor no entero' => ['supplier_id', 'abc', 'El proveedor debe ser un identificador entero.'],
+            'proveedor fuera de rango' => ['supplier_id', '9223372036854775808', 'El proveedor debe ser un identificador entero.'],
+            'fecha pasada' => ['occurred_at', '2020-01-01', $unknown],
+            'fecha futura' => ['scheduled_for', '2030-01-01', $unknown],
             'dosis' => ['dosis', '15ml', $unknown],
             'plan' => ['plan_manejo_id', 1, $unknown],
-            'lote' => ['lote_id', '01AAAAAAAAAAAAAAAAAAAAAAAA', $unknown],
+            'flock' => ['flock_id', '01AAAAAAAAAAAAAAAAAAAAAAAA', $unknown],
             'actor' => ['created_by', 1, $unknown],
             'clave en el cuerpo' => ['idempotency_key', '00000000-0000-4000-8000-000000000001', 'La clave de idempotencia sólo se admite en el encabezado Idempotency-Key.'],
-            'estado' => ['estado', 'active', $unknown],
+            'status' => ['status', 'active', $unknown],
         ];
     }
 
@@ -173,10 +173,10 @@ final class MedicineEndpointTest extends TestCase
         Sanctum::actingAs($this->admin(), ['*']);
 
         // Acción: comprueba ausencia y formato de la clave.
-        $this->postJson('/api/v1/medicamentos', [])->assertUnprocessable()
-            ->assertJsonValidationErrors(['nombre', 'descripcion', 'proveedor_id', 'idempotency_key'])
+        $this->postJson('/api/v1/medicines', [])->assertUnprocessable()
+            ->assertJsonValidationErrors(['name', 'description', 'supplier_id', 'idempotency_key'])
             ->assertJsonPath('errors.idempotency_key.0', 'El encabezado Idempotency-Key es obligatorio.');
-        $this->withHeader('Idempotency-Key', 'invalid')->postJson('/api/v1/medicamentos', $this->payload(Supplier::factory()->create()))
+        $this->withHeader('Idempotency-Key', 'invalid')->postJson('/api/v1/medicines', $this->payload(Supplier::factory()->create()))
             ->assertUnprocessable()->assertJsonPath('errors.idempotency_key.0', 'El encabezado Idempotency-Key debe ser un UUID válido.');
     }
 
@@ -189,10 +189,10 @@ final class MedicineEndpointTest extends TestCase
         $data = $this->payload($supplier);
 
         // Acción: intenta ambos casos sin registrar medicamentos ni auditoría.
-        $this->withHeader('Idempotency-Key', (string) Str::uuid())->postJson('/api/v1/medicamentos', $data)
+        $this->withHeader('Idempotency-Key', (string) Str::uuid())->postJson('/api/v1/medicines', $data)
             ->assertConflict()->assertJsonPath('detail', 'El proveedor debe estar activo para registrar un medicamento.');
-        $data['proveedor_id'] = 9223372036854775807;
-        $this->postJson('/api/v1/medicamentos', $data)->assertNotFound();
+        $data['supplier_id'] = 9223372036854775807;
+        $this->postJson('/api/v1/medicines', $data)->assertNotFound();
         $this->assertDatabaseCount('medicines', 0);
         $this->assertDatabaseCount('activity_log', 0);
     }
@@ -206,21 +206,21 @@ final class MedicineEndpointTest extends TestCase
         $supplier = Supplier::factory()->create(['name' => 'Proveedor original']);
         $data = $this->payload($supplier);
         $key = (string) Str::uuid();
-        $first = $this->withHeader('Idempotency-Key', $key)->postJson('/api/v1/medicamentos', $data)->assertCreated();
+        $first = $this->withHeader('Idempotency-Key', $key)->postJson('/api/v1/medicines', $data)->assertCreated();
 
         // Mutación: cambia referencias después de la operación ya confirmada.
         $supplier->update(['name' => 'Proveedor renombrado', 'status' => 'inactive']);
         $admin->update(['name' => 'Administrador renombrado']);
 
         // Acción: normaliza claves y textos y devuelve la operación original.
-        $reordered = ['proveedor_id' => (string) $supplier->id, 'descripcion' => ' Descripción de catálogo ', 'nombre' => ' Medicamento A '];
-        $this->withHeader('Idempotency-Key', strtoupper($key))->postJson('/api/v1/medicamentos', $reordered)
+        $reordered = ['supplier_id' => (string) $supplier->id, 'description' => ' Descripción de catálogo ', 'name' => ' Medicamento A '];
+        $this->withHeader('Idempotency-Key', strtoupper($key))->postJson('/api/v1/medicines', $reordered)
             ->assertCreated()->assertExactJson($first->json());
-        $this->getJson('/api/v1/medicamentos')->assertOk()->assertJsonPath('data.0.proveedor.nombre_al_registrar', 'Proveedor original');
+        $this->getJson('/api/v1/medicines')->assertOk()->assertJsonPath('data.0.supplier.name_at_registration', 'Proveedor original');
 
         // Acción: la misma clave con otros datos no crea otro medicamento.
-        $data['nombre'] = 'Otro medicamento';
-        $this->postJson('/api/v1/medicamentos', $data)->assertConflict()
+        $data['name'] = 'Otro medicamento';
+        $this->postJson('/api/v1/medicines', $data)->assertConflict()
             ->assertJsonPath('detail', 'La clave de idempotencia ya fue utilizada con otros datos.');
         $this->assertDatabaseCount('medicines', 1);
         $this->assertDatabaseCount('activity_log', 1);
@@ -235,10 +235,10 @@ final class MedicineEndpointTest extends TestCase
         Sanctum::actingAs($this->admin(), ['*']);
 
         // Acción: registra otro hecho con una clave diferente y luego con otro actor.
-        $first = $this->withHeader('Idempotency-Key', $key)->postJson('/api/v1/medicamentos', $data)->assertCreated();
-        $second = $this->withHeader('Idempotency-Key', (string) Str::uuid())->postJson('/api/v1/medicamentos', $data)->assertCreated();
+        $first = $this->withHeader('Idempotency-Key', $key)->postJson('/api/v1/medicines', $data)->assertCreated();
+        $second = $this->withHeader('Idempotency-Key', (string) Str::uuid())->postJson('/api/v1/medicines', $data)->assertCreated();
         Sanctum::actingAs($this->admin(), ['*']);
-        $third = $this->withHeader('Idempotency-Key', $key)->postJson('/api/v1/medicamentos', $data)->assertCreated();
+        $third = $this->withHeader('Idempotency-Key', $key)->postJson('/api/v1/medicines', $data)->assertCreated();
         $this->assertNotSame($first->json('data.id'), $second->json('data.id'));
         $this->assertNotSame($first->json('data.id'), $third->json('data.id'));
         $this->assertDatabaseCount('medicines', 3);
@@ -255,13 +255,13 @@ final class MedicineEndpointTest extends TestCase
         $this->mock(AuditRecorder::class)->shouldReceive('record')->once()->andThrow(new RuntimeException('Audit storage failed.'));
 
         // Acción: el error no debe dejar un registro parcial.
-        $this->withHeader('Idempotency-Key', (string) Str::uuid())->postJson('/api/v1/medicamentos', $data)->assertStatus(500);
+        $this->withHeader('Idempotency-Key', (string) Str::uuid())->postJson('/api/v1/medicines', $data)->assertStatus(500);
         $this->assertDatabaseCount('medicines', 0);
         $this->assertDatabaseCount('activity_log', 0);
 
         // Acción: restaura almacenamiento y reintenta exactamente la misma solicitud.
         $this->app->instance(AuditRecorder::class, $recorder);
-        $this->postJson('/api/v1/medicamentos', $data)->assertCreated();
+        $this->postJson('/api/v1/medicines', $data)->assertCreated();
         $this->assertDatabaseCount('medicines', 1);
         $this->assertDatabaseCount('activity_log', 1);
     }
@@ -290,17 +290,17 @@ final class MedicineEndpointTest extends TestCase
         Medicine::factory()->create(['name' => 'Medicina de otro proveedor']);
 
         // Consulta: limita por proveedor y nombre, siguiendo el enlace generado.
-        $response = $this->getJson('/api/v1/medicamentos?buscar=medicina&proveedor_id='.$supplier->id.'&por_pagina=2')
+        $response = $this->getJson('/api/v1/medicines?search=medicina&supplier_id='.$supplier->id.'&per_page=2')
             ->assertOk()->assertJsonPath('meta.total', 3)->assertJsonPath('data.0.id', $last->public_id)
             ->assertJsonPath('data.1.id', $first->public_id);
         $next = $response->json('links.next');
-        $this->assertStringContainsString('pagina=2', $next);
-        $this->assertStringContainsString('buscar=medicina', $next);
-        $this->assertStringContainsString('proveedor_id='.$supplier->id, $next);
+        $this->assertStringContainsString('page=2', $next);
+        $this->assertStringContainsString('search=medicina', $next);
+        $this->assertStringContainsString('supplier_id='.$supplier->id, $next);
         $this->getJson($next)->assertOk()->assertJsonPath('data.0.id', $old->public_id)->assertJsonCount(1, 'data');
-        $this->getJson('/api/v1/medicamentos?buscar=15%25')->assertOk()->assertJsonPath('meta.total', 1);
-        $this->getJson('/api/v1/medicamentos?buscar='.urlencode("' OR 1=1 --"))->assertOk()->assertJsonCount(0, 'data');
-        $this->getJson('/api/v1/medicamentos?proveedor_id=9223372036854775807')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/medicines?search=15%25')->assertOk()->assertJsonPath('meta.total', 1);
+        $this->getJson('/api/v1/medicines?search='.urlencode("' OR 1=1 --"))->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/medicines?supplier_id=9223372036854775807')->assertOk()->assertJsonCount(0, 'data');
     }
 
     // Flujo: limita filtros y confirma que no hay operaciones públicas de edición.
@@ -310,11 +310,11 @@ final class MedicineEndpointTest extends TestCase
         Sanctum::actingAs($this->admin(), ['*']);
 
         // Consulta: responde vacío y rechaza límites o filtros no permitidos.
-        $this->getJson('/api/v1/medicamentos')->assertOk()->assertJsonCount(0, 'data')->assertJsonPath('meta.per_page', 50);
-        $this->getJson('/api/v1/medicamentos?por_pagina=101&pagina=0&proveedor_id=0&buscar='.str_repeat('a', 161).'&lote_id=1')
-            ->assertUnprocessable()->assertJsonValidationErrors(['por_pagina', 'pagina', 'proveedor_id', 'buscar', 'lote_id']);
-        $this->patchJson('/api/v1/medicamentos', [])->assertMethodNotAllowed();
-        $this->deleteJson('/api/v1/medicamentos')->assertMethodNotAllowed();
+        $this->getJson('/api/v1/medicines')->assertOk()->assertJsonCount(0, 'data')->assertJsonPath('meta.per_page', 50);
+        $this->getJson('/api/v1/medicines?per_page=101&page=0&supplier_id=0&search='.str_repeat('a', 161).'&flock_id=1')
+            ->assertUnprocessable()->assertJsonValidationErrors(['per_page', 'page', 'supplier_id', 'search', 'flock_id']);
+        $this->patchJson('/api/v1/medicines', [])->assertMethodNotAllowed();
+        $this->deleteJson('/api/v1/medicines')->assertMethodNotAllowed();
     }
 
     private function admin(): User
@@ -325,9 +325,9 @@ final class MedicineEndpointTest extends TestCase
         return $user;
     }
 
-    /** @return array{nombre: string, descripcion: string, proveedor_id: int} */
+    /** @return array{name: string, description: string, supplier_id: int} */
     private function payload(Supplier $supplier): array
     {
-        return ['nombre' => 'Medicamento A', 'descripcion' => 'Descripción de catálogo', 'proveedor_id' => $supplier->id];
+        return ['name' => 'Medicamento A', 'description' => 'Descripción de catálogo', 'supplier_id' => $supplier->id];
     }
 }

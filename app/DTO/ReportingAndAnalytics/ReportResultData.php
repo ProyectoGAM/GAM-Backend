@@ -34,15 +34,15 @@ final readonly class ReportResultData
     public function toArray(): array
     {
         return [
-            'clave_fuente' => $this->sourceKey,
-            'version_definicion' => $this->definitionVersion,
-            'columnas' => $this->columns,
+            'source_key' => $this->sourceKey,
+            'definition_version' => $this->definitionVersion,
+            'columns' => $this->columns,
             'rows' => $this->rows,
             'aggregates' => $this->aggregates,
             'units' => $this->units,
             'pagination' => [
                 'current_page' => $this->currentPage,
-                'por_pagina' => $this->perPage,
+                'per_page' => $this->perPage,
                 'total' => $this->total,
                 'last_page' => $this->lastPage,
             ],

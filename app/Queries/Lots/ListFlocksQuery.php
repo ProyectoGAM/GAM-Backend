@@ -30,7 +30,7 @@ final readonly class ListFlocksQuery
         }
 
         return $query->orderByDesc('entry_date')->orderByDesc('id')
-            ->paginate($filters['per_page'] ?? 50, ['*'], 'pagina', $filters['page'] ?? 1)
+            ->paginate($filters['per_page'] ?? 50, ['*'], 'page', $filters['page'] ?? 1)
             ->withQueryString()->through(fn (Flock $flock): array => $this->snapshots->flock($flock));
     }
 }

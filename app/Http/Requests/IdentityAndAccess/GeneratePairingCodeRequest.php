@@ -13,6 +13,6 @@ final class GeneratePairingCodeRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['nombre' => ['required', 'string', 'max:100']];
+        return ['name' => ['required', 'string', 'max:100']];
     }
 }

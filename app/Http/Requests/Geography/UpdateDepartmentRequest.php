@@ -11,17 +11,17 @@ final class UpdateDepartmentRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $departamento = $this->route('departamento');
+        $department = $this->route('department');
 
-        return $departamento instanceof Department
-            && ($this->user()?->can('update', $departamento) ?? false);
+        return $department instanceof Department
+            && ($this->user()?->can('update', $department) ?? false);
     }
 
     /** @return array<string, array<int, string>> */
     public function rules(): array
     {
         return [
-            'nombre' => ['required', 'string', 'max:120'],
+            'name' => ['required', 'string', 'max:120'],
         ];
     }
 
@@ -30,19 +30,19 @@ final class UpdateDepartmentRequest extends FormRequest
     {
         return [
             function (Validator $validator): void {
-                $departamento = $this->route('departamento');
+                $department = $this->route('department');
 
-                if (! $departamento instanceof Department || $validator->errors()->has('nombre')) {
+                if (! $department instanceof Department || $validator->errors()->has('name')) {
                     return;
                 }
 
                 $exists = Department::query()
-                    ->whereKeyNot($departamento->getKey())
-                    ->where('normalized_name', Str::lower(trim($this->string('nombre')->toString())))
+                    ->whereKeyNot($department->getKey())
+                    ->where('normalized_name', Str::lower(trim($this->string('name')->toString())))
                     ->exists();
 
                 if ($exists) {
-                    $validator->errors()->add('nombre', 'El nombre ya está registrado.');
+                    $validator->errors()->add('name', 'El nombre ya está registrado.');
                 }
             },
         ];

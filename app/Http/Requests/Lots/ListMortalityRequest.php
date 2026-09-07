@@ -16,9 +16,9 @@ final class ListMortalityRequest extends LotsRequest
     {
         return [
             ...$this->filterRules(),
-            'lote_id' => ['sometimes', 'ulid'],
-            'galpon_id' => ['sometimes', 'integer', 'exists:poultry_houses,id'],
-            'estado' => ['sometimes', 'in:recorded,cancelled'],
+            'flock_id' => ['sometimes', 'ulid'],
+            'poultry_house_id' => ['sometimes', 'integer', 'exists:poultry_houses,id'],
+            'status' => ['sometimes', 'in:recorded,cancelled'],
         ];
     }
 }

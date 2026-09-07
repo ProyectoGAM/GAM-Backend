@@ -21,10 +21,10 @@ class AuthorizationTest extends TestCase
         Sanctum::actingAs($admin, ['*']);
 
         // Acción: consulta el endpoint administrativo versionado.
-        $this->getJson('/api/v1/administracion')
+        $this->getJson('/api/v1/administration')
             ->assertOk()
             ->assertJsonPath('message', 'Bienvenido al área de administración.')
-            ->assertJsonPath('user.correo_electronico', $admin->email);
+            ->assertJsonPath('user.email', $admin->email);
     }
 
     // Flujo: autoriza al administrador y verifica acceso al endpoint sin versión.
@@ -35,9 +35,9 @@ class AuthorizationTest extends TestCase
         Sanctum::actingAs($admin, ['*']);
 
         // Acción: consulta el endpoint administrativo sin versión.
-        $this->getJson('/administracion')
+        $this->getJson('/administration')
             ->assertOk()
-            ->assertJsonPath('user.correo_electronico', $admin->email);
+            ->assertJsonPath('user.email', $admin->email);
     }
 
     // Flujo: autentica a un usuario sin permiso y verifica la respuesta prohibida.
@@ -47,7 +47,7 @@ class AuthorizationTest extends TestCase
         Sanctum::actingAs(User::factory()->create(), ['*']);
 
         // Acción: intenta acceder al área administrativa.
-        $this->getJson('/administracion')
+        $this->getJson('/administration')
             ->assertForbidden()
             ->assertJsonPath('message', 'No tienes autorización para realizar esta acción.');
     }
@@ -56,7 +56,7 @@ class AuthorizationTest extends TestCase
     public function test_admin_endpoint_returns_401_without_authentication(): void
     {
         // Acción: consulta el endpoint sin credenciales.
-        $this->getJson('/administracion')->assertUnauthorized();
+        $this->getJson('/administration')->assertUnauthorized();
     }
 
     // Flujo: asigna un permiso mediante un rol y verifica su herencia en la autorización.
@@ -71,7 +71,7 @@ class AuthorizationTest extends TestCase
         Sanctum::actingAs($user, ['*']);
 
         // Acción: accede al endpoint usando el permiso heredado.
-        $this->getJson('/api/v1/administracion')->assertOk();
+        $this->getJson('/api/v1/administration')->assertOk();
     }
 
     // Flujo: elimina lógicamente al usuario y verifica que su token existente deja de funcionar.
@@ -86,7 +86,7 @@ class AuthorizationTest extends TestCase
 
         // Acción 2: intenta acceder usando el token previo.
         $this->withToken($token->plainTextToken)
-            ->getJson('/api/v1/administracion')
+            ->getJson('/api/v1/administration')
             ->assertUnauthorized();
     }
 

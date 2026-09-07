@@ -31,18 +31,18 @@ final readonly class FlockController
         return (new LotsOperationResource($action->execute($request->attributesForAction(), $request->actor())))->response()->setStatusCode(201);
     }
 
-    public function show(ViewFlockRequest $request, Flock $lote, LotsSnapshots $snapshots): FlockResource
+    public function show(ViewFlockRequest $request, Flock $flock, LotsSnapshots $snapshots): FlockResource
     {
-        return new FlockResource($snapshots->flock($lote));
+        return new FlockResource($snapshots->flock($flock));
     }
 
-    public function update(UpdateFlockRequest $request, Flock $lote, UpdateFlockAction $action): LotsOperationResource
+    public function update(UpdateFlockRequest $request, Flock $flock, UpdateFlockAction $action): LotsOperationResource
     {
-        return new LotsOperationResource($action->execute($lote, $request->attributesForAction(), $request->actor()));
+        return new LotsOperationResource($action->execute($flock, $request->attributesForAction(), $request->actor()));
     }
 
-    public function history(ListFlockHistoryRequest $request, Flock $lote, GetFlockHistoryQuery $query): AnonymousResourceCollection
+    public function history(ListFlockHistoryRequest $request, Flock $flock, GetFlockHistoryQuery $query): AnonymousResourceCollection
     {
-        return FlockMovementResource::collection($query->execute($lote, $request->attributesForAction()));
+        return FlockMovementResource::collection($query->execute($flock, $request->attributesForAction()));
     }
 }

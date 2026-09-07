@@ -19,11 +19,11 @@ final class StoreProductionUnitRequest extends FarmStructureRequest
     public function rules(): array
     {
         return [
-            'localidad_id' => ['required', 'integer', 'exists:localities,id'],
-            'nombre' => ['required', 'string', 'max:120'],
-            'latitud' => ['required', 'numeric', 'between:-90,90'],
-            'longitud' => ['required', 'numeric', 'between:-180,180'],
-            'estado' => ['sometimes', Rule::enum(ProductionUnitStatus::class)],
+            'locality_id' => ['required', 'integer', 'exists:localities,id'],
+            'name' => ['required', 'string', 'max:120'],
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'status' => ['sometimes', Rule::enum(ProductionUnitStatus::class)],
         ];
     }
 
@@ -32,17 +32,17 @@ final class StoreProductionUnitRequest extends FarmStructureRequest
     {
         return [
             function (Validator $validator): void {
-                if ($validator->errors()->hasAny(['localidad_id', 'nombre'])) {
+                if ($validator->errors()->hasAny(['locality_id', 'name'])) {
                     return;
                 }
 
                 $exists = ProductionUnit::query()
-                    ->where('locality_id', $this->integer('localidad_id'))
-                    ->where('normalized_name', Str::lower(trim($this->string('nombre')->toString())))
+                    ->where('locality_id', $this->integer('locality_id'))
+                    ->where('normalized_name', Str::lower(trim($this->string('name')->toString())))
                     ->exists();
 
                 if ($exists) {
-                    $validator->errors()->add('nombre', 'El nombre ya está registrado en esta localidad.');
+                    $validator->errors()->add('name', 'El nombre ya está registrado en esta localidad.');
                 }
             },
         ];

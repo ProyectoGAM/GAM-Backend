@@ -14,15 +14,15 @@ final class MedicineResource extends JsonResource
     {
         return [
             'id' => $this->public_id,
-            'nombre' => $this->name,
-            'descripcion' => $this->description,
-            'proveedor' => [
+            'name' => $this->name,
+            'description' => $this->description,
+            'supplier' => [
                 'id' => $this->supplier_id,
-                'nombre_al_registrar' => $this->supplier_name_snapshot,
+                'name_at_registration' => $this->supplier_name_snapshot,
             ],
-            'registrado_por' => ['id' => $this->created_by, 'nombre_al_registrar' => $this->created_by_name],
-            'registrado_en' => $this->created_at->utc()->toIso8601String(),
-            'id_operacion' => $this->operation_id,
+            'created_by' => ['id' => $this->created_by, 'name_at_registration' => $this->created_by_name],
+            'created_at' => $this->created_at->utc()->toIso8601String(),
+            'operation_id' => $this->operation_id,
         ];
     }
 }

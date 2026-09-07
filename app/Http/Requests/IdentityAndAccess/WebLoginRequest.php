@@ -14,7 +14,7 @@ final class WebLoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'correo_electronico' => ['required', 'email', 'max:255'],
+            'email' => ['required', 'email', 'max:255'],
             'password' => ['required', 'string'],
         ];
     }

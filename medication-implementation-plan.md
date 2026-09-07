@@ -20,22 +20,22 @@ Fuente: [medication.yaml](contracts/openapi/medication.yaml).
 
 | Método y ruta | Comportamiento |
 | --- | --- |
-| POST /api/v1/medicamentos | Registra una ficha y devuelve su representación completa con 201. |
-| GET /api/v1/medicamentos | Lista fichas completas con paginación, búsqueda por nombre y filtro de proveedor. |
+| POST /api/v1/medicines | Registra una ficha y devuelve su representación completa con 201. |
+| GET /api/v1/medicines | Lista fichas completas con paginación, búsqueda por nombre y filtro de proveedor. |
 
-Alta: nombre —texto obligatorio, máximo 160 caracteres—, descripcion —texto obligatorio, máximo 5000— y proveedor_id —identificador entero positivo—. Nombre y descripción no pueden quedar vacíos después de recortar espacios exteriores.
+Alta: name —texto obligatorio, máximo 160 caracteres—, description —texto obligatorio, máximo 5000— y supplier_id —identificador entero positivo—. Nombre y descripción no pueden quedar vacíos después de recortar espacios exteriores.
 
 El encabezado Idempotency-Key debe contener un UUID. No se admite como campo del cuerpo. Mismo actor, clave y contenido normalizado devuelven exactamente la ficha original con 201; otro contenido produce 409. Otra clave o actor permite otra ficha, incluso con el mismo nombre.
 
-Consulta: buscar, proveedor_id, pagina —1 a 100000— y por_pagina —1 a 100, por defecto 50—. Búsqueda parcial literal sin distinguir mayúsculas; los símbolos de porcentaje y guion bajo no actúan como comodines suministrados por el usuario. Orden descendente por creación e ID interno; enlaces conservan filtros. Un proveedor sin coincidencias devuelve una página vacía.
+Consulta: search, supplier_id, page —1 a 100000— y per_page —1 a 100, por defecto 50—. Búsqueda parcial literal sin distinguir mayúsculas; los símbolos de porcentaje y guion bajo no actúan como comodines suministrados por el usuario. Orden descendente por creación e ID interno; enlaces conservan filtros. Un proveedor sin coincidencias devuelve una página vacía.
 
 Salida allowlist:
 
-- id, nombre, descripcion;
-- proveedor.id y proveedor.nombre_al_registrar;
-- registrado_por.id y registrado_por.nombre_al_registrar;
-- registrado_en, expresado siempre en UTC;
-- id_operacion, compartido con auditoría.
+- id, name, description;
+- supplier.id y supplier.name_at_registration;
+- created_by.id y created_by.name_at_registration;
+- created_at, expresado siempre en UTC;
+- operation_id, compartido con auditoría.
 
 Los nombres conservados se identifican como tales; no representan necesariamente el nombre actual de la referencia. No se exponen claves de idempotencia, hashes, correos ni otros atributos del usuario.
 
@@ -76,9 +76,9 @@ La cobertura está en las clases MedicineEndpointTest, MedicineContractTest, Med
 
 Incluye alta, límites, errores localizados, autorización HTTP y de Action, nombres repetidos, normalización, claves por actor, replay después de modificar/desactivar referencias, rollback de auditoría, paginación, búsqueda literal, snapshots, ausencia de efectos ajenos, contrato HTTP real y seeder oficial.
 
-Para pruebas normales, usar la receta del [README](README.md) que inyecta las variables de testing antes de iniciar PHP, con DB_DATABASE=gam_test. Seleccionar las pruebas de endpoint, contrato y seeder.
+Para pruebas normales, usar la receta del [README](README.md), que ejecuta PHPUnit dentro de `api` y deriva `<DB_DATABASE>_testing` desde la base normal configurada. Seleccionar las pruebas de endpoint, contrato y seeder.
 
-Para concurrencia, crear una vez gam_medicines_test y ejecutar con las mismas variables de testing, sustituyendo DB_DATABASE por gam_medicines_test:
+Para concurrencia, usar la misma base `<DB_DATABASE>_testing`; el archivo de configuración separado conserva el grupo de concurrencia sin crear una segunda base:
 
     vendor/bin/phpunit --configuration phpunit.medicines-concurrency.xml
 
@@ -93,7 +93,7 @@ Formato: vendor/bin/pint --dirty --format agent. El contenedor actual no incluye
 Comprobaciones completadas el 2026-09-05:
 
 - 52 pruebas aprobadas, 826 aserciones: catálogo, contrato, demo y regresiones seleccionadas de Proveedores/Catálogos, Lotes, administrador y demo de mantenimiento.
-- Concurrencia ejecutada por separado en gam_medicines_test: 1 prueba aprobada, 4 aserciones; ambos procesos reciben la misma operación y queda una sola ficha auditada.
+- Concurrencia ejecutada por separado en la misma base `<DB_DATABASE>_testing`: 1 prueba aprobada, 4 aserciones; ambos procesos reciben la misma operación y queda una sola ficha auditada.
 - Pint aplicado a los 20 archivos PHP del cambio; la anotación final de Supplier también fue formateada.
 - Larastan, nivel 5 y configuración del catálogo: sin errores.
 - Revisión del diff sin problemas de espacios; preservada la modificación preexistente de la skill de testing.

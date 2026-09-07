@@ -8,7 +8,6 @@ use App\Http\Requests\SuppliersAndCatalogs\StoreMedicineRequest;
 use App\Http\Resources\SuppliersAndCatalogs\MedicineResource;
 use App\Models\User;
 use App\Queries\SuppliersAndCatalogs\ListMedicinesQuery;
-use App\Support\PublicInputMapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -16,7 +15,7 @@ final readonly class MedicineController
 {
     public function index(ListMedicinesRequest $request, ListMedicinesQuery $query): AnonymousResourceCollection
     {
-        $filters = PublicInputMapper::toInternal($request->validated());
+        $filters = $request->validated();
         foreach (['supplier_id', 'page', 'per_page'] as $key) {
             if (isset($filters[$key])) {
                 $filters[$key] = (int) $filters[$key];
@@ -33,9 +32,9 @@ final readonly class MedicineController
         $data = $request->validated();
 
         return (new MedicineResource($action->execute([
-            'name' => $data['nombre'],
-            'description' => $data['descripcion'],
-            'supplier_id' => (int) $data['proveedor_id'],
+            'name' => $data['name'],
+            'description' => $data['description'],
+            'supplier_id' => (int) $data['supplier_id'],
             'idempotency_key' => $data['idempotency_key'],
         ], $actor)))->response()->setStatusCode(201);
     }

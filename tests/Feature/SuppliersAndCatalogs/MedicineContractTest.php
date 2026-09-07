@@ -40,7 +40,7 @@ final class MedicineContractTest extends TestCase
         }
         sort($actual);
         sort($expected);
-        $this->assertSame(['GET /medicamentos', 'POST /medicamentos'], $actual);
+        $this->assertSame(['GET /medicines', 'POST /medicines'], $actual);
         $this->assertSame($expected, $actual);
         $this->assertSame([['bearerAuth' => []]], $contract['security']);
         $references = [];
@@ -72,8 +72,8 @@ final class MedicineContractTest extends TestCase
         $schema = $contract['components']['schemas']['Medicine'];
 
         // Acción: crea usando exactamente los campos del contrato de alta.
-        $response = $this->withHeader('Idempotency-Key', (string) Str::uuid())->postJson('/api/v1/medicamentos', [
-            'nombre' => str_repeat('A', 160), 'descripcion' => str_repeat('D', 5000), 'proveedor_id' => $supplier->id,
+        $response = $this->withHeader('Idempotency-Key', (string) Str::uuid())->postJson('/api/v1/medicines', [
+            'name' => str_repeat('A', 160), 'description' => str_repeat('D', 5000), 'supplier_id' => $supplier->id,
         ])->assertCreated();
         $data = $response->json('data');
         $keys = array_keys($data);
@@ -82,12 +82,12 @@ final class MedicineContractTest extends TestCase
         sort($expected);
         $this->assertSame($expected, $keys);
         $this->assertMatchesRegularExpression('/'.$schema['properties']['id']['pattern'].'/', $data['id']);
-        foreach (['proveedor', 'registrado_por'] as $field) {
+        foreach (['supplier', 'created_by'] as $field) {
             $this->assertSame($schema['properties'][$field]['required'], array_keys($data[$field]));
         }
 
         // Consulta: el listado entrega la misma ficha completa y metadatos de paginación.
-        $this->getJson('/api/v1/medicamentos')->assertOk()->assertJsonPath('data.0', $data)
+        $this->getJson('/api/v1/medicines')->assertOk()->assertJsonPath('data.0', $data)
             ->assertJsonStructure(['data', 'links' => ['first', 'last', 'prev', 'next'], 'meta' => ['current_page', 'per_page', 'total']]);
     }
 }

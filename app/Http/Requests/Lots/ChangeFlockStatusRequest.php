@@ -14,8 +14,8 @@ final class ChangeFlockStatusRequest extends LotsRequest
     {
         return [
             ...$this->commandRules(),
-            'estado' => ['required', 'in:active,quarantined'],
-            'motivo' => ['required', 'string', 'max:500'],
+            'status' => ['required', 'in:active,quarantined'],
+            'reason' => ['required', 'string', 'max:500'],
         ];
     }
 }

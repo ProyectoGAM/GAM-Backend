@@ -17,7 +17,6 @@ use App\Http\Requests\Inventory\TransferStockRequest;
 use App\Http\Resources\Inventory\InventoryMovementResource;
 use App\Models\Inventory\InventoryMovement;
 use App\Models\User;
-use App\Support\PublicInputMapper;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -25,32 +24,32 @@ final readonly class InventoryMovementController
 {
     public function receive(ReceiveStockRequest $request, ReceiveStockAction $action): JsonResponse
     {
-        return $this->created($action->execute(PublicInputMapper::toInternal($request->validated(), 'inventory'), $this->actor($request)));
+        return $this->created($action->execute($request->validated(), $this->actor($request)));
     }
 
     public function issue(IssueStockRequest $request, IssueStockAction $action): JsonResponse
     {
-        return $this->created($action->execute(PublicInputMapper::toInternal($request->validated(), 'inventory'), $this->actor($request)));
+        return $this->created($action->execute($request->validated(), $this->actor($request)));
     }
 
     public function loss(RecordStockLossRequest $request, RecordStockLossAction $action): JsonResponse
     {
-        return $this->created($action->execute(PublicInputMapper::toInternal($request->validated(), 'inventory'), $this->actor($request)));
+        return $this->created($action->execute($request->validated(), $this->actor($request)));
     }
 
     public function adjust(AdjustStockRequest $request, AdjustStockToCountAction $action): JsonResponse
     {
-        return $this->created($action->execute(PublicInputMapper::toInternal($request->validated(), 'inventory'), $this->actor($request)));
+        return $this->created($action->execute($request->validated(), $this->actor($request)));
     }
 
     public function transfer(TransferStockRequest $request, TransferStockAction $action): JsonResponse
     {
-        return $this->created($action->execute(PublicInputMapper::toInternal($request->validated(), 'inventory'), $this->actor($request)));
+        return $this->created($action->execute($request->validated(), $this->actor($request)));
     }
 
     public function reverse(ReverseInventoryMovementRequest $request, InventoryMovement $inventoryMovement, ReverseInventoryMovementAction $action): JsonResponse
     {
-        return $this->created($action->execute($inventoryMovement, PublicInputMapper::toInternal($request->validated(), 'inventory'), $this->actor($request)));
+        return $this->created($action->execute($inventoryMovement, $request->validated(), $this->actor($request)));
     }
 
     private function created(InventoryMovement $movement): JsonResponse

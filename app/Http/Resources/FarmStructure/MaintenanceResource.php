@@ -14,15 +14,15 @@ final class MaintenanceResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'galpon_id' => $this->poultry_house_id,
-            'fecha_mantenimiento' => $this->maintenance_date->toDateString(),
-            'descripcion' => $this->description,
-            'costo' => ['importe' => $this->cost->amount(), 'moneda' => $this->cost->currency()],
-            'responsable' => ['id' => $this->responsible_user_id, 'nombre' => $this->responsible_name],
-            'estado' => $this->status->value,
+            'poultry_house_id' => $this->poultry_house_id,
+            'maintenance_date' => $this->maintenance_date->toDateString(),
+            'description' => $this->description,
+            'cost' => ['amount' => $this->cost->amount(), 'currency' => $this->cost->currency()],
+            'responsible' => ['id' => $this->responsible_user_id, 'name' => $this->responsible_name],
+            'status' => $this->status->value,
             'version' => $this->version,
-            'motivo_cancelacion' => $this->cancellation_reason,
-            'cancelado_en' => $this->cancelled_at?->toIso8601String(),
+            'cancellation_reason' => $this->cancellation_reason,
+            'cancelled_at' => $this->cancelled_at?->toIso8601String(),
             'created_at' => $this->created_at->toIso8601String(),
             'updated_at' => $this->updated_at->toIso8601String(),
         ];

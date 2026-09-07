@@ -24,13 +24,13 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         RateLimiter::for('auth', function (Request $request): Limit {
-            $email = Str::lower($request->string('correo_electronico')->toString());
+            $email = Str::lower($request->string('email')->toString());
 
             return Limit::perMinute(5)->by($email.'|'.$request->ip());
         });
 
         RateLimiter::for('auth-account', fn (Request $request): Limit => Limit::perMinute(5)->by(
-            'auth-account|'.Str::lower($request->string('correo_electronico')->toString()),
+            'auth-account|'.Str::lower($request->string('email')->toString()),
         ));
 
         RateLimiter::for('pairing', fn (Request $request): Limit => Limit::perMinute(5)->by('pairing|'.$request->ip()));

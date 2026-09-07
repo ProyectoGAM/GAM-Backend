@@ -21,8 +21,8 @@ final class SharedDeviceAuthenticationTest extends TestCase
         [$employee, $device, $credential] = $this->sharedFixture();
 
         $response = $this->withHeader('X-Shared-Device-Token', $credential)
-            ->postJson('/api/v1/dispositivo-compartido/inicio-sesion-pin', [
-                'usuario_id' => $employee->getKey(),
+            ->postJson('/api/v1/shared-device/login-pin', [
+                'user_id' => $employee->getKey(),
                 'pin' => '0007',
             ]);
 
@@ -47,8 +47,8 @@ final class SharedDeviceAuthenticationTest extends TestCase
 
         for ($attempt = 1; $attempt < 5; $attempt++) {
             $this->withHeader('X-Shared-Device-Token', $credential)
-                ->postJson('/api/v1/dispositivo-compartido/inicio-sesion-pin', [
-                    'usuario_id' => $employee->getKey(),
+                ->postJson('/api/v1/shared-device/login-pin', [
+                    'user_id' => $employee->getKey(),
                     'pin' => '9999',
                 ])
                 ->assertUnauthorized()
@@ -56,8 +56,8 @@ final class SharedDeviceAuthenticationTest extends TestCase
         }
 
         $this->withHeader('X-Shared-Device-Token', $credential)
-            ->postJson('/api/v1/dispositivo-compartido/inicio-sesion-pin', [
-                'usuario_id' => $employee->getKey(),
+            ->postJson('/api/v1/shared-device/login-pin', [
+                'user_id' => $employee->getKey(),
                 'pin' => '9999',
             ])
             ->assertStatus(429)
@@ -70,14 +70,14 @@ final class SharedDeviceAuthenticationTest extends TestCase
 
         $this->withCookie('gam_shared_device', $credential)
             ->withCredentials()
-            ->getJson('/api/v1/dispositivo-compartido/web')
+            ->getJson('/api/v1/shared-device/web')
             ->assertOk()
             ->assertJsonPath('data.id', $device->getKey());
 
         $response = $this->withCookie('gam_shared_device', $credential)
             ->withCredentials()
-            ->postJson('/api/v1/dispositivo-compartido/web/inicio-sesion-pin', [
-                'usuario_id' => $employee->getKey(),
+            ->postJson('/api/v1/shared-device/web/login-pin', [
+                'user_id' => $employee->getKey(),
                 'pin' => '0007',
             ]);
 
@@ -99,8 +99,8 @@ final class SharedDeviceAuthenticationTest extends TestCase
         [$employee, $device, $credential, $admin] = $this->sharedFixture();
 
         $this->withHeader('X-Shared-Device-Token', $credential)
-            ->deleteJson('/api/v1/dispositivo-compartido/vinculacion', [
-                'correo_electronico' => $admin->email,
+            ->deleteJson('/api/v1/shared-device/pairing', [
+                'email' => $admin->email,
                 'password' => 'password',
             ])
             ->assertOk();

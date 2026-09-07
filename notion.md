@@ -32,7 +32,7 @@ No se consultó ni modificó Notion durante esta entrega. Al sincronizar, mover 
 
 Disponible en código:
 
-- Alta y consulta paginada de medicamentos mediante `/api/v1/medicamentos`, exclusivamente para administradores activos.
+- Alta y consulta paginada de medicamentos mediante `/api/v1/medicines`, exclusivamente para administradores activos.
 - Nombre, descripción y proveedor; se permiten nombres repetidos y se conserva la identidad individual de cada ficha.
 - Idempotencia, auditoría transaccional, búsqueda, filtro por proveedor y datos demo locales.
 

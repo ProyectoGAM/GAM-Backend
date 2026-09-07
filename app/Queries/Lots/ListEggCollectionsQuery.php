@@ -34,7 +34,7 @@ final readonly class ListEggCollectionsQuery
             $query->where('occurred_at', '<', CarbonImmutable::parse($filters['date_to'], config('lots.timezone'))->addDay()->startOfDay()->toIso8601String());
         }
 
-        return $query->orderByDesc('occurred_at')->orderByDesc('id')->paginate($filters['per_page'] ?? 50, ['*'], 'pagina', $filters['page'] ?? 1)
+        return $query->orderByDesc('occurred_at')->orderByDesc('id')->paginate($filters['per_page'] ?? 50, ['*'], 'page', $filters['page'] ?? 1)
             ->withQueryString()->through(fn (EggCollection $record): array => $this->snapshots->collection($record, $record->flock));
     }
 }

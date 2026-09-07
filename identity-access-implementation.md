@@ -8,7 +8,7 @@ GAM tiene dos transportes y tres contextos de sesión:
 - nativo personal: PAT Bearer de 90 días, almacenado únicamente en secure storage;
 - dispositivo compartido: credencial separada del usuario, válida 365 días, y una sesión de empleado de 8 horas con 120 segundos de inactividad.
 
-El registro público está retirado. Las cuentas se crean mediante POST /api/v1/usuarios y no se emite un token para la persona creada.
+El registro público está retirado. Las cuentas se crean mediante POST /api/v1/users y no se emite un token para la persona creada.
 
 ## Invariantes
 
@@ -49,10 +49,10 @@ El contrato completo está en contracts/openapi/authentication.yaml.
 
 | Caso | Web | Nativo |
 |---|---|---|
-| Login personal | POST /api/v1/autenticacion/web/inicio-sesion | POST /api/v1/autenticacion/inicio-sesion |
-| Vincular dispositivo | POST /api/v1/autenticacion/web/vinculacion | POST /api/v1/dispositivos-compartidos/vinculacion |
-| Estado/lista/PIN | rutas /dispositivo-compartido/web/* con cookies | rutas /dispositivo-compartido/* con headers |
-| Finalizar empleado | POST /.../web/finalizar-sesion | POST /.../finalizar-sesion |
+| Login personal | POST /api/v1/auth/web/login | POST /api/v1/auth/login |
+| Vincular dispositivo | POST /api/v1/auth/web/pairing | POST /api/v1/shared-devices/pairing |
+| Estado/lista/PIN | rutas /shared-device/web/* con cookies | rutas /shared-device/* con headers |
+| Finalizar empleado | POST /.../web/finalize | POST /.../finalize |
 
 Todas las mutaciones web pasan por el middleware web y CSRF. Las rutas nativas no aceptan cookies como sustituto de sus headers.
 

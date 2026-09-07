@@ -12,9 +12,9 @@ final class StoreLocalityRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $departamento = $this->route('departamento');
+        $department = $this->route('department');
 
-        return $departamento instanceof Department
+        return $department instanceof Department
             && ($this->user()?->can('create', Locality::class) ?? false);
     }
 
@@ -22,7 +22,7 @@ final class StoreLocalityRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'nombre' => ['required', 'string', 'max:120'],
+            'name' => ['required', 'string', 'max:120'],
         ];
     }
 
@@ -31,19 +31,19 @@ final class StoreLocalityRequest extends FormRequest
     {
         return [
             function (Validator $validator): void {
-                $departamento = $this->route('departamento');
+                $department = $this->route('department');
 
-                if (! $departamento instanceof Department || $validator->errors()->has('nombre')) {
+                if (! $department instanceof Department || $validator->errors()->has('name')) {
                     return;
                 }
 
                 $exists = Locality::query()
-                    ->whereBelongsTo($departamento)
-                    ->where('normalized_name', Str::lower(trim($this->string('nombre')->toString())))
+                    ->whereBelongsTo($department)
+                    ->where('normalized_name', Str::lower(trim($this->string('name')->toString())))
                     ->exists();
 
                 if ($exists) {
-                    $validator->errors()->add('nombre', 'El nombre ya está registrado en este departamento.');
+                    $validator->errors()->add('name', 'El nombre ya está registrado en este departamento.');
                 }
             },
         ];

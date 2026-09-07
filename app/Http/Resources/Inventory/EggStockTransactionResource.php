@@ -12,18 +12,18 @@ final class EggStockTransactionResource extends JsonResource
     {
         return [
             'id' => $this->public_id,
-            'unidad_productiva_id' => $this->production_unit_id,
-            'tipo' => $this->type,
-            'cantidad' => (int) $this->quantity,
-            'ocurrido_en' => $this->occurred_at,
-            'motivo' => $this->reason,
-            'observaciones' => $this->notes,
-            'estado' => $this->status,
+            'production_unit_id' => $this->production_unit_id,
+            'type' => $this->type,
+            'quantity' => (int) $this->quantity,
+            'occurred_at' => $this->occurred_at,
+            'reason' => $this->reason,
+            'notes' => $this->notes,
+            'status' => $this->status,
             'version' => (int) $this->version,
-            'referencia' => $this->reference_type === null ? null : ['tipo' => $this->reference_type, 'id' => $this->reference_id],
-            'referencias_inventario' => $this->inventory_references ?? [],
-            'saldo' => $this->when(isset($this->saldo), $this->saldo),
-            'revisiones' => EggStockTransactionRevisionResource::collection($this->whenLoaded('revisions')),
+            'reference' => $this->reference_type === null ? null : ['type' => $this->reference_type, 'id' => $this->reference_id],
+            'inventory_references' => $this->inventory_references ?? [],
+            'balance' => $this->when(isset($this->balance), $this->balance),
+            'revisions' => EggStockTransactionRevisionResource::collection($this->whenLoaded('revisions')),
         ];
     }
 }

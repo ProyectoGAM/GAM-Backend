@@ -110,7 +110,7 @@ services:
     volumes:
       # PostgreSQL 18 usa /var/lib/postgresql como volumen principal.
       - postgres-data:/var/lib/postgresql
-      # Crea la base de testing solo al inicializar el volumen por primera vez.
+      # Crea la base de testing al inicializar un volumen nuevo.
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
@@ -118,6 +118,29 @@ services:
       timeout: 5s
       retries: 20
       start_period: 10s
+    networks:
+      - gam-dev
+
+  postgres-test-database:
+    image: postgres:18-alpine
+    restart: "no"
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-gam}
+      POSTGRES_USER: ${DB_USERNAME:-gam}
+      PGPASSWORD: ${DB_PASSWORD:-gam_dev_password}
+      PGHOST: postgres
+      PGPORT: 5432
+    volumes:
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        until pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"; do sleep 1; done
+        /docker-entrypoint-initdb.d/01-create-test-database.sh
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - gam-dev
 
@@ -187,6 +210,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      postgres-test-database:
+        condition: service_completed_successfully
+      storage-test-permissions:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:
@@ -201,6 +228,19 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+
+  storage-test-permissions:
+    image: alpine:3.22
+    restart: "no"
+    user: root
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        mkdir -p /var/www/html/storage/framework/testing/disks/local/report-exports
+        chown -R 33:33 /var/www/html/storage/framework/testing
+    volumes:
+      - storage-data:/var/www/html/storage
 
   horizon:
     <<: *app-service

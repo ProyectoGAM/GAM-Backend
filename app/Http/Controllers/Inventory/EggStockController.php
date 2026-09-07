@@ -22,43 +22,43 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 final readonly class EggStockController
 {
-    public function balance(ViewEggStockRequest $request, ProductionUnit $unidadProductiva, GetEggStockBalanceQuery $query): JsonResponse
+    public function balance(ViewEggStockRequest $request, ProductionUnit $productionUnit, GetEggStockBalanceQuery $query): JsonResponse
     {
-        return response()->json(['data' => $query->execute($unidadProductiva)]);
+        return response()->json(['data' => $query->execute($productionUnit)]);
     }
 
-    public function index(ListEggStockTransactionsRequest $request, ProductionUnit $unidadProductiva, ListEggStockTransactionsQuery $query): AnonymousResourceCollection
+    public function index(ListEggStockTransactionsRequest $request, ProductionUnit $productionUnit, ListEggStockTransactionsQuery $query): AnonymousResourceCollection
     {
-        return EggStockTransactionResource::collection($query->execute($unidadProductiva, $request->attributesForAction()));
+        return EggStockTransactionResource::collection($query->execute($productionUnit, $request->attributesForAction()));
     }
 
-    public function show(ViewEggStockRequest $request, EggStockTransaction $movimiento, GetEggStockTransactionQuery $query): EggStockTransactionResource
+    public function show(ViewEggStockRequest $request, EggStockTransaction $movement, GetEggStockTransactionQuery $query): EggStockTransactionResource
     {
-        return new EggStockTransactionResource($query->execute($movimiento));
+        return new EggStockTransactionResource($query->execute($movement));
     }
 
-    public function receipt(StoreEggStockReceiptRequest $request, ProductionUnit $unidadProductiva, RecordManualEggStockAction $action): JsonResponse
+    public function receipt(StoreEggStockReceiptRequest $request, ProductionUnit $productionUnit, RecordManualEggStockAction $action): JsonResponse
     {
-        $result = $action->execute($unidadProductiva, $request->attributesForAction(), $request->actor());
+        $result = $action->execute($productionUnit, $request->attributesForAction(), $request->actor());
 
         return response()->json(['data' => $result], 201);
     }
 
-    public function issue(StoreEggStockIssueRequest $request, ProductionUnit $unidadProductiva, RecordManualEggStockAction $action): JsonResponse
+    public function issue(StoreEggStockIssueRequest $request, ProductionUnit $productionUnit, RecordManualEggStockAction $action): JsonResponse
     {
         $data = $request->attributesForAction();
-        $result = $action->execute($unidadProductiva, $data, $request->actor(), -1, (string) $data['type']);
+        $result = $action->execute($productionUnit, $data, $request->actor(), -1, (string) $data['type']);
 
         return response()->json(['data' => $result], 201);
     }
 
-    public function update(CorrectEggStockTransactionRequest $request, EggStockTransaction $movimiento, CorrectEggStockTransactionAction $action): JsonResponse
+    public function update(CorrectEggStockTransactionRequest $request, EggStockTransaction $movement, CorrectEggStockTransactionAction $action): JsonResponse
     {
-        return response()->json(['data' => $action->execute($movimiento, $request->attributesForAction(), $request->actor())]);
+        return response()->json(['data' => $action->execute($movement, $request->attributesForAction(), $request->actor())]);
     }
 
-    public function cancel(CancelEggStockTransactionRequest $request, EggStockTransaction $movimiento, CancelEggStockTransactionAction $action): JsonResponse
+    public function cancel(CancelEggStockTransactionRequest $request, EggStockTransaction $movement, CancelEggStockTransactionAction $action): JsonResponse
     {
-        return response()->json(['data' => $action->execute($movimiento, $request->attributesForAction(), $request->actor())]);
+        return response()->json(['data' => $action->execute($movement, $request->attributesForAction(), $request->actor())]);
     }
 }

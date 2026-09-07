@@ -6,7 +6,7 @@ final class CancelEggCollectionRequest extends LotsRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('update', $this->route('recoleccion')) ?? false;
+        return $this->user()?->can('update', $this->route('collection')) ?? false;
     }
 
     /** @return array<string, mixed> */
@@ -14,7 +14,7 @@ final class CancelEggCollectionRequest extends LotsRequest
     {
         return [
             ...$this->commandRules(),
-            'motivo_correccion' => ['required', 'string', 'max:500'],
+            'correction_reason' => ['required', 'string', 'max:500'],
         ];
     }
 }

@@ -15,10 +15,10 @@ final class CreateManagedUserRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'nombre' => ['required', 'string', 'max:255'],
-            'correo_electronico' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'rol' => ['required', 'string', Rule::in(['admin', 'delivery', 'employee'])],
+            'role' => ['required', 'string', Rule::in(['admin', 'delivery', 'employee'])],
         ];
     }
 }

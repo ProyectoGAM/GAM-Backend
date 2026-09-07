@@ -98,7 +98,7 @@ final class GenerateReportExport implements ShouldBeUnique, ShouldQueue
         }
 
         $storedQuery = $export->query;
-        unset($storedQuery['clave_fuente'], $storedQuery['version_definicion']);
+        unset($storedQuery['source_key'], $storedQuery['definition_version']);
         $query = $normalizer->normalize($export->source_key, $storedQuery);
         $file = $writer->write($export, $source, $query);
 

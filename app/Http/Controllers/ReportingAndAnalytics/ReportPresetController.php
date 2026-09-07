@@ -13,7 +13,6 @@ use App\Http\Resources\ReportingAndAnalytics\ReportPresetResource;
 use App\Models\ReportingAndAnalytics\ReportPreset;
 use App\Models\User;
 use App\Queries\ReportingAndAnalytics\ListReportPresetsQuery;
-use App\Support\PublicInputMapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Symfony\Component\HttpFoundation\Response;
@@ -25,7 +24,7 @@ final readonly class ReportPresetController
         /** @var User $actor */
         $actor = $request->user();
 
-        return ReportPresetResource::collection($query->execute($actor, PublicInputMapper::toInternal($request->validated(), 'report')));
+        return ReportPresetResource::collection($query->execute($actor, $request->validated()));
     }
 
     public function store(StoreReportPresetRequest $request, CreateReportPresetAction $action): JsonResponse
@@ -33,7 +32,7 @@ final readonly class ReportPresetController
         /** @var User $actor */
         $actor = $request->user();
 
-        return (new ReportPresetResource($action->execute(PublicInputMapper::toInternal($request->validated(), 'report'), $actor)))
+        return (new ReportPresetResource($action->execute($request->validated(), $actor)))
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
     }
@@ -48,7 +47,7 @@ final readonly class ReportPresetController
         /** @var User $actor */
         $actor = $request->user();
 
-        return new ReportPresetResource($action->execute($reportPreset, PublicInputMapper::toInternal($request->validated(), 'report'), $actor));
+        return new ReportPresetResource($action->execute($reportPreset, $request->validated(), $actor));
     }
 
     public function destroy(ManageReportPresetRequest $request, ReportPreset $reportPreset): Response

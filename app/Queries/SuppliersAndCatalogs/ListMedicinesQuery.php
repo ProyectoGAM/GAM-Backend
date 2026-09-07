@@ -18,7 +18,7 @@ final readonly class ListMedicinesQuery
             ->when($filters['search'] ?? null, fn (Builder $query, string $search): Builder => $query->where('name', 'ilike', '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search).'%'))
             ->when($filters['supplier_id'] ?? null, fn (Builder $query, int $supplierId): Builder => $query->where('supplier_id', $supplierId))
             ->orderByDesc('created_at')->orderByDesc('id')
-            ->paginate($filters['per_page'] ?? 50, ['*'], 'pagina', $filters['page'] ?? 1)
+            ->paginate($filters['per_page'] ?? 50, ['*'], 'page', $filters['page'] ?? 1)
             ->withQueryString();
     }
 }
