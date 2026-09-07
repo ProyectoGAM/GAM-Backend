@@ -48,9 +48,9 @@ final class InventoryEndpointTest extends TestCase
         // Verificación: la API expone únicamente el saldo disponible y no campos de reservas.
         $this->getJson('/api/v1/inventory/balances')
             ->assertOk()
-            ->assertJsonPath('data.0.cantidad_disponible', '8.000000')
-            ->assertJsonMissingPath('data.0.cantidad_fisica')
-            ->assertJsonMissingPath('data.0.cantidad_reservada');
+            ->assertJsonPath('data.0.available_quantity', '8.000000')
+            ->assertJsonMissingPath('data.0.physical_quantity')
+            ->assertJsonMissingPath('data.0.reserved_quantity');
     }
 
     // Flujo: repite el mismo ingreso; verifica que la idempotencia evita duplicados.

@@ -105,7 +105,7 @@ final class GeographyEndpointTest extends TestCase
         $this->getJson("/api/v1/departments/{$departamento->getKey()}/localities")
             ->assertOk()
             ->assertJsonPath('data.0.name', 'Chuy')
-            ->assertJsonPath('data.0.departamento.name', 'Rocha');
+            ->assertJsonPath('data.0.department.name', 'Rocha');
     }
 
     /** @param list<string> $permissions */

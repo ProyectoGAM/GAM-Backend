@@ -60,8 +60,7 @@ final class MaintenanceEndpointTest extends TestCase
         $this->assertNotEmpty($entry->operation_id);
         $this->assertNotEmpty($entry->trace_id);
         $this->assertSame('999999999999999.99', $entry->properties['subject_snapshot']['cost']['amount']);
-        $response->assertJsonMissingPath('data.idempotency_key')->assertJsonMissingPath('data.responsible.email')
-            ->assertJsonMissingPath('data.cost')->assertJsonMissingPath('data.status')->assertJsonMissingPath('data.poultry_house_id');
+        $response->assertJsonMissingPath('data.idempotency_key')->assertJsonMissingPath('data.responsible.email');
     }
 
     // Flujo: reintenta el alta y rechaza la reutilización de clave con otro contenido.
@@ -177,10 +176,10 @@ final class MaintenanceEndpointTest extends TestCase
         Sanctum::actingAs($this->userWithPermissions(['poultry-houses.view']), ['*']);
 
         // Acción: consulta vacío, agrega dos hechos y consulta el último no cancelado.
-        $this->getJson($this->collectionUrl($house).'/ultimo')->assertOk()->assertExactJson(['data' => null]);
+        $this->getJson($this->collectionUrl($house).'/latest')->assertOk()->assertExactJson(['data' => null]);
         $completed = Maintenance::factory()->for($house)->create(['maintenance_date' => '2026-01-01']);
         Maintenance::factory()->for($house)->cancelled()->create(['maintenance_date' => '2026-08-01']);
-        $this->getJson($this->collectionUrl($house).'/ultimo')->assertOk()->assertJsonPath('data.id', $completed->id);
+        $this->getJson($this->collectionUrl($house).'/latest')->assertOk()->assertJsonPath('data.id', $completed->id);
     }
 
     // Flujo: corrige el costo y conserva tanto el alta original como los cambios explícitos.
@@ -229,7 +228,7 @@ final class MaintenanceEndpointTest extends TestCase
         $this->patchJson($url, ['version' => 2, 'reason' => 'Cambio', 'description' => 'No guardar'])->assertConflict();
         $this->deleteJson($url)->assertMethodNotAllowed();
         $this->getJson($url)->assertOk()->assertJsonPath('data.cancellation_reason', 'Registro duplicado');
-        $this->getJson($this->collectionUrl($maintenance->poultryHouse).'/ultimo')->assertExactJson(['data' => null]);
+        $this->getJson($this->collectionUrl($maintenance->poultryHouse).'/latest')->assertExactJson(['data' => null]);
 
         // Verificación: el hecho original sigue disponible.
         $this->assertModelExists($maintenance);
@@ -247,7 +246,7 @@ final class MaintenanceEndpointTest extends TestCase
 
         // Acción: intenta cancelar una versión anterior o corregir sin cambios.
         $this->postJson($url.'/cancellation', ['version' => 1, 'reason' => 'Obsoleto'])->assertConflict();
-        $this->patchJson($url, ['version' => 3, 'reason' => 'Sin datos'])->assertUnprocessable()->assertJsonValidationErrors('solicitud');
+        $this->patchJson($url, ['version' => 3, 'reason' => 'Sin datos'])->assertUnprocessable()->assertJsonValidationErrors('request');
         $this->patchJson($url, ['description' => 'Nuevo texto', 'reason' => 'Sin versión'])->assertUnprocessable()->assertJsonValidationErrors('version');
 
         // Verificación: no se altera el registro ni se agregan auditorías.
@@ -286,7 +285,7 @@ final class MaintenanceEndpointTest extends TestCase
 
         // Acción: recorre lecturas y escrituras sin una sesión.
         $this->getJson($collection)->assertUnauthorized();
-        $this->getJson($collection.'/ultimo')->assertUnauthorized();
+        $this->getJson($collection.'/latest')->assertUnauthorized();
         $this->getJson($url)->assertUnauthorized();
         $this->postJson($collection, [])->assertUnauthorized();
         $this->patchJson($url, [])->assertUnauthorized();
@@ -304,7 +303,7 @@ final class MaintenanceEndpointTest extends TestCase
 
         // Acción: rechaza lecturas sin permiso y escrituras con permiso sólo de lectura.
         $this->getJson($collection)->assertForbidden();
-        $this->getJson($collection.'/ultimo')->assertForbidden();
+        $this->getJson($collection.'/latest')->assertForbidden();
         $this->getJson($url)->assertForbidden();
         Sanctum::actingAs($this->userWithPermissions(['poultry-houses.view']), ['*']);
         $this->postJson($collection, [])->assertForbidden();

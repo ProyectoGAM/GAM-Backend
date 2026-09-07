@@ -23,8 +23,8 @@ final class MedicineConcurrencyTest extends TestCase
     /** Los procesos secundarios necesitan datos confirmados en una base exclusiva de pruebas. */
     public function runDatabaseMigrations(): void
     {
-        if (! app()->environment('testing') || config('database.default') !== 'pgsql' || DB::connection()->getDatabaseName() !== 'gam_medicines_test') {
-            $this->markTestSkipped('Ejecutar con phpunit.medicines-concurrency.xml y la base gam_medicines_test.');
+        if (! app()->environment('testing') || config('database.default') !== 'pgsql' || ! str_ends_with(DB::connection()->getDatabaseName(), '_testing')) {
+            $this->markTestSkipped('La concurrencia real requiere una base PostgreSQL aislada con sufijo _testing.');
         }
         $this->migrateIsolatedDatabase();
     }
@@ -39,7 +39,7 @@ final class MedicineConcurrencyTest extends TestCase
         $data = ['name' => 'Medicamento concurrente', 'description' => 'Ficha de prueba',
             'supplier_id' => Supplier::factory()->create()->id, 'idempotency_key' => (string) Str::uuid()];
         $task = static function () use ($actorId, $data): string {
-            if (! app()->environment('testing') || DB::connection()->getDatabaseName() !== 'gam_medicines_test') {
+            if (! app()->environment('testing') || ! str_ends_with(DB::connection()->getDatabaseName(), '_testing')) {
                 throw new \RuntimeException('El proceso secundario debe usar la base de pruebas exclusiva.');
             }
 

@@ -42,7 +42,7 @@ docker compose -f compose.dev.yaml up -d --build
 
 ## Tests y Artisan
 
-La estrategia oficial de testing ejecuta PHPUnit dentro del contenedor `api`. PHPUnit usa `DB_HOST=postgres` y la base aislada `gam_test`; las credenciales se heredan del servicio PostgreSQL definido en Compose.
+La estrategia oficial de testing ejecuta PHPUnit dentro del contenedor `api`. PHPUnit usa PostgreSQL en `DB_HOST=postgres` y deriva la base aislada agregando `_testing` al `DB_DATABASE` normal del entorno. Con la configuración local actual, la base normal es `sga_backend` y la de testing es `sga_backend_testing`; las credenciales se heredan del servicio PostgreSQL definido en Compose.
 
 ```bash
 docker compose -f compose.dev.yaml exec -T \
@@ -50,7 +50,6 @@ docker compose -f compose.dev.yaml exec -T \
   -e DB_CONNECTION=pgsql \
   -e DB_HOST=postgres \
   -e DB_PORT=5432 \
-  -e DB_DATABASE=gam_test \
   -e CACHE_STORE=array \
   -e QUEUE_CONNECTION=sync \
   -e SESSION_DRIVER=array \
@@ -59,17 +58,35 @@ docker compose -f compose.dev.yaml exec -T \
   -e PULSE_ENABLED=false \
   -e TELESCOPE_ENABLED=false \
   -e NIGHTWATCH_ENABLED=false \
-  api vendor/bin/phpunit --configuration phpunit.xml
+  -e IDENTITY_PIN_PEPPER= \
+  api php artisan test --compact
 docker compose -f compose.dev.yaml exec api php artisan optimize:clear
 ```
 
-Las variables de testing se inyectan antes de iniciar PHP para que el bootstrap de Laravel no pueda tomar la base de desarrollo del contenedor.
+El bootstrap de PHPUnit conserva la conexión PostgreSQL y transforma el nombre normal configurado en `<DB_DATABASE>_testing`. Además, `Tests\TestCase` aborta antes de los traits de base de datos si `APP_ENV` no es `testing`, la conexión no es PostgreSQL o la base efectiva no termina en `_testing`.
 
-El init script de PostgreSQL crea `gam_test` únicamente cuando se inicializa el volumen por primera vez. Si el volumen ya existe y la base aún no fue creada, ejecutá una vez:
+Compose crea esa base automáticamente dentro de la instancia PostgreSQL existente mediante `postgres-test-database`; el servicio es idempotente y también cubre volúmenes ya inicializados. Para verificar la conexión efectiva:
 
 ```bash
-docker compose -f compose.dev.yaml exec -T postgres sh -lc 'psql -U "$POSTGRES_USER" -d postgres -c "CREATE DATABASE gam_test;"'
+docker compose -f compose.dev.yaml exec -T \
+  -e APP_ENV=testing \
+  -e DB_CONNECTION=pgsql \
+  -e DB_HOST=postgres \
+  -e DB_PORT=5432 \
+  -e DB_DATABASE=sga_backend_testing \
+  api php artisan config:show database.default
+docker compose -f compose.dev.yaml exec -T \
+  -e APP_ENV=testing \
+  -e DB_CONNECTION=pgsql \
+  -e DB_HOST=postgres \
+  -e DB_PORT=5432 \
+  -e DB_DATABASE=sga_backend_testing \
+  api php artisan config:show database.connections.pgsql.database
 ```
+
+La salida debe ser `pgsql` y `sga_backend_testing` (la base normal local es `sga_backend`; en otro entorno, sustituir ambos nombres por `<DB_DATABASE>` y `<DB_DATABASE>_testing`).
+
+Para la comprobación adicional con un pepper temporal no persistido, reemplazá el valor vacío por `-e IDENTITY_PIN_PEPPER=test-only-temporary-value`.
 
 No ejecutes `docker compose down -v`: elimina los volúmenes y los datos existentes.
 ## Datos de prueba locales

@@ -157,18 +157,32 @@ El seeder de producción usa el producto técnico protegido `Huevo` y una cuenta
 
 La cobertura del módulo está en `tests/Feature/Lots` y `tests/Unit/Lots`. Incluye validación HTTP, permisos, capacidad, metadatos del destinatario, traslados totales, compensaciones, idempotencia, versiones, fechas locales, stock, rollback por falla de auditoría y carga demo repetida.
 
-`LotsConcurrencyTest` usa procesos PHP independientes con PostgreSQL real: admisiones que compiten por un galpón, mortalidades con la misma versión y reintentos simultáneos. Se ejecuta únicamente si la conexión usa la base `gam_lots_test`; fuera de ella se omite para impedir una limpieza accidental de desarrollo.
+`LotsConcurrencyTest` usa procesos PHP independientes con PostgreSQL real: admisiones que compiten por un galpón, mortalidades con la misma versión y reintentos simultáneos. Se ejecuta únicamente si la conexión usa una base cuyo nombre termina en `_testing`; fuera de ella se omite para impedir una limpieza accidental de desarrollo.
 
-Crear esa base vacía una sola vez, usando las credenciales locales de PostgreSQL (el usuario predeterminado del compose es `gam`):
+Compose crea automáticamente la base `<DB_DATABASE>_testing` dentro de la instancia PostgreSQL existente:
 
 ```bash
-docker compose -f compose.dev.yaml exec -T postgres createdb -U gam gam_lots_test
+docker compose -f compose.dev.yaml up -d --build
 ```
 
-No ejecutar dos suites simultáneamente contra la misma base. El comando siguiente usa caché y sesiones en memoria para no compartir Redis con desarrollo:
+No ejecutar dos suites simultáneamente contra la misma base. El comando siguiente usa caché, cola y sesiones en memoria para no compartir Redis con desarrollo:
 
 ```bash
-docker compose -f compose.dev.yaml exec -T -e DB_HOST=postgres -e DB_DATABASE=gam_lots_test -e APP_ENV=testing -e CACHE_STORE=array -e SESSION_DRIVER=array -e QUEUE_CONNECTION=sync -e PULSE_ENABLED=false api php artisan test --compact tests/Feature/Lots tests/Unit/Lots
+docker compose -f compose.dev.yaml exec -T \
+  -e APP_ENV=testing \
+  -e DB_CONNECTION=pgsql \
+  -e DB_HOST=postgres \
+  -e DB_PORT=5432 \
+  -e CACHE_STORE=array \
+  -e QUEUE_CONNECTION=sync \
+  -e SESSION_DRIVER=array \
+  -e MAIL_MAILER=array \
+  -e BROADCAST_CONNECTION=null \
+  -e PULSE_ENABLED=false \
+  -e TELESCOPE_ENABLED=false \
+  -e NIGHTWATCH_ENABLED=false \
+  -e IDENTITY_PIN_PEPPER= \
+  api php artisan test --compact tests/Feature/Lots tests/Unit/Lots
 ```
 
 Para la regresión completa, usar los mismos argumentos y omitir las dos rutas de tests. Las pruebas de demo simulan el disco local para no escribir exportaciones en el almacenamiento normal.
@@ -184,7 +198,7 @@ Si la imagen no contiene Git, Pint debe recibir la lista exacta de archivos PHP 
 
 ### Resultados de esta entrega
 
-- Regresión completa sobre PostgreSQL en `gam_lots_test`: **151 pruebas aprobadas, 981 aserciones**, en 181,71 segundos. Incluye 65 casos del módulo y 86 casos existentes.
+- Regresión completa sobre PostgreSQL en `<DB_DATABASE>_testing`: **151 pruebas aprobadas, 981 aserciones**, en 181,71 segundos. Incluye 65 casos del módulo y 86 casos existentes.
 - Tres pruebas de concurrencia con procesos independientes aprobadas: competencia por capacidad, conflicto de versión y reintentos simultáneos idempotentes.
 - Contrato OpenAPI verificado mediante pruebas: YAML válido, referencias internas resueltas, correspondencia de las 28 rutas con Laravel y campos de los Resources públicos.
 - PHPStan/Larastan con `.phpstan-lots.neon`, nivel 5: sin errores en el módulo y las integraciones incluidas.

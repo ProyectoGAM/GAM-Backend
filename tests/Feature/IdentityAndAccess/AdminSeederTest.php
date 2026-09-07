@@ -61,7 +61,7 @@ final class AdminSeederTest extends TestCase
 
         // Acción 3: usa el token para consultar administración.
         $this->withToken($response->json('access_token'))
-            ->getJson('/administracion')
+            ->getJson('/administration')
             ->assertOk()
             ->assertJsonPath('user.email', config('auth.admin.email'));
     }

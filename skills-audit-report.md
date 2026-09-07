@@ -325,7 +325,7 @@ Hallazgos críticos:
 6. Pulse SKILL.md:15-23 comienza por composer require, vendor:publish y migrate aunque Pulse ya está declarado, configurado y migrado.
 7. El MCP de .mcp.json no puede iniciar en el host observado porque no hay php en PATH ni vendor/autoload.php.
 8. Infer conventions referencia pint.json, rector.php y phpstan.neon como si fueran archivos principales; en el repositorio solo existe .phpstan-lots.neon. La skill debe decir “si existe”.
-9. Los comandos de testing de las skills no reflejan el flujo oficial de README.md, que ejecuta PHPUnit dentro del servicio api con DB_DATABASE=gam_test.
+9. Los comandos de testing de las skills no reflejan el flujo oficial de README.md, que ejecuta PHPUnit dentro del servicio api con la base derivada `<DB_DATABASE>_testing`.
 
 Validaciones positivas:
 

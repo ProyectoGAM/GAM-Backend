@@ -35,7 +35,7 @@ class AuthorizationTest extends TestCase
         Sanctum::actingAs($admin, ['*']);
 
         // Acción: consulta el endpoint administrativo sin versión.
-        $this->getJson('/administracion')
+        $this->getJson('/administration')
             ->assertOk()
             ->assertJsonPath('user.email', $admin->email);
     }
@@ -47,7 +47,7 @@ class AuthorizationTest extends TestCase
         Sanctum::actingAs(User::factory()->create(), ['*']);
 
         // Acción: intenta acceder al área administrativa.
-        $this->getJson('/administracion')
+        $this->getJson('/administration')
             ->assertForbidden()
             ->assertJsonPath('message', 'No tienes autorización para realizar esta acción.');
     }
@@ -56,7 +56,7 @@ class AuthorizationTest extends TestCase
     public function test_admin_endpoint_returns_401_without_authentication(): void
     {
         // Acción: consulta el endpoint sin credenciales.
-        $this->getJson('/administracion')->assertUnauthorized();
+        $this->getJson('/administration')->assertUnauthorized();
     }
 
     // Flujo: asigna un permiso mediante un rol y verifica su herencia en la autorización.

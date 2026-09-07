@@ -32,7 +32,7 @@ final class ReportingEndpointTest extends TestCase
         Sanctum::actingAs($this->userWithPermissions(['reports.view', 'inventory.view']), ['*']);
 
         // Acción: consulta el catálogo público de fuentes.
-        $response = $this->getJson('/api/v1/reports/fuentes');
+        $response = $this->getJson('/api/v1/reports/sources');
 
         // Verificación: confirma que la fuente real de inventario está publicada.
         $response->assertOk()->assertJsonPath('data.0.key', 'inventory.stock-balances');
@@ -104,7 +104,7 @@ final class ReportingEndpointTest extends TestCase
         Sanctum::actingAs($this->userWithPermissions(['reports.view', 'inventory.view']), ['*']);
 
         // Acción: solicita la agrupación usada por el indicador de movimientos.
-        $response = $this->postJson('/api/v1/reports/inventory.movimientos/previews', [
+        $response = $this->postJson('/api/v1/reports/inventory.movements/previews', [
             'groupings' => ['day', 'type'],
             'metrics' => ['movement_count'],
             'page' => 1,
@@ -183,7 +183,7 @@ final class ReportingEndpointTest extends TestCase
         $token = $owner->createToken('download-test')->plainTextToken;
 
         // Acción 1: descarga el archivo usando la autenticación Sanctum.
-        $this->withToken($token)->get('/api/v1/report-exports/'.$export->getKey().'/descarga')
+        $this->withToken($token)->get('/api/v1/report-exports/'.$export->getKey().'/download')
             ->assertOk()
             ->assertHeader('Content-Disposition', 'attachment; filename=test.xlsx');
     }
@@ -241,10 +241,10 @@ final class ReportingEndpointTest extends TestCase
         $result = new ReportResultData(
             sourceKey: $source->key,
             definitionVersion: $source->definitionVersion,
-            columns: ['cantidad_disponible'],
-            rows: [['cantidad_disponible' => '48.000000'], ['cantidad_disponible' => '95.650000']],
+            columns: ['available_quantity'],
+            rows: [['available_quantity' => '48.000000'], ['available_quantity' => '95.650000']],
             aggregates: [],
-            units: ['cantidad_disponible' => 'base_unit'],
+            units: ['available_quantity' => 'base_unit'],
             currentPage: 1,
             perPage: 50,
             total: 2,

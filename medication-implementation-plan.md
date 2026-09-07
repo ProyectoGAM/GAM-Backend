@@ -76,9 +76,9 @@ La cobertura está en las clases MedicineEndpointTest, MedicineContractTest, Med
 
 Incluye alta, límites, errores localizados, autorización HTTP y de Action, nombres repetidos, normalización, claves por actor, replay después de modificar/desactivar referencias, rollback de auditoría, paginación, búsqueda literal, snapshots, ausencia de efectos ajenos, contrato HTTP real y seeder oficial.
 
-Para pruebas normales, usar la receta del [README](README.md) que inyecta las variables de testing antes de iniciar PHP, con DB_DATABASE=gam_test. Seleccionar las pruebas de endpoint, contrato y seeder.
+Para pruebas normales, usar la receta del [README](README.md), que ejecuta PHPUnit dentro de `api` y deriva `<DB_DATABASE>_testing` desde la base normal configurada. Seleccionar las pruebas de endpoint, contrato y seeder.
 
-Para concurrencia, crear una vez gam_medicines_test y ejecutar con las mismas variables de testing, sustituyendo DB_DATABASE por gam_medicines_test:
+Para concurrencia, usar la misma base `<DB_DATABASE>_testing`; el archivo de configuración separado conserva el grupo de concurrencia sin crear una segunda base:
 
     vendor/bin/phpunit --configuration phpunit.medicines-concurrency.xml
 
@@ -93,7 +93,7 @@ Formato: vendor/bin/pint --dirty --format agent. El contenedor actual no incluye
 Comprobaciones completadas el 2026-09-05:
 
 - 52 pruebas aprobadas, 826 aserciones: catálogo, contrato, demo y regresiones seleccionadas de Proveedores/Catálogos, Lotes, administrador y demo de mantenimiento.
-- Concurrencia ejecutada por separado en gam_medicines_test: 1 prueba aprobada, 4 aserciones; ambos procesos reciben la misma operación y queda una sola ficha auditada.
+- Concurrencia ejecutada por separado en la misma base `<DB_DATABASE>_testing`: 1 prueba aprobada, 4 aserciones; ambos procesos reciben la misma operación y queda una sola ficha auditada.
 - Pint aplicado a los 20 archivos PHP del cambio; la anotación final de Supplier también fue formateada.
 - Larastan, nivel 5 y configuración del catálogo: sin errores.
 - Revisión del diff sin problemas de espacios; preservada la modificación preexistente de la skill de testing.
