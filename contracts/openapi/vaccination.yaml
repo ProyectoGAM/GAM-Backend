@@ -1,0 +1,181 @@
+openapi: 3.1.0
+info:
+  title: API de vacunas GAM
+  version: 1.0.0
+  description: Catálogo administrativo de vacunas vinculadas a productos de inventario. Todas las operaciones requieren el rol ADMIN activo.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /vacunas:
+    get:
+      summary: Lista vacunas
+      description: Sólo ADMIN. Incluye vacunas activas e inactivas si no se envía el filtro estado; ordena por creación descendente e id descendente.
+      parameters:
+        - $ref: '#/components/parameters/Buscar'
+        - $ref: '#/components/parameters/Sku'
+        - $ref: '#/components/parameters/ProveedorId'
+        - $ref: '#/components/parameters/Estado'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200': { $ref: '#/components/responses/VaccineCollection' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    post:
+      summary: Registra o adopta una vacuna por SKU
+      description: >-
+        Sólo ADMIN. El SKU identifica el producto de inventario: si existe un producto activo de tipo vaccine con seguimiento de stock y sin ficha, se adopta sin cambiar su identidad ni movimientos; si no existe, se crea. El nombre es único global. Si unidad_base se omite, la alta nueva usa dose y la adopción hereda la unidad existente. El proveedor debe existir y estar activo, o devuelve 404 y 409 respectivamente. Idempotency-Key se normaliza como UUID en minúsculas junto con el comando: la primera ejecución devuelve 201 y la repetición del mismo comando devuelve 200 con la representación actual; la misma clave con otro comando devuelve 409.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateVaccine' }
+      responses:
+        '201': { description: Vacuna creada o producto adoptado por primera vez, content: { application/json: { schema: { $ref: '#/components/schemas/VaccineEnvelope' } } } }
+        '200': { description: Repetición idempotente con la representación actual de la vacuna, content: { application/json: { schema: { $ref: '#/components/schemas/VaccineEnvelope' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: Proveedor inexistente }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /vacunas/{vaccine}:
+    get:
+      summary: Consulta una vacuna por identificador público
+      parameters: [ { $ref: '#/components/parameters/VaccineId' } ]
+      responses:
+        '200': { $ref: '#/components/responses/Vaccine' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      summary: Actualiza los datos de catálogo de una vacuna
+      description: Sólo ADMIN. Permite nombre, descripción, detalles libres opcionales y proveedor. Una solicitud sin cambios efectivos devuelve 200 sin una nueva auditoría.
+      parameters: [ { $ref: '#/components/parameters/VaccineId' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateVaccine' }
+      responses:
+        '200': { $ref: '#/components/responses/Vaccine' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /vacunas/{vaccine}/estado:
+    patch:
+      summary: Activa o desactiva una vacuna sin eliminar su historial
+      description: Sólo ADMIN. La baja lógica devuelve 409 si existe algún saldo positivo. La reactivación está permitida; el historial y los movimientos se retienen, y los reversos de inventario requieren reactivar antes el producto.
+      parameters: [ { $ref: '#/components/parameters/VaccineId' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [estado]
+              properties:
+                estado: { type: string, enum: [active, inactive] }
+      responses:
+        '200': { $ref: '#/components/responses/Vaccine' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer }
+  parameters:
+    VaccineId: { name: vaccine, in: path, required: true, schema: { type: string, pattern: '^[0-9A-HJKMNP-TV-Z]{26}$' } }
+    Buscar: { name: buscar, in: query, schema: { type: string, minLength: 1, maxLength: 160 } }
+    Sku: { name: sku, in: query, schema: { type: string, minLength: 1, maxLength: 80 } }
+    ProveedorId: { name: proveedor_id, in: query, schema: { type: integer, minimum: 1, maximum: 9223372036854775807 } }
+    Estado: { name: estado, in: query, schema: { type: string, enum: [active, inactive] } }
+    Page: { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 100000, default: 1 } }
+    PerPage: { name: per_page, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+  schemas:
+    CreateVaccine:
+      type: object
+      additionalProperties: false
+      required: [sku, nombre, descripcion, proveedor_id]
+      properties:
+        sku: { type: string, minLength: 1, maxLength: 80, description: Identificador comercial único del producto. }
+        nombre: { type: string, minLength: 1, maxLength: 160, description: Nombre único global del producto. }
+        descripcion: { type: string, minLength: 1, maxLength: 5000 }
+        detalles: { type: [string, 'null'], maxLength: 5000, description: Texto libre opcional. }
+        proveedor_id: { type: integer, minimum: 1, maximum: 9223372036854775807 }
+        unidad_base: { type: [string, 'null'], enum: [unit, kg, g, l, ml, dose, null], description: Opcional; dose en alta nueva y heredada al adoptar. }
+    UpdateVaccine:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        nombre: { type: string, minLength: 1, maxLength: 160 }
+        descripcion: { type: string, minLength: 1, maxLength: 5000 }
+        detalles: { type: [string, 'null'], maxLength: 5000, description: Texto libre opcional. }
+        proveedor_id: { type: integer, minimum: 1, maximum: 9223372036854775807 }
+    Vaccine:
+      type: object
+      required: [id, sku, producto_id, unidad_base, estado, nombre, descripcion, detalles, proveedor, creado_por, creado_en, actualizado_en, operacion_id]
+      properties:
+        id: { type: string, pattern: '^[0-9A-HJKMNP-TV-Z]{26}$' }
+        sku: { type: string }
+        producto_id: { type: integer }
+        unidad_base: { type: string, enum: [unit, kg, g, l, ml, dose] }
+        estado: { type: string, enum: [active, inactive] }
+        nombre: { type: string }
+        descripcion: { type: string }
+        detalles: { type: [string, 'null'] }
+        proveedor:
+          type: object
+          required: [id, nombre, nombre_al_asociar]
+          properties:
+            id: { type: integer }
+            nombre: { type: string }
+            nombre_al_asociar: { type: string }
+        creado_por:
+          type: object
+          required: [id, nombre_al_crear]
+          properties:
+            id: { type: integer }
+            nombre_al_crear: { type: string }
+        creado_en: { type: string, format: date-time }
+        actualizado_en: { type: string, format: date-time }
+        operacion_id: { type: string, format: uuid }
+    VaccineEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Vaccine' }
+    Problem:
+      type: object
+      required: [title, status, detail]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+  responses:
+    Vaccine:
+      description: Vacuna
+      content: { application/json: { schema: { $ref: '#/components/schemas/VaccineEnvelope' } } }
+    VaccineCollection:
+      description: Colección paginada de vacunas
+      content: { application/json: { schema: { type: object, required: [data, links, meta], properties: { data: { type: array, items: { $ref: '#/components/schemas/Vaccine' } }, links: { type: object }, meta: { type: object } } } } }
+    Conflict:
+      description: Conflicto de negocio
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    ValidationError: { description: Entrada inválida }
+    Unauthorized: { description: Autenticación requerida }
+    Forbidden: { description: Acceso prohibido }
+    NotFound: { description: Recurso inexistente }

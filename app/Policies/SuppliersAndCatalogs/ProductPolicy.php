@@ -24,11 +24,19 @@ final readonly class ProductPolicy
 
     public function update(User $user, Product $product): bool
     {
+        if ($product->vaccine()->exists()) {
+            return ! $user->trashed() && $user->hasRole('admin');
+        }
+
         return $this->create($user);
     }
 
     public function changeStatus(User $user, Product $product): bool
     {
+        if ($product->vaccine()->exists()) {
+            return ! $user->trashed() && $user->hasRole('admin');
+        }
+
         return $this->create($user);
     }
 
