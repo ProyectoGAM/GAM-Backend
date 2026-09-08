@@ -13,9 +13,14 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 /**
+ * @property int $id
+ * @property string $sku
+ * @property string $name
+ * @property string $normalized_name
  * @property BaseUnit $base_unit
  * @property ProductKind $kind
  * @property ProductStatus $status
@@ -65,5 +70,11 @@ class Product extends Model
     public function movementLines(): HasMany
     {
         return $this->hasMany(InventoryMovementLine::class);
+    }
+
+    /** @return HasOne<Vaccine, $this> */
+    public function vaccine(): HasOne
+    {
+        return $this->hasOne(Vaccine::class);
     }
 }

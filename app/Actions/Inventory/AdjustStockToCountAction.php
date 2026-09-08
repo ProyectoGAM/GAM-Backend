@@ -8,6 +8,7 @@ use App\Exceptions\Inventory\InventoryConflict;
 use App\Models\Inventory\InventoryMovement;
 use App\Models\Inventory\StockBalance;
 use App\Models\Inventory\StockLocation;
+use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\User;
 use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
@@ -37,6 +38,8 @@ final readonly class AdjustStockToCountAction
         }
 
         return DB::transaction(function () use ($attributes, $actor): InventoryMovement {
+            $productIds = array_values(array_unique(array_map(static fn (array $line): int => (int) $line['product_id'], $attributes['lines'])));
+            Product::query()->whereIn('id', $productIds)->orderBy('id')->sharedLock()->get();
             $locationIds = array_values(array_unique(array_map(static fn (array $line): int => (int) $line['stock_location_id'], $attributes['lines'])));
             StockLocation::query()->whereIn('id', $locationIds)->orderBy('id')->lockForUpdate()->get();
             $keys = array_map(static fn (array $line): string => $line['product_id'].':'.$line['stock_location_id'], $attributes['lines']);

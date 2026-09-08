@@ -32,6 +32,7 @@ use Database\Seeders\FarmStructure\MaintenanceDemoSeeder;
 use Database\Seeders\Lots\EggProductionDemoSeeder;
 use Database\Seeders\Lots\LotsDemoSeeder;
 use Database\Seeders\SuppliersAndCatalogs\MedicineDemoSeeder;
+use Database\Seeders\SuppliersAndCatalogs\VaccineDemoSeeder;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -53,6 +54,7 @@ final class LocalDemoDataSeeder extends Seeder
         $suppliers = $this->seedSuppliers($localities);
         $this->call(MedicineDemoSeeder::class);
         $products = $this->seedProducts();
+        $this->call(VaccineDemoSeeder::class);
         $locations = $this->seedStockLocations($units);
 
         $this->seedBalances($products, $locations);

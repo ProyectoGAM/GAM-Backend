@@ -53,4 +53,10 @@ class Supplier extends Model
     {
         return $this->hasMany(InventoryMovement::class);
     }
+
+    /** @return HasMany<Vaccine, $this> */
+    public function vaccines(): HasMany
+    {
+        return $this->hasMany(Vaccine::class);
+    }
 }

@@ -11,8 +11,8 @@ use App\Models\Inventory\InventoryMovement;
 use App\Models\Inventory\InventoryMovementLine;
 use App\Models\Inventory\StockBalance;
 use App\Models\Inventory\StockLocation;
+use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\User;
-use App\Queries\SuppliersAndCatalogs\GetActiveProductQuery;
 use App\Queries\SuppliersAndCatalogs\GetActiveSupplierQuery;
 use App\ValueObjects\Inventory\InventoryQuantity;
 use Brick\Math\BigDecimal;
@@ -24,7 +24,6 @@ final readonly class RecordInventoryMovementAction
 {
     public function __construct(
         private AuditRecorder $auditRecorder,
-        private GetActiveProductQuery $getActiveProduct,
         private GetActiveSupplierQuery $getActiveSupplier,
     ) {}
 
@@ -49,27 +48,38 @@ final readonly class RecordInventoryMovementAction
                 }
 
                 $lineKeys = [];
-                $productData = [];
                 $locationIds = [];
                 $normalizedLines = [];
+                $productIds = [];
                 foreach ($command->lines as $line) {
                     $key = $line['product_id'].':'.$line['stock_location_id'];
                     if (isset($lineKeys[$key])) {
                         throw new InventoryConflict('No puedes repetir el mismo producto y ubicación en una operación.');
                     }
                     $lineKeys[$key] = true;
-                    $productData[$line['product_id']] ??= $this->getActiveProduct->execute($line['product_id']);
-                    if ($productData[$line['product_id']] === null || ! $productData[$line['product_id']]->stockTracked) {
+                    $productIds[$line['product_id']] = true;
+                }
+                $products = Product::query()
+                    ->whereIn('id', array_keys($productIds))
+                    ->orderBy('id')
+                    ->sharedLock()
+                    ->get()
+                    ->keyBy('id');
+
+                foreach ($command->lines as $line) {
+                    /** Bloquea los productos antes de consultar su estado y unidad. */
+                    $product = $products->get($line['product_id']);
+                    if ($product === null || $product->status->value !== 'active' || ! $product->stock_tracked) {
                         throw new InventoryConflict('El producto indicado no está activo o no controla stock.');
                     }
-                    if ($productData[$line['product_id']]->systemKey === 'generic_egg' && ! $command->eggAccountOperation) {
+                    if ($product->system_key === 'generic_egg' && ! $command->eggAccountOperation) {
                         throw new InventoryConflict('El producto técnico Huevo sólo puede moverse desde el módulo de stock de huevos.');
                     }
 
                     try {
                         $onHandDelta = InventoryQuantity::from(
                             (string) $line['on_hand_delta'],
-                            $productData[$line['product_id']]->baseUnit,
+                            $product->base_unit,
                         );
                     } catch (InvalidArgumentException $exception) {
                         throw new InventoryConflict($exception->getMessage(), previous: $exception);
@@ -83,7 +93,7 @@ final readonly class RecordInventoryMovementAction
                         ->where('product_id', $line['product_id'])
                         ->where('stock_location_id', $line['stock_location_id'])
                         ->exists();
-                    if ($command->eggAccountOperation && ($productData[$line['product_id']]->systemKey !== 'generic_egg' || ! $isEggAccount)) {
+                    if ($command->eggAccountOperation && ($product->system_key !== 'generic_egg' || ! $isEggAccount)) {
                         throw new InventoryConflict('La operación técnica sólo puede utilizar una cuenta válida de huevos.');
                     }
                     if ($isEggAccount && ! $command->eggAccountOperation) {
@@ -171,7 +181,7 @@ final readonly class RecordInventoryMovementAction
                         'inventory_movement_id' => $movement->getKey(),
                         'product_id' => $line['product_id'],
                         'stock_location_id' => $line['stock_location_id'],
-                        'unit' => $productData[$line['product_id']]->baseUnit->value,
+                        'unit' => $products->get($line['product_id'])->base_unit->value,
                         'on_hand_delta' => $line['on_hand_delta'],
                     ])->save();
                 }

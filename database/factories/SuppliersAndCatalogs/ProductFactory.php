@@ -29,4 +29,14 @@ class ProductFactory extends Factory
             'status' => ProductStatus::Active,
         ];
     }
+
+    public function vaccine(): static
+    {
+        return $this->state(fn (): array => [
+            'kind' => ProductKind::Vaccine,
+            'base_unit' => BaseUnit::Dose,
+            'stock_tracked' => true,
+            'status' => ProductStatus::Active,
+        ]);
+    }
 }

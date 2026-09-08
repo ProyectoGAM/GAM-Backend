@@ -33,6 +33,8 @@ use App\Http\Controllers\SuppliersAndCatalogs\ProductController;
 use App\Http\Controllers\SuppliersAndCatalogs\ProductStatusController;
 use App\Http\Controllers\SuppliersAndCatalogs\SupplierController;
 use App\Http\Controllers\SuppliersAndCatalogs\SupplierStatusController;
+use App\Http\Controllers\SuppliersAndCatalogs\VaccineController;
+use App\Http\Controllers\SuppliersAndCatalogs\VaccineStatusController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.v1.')->group(function (): void {
@@ -222,6 +224,11 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('/products', [ProductController::class, 'index'])->name('products.index');
         Route::get('/medicines', [MedicineController::class, 'index'])->name('medicines.index');
         Route::post('/medicines', [MedicineController::class, 'store'])->name('medicines.store');
+        Route::get('/vacunas', [VaccineController::class, 'index'])->name('vaccines.index');
+        Route::post('/vacunas', [VaccineController::class, 'store'])->name('vaccines.store');
+        Route::get('/vacunas/{vaccine}', [VaccineController::class, 'show'])->name('vaccines.show');
+        Route::patch('/vacunas/{vaccine}', [VaccineController::class, 'update'])->name('vaccines.update');
+        Route::patch('/vacunas/{vaccine}/estado', [VaccineStatusController::class, 'update'])->name('vaccines.status.update');
         Route::post('/products', [ProductController::class, 'store'])->name('products.store');
         Route::get('/products/{product}', [ProductController::class, 'show'])->name('products.show');
         Route::patch('/products/{product}', [ProductController::class, 'update'])->name('products.update');
