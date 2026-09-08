@@ -24,23 +24,28 @@ No se consultó ni modificó Notion durante esta entrega. Al sincronizar, mover 
 
 | Módulo / tarjeta Notion | Estado en código | Documentación fuente | Contrato | Trabajo restante |
 |---|---|---|---|---|
-| **06 — Manejo productivo y sanidad** | **Medicamentos implementados; módulo aún incompleto** | [medication-implementation-plan.md](medication-implementation-plan.md) | [medication.yaml](contracts/openapi/medication.yaml) | Completar las demás secciones del módulo; mantener la tarjeta en implementación |
+| **06 — Manejo productivo y sanidad** | **Medicamentos y Vacunas implementados; módulo aún incompleto** | [medication-implementation-plan.md](medication-implementation-plan.md) y [vaccination-implementation.md](vaccination-implementation.md) | [medication.yaml](contracts/openapi/medication.yaml) y [vaccination.yaml](contracts/openapi/vaccination.yaml) | Completar Plan de Manejo, aplicaciones y las demás secciones; mantener la tarjeta en implementación |
 
 ## Módulo 06 — Manejo productivo y sanidad
 
-**Medicamentos está implementado en su alcance actual de catálogo. El módulo completo todavía no está listo: faltan las demás secciones de manejo productivo y sanidad.** Este avance no debe registrarse como un módulo terminado pendiente de mover.
+**Medicamentos y Vacunas están implementados en su alcance actual de catálogo. El módulo completo todavía no está listo: faltan Plan de Manejo, aplicaciones y las demás secciones de manejo productivo y sanidad.** Este avance no debe registrarse como un módulo terminado pendiente de mover.
 
 Disponible en código:
 
 - Alta y consulta paginada de medicamentos mediante `/api/v1/medicines`, exclusivamente para administradores activos.
 - Nombre, descripción y proveedor; se permiten nombres repetidos y se conserva la identidad individual de cada ficha.
 - Idempotencia, auditoría transaccional, búsqueda, filtro por proveedor y datos demo locales.
+- CRUD backend de vacunas mediante `/api/v1/vacunas`, exclusivamente para administradores activos.
+- SKU y nombre único, descripción, detalles opcionales, proveedor y baja lógica con conflicto cuando existe stock positivo.
+- Relación 1:1 con el Product de Inventario, unidad `dose` predeterminada, saldos y movimientos compartidos, idempotencia, auditoría atómica y locks de concurrencia.
 
-La asignación a un futuro plan de manejo relacionado con un lote y las fechas de aplicación quedan diferidas hasta definir ese dominio. Las dosis son una posible ampliación, todavía no confirmada. El catálogo no registra intervenciones ni modifica stock.
+La asignación a un futuro Plan de Manejo relacionado con un lote, las fechas de aplicación y el consumo ocasionado por una vacunación quedan diferidos hasta definir ese dominio. Los catálogos no registran intervenciones ni modifican stock por sí mismos.
 
-Las demás secciones, como vacunación, pesajes y otros manejos, quedan fuera de esta entrega y requieren su propia definición e implementación. La mortalidad ya pertenece a Lotes y no debe duplicarse aquí. La ubicación técnica del catálogo es `SuppliersAndCatalogs`; esta tarjeta registra su aporte al área funcional de la hoja de ruta.
+Las demás secciones, como Plan de Manejo, aplicaciones, pesajes y otros manejos, quedan fuera de esta entrega y requieren su propia definición e implementación. La mortalidad ya pertenece a Lotes y no debe duplicarse aquí. La ubicación técnica de ambos catálogos es `SuppliersAndCatalogs`; esta tarjeta registra su aporte al área funcional de la hoja de ruta.
 
 Validación automatizada registrada el 2026-09-05: 52 pruebas aprobadas con 826 aserciones, incluyendo regresiones seleccionadas, y una prueba de concurrencia separada con 4 aserciones. La aceptación manual del catálogo sigue pendiente y puede documentarse por separado, sin cambiar el estado incompleto del módulo.
+
+Validación de Vacunas registrada el 2026-09-08: 16 pruebas específicas aprobadas con 107 aserciones; suite completa aprobada con variables de testing válidas, 271 pruebas y 1803 aserciones; Larastan, Pint y `git diff --check` correctos. La guía [vaccination-implementation.md](vaccination-implementation.md) contiene el procedimiento de Do Test y las observaciones técnicas pendientes de autenticación compartida, validación interna y cobertura. La tarjeta debe permanecer en implementación hasta resolverlas y completar la aceptación manual.
 
 ## Módulo 05 — Lotes y cría
 
