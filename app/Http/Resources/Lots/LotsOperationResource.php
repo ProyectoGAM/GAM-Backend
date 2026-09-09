@@ -28,11 +28,16 @@ final class LotsOperationResource extends JsonResource
             'mortality' => ['mortality', MortalityResource::class],
             'collection' => ['collection', EggCollectionResource::class],
             'catalog' => ['catalog', LotsCatalogResource::class],
+            'weighing' => ['weighing', WeighingResource::class],
+            'settings' => ['settings', WeighingSettingsResource::class],
         ];
         foreach ($resources as $key => [$public, $resource]) {
             if (isset($operation->result[$key])) {
                 $result[$public] = (new $resource($operation->result[$key]))->resolve($request);
             }
+        }
+        if (array_key_exists('warnings', $operation->result)) {
+            $result['warnings'] = $operation->result['warnings'];
         }
 
         return $result;

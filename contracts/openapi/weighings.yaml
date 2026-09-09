@@ -1,0 +1,662 @@
+openapi: "3.1.0"
+info:
+  title: "06 — Pesajes"
+  version: "1.0.0"
+  description: "Registro, corrección, distribución y evolución histórica de pesajes de lotes. Las rutas públicas y los mensajes descriptivos están en español; los identificadores estables permanecen en inglés."
+servers:
+  - url: "/api/v1"
+security:
+  - bearerAuth: []
+  - sanctumCookie: []
+  - bearerAuth: []
+    sharedDeviceHeader: []
+    sharedSessionHeader: []
+  - sanctumCookie: []
+    sharedDeviceCookie: []
+    sharedSessionHeader: []
+tags:
+  - name: "Pesajes"
+    description: "Capturas individuales o grupales, correcciones y consultas históricas."
+  - name: "Configuración de pesajes"
+    description: "Rangos globales de referencia administrados con control optimista."
+paths:
+  "/pesajes":
+    get:
+      tags: ["Pesajes"]
+      operationId: listWeighings
+      summary: "Lista pesajes ordenados del más reciente al más antiguo"
+      description: "Permiso requerido: weighings.view."
+      x-permission: weighings.view
+      parameters:
+        - "$ref": "#/components/parameters/FlockFilter"
+        - "$ref": "#/components/parameters/ModeFilter"
+        - "$ref": "#/components/parameters/From"
+        - "$ref": "#/components/parameters/To"
+        - "$ref": "#/components/parameters/Page"
+        - "$ref": "#/components/parameters/PerPage"
+      responses:
+        "200":
+          description: "Pesajes paginados."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PaginatedWeighings"
+        "401": { "$ref": "#/components/responses/Unauthenticated" }
+        "403": { "$ref": "#/components/responses/Forbidden" }
+        "422": { "$ref": "#/components/responses/InvalidInput" }
+    post:
+      tags: ["Pesajes"]
+      operationId: recordWeighing
+      summary: "Registra un pesaje individual o grupal"
+      description: "Permiso requerido: weighings.manage. Los valores fuera de rango requieren confirmación explícita y el primer conflicto no persiste efectos."
+      security:
+        - bearerAuth: []
+        - sanctumCookie: []
+          csrf: []
+        - bearerAuth: []
+          sharedDeviceHeader: []
+          sharedSessionHeader: []
+        - sanctumCookie: []
+          sharedDeviceCookie: []
+          sharedSessionHeader: []
+          csrf: []
+      x-permission: weighings.manage
+      parameters:
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/RecordWeighing"
+      responses:
+        "201":
+          description: "Pesaje registrado."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401": { "$ref": "#/components/responses/Unauthenticated" }
+        "403": { "$ref": "#/components/responses/Forbidden" }
+        "409": { "$ref": "#/components/responses/Conflict" }
+        "422": { "$ref": "#/components/responses/InvalidInput" }
+  "/pesajes/evolucion":
+    get:
+      tags: ["Pesajes"]
+      operationId: getWeighingEvolution
+      summary: "Obtiene un punto por pesaje para la evolución de un lote"
+      description: "Requiere flock_id. No agrega, interpola ni suaviza los puntos. Si la consulta supera 1000 pesajes, debes indicar date_from y date_to para acotar las fechas."
+      x-permission: weighings.view
+      parameters:
+        - "$ref": "#/components/parameters/RequiredFlockFilter"
+        - "$ref": "#/components/parameters/ModeFilter"
+        - "$ref": "#/components/parameters/From"
+        - "$ref": "#/components/parameters/To"
+        - "$ref": "#/components/parameters/OutputUnit"
+      responses:
+        "200":
+          description: "Evolución histórica."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/EvolutionResponse"
+        "401": { "$ref": "#/components/responses/Unauthenticated" }
+        "403": { "$ref": "#/components/responses/Forbidden" }
+        "422": { "$ref": "#/components/responses/InvalidInput" }
+  "/pesajes/{pesaje}":
+    get:
+      tags: ["Pesajes"]
+      operationId: showWeighing
+      summary: "Consulta un pesaje"
+      x-permission: weighings.view
+      parameters:
+        - "$ref": "#/components/parameters/Weighing"
+      responses:
+        "200":
+          description: "Pesaje."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/WeighingResponse"
+        "401": { "$ref": "#/components/responses/Unauthenticated" }
+        "403": { "$ref": "#/components/responses/Forbidden" }
+        "404": { "$ref": "#/components/responses/NotFound" }
+    patch:
+      tags: ["Pesajes"]
+      operationId: correctWeighing
+      summary: "Corrige un pesaje conservando auditoría antes/después"
+      security:
+        - bearerAuth: []
+        - sanctumCookie: []
+          csrf: []
+        - bearerAuth: []
+          sharedDeviceHeader: []
+          sharedSessionHeader: []
+        - sanctumCookie: []
+          sharedDeviceCookie: []
+          sharedSessionHeader: []
+          csrf: []
+      x-permission: weighings.manage
+      parameters:
+        - "$ref": "#/components/parameters/Weighing"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/CorrectWeighing"
+      responses:
+        "200":
+          description: "Pesaje corregido."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401": { "$ref": "#/components/responses/Unauthenticated" }
+        "403": { "$ref": "#/components/responses/Forbidden" }
+        "404": { "$ref": "#/components/responses/NotFound" }
+        "409": { "$ref": "#/components/responses/Conflict" }
+        "422": { "$ref": "#/components/responses/InvalidInput" }
+  "/pesajes/{pesaje}/distribucion":
+    get:
+      tags: ["Pesajes"]
+      operationId: getWeighingDistribution
+      summary: "Calcula histograma y campana para un pesaje individual"
+      description: "Los pesajes grupales devuelven available=false y reason=group_mode."
+      x-permission: weighings.view
+      parameters:
+        - "$ref": "#/components/parameters/Weighing"
+        - "$ref": "#/components/parameters/OutputUnit"
+      responses:
+        "200":
+          description: "Distribución calculada."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/DistributionResponse"
+        "401": { "$ref": "#/components/responses/Unauthenticated" }
+        "403": { "$ref": "#/components/responses/Forbidden" }
+        "404": { "$ref": "#/components/responses/NotFound" }
+  "/configuracion-pesajes":
+    get:
+      tags: ["Configuración de pesajes"]
+      operationId: showWeighingSettings
+      summary: "Consulta la configuración global de rangos"
+      x-permission: weighing-settings.manage
+      responses:
+        "200":
+          description: "Configuración o null cuando todavía no existe."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/SettingsResponse"
+        "401": { "$ref": "#/components/responses/Unauthenticated" }
+        "403": { "$ref": "#/components/responses/Forbidden" }
+    put:
+      tags: ["Configuración de pesajes"]
+      operationId: saveWeighingSettings
+      summary: "Crea o actualiza los rangos globales"
+      security:
+        - bearerAuth: []
+        - sanctumCookie: []
+          csrf: []
+        - bearerAuth: []
+          sharedDeviceHeader: []
+          sharedSessionHeader: []
+        - sanctumCookie: []
+          sharedDeviceCookie: []
+          sharedSessionHeader: []
+          csrf: []
+      x-permission: weighing-settings.manage
+      parameters:
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/UpdateSettings"
+      responses:
+        "200":
+          description: "Configuración guardada."
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/OperationResponse"
+        "401": { "$ref": "#/components/responses/Unauthenticated" }
+        "403": { "$ref": "#/components/responses/Forbidden" }
+        "409": { "$ref": "#/components/responses/Conflict" }
+        "422": { "$ref": "#/components/responses/InvalidInput" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    sanctumCookie:
+      type: apiKey
+      in: cookie
+      name: gam_session
+    sharedDeviceHeader:
+      type: apiKey
+      in: header
+      name: X-Shared-Device-Token
+    sharedDeviceCookie:
+      type: apiKey
+      in: cookie
+      name: gam_shared_device
+    sharedSessionHeader:
+      type: apiKey
+      in: header
+      name: X-GAM-Session
+    csrf:
+      type: apiKey
+      in: header
+      name: X-XSRF-TOKEN
+    IdempotencyKey:
+      type: apiKey
+      in: header
+      name: Idempotency-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+    Weighing:
+      name: pesaje
+      in: path
+      required: true
+      schema: { type: string, pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$" }
+    FlockFilter:
+      name: flock_id
+      in: query
+      required: false
+      schema: { type: string }
+    RequiredFlockFilter:
+      name: flock_id
+      in: query
+      required: true
+      schema: { type: string }
+    ModeFilter:
+      name: mode
+      in: query
+      required: false
+      schema: { type: string, enum: [individual, group] }
+    From:
+      name: date_from
+      in: query
+      required: false
+      schema: { type: string, format: date }
+    To:
+      name: date_to
+      in: query
+      required: false
+      schema: { type: string, format: date }
+    Page:
+      name: page
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1 }
+    PerPage:
+      name: per_page
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100 }
+    OutputUnit:
+      name: unit
+      in: query
+      required: false
+      schema: { type: string, enum: [g, kg], default: g }
+  responses:
+    Unauthenticated:
+      description: "No autenticado."
+      content: { application/problem+json: { schema: { "$ref": "#/components/schemas/Problem" } } }
+    Forbidden:
+      description: "Acceso prohibido."
+      content: { application/problem+json: { schema: { "$ref": "#/components/schemas/Problem" } } }
+    NotFound:
+      description: "Recurso no encontrado."
+      content: { application/problem+json: { schema: { "$ref": "#/components/schemas/Problem" } } }
+    InvalidInput:
+      description: "Datos inválidos."
+      content: { application/problem+json: { schema: { "$ref": "#/components/schemas/Problem" } } }
+    Conflict:
+      description: "Conflicto de pesajes."
+      content: { application/problem+json: { schema: { "$ref": "#/components/schemas/Problem" } } }
+  schemas:
+    DecimalGrams:
+      type: string
+      pattern: "^(?=.*[1-9])(?:0|[1-9][0-9]{0,12})(?:\\.[0-9])?$"
+      description: "Gramos positivos: hasta 13 dígitos enteros y un decimal."
+    DecimalKilograms:
+      type: string
+      pattern: "^(?=.*[1-9])(?:0|[1-9][0-9]{0,9})(?:\\.[0-9]{1,4})?$"
+      description: "Kilogramos positivos: hasta 10 dígitos enteros y cuatro decimales."
+    RecordWeighing:
+      oneOf:
+        - "$ref": "#/components/schemas/RecordWeighingGrams"
+        - "$ref": "#/components/schemas/RecordWeighingKilograms"
+      discriminator:
+        propertyName: unit
+        mapping:
+          g: "#/components/schemas/RecordWeighingGrams"
+          kg: "#/components/schemas/RecordWeighingKilograms"
+    RecordWeighingGrams:
+      type: object
+      additionalProperties: false
+      required: [flock_id, mode, unit, measurements]
+      properties:
+        id: { type: string }
+        flock_id: { type: string }
+        mode: { type: string, enum: [individual, group] }
+        unit: { type: string, enum: [g] }
+        occurred_at: { type: string, format: date-time }
+        notes: { type: [string, "null"], maxLength: 5000 }
+        confirm_out_of_range: { type: boolean }
+        measurements:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            oneOf:
+              - "$ref": "#/components/schemas/IndividualMeasurementGrams"
+              - "$ref": "#/components/schemas/GroupMeasurementGrams"
+    RecordWeighingKilograms:
+      type: object
+      additionalProperties: false
+      required: [flock_id, mode, unit, measurements]
+      properties:
+        id: { type: string }
+        flock_id: { type: string }
+        mode: { type: string, enum: [individual, group] }
+        unit: { type: string, enum: [kg] }
+        occurred_at: { type: string, format: date-time }
+        notes: { type: [string, "null"], maxLength: 5000 }
+        confirm_out_of_range: { type: boolean }
+        measurements:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            oneOf:
+              - "$ref": "#/components/schemas/IndividualMeasurementKilograms"
+              - "$ref": "#/components/schemas/GroupMeasurementKilograms"
+    IndividualMeasurementGrams:
+      type: object
+      additionalProperties: false
+      required: [weight]
+      properties:
+        weight: { "$ref": "#/components/schemas/DecimalGrams" }
+    GroupMeasurementGrams:
+      type: object
+      additionalProperties: false
+      required: [total_weight, bird_count]
+      properties:
+        total_weight: { "$ref": "#/components/schemas/DecimalGrams" }
+        bird_count: { type: integer, minimum: 1 }
+    IndividualMeasurementKilograms:
+      type: object
+      additionalProperties: false
+      required: [weight]
+      properties:
+        weight: { "$ref": "#/components/schemas/DecimalKilograms" }
+    GroupMeasurementKilograms:
+      type: object
+      additionalProperties: false
+      required: [total_weight, bird_count]
+      properties:
+        total_weight: { "$ref": "#/components/schemas/DecimalKilograms" }
+        bird_count: { type: integer, minimum: 1 }
+    CorrectWeighing:
+      oneOf:
+        - "$ref": "#/components/schemas/CorrectWeighingGrams"
+        - "$ref": "#/components/schemas/CorrectWeighingKilograms"
+        - "$ref": "#/components/schemas/CorrectWeighingInheritedUnit"
+      description: "Con unit explícita, las mediciones deben usar el formato de esa unidad. Si unit se omite, el servidor conserva la unidad capturada del pesaje y valida las mediciones con esa unidad; como el contrato no conoce ese valor histórico, la variante heredada acepta el formato de gramos o kilogramos."
+    CorrectWeighingGrams:
+      type: object
+      additionalProperties: false
+      required: [version, correction_reason, unit]
+      properties:
+        version: { type: integer, minimum: 1 }
+        correction_reason: { type: string, minLength: 1, maxLength: 500 }
+        flock_id: { type: string }
+        mode: { type: string, enum: [individual, group] }
+        unit: { type: string, enum: [g] }
+        occurred_at: { type: string, format: date-time }
+        notes: { type: [string, "null"], maxLength: 5000 }
+        confirm_out_of_range: { type: boolean }
+        measurements:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            oneOf:
+              - "$ref": "#/components/schemas/IndividualMeasurementGrams"
+              - "$ref": "#/components/schemas/GroupMeasurementGrams"
+    CorrectWeighingKilograms:
+      type: object
+      additionalProperties: false
+      required: [version, correction_reason, unit]
+      properties:
+        version: { type: integer, minimum: 1 }
+        correction_reason: { type: string, minLength: 1, maxLength: 500 }
+        flock_id: { type: string }
+        mode: { type: string, enum: [individual, group] }
+        unit: { type: string, enum: [kg] }
+        occurred_at: { type: string, format: date-time }
+        notes: { type: [string, "null"], maxLength: 5000 }
+        confirm_out_of_range: { type: boolean }
+        measurements:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            oneOf:
+              - "$ref": "#/components/schemas/IndividualMeasurementKilograms"
+              - "$ref": "#/components/schemas/GroupMeasurementKilograms"
+    CorrectWeighingInheritedUnit:
+      type: object
+      additionalProperties: false
+      required: [version, correction_reason]
+      description: "No incluye unit: el servidor hereda la unidad capturada del pesaje. Las mediciones se muestran con cualquier formato decimal compatible porque la unidad efectiva sólo se conoce al resolver el pesaje; después de heredarla, el servidor aplica exclusivamente la validación de gramos o kilogramos correspondiente."
+      properties:
+        version: { type: integer, minimum: 1 }
+        correction_reason: { type: string, minLength: 1, maxLength: 500 }
+        flock_id: { type: string }
+        mode: { type: string, enum: [individual, group] }
+        occurred_at: { type: string, format: date-time }
+        notes: { type: [string, "null"], maxLength: 5000 }
+        confirm_out_of_range: { type: boolean }
+        measurements:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            anyOf:
+              - "$ref": "#/components/schemas/IndividualMeasurementGrams"
+              - "$ref": "#/components/schemas/GroupMeasurementGrams"
+              - "$ref": "#/components/schemas/IndividualMeasurementKilograms"
+              - "$ref": "#/components/schemas/GroupMeasurementKilograms"
+    UpdateSettings:
+      oneOf:
+        - "$ref": "#/components/schemas/UpdateSettingsGrams"
+        - "$ref": "#/components/schemas/UpdateSettingsKilograms"
+      discriminator:
+        propertyName: unit
+        mapping:
+          g: "#/components/schemas/UpdateSettingsGrams"
+          kg: "#/components/schemas/UpdateSettingsKilograms"
+    UpdateSettingsGrams:
+      type: object
+      additionalProperties: false
+      required: [adult_from_week, unit, chick_min_weight, chick_max_weight, adult_min_weight, adult_max_weight]
+      properties:
+        version: { type: integer, minimum: 1 }
+        adult_from_week: { type: integer, minimum: 1 }
+        unit: { type: string, enum: [g] }
+        chick_min_weight: { "$ref": "#/components/schemas/DecimalGrams" }
+        chick_max_weight: { "$ref": "#/components/schemas/DecimalGrams" }
+        adult_min_weight: { "$ref": "#/components/schemas/DecimalGrams" }
+        adult_max_weight: { "$ref": "#/components/schemas/DecimalGrams" }
+    UpdateSettingsKilograms:
+      type: object
+      additionalProperties: false
+      required: [adult_from_week, unit, chick_min_weight, chick_max_weight, adult_min_weight, adult_max_weight]
+      properties:
+        version: { type: integer, minimum: 1 }
+        adult_from_week: { type: integer, minimum: 1 }
+        unit: { type: string, enum: [kg] }
+        chick_min_weight: { "$ref": "#/components/schemas/DecimalKilograms" }
+        chick_max_weight: { "$ref": "#/components/schemas/DecimalKilograms" }
+        adult_min_weight: { "$ref": "#/components/schemas/DecimalKilograms" }
+        adult_max_weight: { "$ref": "#/components/schemas/DecimalKilograms" }
+    Measurement:
+      type: object
+      additionalProperties: false
+      required: [position, weight_g, total_weight_g, bird_count, average_weight_g, outside_expected_range]
+      properties:
+        position: { type: integer }
+        weight_g: { type: [string, "null"] }
+        total_weight_g: { type: [string, "null"] }
+        bird_count: { type: [integer, "null"] }
+        average_weight_g: { type: [string, "null"] }
+        outside_expected_range: { type: boolean }
+    Weighing:
+      type: object
+      additionalProperties: false
+      required: [id, flock_id, poultry_house_id, production_unit_id, mode, occurred_at, unit, captured_unit, notes, stage, expected_range, reference, represented_bird_count, total_weight_g, average_weight_g, total_weight, average_weight, outside_expected_range, version, created_by, measurements]
+      properties:
+        id: { type: string }
+        flock_id: { type: string }
+        poultry_house_id: { type: integer }
+        production_unit_id: { type: integer }
+        mode: { type: string, enum: [individual, group] }
+        occurred_at: { type: string, format: date-time }
+        unit: { type: string, enum: [g, kg] }
+        captured_unit: { type: string, enum: [g, kg] }
+        notes: { type: [string, "null"] }
+        stage: { type: [string, "null"], enum: [chick, adult, "null"] }
+        expected_range: { type: [object, "null"] }
+        reference: { type: [object, "null"] }
+        represented_bird_count: { type: integer }
+        total_weight_g: { type: string }
+        average_weight_g: { type: string }
+        total_weight: { type: object }
+        average_weight: { type: object }
+        outside_expected_range: { type: boolean }
+        version: { type: integer }
+        created_by: { type: [integer, "null"] }
+        measurements:
+          type: array
+          items: { "$ref": "#/components/schemas/Measurement" }
+    ReferenceSettings:
+      type: object
+      additionalProperties: false
+      required: [adult_from_week, chick_min_weight_g, chick_max_weight_g, adult_min_weight_g, adult_max_weight_g, unit, captured_unit, version]
+      properties:
+        adult_from_week: { type: integer }
+        chick_min_weight_g: { type: string }
+        chick_max_weight_g: { type: string }
+        adult_min_weight_g: { type: string }
+        adult_max_weight_g: { type: string }
+        unit: { type: string, enum: [g, kg] }
+        captured_unit: { type: string, enum: [g, kg] }
+        version: { type: integer }
+    Operation:
+      type: object
+      additionalProperties: true
+      required: [operation_id]
+      properties:
+        operation_id: { type: string, format: uuid }
+        warnings:
+          type: array
+          items: { "$ref": "#/components/schemas/Warning" }
+    Warning:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code: { type: string, enum: [WEIGHING_REFERENCE_UNAVAILABLE] }
+        message: { type: string }
+    Problem:
+      type: object
+      additionalProperties: true
+      required: [type, title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        detail: { type: string }
+        message: { type: string }
+        meta: { type: object }
+    PaginatedWeighings:
+      type: object
+      required: [data, links, meta]
+      properties:
+        data: { type: array, items: { "$ref": "#/components/schemas/Weighing" } }
+        links: { type: object }
+        meta: { type: object }
+    WeighingResponse:
+      type: object
+      required: [data]
+      properties: { data: { "$ref": "#/components/schemas/Weighing" } }
+    SettingsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          oneOf:
+            - "$ref": "#/components/schemas/ReferenceSettings"
+            - type: "null"
+    OperationResponse:
+      type: object
+      required: [data]
+      properties: { data: { "$ref": "#/components/schemas/Operation" } }
+    EvolutionResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { "$ref": "#/components/schemas/EvolutionPoint" }
+    EvolutionPoint:
+      type: object
+      required: [id, date, mode, represented_bird_count, average_weight, average_weight_g, unit, outside_expected_range]
+      properties:
+        id: { type: string }
+        date: { type: string, format: date-time }
+        mode: { type: string }
+        represented_bird_count: { type: integer }
+        average_weight: { type: object }
+        average_weight_g: { type: string }
+        unit: { type: string }
+        outside_expected_range: { type: boolean }
+    DistributionResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          description: "mean, sample_stddev y los límites de bins y curve.x usan unit. curve.y es densidad en esa unidad y cada punto declara y_unit como 1/g o 1/kg."
+          required: [available, reason, unit, n, mean, sample_stddev, bins, curve]
+          properties:
+            available: { type: boolean }
+            reason: { type: [string, "null"] }
+            unit: { type: string }
+            n: { type: [integer, "null"] }
+            mean: { type: [string, "null"] }
+            sample_stddev: { type: [string, "null"] }
+            bins: { type: array }
+            curve:
+              type: [array, "null"]
+              items:
+                type: object
+                additionalProperties: false
+                required: [x, y, y_unit]
+                properties:
+                  x: { type: string }
+                  y: { type: string }
+                  y_unit: { type: string, enum: ["1/g", "1/kg"] }

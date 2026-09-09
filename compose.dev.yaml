@@ -298,6 +298,7 @@ services:
       URLS: >-
         [{"url":"/docs/openapi/authentication.yaml","name":"Autenticación"},
          {"url":"/docs/openapi/lots.yaml","name":"Lotes y producción de huevos"},
+         {"url":"/docs/openapi/weighings.yaml","name":"Pesajes"},
          {"url":"/docs/openapi/maintenance.yaml","name":"Mantenimientos"},
          {"url":"/docs/openapi/medication.yaml","name":"Medicamentos"},
          {"url":"/docs/openapi/vaccination.yaml","name":"Vacunas"},

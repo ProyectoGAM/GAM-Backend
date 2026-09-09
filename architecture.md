@@ -422,18 +422,24 @@ La auditoría es transversal y no necesita convertirse en un módulo arquitectó
 
 ## 17. Autenticación
 
-La API utiliza Laravel Sanctum con Personal Access Tokens.
+La API utiliza Laravel Sanctum con canales de autenticación separados según el tipo de cliente.
+
+Las sesiones personales web usan cookies stateful y protección CSRF. Los clientes personales nativos usan Personal Access Tokens Bearer con expiración y revocación:
 
 ```http
 Authorization: Bearer <token>
 ```
 
-Los tokens deben poder:
+Los dispositivos compartidos usan una credencial independiente de la sesión personal. En clientes nativos se presenta mediante `X-Shared-Device-Token`; en web se conserva en la cookie HttpOnly `gam_shared_device`. Una sesión de empleado compartida exige además su `auth_sessions` vigente, `X-GAM-Session`, la generación actual del dispositivo y los permisos funcionales del actor. El transporte de la credencial debe coincidir con el transporte de la sesión.
+
+Los tokens y sesiones deben poder:
 
 * expirar;
 * revocarse;
 * asociarse al usuario;
 * limitarse mediante abilities cuando sea necesario.
+
+El rol o modo conservado por un frontend nunca constituye evidencia de autorización. Las credenciales, contraseñas, PIN, peppers, tokens y secretos de dispositivo no se registran en logs ni auditoría.
 
 ## 18. Autorización
 

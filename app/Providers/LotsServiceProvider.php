@@ -9,11 +9,15 @@ use App\Models\Lots\EggCollection;
 use App\Models\Lots\Flock;
 use App\Models\Lots\MortalityCategory;
 use App\Models\Lots\MortalityRecord;
+use App\Models\Lots\Weighing;
+use App\Models\Lots\WeighingReferenceSettings;
 use App\Policies\Lots\BreedPolicy;
 use App\Policies\Lots\EggCollectionPolicy;
 use App\Policies\Lots\FlockPolicy;
 use App\Policies\Lots\MortalityCategoryPolicy;
 use App\Policies\Lots\MortalityRecordPolicy;
+use App\Policies\Lots\WeighingPolicy;
+use App\Policies\Lots\WeighingReferenceSettingsPolicy;
 use App\Services\Lots\LotsPoultryHouseOccupancyProvider;
 use App\Services\SystemClock;
 use Illuminate\Support\Facades\Gate;
@@ -34,5 +38,7 @@ final class LotsServiceProvider extends ServiceProvider
         Gate::policy(MortalityCategory::class, MortalityCategoryPolicy::class);
         Gate::policy(MortalityRecord::class, MortalityRecordPolicy::class);
         Gate::policy(EggCollection::class, EggCollectionPolicy::class);
+        Gate::policy(Weighing::class, WeighingPolicy::class);
+        Gate::policy(WeighingReferenceSettings::class, WeighingReferenceSettingsPolicy::class);
     }
 }

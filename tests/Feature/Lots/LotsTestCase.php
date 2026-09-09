@@ -5,6 +5,7 @@ namespace Tests\Feature\Lots;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\Lots\Breed;
 use App\Models\Lots\Flock;
+use App\Models\Lots\FlockMovement;
 use App\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Str;
@@ -36,6 +37,27 @@ abstract class LotsTestCase extends TestCase
             'breed_id' => $breed?->id ?? Breed::factory(),
             'poultry_house_id' => $house?->id ?? PoultryHouse::factory(),
         ]);
+    }
+
+    protected function flockWithHistory(int $quantity = 100, ?Breed $breed = null, ?PoultryHouse $house = null): Flock
+    {
+        // Preparación: crea la admisión histórica que la proyección de pesajes consulta.
+        $flock = $this->flock($quantity, $breed, $house);
+        FlockMovement::factory()->create([
+            'destination_flock_id' => $flock->id,
+            'quantity' => $quantity,
+            'occurred_at' => $flock->established_at,
+            'created_by' => auth()->id(),
+            'after' => [$flock->public_id => [
+                'public_id' => $flock->public_id,
+                'poultry_house_id' => $flock->poultry_house_id,
+                'production_unit_id' => $flock->production_unit_id,
+                'current_quantity' => $quantity,
+                'entry_date' => $flock->entry_date->format('Y-m-d'),
+            ]],
+        ]);
+
+        return $flock;
     }
 
     /** @param array<string, mixed> $payload */
