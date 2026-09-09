@@ -24,6 +24,7 @@ use App\Http\Controllers\Lots\FlockRedistributionController;
 use App\Http\Controllers\Lots\FlockStatusController;
 use App\Http\Controllers\Lots\MortalityCategoryController;
 use App\Http\Controllers\Lots\MortalityController;
+use App\Http\Controllers\Lots\WeighingController;
 use App\Http\Controllers\ReferenceData\ReferenceOptionsController;
 use App\Http\Controllers\ReportingAndAnalytics\ReportExportController;
 use App\Http\Controllers\ReportingAndAnalytics\ReportPresetController;
@@ -63,6 +64,17 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         ->name('shared-device.local-revoke');
 
     Route::middleware('auth:sanctum')->group(function (): void {
+        Route::middleware(['shared.device:any', 'shared.session.conditional'])->name('weighings.')->group(function (): void {
+            Route::get('/configuracion-pesajes', [WeighingController::class, 'settings'])->name('settings.show');
+            Route::put('/configuracion-pesajes', [WeighingController::class, 'updateSettings'])->name('settings.update');
+            Route::get('/pesajes/evolucion', [WeighingController::class, 'evolution'])->name('evolution');
+            Route::get('/pesajes', [WeighingController::class, 'index'])->name('index');
+            Route::post('/pesajes', [WeighingController::class, 'store'])->name('store');
+            Route::get('/pesajes/{pesaje}/distribucion', [WeighingController::class, 'distribution'])->name('distribution');
+            Route::get('/pesajes/{pesaje}', [WeighingController::class, 'show'])->name('show');
+            Route::patch('/pesajes/{pesaje}', [WeighingController::class, 'update'])->name('update');
+        });
+
         Route::name('lots.')->group(function (): void {
             Route::get('/flocks', [FlockController::class, 'index'])->name('index');
             Route::post('/flocks', [FlockController::class, 'store'])->name('store');

@@ -31,6 +31,7 @@ use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
 use Database\Seeders\FarmStructure\MaintenanceDemoSeeder;
 use Database\Seeders\Lots\EggProductionDemoSeeder;
 use Database\Seeders\Lots\LotsDemoSeeder;
+use Database\Seeders\Lots\WeighingDemoSeeder;
 use Database\Seeders\SuppliersAndCatalogs\MedicineDemoSeeder;
 use Database\Seeders\SuppliersAndCatalogs\VaccineDemoSeeder;
 use Illuminate\Database\Seeder;
@@ -62,6 +63,7 @@ final class LocalDemoDataSeeder extends Seeder
         $this->seedReports($admin);
         $this->call(LotsDemoSeeder::class);
         $this->call(EggProductionDemoSeeder::class);
+        $this->call(WeighingDemoSeeder::class);
     }
 
     /** @return array<string, Locality> */

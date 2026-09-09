@@ -24,11 +24,11 @@ No se consultó ni modificó Notion durante esta entrega. Al sincronizar, mover 
 
 | Módulo / tarjeta Notion | Estado en código | Documentación fuente | Contrato | Trabajo restante |
 |---|---|---|---|---|
-| **06 — Manejo productivo y sanidad** | **Medicamentos y Vacunas implementados; módulo aún incompleto** | [medication-implementation-plan.md](medication-implementation-plan.md) y [vaccination-implementation.md](vaccination-implementation.md) | [medication.yaml](contracts/openapi/medication.yaml) y [vaccination.yaml](contracts/openapi/vaccination.yaml) | Completar Plan de Manejo, aplicaciones y las demás secciones; mantener la tarjeta en implementación |
+| **06 — Manejo productivo y sanidad** | **Medicamentos, Vacunas y Pesajes implementados; módulo aún incompleto** | [medication-implementation-plan.md](medication-implementation-plan.md), [vaccination-implementation.md](vaccination-implementation.md) y [weighing-implementation.md](weighing-implementation.md) | [medication.yaml](contracts/openapi/medication.yaml), [vaccination.yaml](contracts/openapi/vaccination.yaml) y [weighings.yaml](contracts/openapi/weighings.yaml) | Completar Plan de Manejo, aplicaciones y las demás secciones; mantener la tarjeta en implementación |
 
 ## Módulo 06 — Manejo productivo y sanidad
 
-**Medicamentos y Vacunas están implementados en su alcance actual de catálogo. El módulo completo todavía no está listo: faltan Plan de Manejo, aplicaciones y las demás secciones de manejo productivo y sanidad.** Este avance no debe registrarse como un módulo terminado pendiente de mover.
+**Medicamentos y Vacunas están implementados en su alcance actual de catálogo, y Pesajes está implementado como manejo productivo de lotes. El módulo completo todavía no está listo: faltan Plan de Manejo, aplicaciones y las demás secciones de manejo productivo y sanidad.** Este avance no debe registrarse como un módulo terminado pendiente de mover.
 
 Disponible en código:
 
@@ -38,14 +38,20 @@ Disponible en código:
 - CRUD backend de vacunas mediante `/api/v1/vacunas`, exclusivamente para administradores activos.
 - SKU y nombre único, descripción, detalles opcionales, proveedor y baja lógica con conflicto cuando existe stock positivo.
 - Relación 1:1 con el Product de Inventario, unidad `dose` predeterminada, saldos y movimientos compartidos, idempotencia, auditoría atómica y locks de concurrencia.
+- Configuración global versionada de rangos de peso para etapas `chick` y `adult`, administrable mediante `/api/v1/configuracion-pesajes`.
+- Registro individual y grupal de pesajes mediante `/api/v1/pesajes`, con gramos normalizados, confirmación explícita de valores fuera de rango, proyección histórica del lote y correcciones auditadas.
+- Listado, detalle, evolución por lote y distribución individual consumible por el frontend externo, con salida en gramos o kilogramos y límite de 1000 puntos de evolución.
+- Permisos `weighings.view`, `weighings.manage` y `weighing-settings.manage`, idempotencia, control optimista, locks transaccionales y soporte para autenticación personal o compartida.
 
 La asignación a un futuro Plan de Manejo relacionado con un lote, las fechas de aplicación y el consumo ocasionado por una vacunación quedan diferidos hasta definir ese dominio. Los catálogos no registran intervenciones ni modifican stock por sí mismos.
 
-Las demás secciones, como Plan de Manejo, aplicaciones, pesajes y otros manejos, quedan fuera de esta entrega y requieren su propia definición e implementación. La mortalidad ya pertenece a Lotes y no debe duplicarse aquí. La ubicación técnica de ambos catálogos es `SuppliersAndCatalogs`; esta tarjeta registra su aporte al área funcional de la hoja de ruta.
+Las demás secciones, como Plan de Manejo, aplicaciones y otros manejos, quedan fuera de esta entrega y requieren su propia definición e implementación. La mortalidad ya pertenece a Lotes y no debe duplicarse aquí. La ubicación técnica de los catálogos es `SuppliersAndCatalogs`; Pesajes pertenece a `Lots` porque depende de la población, ubicación y ciclo de vida históricos del lote. Esta tarjeta registra el aporte de ambas áreas técnicas al módulo funcional.
 
 Validación automatizada registrada el 2026-09-05: 52 pruebas aprobadas con 826 aserciones, incluyendo regresiones seleccionadas, y una prueba de concurrencia separada con 4 aserciones. La aceptación manual del catálogo sigue pendiente y puede documentarse por separado, sin cambiar el estado incompleto del módulo.
 
 Validación de Vacunas registrada el 2026-09-08: 16 pruebas específicas aprobadas con 107 aserciones; suite completa aprobada con variables de testing válidas, 271 pruebas y 1803 aserciones; Larastan, Pint y `git diff --check` correctos. La guía [vaccination-implementation.md](vaccination-implementation.md) contiene el procedimiento de Do Test y las observaciones técnicas pendientes de autenticación compartida, validación interna y cobertura. La tarjeta debe permanecer en implementación hasta resolverlas y completar la aceptación manual.
+
+Validación de Pesajes registrada el 2026-09-09: 37 pruebas focalizadas aprobadas con 441 aserciones; suite completa aprobada con `APP_KEY` y pepper temporales válidos, 305 pruebas y 2226 aserciones; contrato final aprobado con 5 pruebas y 197 aserciones; Larastan, Pint, rutas y `git diff --check` correctos. Las revisiones funcional y de seguridad cerraron sin bloqueadores. La guía [weighing-implementation.md](weighing-implementation.md) contiene fórmulas, contrato, datos demo y procedimiento de Do Test. Esta sección está lista para aceptación manual, pero la tarjeta del Módulo 06 debe permanecer en implementación.
 
 ## Módulo 05 — Lotes y cría
 

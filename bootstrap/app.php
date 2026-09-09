@@ -3,6 +3,7 @@
 use App\Exceptions\IdentityAndAccess\IdentityException;
 use App\Http\Middleware\AssignTraceContext;
 use App\Http\Middleware\ResolveSharedDevice;
+use App\Http\Middleware\ValidateConditionalSharedSession;
 use App\Http\Middleware\ValidateSharedSession;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -39,6 +40,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role_or_permission' => RoleOrPermissionMiddleware::class,
             'shared.device' => ResolveSharedDevice::class,
             'shared.session' => ValidateSharedSession::class,
+            'shared.session.conditional' => ValidateConditionalSharedSession::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
