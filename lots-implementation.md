@@ -13,10 +13,11 @@ Dependencias: M03 Instalaciones, M04 Proveedores y productos, Identidad y acceso
 ## Implementación realizada
 
 - Actions, Queries, Requests y Resources de Lotes se agrupan bajo `app/Actions/Lots`, `app/Queries/Lots`, `app/Http/Requests/Lots` y `app/Http/Resources/Lots`; los modelos permanecen en `app/Models/Lots` y las Policies en `app/Policies/Lots`.
-- Siete tablas nuevas: `breeds`, `mortality_categories`, `flocks`, `flock_operations`, `flock_movements`, `mortality_records` y `egg_collections`. Incluyen FKs restrictivas, índices y restricciones de cantidades, estados y unicidad.
+- Ocho tablas nuevas o ampliadas: las tablas originales de Lotes y `flock_activities`, con FKs restrictivas, índices, journal de actividad y restricciones de cantidades, estados y unicidad.
 - 28 operaciones HTTP bajo `/api/v1`, con contrato público en español, FormRequests, Actions, Queries y Resources.
 - ULID público para lotes, movimientos, mortalidades y recolecciones; IDs numéricos internos para relaciones. Razas, categorías y referencias de otros módulos conservan IDs numéricos.
 - Cantidades enteras, bloqueo transaccional de lotes y galpones, control de versión, idempotencia por actor y auditoría síncrona.
+- Cada galpón puede tener como máximo un lote `active` o `quarantined`; los lotes `finished` no ocupan. La exclusividad se comprueba después de bloquear el galpón y también la impone PostgreSQL.
 - `PoultryHouseOccupancyProvider` obtiene la ocupación real desde Lotes. Las Actions existentes de Instalaciones impiden reducir la capacidad por debajo de la ocupación o desactivar un galpón ocupado.
 - `RecordEggStockTransactionAction` es la frontera pública de Inventario. La producción no escribe directamente en sus modelos ni en sus saldos.
 - `Clock`, `SystemClock` y `FlockAge` centralizan los cálculos temporales. `config/lots.php` define `LOTS_TIMEZONE`, por defecto `America/Montevideo`.
@@ -30,6 +31,7 @@ Dependencias: M03 Instalaciones, M04 Proveedores y productos, Identidad y acceso
 | Parcial hacia un galpón | Descuenta del origen y crea un lote independiente con código y ULID propios; movimiento `partial_new`. |
 | Parcial hacia un lote existente | Descuenta del origen y aumenta el destinatario; movimiento `partial_existing`. Requiere la misma raza, ambos activos y sus dos versiones. |
 | Total | Traslada el mismo lote completo a otro galpón; movimiento `total`. Conserva ULID, código, raza, procedencia y cantidad inicial. |
+| Unión total hacia un lote existente | Suma todas las aves al receptor compatible, conserva sus metadatos, lleva el origen a cero y lo finaliza; movimiento `total_existing`. No registra un egreso ficticio. |
 | Finalización | Registra el egreso de todas las aves remanentes, deja cantidad viva cero y estado `finished`; movimiento `departure`. No crea mortalidad. |
 
 La redistribución conserva el total de aves de los lotes involucrados. La cantidad física máxima de un galpón nunca se incrementa ni decrementa: `disponible = capacidad física - suma de aves vivas`, incluyendo cuarentena.
@@ -38,13 +40,13 @@ El destinatario existente conserva su proveedor/origen, fecha de ingreso, edad a
 
 Un destinatario nuevo hereda raza, procedencia y fecha de ingreso; `established_at` indica el instante de creación por redistribución. No tiene `parent_id` ni genealogía. El movimiento, no una jerarquía de lotes, expresa su origen.
 
-La redistribución total no borra el lote ni lo fusiona con uno existente. Se indica solamente otro galpón, sin código ni ULID de destino. Para añadir aves a un lote existente se utiliza la redistribución parcial; no existe un PATCH libre de cantidad ni un ingreso externo adicional sobre un lote ya creado.
+La redistribución total sin receptor no borra el lote: se indica otro galpón vacío y se conserva su identidad. Con `destination_flock_id`, la cantidad total representa una unión válida: el origen finaliza y el receptor conserva sus datos. No existe un PATCH libre de cantidad ni un ingreso externo adicional sobre un lote ya creado.
 
 Las cantidades iniciales son fotografías por lote, no un contador global de aves compradas: sumarlas después de crear lotes por redistribución produciría doble conteo. Para reconstruir ingresos o salidas se consulta el histórico de movimientos.
 
 ### Estados, edad e histórico
 
-Estados estables: `active`, `quarantined` y `finished`. Un lote abierto puede alternar entre activo y cuarentena. Ambos pueden finalizar; no se reabre un finalizado. La cuarentena impide redistribuir, pero admite mortalidad y recolección mientras haya aves para esta última.
+Estados estables: `active`, `quarantined` y `finished`. Un lote abierto puede alternar entre activo y cuarentena. Ambos pueden finalizar; cualquier operación que deje cero aves finaliza el lote automáticamente. Una reversión válida puede reactivar el origen desde su fotografía histórica; una corrección o cancelación de mortalidad que devuelva aves a un lote finalizado exige confirmación explícita, y sólo aplica si la terminalidad provino de mortalidad y el galpón está libre. La cuarentena impide redistribuir, pero admite mortalidad y recolección mientras haya aves para esta última.
 
 `age_days` son días calendario desde `entry_date` en `LOTS_TIMEZONE`; `current_week = floor(age_days / 7) + 1`. El día del ingreso es semana 1 y el séptimo día transcurrido es semana 2. No representa una edad biológica anterior al ingreso: no se modela fecha de nacimiento ni edad inicial adicional.
 
@@ -58,13 +60,13 @@ No hay DELETE, `SoftDeletes` ni `isDeleted` para Lotes, mortalidad, recolección
 
 ### Correcciones y compensaciones
 
-- Una redistribución puede revertirse únicamente si ninguno de los lotes involucrados tiene operaciones posteriores. Se verifican sus versiones, estado y la capacidad necesaria. El movimiento original queda intacto y se agrega `redistribution_reversal`, que expone `reversed_movement_id`.
+- Una redistribución puede revertirse únicamente si ninguno de los lotes involucrados tiene actividad posterior de negocio. El journal ordenado incluye pesajes, recolecciones, mortalidad, distribuciones, correcciones y cambios del lote; las versiones son una protección adicional. Se verifican estado, operación histórica verificable y la capacidad necesaria del galpón de retorno. El movimiento original queda intacto y se agrega `redistribution_reversal`, que expone `reversed_movement_id`.
 - Al revertir una redistribución a un lote nuevo, éste permanece consultable, vacío y finalizado. La reversión a uno existente restaura ambas cantidades sin cambiar sus metadatos. La reversión total restituye el galpón original.
 - Mortalidad admite corregir cantidad, categoría y observaciones. Cancelar no borra el registro; su estado pasa a `cancelled`. La cantidad viva se ajusta por la diferencia y la restitución vuelve a validar capacidad en el galpón actual del lote.
 - La mortalidad conserva el galpón y la fecha originales del hecho, aunque el lote se traslade después. Las rectificaciones se aplican ahora, mediante `mortality_correction` y auditoría; no se edita el movimiento original.
 - Recolección admite corregir cantidad, fecha efectiva y observaciones. No permite cambiar lote, galpón ni UP. La diferencia genera una compensación de inventario; una corrección sólo textual no genera movimientos de stock de cantidad cero.
 - Cancelar una recolección mantiene el hecho histórico y compensa su ingreso en la cuenta de huevos de la UP. La recolección no modifica aves ni la versión del lote.
-- Los registros cancelados y los lotes finalizados no se corrigen ni reactivan. Todas las correcciones y cancelaciones requieren `reason`.
+- Los registros cancelados no se corrigen otra vez. Una corrección o cancelación que devuelva aves a un lote finalizado debe enviar `confirm_reactivation=true` y sólo puede reactivar una terminalidad por mortalidad; no reabre el origen de una unión o egreso posterior. Todas las correcciones y cancelaciones requieren `reason`.
 - Un movimiento de corrección o finalización puede tener cantidad cero cuando no modifica aves; queda diferenciado por tipo y auditoría, sin fingir un ingreso.
 
 ### Transacciones, acceso y reintentos offline
@@ -133,7 +135,7 @@ Errores: `401` sin sesión, `403` sin permiso, `404` recurso inexistente, `422` 
 
 ## Datos demo y despliegue
 
-Migración aditiva: `database/migrations/2026_08_30_230431_create_lots_tables.php`. No ejecuta migraciones de datos del código viejo ni modifica la capacidad de instalaciones existentes.
+Migración aditiva: `database/migrations/2026_09_21_194750_add_flock_occupancy_and_activity_constraints.php`. Antes de crear las restricciones detecta lotes abiertos sin aves, lotes finalizados incompatibles y galpones con más de un lote abierto; aborta con diagnóstico y no corrige datos. Reconstruye marcas históricas desde operaciones, movimientos y auditoría en orden; sólo marca `reversal_verified=true` cuando una redistribución heredada tiene ambos lotes, fotografías y auditoría completa, incluida toda operación posterior que pudiera tocar lotes. Los movimientos sin operación o con cobertura incierta conservan `false` y su reversión responde `409`. El rollback de esta migración elimina sus restricciones y journal, pero conserva el tipo `total_existing` en el CHECK de movimientos para no invalidar el historial ya escrito.
 
 ```bash
 docker compose -f compose.dev.yaml exec -T api php artisan migrate --no-interaction
@@ -149,7 +151,7 @@ No se necesita ni debe usarse `migrate:fresh` sobre una base con datos que deban
 | `DEMO-LOT-A` | `active` | 70 | Admitió 100, redistribuyó 20 y 10 y se trasladó íntegro a Galpón Lotes Demo. |
 | `DEMO-LOT-B` | `active` | 48 | Admitió 40, recibió 10, registró 2 bajas y produjo huevos genéricos. |
 | `DEMO-LOT-C` | `finished` | 0 | Recibió 20 como lote nuevo y finalizó con egreso de esas aves. |
-| `DEMO-LOT-D` | `quarantined` | 25 | Origen propio, otra raza, en Galpón Lotes Demo. |
+| `DEMO-LOT-D` | `quarantined` | 25 | Origen propio, otra raza, en Galpón Lotes Cuarentena Demo. |
 
 El seeder de producción usa el producto técnico protegido `Huevo` y una cuenta exclusiva por UP. Las claves estables impiden repetir movimientos o sobrescribir fechas, versiones y correcciones realizadas después por un usuario. La descripción completa de los escenarios se encuentra en [egg-production-implementation.md](egg-production-implementation.md).
 
@@ -287,7 +289,7 @@ Probar otro destinatario de raza diferente: `409`. Repetir con versión obsoleta
 
 Esperado: A conserva ULID, código, cantidad inicial 100 y cantidad viva 70; ahora está en G3, con versión 4 y la UP de G3. No aparece un lote nuevo, A no desaparece del listado y su historial incluye `total` desde G1 a G3. G1 queda libre de A.
 
-Probar un total hacia B, un total al mismo galpón o un total con `destination_code`: `409`. No se interpreta como fusión ni borrado.
+Probar una unión total hacia B: debe responder `201`, dejar B con sus metadatos y cantidad incrementada, finalizar A y exponer `type=total_existing`, sin movimiento `departure`. Un total al mismo galpón o un total con `destination_code`: `409`. El traslado total sin receptor conserva la identidad del lote.
 
 ### 6. Reversiones y capacidad
 
@@ -356,7 +358,7 @@ Las entradas manuales, salidas para reparto y pérdidas se validan en el recorri
 | Cuarentena | PATCH `/flocks/{B}/status` con versión actual, `status:quarantined` y motivo. | `200`; conserva aves y ocupación. Redistribuir B devuelve `409`; mortalidad/recolección válida sigue permitida. |
 | Reactivación | PATCH de B a `active` con nueva clave/versión y motivo. | `200`, nueva versión. |
 | Finalización | POST `/flocks/{C}/finalization` con versión 1 y motivo, si C no fue modificado. | `200`, C=0/`finished`, egreso 20, no mortalidad extra, consulta e histórico disponibles. |
-| Reapertura | Intentar cambiar C finalizado a `active`. | `409`, sin cambios. |
+| Reapertura | Intentar cambiar C finalizado a `active`; luego corregir una mortalidad terminal con y sin confirmación. | El cambio ordinario responde `409`; la corrección sin `confirm_reactivation` responde `409` sin mutación y con confirmación sólo reactiva en galpón libre y con capacidad. |
 | Sin autenticación | GET `/flocks` sin token. | `401`. |
 | Sin permiso | Usuario activo sin `flocks.view` consulta lotes; sin permiso de escritura intenta un comando. | `403`; no hay escrituras. Repetir para mortalidad, recolección y catálogos. |
 | Auditoría restringida | Usuario sin `audit.view` consulta `/audit/entries`. | `403`, aunque tenga permisos de producción. |
@@ -399,4 +401,4 @@ No se creó, modificó ni consultó contenido de Notion para esta entrega. La pe
 
 ## Fuera de alcance
 
-Interfaz Angular/mobile, almacenamiento y sincronización del dispositivo, outbox externo, genealogía, fusiones totales entre lotes, compras/admisiones adicionales directas a un lote existente, porcentajes históricos de productividad sin denominadores confiables y migración del sistema viejo. Notion queda expresamente a cargo del usuario con acceso.
+Interfaz Angular/mobile, almacenamiento y sincronización del dispositivo, outbox externo, genealogía, compras/admisiones adicionales directas a un lote existente, porcentajes históricos de productividad sin denominadores confiables y migración del sistema viejo. Notion queda expresamente a cargo del usuario con acceso.

@@ -30,6 +30,7 @@ final readonly class LotsHistory
             'destination_poultry_house_id' => $to?->poultry_house_id,
             'before' => $before, 'after' => $after, 'occurred_at' => $time,
             'created_by' => $actor->id, 'reason' => $reason, 'reverses_movement_id' => $reverses,
+            'reversal_verified' => true,
         ])->save();
 
         return $movement->setRelation('sourceFlock', $from)->setRelation('destinationFlock', $to)

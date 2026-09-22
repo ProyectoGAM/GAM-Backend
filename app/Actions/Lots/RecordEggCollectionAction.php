@@ -12,6 +12,7 @@ use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
 use App\Models\User;
 use App\Queries\FarmStructure\LockPoultryHousesQuery;
+use App\Services\Lots\FlockActivityJournal;
 use App\Services\Lots\FlockState;
 use App\Services\Lots\LotsHistory;
 use App\Services\Lots\LotsSnapshots;
@@ -23,6 +24,7 @@ final readonly class RecordEggCollectionAction
     public function __construct(
         private RunLotsCommand $commands,
         private FlockState $state,
+        private FlockActivityJournal $activities,
         private LockPoultryHousesQuery $houses,
         private RecordEggStockTransactionAction $stock,
         private LotsSnapshots $snapshots,
@@ -80,6 +82,7 @@ final readonly class RecordEggCollectionAction
             $snapshot = $this->snapshots->collection($record, $locked);
             $snapshot['stock_transaction_id'] = $stock['transaction']->public_id;
             $this->history->audit($record, $actor, 'eggs_collected', 'Recolección de huevos registrada', $operationId, [], $snapshot, $record->production_unit_id, $source);
+            $this->activities->record($locked, $operationId, 'egg_collection', 'eggs.record');
             event(new EggsCollected($operationId, [$locked->public_id], $actor->id));
 
             return ['flock' => $this->snapshots->flock($locked), 'collection' => $snapshot, 'stock_transaction' => $stock['transaction']->public_id];

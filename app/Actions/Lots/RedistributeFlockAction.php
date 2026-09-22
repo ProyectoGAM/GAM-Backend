@@ -9,6 +9,7 @@ use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
 use App\Models\User;
 use App\Queries\FarmStructure\LockPoultryHousesQuery;
+use App\Services\Lots\FlockActivityJournal;
 use App\Services\Lots\FlockState;
 use App\Services\Lots\LotsHistory;
 use App\Services\Lots\LotsSnapshots;
@@ -17,7 +18,14 @@ use Illuminate\Support\Str;
 
 final readonly class RedistributeFlockAction
 {
-    public function __construct(private RunLotsCommand $commands, private FlockState $state, private LockPoultryHousesQuery $houses, private LotsSnapshots $snapshots, private LotsHistory $history) {}
+    public function __construct(
+        private RunLotsCommand $commands,
+        private FlockState $state,
+        private LockPoultryHousesQuery $houses,
+        private LotsSnapshots $snapshots,
+        private LotsHistory $history,
+        private FlockActivityJournal $activities,
+    ) {}
 
     /** @param array<string, mixed> $data */
     public function execute(Flock $flock, array $data, User $actor, string $source = 'api'): FlockOperation
@@ -43,64 +51,112 @@ final readonly class RedistributeFlockAction
             }
             $time = $this->state->time($from, $data['occurred_at'] ?? null);
             $total = $quantity === $from->current_quantity;
+
             if ($to !== null) {
                 $this->state->version($to, (int) $data['destination_version']);
                 $this->state->open($to, true);
                 $this->state->time($to, $time->toIso8601String());
-                if ($total || $from->breed_id !== $to->breed_id) {
-                    throw new LotsConflict('La incorporación a otro lote debe ser parcial y de la misma raza.');
+                if ($from->breed_id !== $to->breed_id) {
+                    throw new LotsConflict('La incorporación a otro lote debe ser de la misma raza.');
                 }
-            }
-            $destinationHouseId = $to !== null ? $to->poultry_house_id : (int) $data['destination_poultry_house_id'];
-            if ($total && $destinationHouseId === $from->poultry_house_id) {
-                throw new LotsConflict('El traslado total requiere otro galpón.');
-            }
-            if ($total && (isset($data['destination_code']) || isset($data['destination_public_id']))) {
-                throw new LotsConflict('El traslado total conserva el lote y no admite datos de un lote nuevo.');
-            }
-            if (! $total && $to === null && empty($data['destination_code'])) {
+            } elseif (! $total && empty($data['destination_code'])) {
                 throw new LotsConflict('Indica el código del lote nuevo para la redistribución parcial.');
             }
+
+            $destinationHouseId = $to === null ? (int) $data['destination_poultry_house_id'] : $to->poultry_house_id;
+            if ($total && $to === null && $destinationHouseId === $from->poultry_house_id) {
+                throw new LotsConflict('El traslado total requiere otro galpón.');
+            }
+            if ($total && $to === null && (isset($data['destination_code']) || isset($data['destination_public_id']))) {
+                throw new LotsConflict('El traslado total conserva el lote y no admite datos de un lote nuevo.');
+            }
+            if ($total && $to !== null && isset($data['destination_code'])) {
+                throw new LotsConflict('La unión total conserva los datos del lote receptor.');
+            }
+
             $houses = $this->houses->execute([$from->poultry_house_id, $destinationHouseId]);
             $destinationHouse = $houses[$destinationHouseId];
-            $this->state->receive($destinationHouse, $destinationHouseId === $from->poultry_house_id ? 0 : $quantity);
+            $this->state->receive(
+                $destinationHouse,
+                $destinationHouseId === $from->poultry_house_id ? 0 : $quantity,
+                requiresEmpty: $to === null,
+                existingReceiver: $to,
+            );
+
             $before = [$from->public_id => $this->snapshots->flock($from)];
             if ($to !== null) {
                 $before[$to->public_id] = $this->snapshots->flock($to);
             }
-            if ($total) {
+
+            if ($total && $to === null) {
                 $type = 'total';
-                $from->forceFill(['poultry_house_id' => $destinationHouseId, 'production_unit_id' => $destinationHouse->productionUnitId, 'version' => $from->version + 1])->save();
-                $to = $from;
+                $from->forceFill([
+                    'poultry_house_id' => $destinationHouseId,
+                    'production_unit_id' => $destinationHouse->productionUnitId,
+                    'version' => $from->version + 1,
+                ])->save();
+                $destination = $from;
+            } elseif ($total) {
+                $type = 'total_existing';
+                $from->forceFill([
+                    'current_quantity' => 0,
+                    'status' => FlockStatus::Finished,
+                    'finalized_at' => $time,
+                    'finalization_reason' => $data['reason'] ?? 'Unión total con otro lote.',
+                    'version' => $from->version + 1,
+                ])->save();
+                $to->current_quantity += $quantity;
+                $to->version++;
+                $to->save();
+                $destination = $to;
             } else {
                 $from->current_quantity -= $quantity;
                 $from->version++;
                 $from->save();
                 if ($to === null) {
                     $type = 'partial_new';
-                    $to = new Flock;
-                    $to->forceFill([
-                        'public_id' => $data['destination_public_id'] ?? (string) Str::ulid(), 'code' => $data['destination_code'],
-                        'breed_id' => $from->breed_id, 'supplier_id' => $from->supplier_id, 'supplier_name' => $from->supplier_name,
-                        'origin' => $from->origin, 'entry_date' => $from->entry_date, 'established_at' => $time,
-                        'poultry_house_id' => $destinationHouseId, 'production_unit_id' => $destinationHouse->productionUnitId,
-                        'initial_quantity' => $quantity, 'current_quantity' => $quantity, 'status' => FlockStatus::Active, 'version' => 1,
+                    $destination = new Flock;
+                    $destination->forceFill([
+                        'public_id' => $data['destination_public_id'] ?? (string) Str::ulid(),
+                        'code' => $data['destination_code'],
+                        'breed_id' => $from->breed_id,
+                        'supplier_id' => $from->supplier_id,
+                        'supplier_name' => $from->supplier_name,
+                        'origin' => $from->origin,
+                        'entry_date' => $from->entry_date,
+                        'established_at' => $time,
+                        'poultry_house_id' => $destinationHouseId,
+                        'production_unit_id' => $destinationHouse->productionUnitId,
+                        'initial_quantity' => $quantity,
+                        'current_quantity' => $quantity,
+                        'status' => FlockStatus::Active,
+                        'version' => 1,
                     ])->save();
                 } else {
                     $type = 'partial_existing';
-                    $to->current_quantity += $quantity;
-                    $to->version++;
-                    $to->save();
+                    $destination = $to;
+                    $destination->current_quantity += $quantity;
+                    $destination->version++;
+                    $destination->save();
                 }
             }
-            $after = [$from->public_id => $this->snapshots->flock($from), $to->public_id => $this->snapshots->flock($to)];
-            $movement = $this->history->movement($operationId, $type, $from, $to, $quantity, $before, $after, $time, $actor, $data['reason'] ?? null);
-            foreach ([$from->public_id => $from, $to->public_id => $to] as $id => $changed) {
-                $this->history->audit($changed, $actor, 'flock_redistributed', 'Aves redistribuidas', $operationId, $before[$id] ?? [], $after[$id], $changed->production_unit_id, $source, $data['reason'] ?? null);
+
+            $after = [$from->public_id => $this->snapshots->flock($from)];
+            if ($destination->public_id !== $from->public_id) {
+                $after[$destination->public_id] = $this->snapshots->flock($destination);
+            }
+            $movement = $this->history->movement($operationId, $type, $from, $destination, $quantity, $before, $after, $time, $actor, $data['reason'] ?? null);
+            $changedFlocks = [$from->public_id => $from];
+            if ($destination->public_id !== $from->public_id) {
+                $changedFlocks[$destination->public_id] = $destination;
+            }
+            foreach ($changedFlocks as $id => $changed) {
+                $this->history->audit($changed, $actor, 'flock_redistributed', $type === 'total_existing' ? 'Unión total de lotes' : 'Aves redistribuidas', $operationId, $before[$id] ?? [], $after[$id], $changed->production_unit_id, $source, $data['reason'] ?? null);
+                $this->activities->record($changed, $operationId, $type, 'flock.redistribute');
             }
             event(new FlockRedistributed($operationId, array_keys($after), $actor->id));
 
-            return ['flock' => $after[$from->public_id], 'destination' => $after[$to->public_id], 'movement' => $this->snapshots->movement($movement)];
+            return ['flock' => $after[$from->public_id], 'destination' => $after[$destination->public_id], 'movement' => $this->snapshots->movement($movement)];
         });
     }
 }

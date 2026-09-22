@@ -11,6 +11,7 @@ use App\Models\Lots\Weighing;
 use App\Models\Lots\WeighingMeasurement;
 use App\Models\Lots\WeighingReferenceSettings;
 use App\Models\User;
+use App\Services\Lots\FlockActivityJournal;
 use App\Services\Lots\FlockState;
 use App\Services\Lots\LotsHistory;
 use App\Services\Lots\LotsSnapshots;
@@ -26,6 +27,7 @@ final readonly class CorrectWeighingAction
     public function __construct(
         private RunLotsCommand $commands,
         private FlockState $state,
+        private FlockActivityJournal $activities,
         private WeighingFlockProjection $projection,
         private WeighingBuilder $builder,
         private WeighingPresenter $presenter,
@@ -105,6 +107,7 @@ final readonly class CorrectWeighingAction
                 }
                 $after = $this->presenter->weighing($current->fresh(['flock', 'measurements']));
                 $this->history->audit($current, $actor, 'weighing_corrected', 'Pesaje rectificado', $operationId, $before, $after, $built['production_unit_id'], $source, $data['correction_reason']);
+                $this->activities->recordMany([$currentFlock, $destination], $operationId, 'weighing_correction', 'weighing.correct');
                 event(new WeighingCorrected($operationId, [$currentFlock->public_id, $destination->public_id], $actor->id));
 
                 return [

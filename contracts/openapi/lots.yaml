@@ -240,8 +240,8 @@ paths:
     post:
       tags: ["Redistribuciones"]
       operationId: "redistributeFlock"
-      summary: "Redistribuye parcialmente o traslada el lote completo"
-      description: "Permiso requerido: flocks.redistribute. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      summary: "Redistribuye, une o traslada un lote"
+      description: "Permiso requerido: flocks.redistribute. Una cantidad parcial puede crear un lote en un galpón vacío o incorporarse a un receptor compatible. Si la cantidad coincide con todas las aves y se indica un receptor, finaliza el origen y conserva los datos del receptor; sin receptor, traslada el mismo lote a otro galpón. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "flocks.redistribute"
       parameters:
         -
@@ -275,8 +275,8 @@ paths:
     post:
       tags: ["Redistribuciones"]
       operationId: "reverseRedistribution"
-      summary: "Compensa una redistribución sin operaciones posteriores"
-      description: "Permiso requerido: flocks.redistribute. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      summary: "Compensa una redistribución sin actividad posterior"
+      description: "Permiso requerido: flocks.redistribute. Sólo se permite cuando ningún lote involucrado tiene actividad de negocio posterior, la operación histórica es verificable y el galpón requerido para devolver las aves está libre, operativo y tiene capacidad. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "flocks.redistribute"
       parameters:
         -
@@ -646,7 +646,7 @@ paths:
       tags: ["Mortalidad"]
       operationId: "correctMortality"
       summary: "Rectifica cantidad, categoría o notas con auditoría"
-      description: "Permiso requerido: mortality.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: mortality.manage. Si la corrección devuelve aves a un lote finalizado por mortalidad, exige confirm_reactivation=true y un galpón libre, operativo y con capacidad; sin confirmación responde 409 sin mutación. Un lote finalizado por unión o egreso posterior no se reactiva por esta ruta. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "mortality.manage"
       parameters:
         -
@@ -753,8 +753,8 @@ paths:
     post:
       tags: ["Mortalidad"]
       operationId: "cancelMortality"
-      summary: "Cancela y restituye aves si la capacidad y el estado lo permiten"
-      description: "Permiso requerido: mortality.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      summary: "Cancela y restituye aves con reactivación confirmada"
+      description: "Permiso requerido: mortality.manage. Si la restitución devuelve aves a un lote finalizado por mortalidad, se requiere confirm_reactivation=true y un galpón libre, operativo y con capacidad. Un lote finalizado por unión o egreso no se reactiva por esta ruta. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "mortality.manage"
       parameters:
         -
@@ -1388,7 +1388,7 @@ components:
       in: "query"
       schema:
         type: "string"
-        enum: ["admission", "partial_new", "partial_existing", "total", "departure", "mortality", "mortality_correction", "redistribution_reversal"]
+        enum: ["admission", "partial_new", "partial_existing", "total", "total_existing", "departure", "mortality", "mortality_correction", "redistribution_reversal"]
   responses:
     Unauthenticated:
       description: "Sesión o token ausente o inválido."
@@ -1506,7 +1506,7 @@ components:
           format: "uuid"
         type:
           type: "string"
-          enum: ["admission", "partial_new", "partial_existing", "total", "departure", "mortality", "mortality_correction", "redistribution_reversal"]
+          enum: ["admission", "partial_new", "partial_existing", "total", "total_existing", "departure", "mortality", "mortality_correction", "redistribution_reversal"]
         quantity:
           type: "integer"
           minimum: 0
@@ -1824,7 +1824,7 @@ components:
           type: ["string", "null"]
           minLength: 1
           maxLength: 500
-      description: "Parcial: galpón y código nuevos, o lote existente de igual raza y su versión. Total: sólo otro galpón, conservando identidad. Nunca permite fusionar todas las aves con otro lote. El código destino es obligatorio si la cantidad es menor que las aves vivas y no se indica un lote existente."
+      description: "Parcial: galpón vacío y código nuevos, o lote existente abierto de igual raza y su versión, conservando los datos del receptor. Total: con sólo otro galpón traslada el mismo lote (type=total); con destination_flock_id une las aves al receptor, finaliza el origen y conserva sus metadatos (type=total_existing). El código destino es obligatorio si la cantidad es menor que las aves vivas y no se indica un lote existente."
       oneOf:
         -
           required: ["destination_poultry_house_id"]
@@ -1911,6 +1911,10 @@ components:
           type: "string"
           minLength: 1
           maxLength: 500
+        confirm_reactivation:
+          type: "boolean"
+          default: false
+          description: "Confirma la reactivación atómica cuando la corrección devuelve aves a un lote finalizado por mortalidad."
         quantity:
           type: "integer"
           minimum: 1
@@ -1940,6 +1944,10 @@ components:
           type: "string"
           minLength: 1
           maxLength: 500
+        confirm_reactivation:
+          type: "boolean"
+          default: false
+          description: "Confirma la reactivación atómica cuando la cancelación devuelve aves a un lote finalizado por mortalidad."
     RecordEggCollection:
       type: "object"
       additionalProperties: false

@@ -8,6 +8,7 @@ use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Interfaces\FarmStructure\PoultryHouseOccupancyProvider;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\Lots\Breed;
+use App\Models\Lots\Flock;
 use App\Models\SuppliersAndCatalogs\Supplier;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
@@ -140,6 +141,22 @@ final class FlockEndpointTest extends LotsTestCase
         $this->assertDatabaseCount('flocks', 0);
     }
 
+    // Flujo: impide un segundo lote abierto aunque el galpón conserve capacidad física.
+    public function test_second_open_flock_in_same_house_returns_409(): void
+    {
+        // Preparación: admite el primer lote en un galpón con plazas sobrantes.
+        $this->signIn();
+        $payload = $this->payload();
+        $this->command('POST', '/flocks', $payload)->assertCreated();
+
+        // Request: intenta admitir otro lote en el mismo galpón.
+        $this->command('POST', '/flocks', [...$payload, 'code' => 'TEST-B', 'initial_quantity' => 1])->assertConflict();
+
+        // Verificación: conserva una sola ocupación abierta y ningún efecto parcial.
+        $this->assertDatabaseCount('flocks', 1);
+        $this->assertDatabaseCount('flock_movements', 1);
+    }
+
     // Flujo: revierte alta y movimiento cuando falla la auditoría síncrona.
     public function test_audit_failure_rolls_back_admission(): void
     {
@@ -176,6 +193,25 @@ final class FlockEndpointTest extends LotsTestCase
         // Request: una nueva finalización o reapertura no está permitida.
         $this->command('POST', "/flocks/{$flock->public_id}/finalization", ['version' => 2, 'reason' => 'Duplicado'])->assertConflict();
         $this->command('PATCH', "/flocks/{$flock->public_id}/status", ['version' => 2, 'status' => 'active', 'reason' => 'Reabrir'])->assertConflict();
+    }
+
+    // Flujo: libera el galpón al finalizar un lote y permite una nueva admisión.
+    public function test_new_admission_is_allowed_after_previous_flock_finishes(): void
+    {
+        // Preparación: admite un lote en un galpón con capacidad exacta.
+        $this->signIn();
+        $payload = $this->payload();
+        $created = $this->command('POST', '/flocks', $payload)->assertCreated();
+
+        // Mutación: finaliza el lote y deja el galpón disponible para historial futuro.
+        $this->command('POST', '/flocks/'.$created->json('data.flock.id').'/finalization', [
+            'version' => 1, 'reason' => 'Fin del ciclo',
+        ])->assertOk();
+
+        // Request: registra otro lote en el mismo galpón después de la liberación.
+        $this->command('POST', '/flocks', [...$payload, 'code' => 'TEST-DESPUES', 'initial_quantity' => 50])->assertCreated();
+        $this->assertDatabaseCount('flocks', 2);
+        $this->assertSame(1, Flock::query()->where('poultry_house_id', $payload['poultry_house_id'])->whereIn('status', [FlockStatus::Active, FlockStatus::Quarantined])->count());
     }
 
     // Flujo: la cuarentena conserva ocupación y las versiones evitan sobrescrituras.

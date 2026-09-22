@@ -2,6 +2,7 @@
 
 namespace App\Actions\Lots;
 
+use App\Enums\Lots\FlockStatus;
 use App\Events\Lots\MortalityRecorded;
 use App\Exceptions\Lots\LotsConflict;
 use App\Models\Lots\Flock;
@@ -10,6 +11,7 @@ use App\Models\Lots\MortalityCategory;
 use App\Models\Lots\MortalityRecord;
 use App\Models\User;
 use App\Queries\FarmStructure\LockPoultryHousesQuery;
+use App\Services\Lots\FlockActivityJournal;
 use App\Services\Lots\FlockState;
 use App\Services\Lots\LotsHistory;
 use App\Services\Lots\LotsSnapshots;
@@ -18,7 +20,7 @@ use Illuminate\Support\Str;
 
 final readonly class RecordMortalityAction
 {
-    public function __construct(private RunLotsCommand $commands, private FlockState $state, private LockPoultryHousesQuery $houses, private LotsSnapshots $snapshots, private LotsHistory $history) {}
+    public function __construct(private RunLotsCommand $commands, private FlockState $state, private LockPoultryHousesQuery $houses, private LotsSnapshots $snapshots, private LotsHistory $history, private FlockActivityJournal $activities) {}
 
     /** @param array<string, mixed> $data */
     public function execute(Flock $flock, array $data, User $actor, string $source = 'api'): FlockOperation
@@ -47,6 +49,11 @@ final readonly class RecordMortalityAction
                 'notes' => $data['notes'] ?? null, 'status' => 'recorded', 'version' => 1, 'created_by' => $actor->id,
             ])->save();
             $locked->current_quantity -= $quantity;
+            if ($locked->current_quantity === 0) {
+                $locked->status = FlockStatus::Finished;
+                $locked->finalized_at = $time;
+                $locked->finalization_reason = 'Lote agotado por mortalidad.';
+            }
             $locked->version++;
             $locked->save();
             $after = $this->snapshots->flock($locked);
@@ -54,6 +61,7 @@ final readonly class RecordMortalityAction
             $snapshot = $this->snapshots->mortality($record, $locked);
             $this->history->audit($record, $actor, 'mortality_recorded', 'Mortalidad registrada', $operationId, [], $snapshot, $record->production_unit_id, $source);
             $this->history->audit($locked, $actor, 'flock_mortality_applied', 'Cantidad viva ajustada por mortalidad', $operationId, $before, $after, $locked->production_unit_id, $source);
+            $this->activities->record($locked, $operationId, 'mortality', 'mortality.record');
             event(new MortalityRecorded($operationId, [$locked->public_id], $actor->id));
 
             return ['flock' => $after, 'mortality' => $snapshot, 'movement' => $this->snapshots->movement($movement)];

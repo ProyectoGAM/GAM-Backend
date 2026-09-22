@@ -8,6 +8,7 @@ use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
 use App\Models\User;
 use App\Queries\FarmStructure\LockPoultryHousesQuery;
+use App\Services\Lots\FlockActivityJournal;
 use App\Services\Lots\FlockState;
 use App\Services\Lots\LotsHistory;
 use App\Services\Lots\LotsSnapshots;
@@ -15,7 +16,7 @@ use App\Services\Lots\RunLotsCommand;
 
 final readonly class FinalizeFlockAction
 {
-    public function __construct(private RunLotsCommand $commands, private FlockState $state, private LockPoultryHousesQuery $houses, private LotsSnapshots $snapshots, private LotsHistory $history) {}
+    public function __construct(private RunLotsCommand $commands, private FlockState $state, private LockPoultryHousesQuery $houses, private LotsSnapshots $snapshots, private LotsHistory $history, private FlockActivityJournal $activities) {}
 
     /** @param array<string, mixed> $data */
     public function execute(Flock $flock, array $data, User $actor, string $source = 'api'): FlockOperation
@@ -32,6 +33,7 @@ final readonly class FinalizeFlockAction
             $after = $this->snapshots->flock($locked);
             $movement = $this->history->movement($operationId, 'departure', $locked, null, $quantity, [$locked->public_id => $before], [$locked->public_id => $after], $time, $actor, $data['reason']);
             $this->history->audit($locked, $actor, 'flock_finalized', 'Lote finalizado con egreso de aves', $operationId, $before, $after, $locked->production_unit_id, $source, $data['reason']);
+            $this->activities->record($locked, $operationId, 'finalization', 'flock.finalize');
             event(new FlockFinalized($operationId, [$locked->public_id], $actor->id));
 
             return ['flock' => $after, 'movement' => $this->snapshots->movement($movement)];

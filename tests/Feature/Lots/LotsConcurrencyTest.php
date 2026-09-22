@@ -23,6 +23,52 @@ final class LotsConcurrencyTest extends TestCase
         runDatabaseMigrations as private migrateIsolatedDatabase;
     }
 
+    private ?string $originalAppKey = null;
+
+    private bool $hadOriginalEnvAppKey = false;
+
+    private ?string $originalEnvAppKey = null;
+
+    private bool $hadOriginalServerAppKey = false;
+
+    private ?string $originalServerAppKey = null;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->originalAppKey = getenv('APP_KEY') === false ? null : getenv('APP_KEY');
+        $this->hadOriginalEnvAppKey = array_key_exists('APP_KEY', $_ENV);
+        $this->originalEnvAppKey = $_ENV['APP_KEY'] ?? null;
+        $this->hadOriginalServerAppKey = array_key_exists('APP_KEY', $_SERVER);
+        $this->originalServerAppKey = $_SERVER['APP_KEY'] ?? null;
+        $applicationKey = (string) config('app.key');
+        putenv('APP_KEY='.$applicationKey);
+        $_ENV['APP_KEY'] = $applicationKey;
+        $_SERVER['APP_KEY'] = $applicationKey;
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->originalAppKey === null) {
+            putenv('APP_KEY');
+        } else {
+            putenv('APP_KEY='.$this->originalAppKey);
+        }
+        if ($this->hadOriginalEnvAppKey) {
+            $_ENV['APP_KEY'] = $this->originalEnvAppKey;
+        } else {
+            unset($_ENV['APP_KEY']);
+        }
+        if ($this->hadOriginalServerAppKey) {
+            $_SERVER['APP_KEY'] = $this->originalServerAppKey;
+        } else {
+            unset($_SERVER['APP_KEY']);
+        }
+
+        parent::tearDown();
+    }
+
     /** Los procesos secundarios necesitan datos confirmados, nunca la base de desarrollo. */
     public function runDatabaseMigrations(): void
     {
@@ -51,12 +97,12 @@ final class LotsConcurrencyTest extends TestCase
             $commands[] = [
                 'actor_id' => $this->actor('flocks.manage')->id,
                 'data' => ['code' => 'CONCURRENT-'.$number, 'breed_id' => $breed->id, 'origin' => 'Propio',
-                    'poultry_house_id' => $house->id, 'initial_quantity' => 70,
+                    'poultry_house_id' => $house->id, 'initial_quantity' => 30,
                     'entry_date' => now(config('lots.timezone'))->subDay()->toDateString(), 'idempotency_key' => (string) Str::uuid()],
             ];
         }
 
-        // Mutación: ejecuta simultáneamente dos admisiones que no caben juntas.
+        // Mutación: ejecuta simultáneamente dos admisiones incompatibles aunque juntas cabrían.
         $tasks = [];
         foreach ($commands as $command) {
             $tasks[] = static function () use ($command): string {
@@ -72,7 +118,7 @@ final class LotsConcurrencyTest extends TestCase
         $results = Concurrency::driver('process')->run($tasks, timeout: 30);
         sort($results);
         $this->assertSame(['conflict', 'created'], $results);
-        $this->assertSame(70, (int) Flock::query()->sum('current_quantity'));
+        $this->assertSame(30, (int) Flock::query()->sum('current_quantity'));
         $this->assertDatabaseCount('flock_movements', 1);
         $this->assertDatabaseCount('flock_operations', 1);
     }

@@ -80,6 +80,11 @@ final class PoultryHouseEndpointTest extends TestCase
             {
                 return 80;
             }
+
+            public function openFlocksCountFor(int $poultryHouseId): int
+            {
+                return 1;
+            }
         });
 
         // Acción: intenta reducir la capacidad por debajo de la ocupación.

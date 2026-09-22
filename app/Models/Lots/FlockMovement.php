@@ -25,6 +25,7 @@ use Illuminate\Support\Str;
  * @property CarbonImmutable $occurred_at
  * @property int $created_by
  * @property int|null $reverses_movement_id
+ * @property bool $reversal_verified
  * @property-read Flock|null $sourceFlock
  * @property-read Flock|null $destinationFlock
  * @property-read FlockMovement|null $reversedMovement
@@ -54,7 +55,10 @@ class FlockMovement extends Model
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['before' => 'array', 'after' => 'array', 'quantity' => 'integer', 'occurred_at' => 'immutable_datetime'];
+        return [
+            'before' => 'array', 'after' => 'array', 'quantity' => 'integer',
+            'occurred_at' => 'immutable_datetime', 'reversal_verified' => 'boolean',
+        ];
     }
 
     /** @return BelongsTo<Flock, $this> */

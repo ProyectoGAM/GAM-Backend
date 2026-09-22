@@ -10,4 +10,9 @@ final readonly class EmptyPoultryHouseOccupancyProvider implements PoultryHouseO
     {
         return 0;
     }
+
+    public function openFlocksCountFor(int $poultryHouseId): int
+    {
+        return 0;
+    }
 }

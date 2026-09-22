@@ -34,6 +34,14 @@ final class LotsDemoSeeder extends Seeder
         if ($destination === null) {
             $destination = $createHouse->execute($unit, ['name' => 'Galpón Lotes Demo', 'bird_capacity' => 300], $actor);
         }
+        $splitHouse = PoultryHouse::query()->where('production_unit_id', $unit->id)->where('normalized_name', 'galpón lotes parcial demo')->first();
+        if ($splitHouse === null) {
+            $splitHouse = $createHouse->execute($unit, ['name' => 'Galpón Lotes Parcial Demo', 'bird_capacity' => 300], $actor);
+        }
+        $quarantineHouse = PoultryHouse::query()->where('production_unit_id', $unit->id)->where('normalized_name', 'galpón lotes cuarentena demo')->first();
+        if ($quarantineHouse === null) {
+            $quarantineHouse = $createHouse->execute($unit, ['name' => 'Galpón Lotes Cuarentena Demo', 'bird_capacity' => 300], $actor);
+        }
         $breedResult = $this->once($actor, 501, fn (string $key): FlockOperation => $breeds->execute(null, ['name' => 'Ponedoras demo', 'idempotency_key' => $key], $actor, 'seeder'));
         $otherBreed = $this->once($actor, 502, fn (string $key): FlockOperation => $breeds->execute(null, ['name' => 'Camperas demo', 'idempotency_key' => $key], $actor, 'seeder'));
         $category = $this->once($actor, 503, fn (string $key): FlockOperation => $categories->execute(null, ['name' => 'Causa en observación', 'idempotency_key' => $key], $actor, 'seeder'));
@@ -51,10 +59,10 @@ final class LotsDemoSeeder extends Seeder
         ], $actor, 'seeder'));
         $aId = $a->result['flock']['public_id'];
         $bId = $b->result['flock']['public_id'];
-        $split = $this->once($actor, 506, function (string $key) use ($aId, $layers, $redistribute, $actor): FlockOperation {
+        $split = $this->once($actor, 506, function (string $key) use ($aId, $splitHouse, $redistribute, $actor): FlockOperation {
             $flock = Flock::query()->where('public_id', $aId)->firstOrFail();
 
-            return $redistribute->execute($flock, ['quantity' => 20, 'destination_poultry_house_id' => $layers->id, 'destination_code' => 'DEMO-LOT-C', 'version' => $flock->version, 'idempotency_key' => $key], $actor, 'seeder');
+            return $redistribute->execute($flock, ['quantity' => 20, 'destination_poultry_house_id' => $splitHouse->id, 'destination_code' => 'DEMO-LOT-C', 'version' => $flock->version, 'idempotency_key' => $key], $actor, 'seeder');
         });
         $this->once($actor, 507, function (string $key) use ($aId, $bId, $redistribute, $actor): FlockOperation {
             $from = Flock::query()->where('public_id', $aId)->firstOrFail();
@@ -79,7 +87,7 @@ final class LotsDemoSeeder extends Seeder
         });
         $d = $this->once($actor, 512, fn (string $key): FlockOperation => $create->execute([
             'code' => 'DEMO-LOT-D', 'breed_id' => $otherBreed->result['catalog']['id'], 'origin' => 'Cría propia demo',
-            'poultry_house_id' => $destination->id, 'initial_quantity' => 25, 'entry_date' => $entryDate, 'idempotency_key' => $key,
+            'poultry_house_id' => $quarantineHouse->id, 'initial_quantity' => 25, 'entry_date' => $entryDate, 'idempotency_key' => $key,
         ], $actor, 'seeder'));
         $this->once($actor, 513, function (string $key) use ($d, $status, $actor): FlockOperation {
             $flock = Flock::query()->where('public_id', $d->result['flock']['public_id'])->firstOrFail();

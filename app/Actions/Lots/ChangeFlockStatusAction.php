@@ -8,6 +8,7 @@ use App\Exceptions\Lots\LotsConflict;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
 use App\Models\User;
+use App\Services\Lots\FlockActivityJournal;
 use App\Services\Lots\FlockState;
 use App\Services\Lots\LotsHistory;
 use App\Services\Lots\LotsSnapshots;
@@ -15,7 +16,7 @@ use App\Services\Lots\RunLotsCommand;
 
 final readonly class ChangeFlockStatusAction
 {
-    public function __construct(private RunLotsCommand $commands, private FlockState $state, private LotsSnapshots $snapshots, private LotsHistory $history) {}
+    public function __construct(private RunLotsCommand $commands, private FlockState $state, private LotsSnapshots $snapshots, private LotsHistory $history, private FlockActivityJournal $activities) {}
 
     /** @param array<string, mixed> $data */
     public function execute(Flock $flock, array $data, User $actor, string $source = 'api'): FlockOperation
@@ -33,6 +34,7 @@ final readonly class ChangeFlockStatusAction
             $locked->save();
             $after = $this->snapshots->flock($locked);
             $this->history->audit($locked, $actor, 'flock_status_changed', 'Estado del lote cambiado', $operationId, $before, $after, $locked->production_unit_id, $source, $data['reason']);
+            $this->activities->record($locked, $operationId, 'status_change', 'flock.status');
             event(new FlockStatusChanged($operationId, [$locked->public_id], $actor->id));
 
             return ['flock' => $after];
