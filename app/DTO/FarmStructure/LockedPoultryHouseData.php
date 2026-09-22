@@ -9,6 +9,7 @@ final readonly class LockedPoultryHouseData
         public int $productionUnitId,
         public int $capacity,
         public int $occupancy,
+        public int $openFlocksCount,
         public bool $canReceive,
     ) {}
 

@@ -12,6 +12,7 @@ use App\Models\Lots\FlockOperation;
 use App\Models\User;
 use App\Queries\FarmStructure\LockPoultryHousesQuery;
 use App\Queries\SuppliersAndCatalogs\GetActiveSupplierQuery;
+use App\Services\Lots\FlockActivityJournal;
 use App\Services\Lots\FlockState;
 use App\Services\Lots\LotsHistory;
 use App\Services\Lots\LotsSnapshots;
@@ -21,7 +22,7 @@ use Illuminate\Support\Str;
 
 final readonly class CreateFlockAction
 {
-    public function __construct(private RunLotsCommand $commands, private FlockState $state, private LockPoultryHousesQuery $houses, private GetActiveSupplierQuery $suppliers, private LotsSnapshots $snapshots, private LotsHistory $history, private Clock $clock) {}
+    public function __construct(private RunLotsCommand $commands, private FlockState $state, private LockPoultryHousesQuery $houses, private GetActiveSupplierQuery $suppliers, private LotsSnapshots $snapshots, private LotsHistory $history, private FlockActivityJournal $activities, private Clock $clock) {}
 
     /** @param array<string, mixed> $data */
     public function execute(array $data, User $actor, string $source = 'api'): FlockOperation
@@ -44,7 +45,7 @@ final readonly class CreateFlockAction
                 throw new LotsConflict('Indica un proveedor activo o describe el origen del lote.');
             }
             $house = $this->houses->execute([(int) $data['poultry_house_id']])[(int) $data['poultry_house_id']];
-            $this->state->receive($house, $quantity);
+            $this->state->receive($house, $quantity, requiresEmpty: true);
             $flock = new Flock;
             $flock->forceFill([
                 'public_id' => $data['public_id'] ?? (string) Str::ulid(), 'code' => $data['code'],
@@ -56,6 +57,7 @@ final readonly class CreateFlockAction
             $after = $this->snapshots->flock($flock);
             $movement = $this->history->movement($operationId, 'admission', null, $flock, $quantity, [], [$flock->public_id => $after], $entry->utc(), $actor);
             $this->history->audit($flock, $actor, 'flock_created', 'Lote creado', $operationId, [], $after, $house->productionUnitId, $source);
+            $this->activities->record($flock, $operationId, 'admission', 'flock.create');
             event(new FlockCreated($operationId, [$flock->public_id], $actor->id));
 
             return ['flock' => $after, 'movement' => $this->snapshots->movement($movement)];

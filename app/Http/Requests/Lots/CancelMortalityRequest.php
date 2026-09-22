@@ -15,6 +15,7 @@ final class CancelMortalityRequest extends LotsRequest
         return [
             ...$this->commandRules(),
             'flock_version' => ['required', 'integer', 'min:1'],
+            'confirm_reactivation' => ['sometimes', 'boolean'],
             'reason' => ['required', 'string', 'max:500'],
         ];
     }

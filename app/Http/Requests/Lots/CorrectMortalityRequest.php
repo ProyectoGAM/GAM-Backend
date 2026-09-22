@@ -18,6 +18,7 @@ final class CorrectMortalityRequest extends LotsRequest
             'quantity' => ['sometimes', 'integer', 'min:1', 'max:2147483647'],
             'mortality_category_id' => ['sometimes', 'integer', 'min:1'],
             'notes' => ['sometimes', 'nullable', 'string', 'max:5000'],
+            'confirm_reactivation' => ['sometimes', 'boolean'],
             'reason' => ['required', 'string', 'max:500'],
         ];
     }

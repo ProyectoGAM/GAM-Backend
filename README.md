@@ -103,6 +103,8 @@ Para reconstruir la base local desde cero:
 docker compose -f compose.dev.yaml exec api php artisan migrate:fresh --seed --force
 ```
 
+Las decisiones para corregir, regenerar o reconstruir datos de prueba del entorno local no requieren confirmación adicional: son datos ficticios, no pertenecen a producción y su reemplazo no afecta negativamente el desarrollo. Esta autorización se limita a `APP_ENV=local` y no aplica a datos reales ni a otros entornos.
+
 Cada módulo nuevo debe incluir su seeder de datos demo y registrarlo en `LocalDemoDataSeeder` (o en un seeder del módulo invocado por este), para que sus datos estén disponibles automáticamente cuando el ambiente sea local.
 
 ## Autenticación multi-login

@@ -12,6 +12,7 @@ use App\Models\Lots\Weighing;
 use App\Models\Lots\WeighingMeasurement;
 use App\Models\Lots\WeighingReferenceSettings;
 use App\Models\User;
+use App\Services\Lots\FlockActivityJournal;
 use App\Services\Lots\FlockState;
 use App\Services\Lots\LotsHistory;
 use App\Services\Lots\LotsSnapshots;
@@ -27,6 +28,7 @@ final readonly class RecordWeighingAction
     public function __construct(
         private RunLotsCommand $commands,
         private FlockState $state,
+        private FlockActivityJournal $activities,
         private WeighingFlockProjection $projection,
         private WeighingBuilder $builder,
         private WeighingPresenter $presenter,
@@ -91,6 +93,7 @@ final readonly class RecordWeighingAction
                 $this->saveMeasurements($weighing, $built['measurements']);
                 $after = $this->presenter->weighing($weighing->fresh(['flock', 'measurements']));
                 $this->history->audit($weighing, $actor, 'weighing_recorded', 'Pesaje registrado', $operationId, [], $after, $built['production_unit_id'], $source);
+                $this->activities->record($locked, $operationId, 'weighing', 'weighing.record');
                 event(new WeighingRecorded($operationId, [$locked->public_id], $actor->id));
 
                 return [

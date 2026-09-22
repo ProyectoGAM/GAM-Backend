@@ -2,6 +2,7 @@
 
 namespace Database\Seeders\Lots;
 
+use App\Actions\FarmStructure\CreatePoultryHouseAction;
 use App\Actions\Inventory\EnsureEggStockAccountAction;
 use App\Actions\Inventory\RecordManualEggStockAction;
 use App\Actions\Lots\CorrectEggCollectionAction;
@@ -21,7 +22,7 @@ use Illuminate\Database\Seeder;
 
 final class EggProductionDemoSeeder extends Seeder
 {
-    public function run(CreateFlockAction $flocks, RecordEggCollectionAction $collections, CorrectEggCollectionAction $corrections, RecordManualEggStockAction $manual, EnsureEggStockAccountAction $accounts): void
+    public function run(CreateFlockAction $flocks, RecordEggCollectionAction $collections, CorrectEggCollectionAction $corrections, RecordManualEggStockAction $manual, EnsureEggStockAccountAction $accounts, CreatePoultryHouseAction $createHouse): void
     {
         if (! app()->environment('local')) {
             return;
@@ -30,8 +31,12 @@ final class EggProductionDemoSeeder extends Seeder
         ProductionUnit::query()->each(function (ProductionUnit $unit) use ($accounts): void {
             $accounts->execute($unit);
         });
-        $house = PoultryHouse::query()->where('normalized_name', 'galpón ponedoras')->firstOrFail();
-        $unit = ProductionUnit::query()->findOrFail($house->production_unit_id);
+        $baseHouse = PoultryHouse::query()->where('normalized_name', 'galpón ponedoras')->firstOrFail();
+        $unit = ProductionUnit::query()->findOrFail($baseHouse->production_unit_id);
+        $house = PoultryHouse::query()->where('production_unit_id', $unit->id)->where('normalized_name', 'galpón ponedoras demo')->first();
+        if ($house === null) {
+            $house = $createHouse->execute($unit, ['name' => 'Galpón Ponedoras Demo', 'bird_capacity' => 300], $actor);
+        }
         $accounts->execute($unit);
         $breed = Breed::query()->where('normalized_name', 'ponedoras demo')->firstOrFail();
         $supplier = Supplier::query()->orderBy('id')->firstOrFail();

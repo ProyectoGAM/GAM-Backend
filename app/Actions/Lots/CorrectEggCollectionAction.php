@@ -8,8 +8,11 @@ use App\Exceptions\Lots\LotsConflict;
 use App\Models\Inventory\EggStockTransaction;
 use App\Models\Inventory\EggStockTransactionRevision;
 use App\Models\Lots\EggCollection;
+use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
 use App\Models\User;
+use App\Services\Lots\FlockActivityJournal;
+use App\Services\Lots\FlockState;
 use App\Services\Lots\LotsHistory;
 use App\Services\Lots\LotsSnapshots;
 use App\Services\Lots\RunLotsCommand;
@@ -20,6 +23,8 @@ final readonly class CorrectEggCollectionAction
 {
     public function __construct(
         private RunLotsCommand $commands,
+        private FlockState $state,
+        private FlockActivityJournal $activities,
         private RecordEggStockTransactionAction $stock,
         private LotsSnapshots $snapshots,
         private LotsHistory $history,
@@ -29,7 +34,10 @@ final readonly class CorrectEggCollectionAction
     public function execute(EggCollection $record, array $data, User $actor, bool $cancel = false, string $source = 'api'): FlockOperation
     {
         return $this->commands->execute($actor, 'egg-collections.manage', $cancel ? 'eggs.cancel' : 'eggs.correct', $data['idempotency_key'], ['record' => $record->public_id, ...$data], function (string $operationId) use ($record, $data, $actor, $cancel, $source): array {
+            $flockPublicId = Flock::query()->whereKey($record->flock_id)->value('public_id');
+            $flock = $this->state->lock([$flockPublicId])->get($flockPublicId);
             $current = EggCollection::query()->whereKey($record->id)->lockForUpdate()->firstOrFail();
+            $current->setRelation('flock', $flock);
             if ($current->version !== (int) $data['version'] || $current->status !== 'recorded') {
                 throw new LotsConflict('La recolección cambió de versión o ya fue cancelada.');
             }
@@ -38,7 +46,7 @@ final readonly class CorrectEggCollectionAction
                 ->where('reference_id', $current->public_id)
                 ->lockForUpdate()
                 ->firstOrFail();
-            $before = $this->snapshots->collection($current, $current->flock);
+            $before = $this->snapshots->collection($current, $flock);
             $newQuantity = $cancel ? $current->quantity : (int) ($data['quantity'] ?? $current->quantity);
             $newOccurredAt = $cancel ? $current->occurred_at : (isset($data['occurred_at']) ? CarbonImmutable::parse($data['occurred_at']) : $current->occurred_at);
             $newNotes = $cancel ? $current->notes : (array_key_exists('notes', $data) ? $data['notes'] : $current->notes);
@@ -71,7 +79,7 @@ final readonly class CorrectEggCollectionAction
                 'status' => $cancel ? 'cancelled' : 'recorded',
                 'version' => $transaction->version + 1,
             ])->save();
-            $after = $this->snapshots->collection($current, $current->flock);
+            $after = $this->snapshots->collection($current, $flock);
             EggStockTransactionRevision::query()->create([
                 'public_id' => (string) Str::ulid(),
                 'egg_stock_transaction_id' => $transaction->id,
@@ -83,9 +91,10 @@ final readonly class CorrectEggCollectionAction
                 'created_by' => $actor->id,
             ]);
             $this->history->audit($current, $actor, $cancel ? 'egg_collection_cancelled' : 'egg_collection_corrected', $cancel ? 'Recolección cancelada' : 'Recolección rectificada', $operationId, $before, $after, $current->production_unit_id, $source, $reason);
-            event(new EggCollectionCorrected($operationId, [$current->flock->public_id], $actor->id));
+            $this->activities->record($flock, $operationId, $cancel ? 'egg_collection_cancelled' : 'egg_collection_correction', $cancel ? 'eggs.cancel' : 'eggs.correct');
+            event(new EggCollectionCorrected($operationId, [$flock->public_id], $actor->id));
 
-            return ['flock' => $this->snapshots->flock($current->flock), 'collection' => $after, 'stock_transaction' => $transaction->public_id];
+            return ['flock' => $this->snapshots->flock($flock), 'collection' => $after, 'stock_transaction' => $transaction->public_id];
         });
     }
 }

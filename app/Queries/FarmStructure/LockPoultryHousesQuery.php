@@ -35,6 +35,7 @@ final readonly class LockPoultryHousesQuery
             $result[$house->id] = new LockedPoultryHouseData(
                 $house->id, $house->production_unit_id, $house->bird_capacity,
                 $this->occupancy->occupancyFor($house->id),
+                $this->occupancy->openFlocksCountFor($house->id),
                 $house->status === PoultryHouseStatus::Operational
                     && $house->productionUnit->status === ProductionUnitStatus::Active,
             );
