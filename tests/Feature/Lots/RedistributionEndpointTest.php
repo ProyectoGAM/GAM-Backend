@@ -9,6 +9,7 @@ use App\Models\FarmStructure\PoultryHouse;
 use App\Models\Lots\Breed;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockMovement;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -19,7 +20,10 @@ final class RedistributionEndpointTest extends LotsTestCase
     {
         // Preparación: crea origen y galpón destino con capacidad disponible.
         $this->signIn();
-        $flock = $this->flock();
+        $flock = $this->flockWithPlan(100, activities: [
+            ['type' => 'weighing', 'title' => 'Pesaje pasado', 'timing_kind' => 'week', 'start_week' => 1],
+            ['type' => 'vaccination', 'title' => 'Vacuna futura', 'timing_kind' => 'week', 'start_week' => 10],
+        ]);
         $house = PoultryHouse::factory()->create(['bird_capacity' => 40]);
         $publicId = (string) Str::ulid();
 
@@ -37,9 +41,54 @@ final class RedistributionEndpointTest extends LotsTestCase
         $this->assertDatabaseHas('flock_movements', ['source_flock_id' => $flock->id, 'destination_flock_id' => $destination->id, 'quantity' => 40]);
         $this->assertDatabaseHas('poultry_houses', ['id' => $house->id, 'bird_capacity' => 40]);
 
+        // Verificación: el lote nuevo tiene un plan propio con las actividades futuras y su procedencia.
+        $sourcePlan = DB::table('flock_plans')->where('flock_id', $flock->id)->first();
+        $destinationPlan = DB::table('flock_plans')->where('flock_id', $destination->id)->first();
+        $this->assertNotNull($sourcePlan);
+        $this->assertNotNull($destinationPlan);
+        $this->assertNotSame($sourcePlan->id, $destinationPlan->id);
+        $this->assertSame($flock->id, $destinationPlan->source_flock_id);
+        $this->assertSame($sourcePlan->baseline_date, $destinationPlan->baseline_date);
+        $this->assertSame($sourcePlan->plan_template_version_id, $destinationPlan->plan_template_version_id);
+        $sourceRevisionId = DB::table('flock_plan_revisions')->where('flock_plan_id', $sourcePlan->id)->value('id');
+        $destinationRevisionId = DB::table('flock_plan_revisions')->where('flock_plan_id', $destinationPlan->id)->value('id');
+        $sourceFutureActivityId = DB::table('flock_plan_activities')
+            ->where('flock_plan_revision_id', $sourceRevisionId)->where('title', 'Vacuna futura')->value('id');
+        $this->assertSame('Vacuna futura', DB::table('flock_plan_activities')
+            ->where('flock_plan_revision_id', $destinationRevisionId)->value('title'));
+        $this->assertNotNull($sourceFutureActivityId);
+        $this->assertSame($sourceFutureActivityId, DB::table('flock_plan_activities')
+            ->where('flock_plan_revision_id', $destinationRevisionId)->value('copied_from_activity_id'));
+        $this->assertDatabaseMissing('flock_plan_activities', [
+            'flock_plan_revision_id' => $destinationRevisionId, 'title' => 'Pesaje pasado',
+        ]);
+
         // Consulta: ambos lotes exponen el mismo movimiento y su fotografía histórica.
         $this->getJson("/api/v1/flocks/{$publicId}/history")->assertOk()->assertJsonPath('data.0.id', $response->json('data.movement.id'));
         $this->getJson("/api/v1/flocks/{$flock->public_id}/history")->assertOk()->assertJsonPath("data.0.before.{$flock->public_id}.current_quantity", 100);
+    }
+
+    // Flujo: revierte toda la división cuando el lote legado todavía no tiene plan.
+    public function test_partial_new_split_without_source_plan_rolls_back_every_change(): void
+    {
+        // Preparación: usa un lote legado sin asignación y un galpón disponible.
+        $this->signIn();
+        $source = $this->flock();
+        $house = PoultryHouse::factory()->create();
+
+        // Request: intenta crear un lote nuevo y recibe conflicto por el plan ausente.
+        $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
+            'version' => 1, 'quantity' => 20, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'SIN-PLAN',
+        ])->assertConflict();
+
+        // Verificación: se revierten el descuento, el lote destino, la operación y la auditoría.
+        $this->assertSame(100, $source->fresh()->current_quantity);
+        $this->assertSame(1, $source->fresh()->version);
+        $this->assertDatabaseCount('flocks', 1);
+        $this->assertDatabaseCount('flock_plans', 0);
+        $this->assertDatabaseCount('flock_movements', 0);
+        $this->assertDatabaseCount('flock_operations', 0);
+        $this->assertDatabaseCount('activity_log', 0);
     }
 
     // Flujo: agrega aves a un lote existente sin sobrescribir su procedencia ni edad.
@@ -207,7 +256,7 @@ final class RedistributionEndpointTest extends LotsTestCase
     {
         // Preparación: registra una redistribución sin operaciones posteriores.
         $this->signIn();
-        $flock = $this->flock();
+        $flock = $this->flockWithPlan();
         $house = PoultryHouse::factory()->create();
         $operation = $this->command('POST', "/flocks/{$flock->public_id}/redistributions", [
             'version' => 1, 'quantity' => 40, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'A-REVERTIR',
@@ -250,7 +299,7 @@ final class RedistributionEndpointTest extends LotsTestCase
     {
         // Preparación: redistribuye aves y habilita los permisos de recolección.
         $this->signIn(['flocks.view', 'flocks.manage', 'flocks.redistribute', 'flocks.finalize', 'egg-collections.view', 'egg-collections.manage', 'egg-stock.view', 'egg-stock.move', 'egg-stock.adjust']);
-        $source = $this->flock();
+        $source = $this->flockWithPlan();
         $house = PoultryHouse::factory()->create();
         $operation = $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
             'version' => 1, 'quantity' => 20, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'RECEPTOR-EGG',
@@ -272,7 +321,7 @@ final class RedistributionEndpointTest extends LotsTestCase
     {
         // Preparación: crea una redistribución parcial y habilita el módulo de pesajes.
         $this->signIn(['flocks.view', 'flocks.manage', 'flocks.redistribute', 'flocks.finalize', 'weighings.view', 'weighings.manage']);
-        $source = $this->flock();
+        $source = $this->flockWithPlan();
         $house = PoultryHouse::factory()->create();
         $operation = $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
             'version' => 1, 'quantity' => 20, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'RECEPTOR-PESO',
@@ -344,7 +393,7 @@ final class RedistributionEndpointTest extends LotsTestCase
     {
         // Preparación: crea una redistribución y la marca como historial incierto.
         $this->signIn();
-        $source = $this->flock();
+        $source = $this->flockWithPlan();
         $house = PoultryHouse::factory()->create();
         $operation = $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
             'version' => 1, 'quantity' => 20, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'LEGACY-UNCERTAIN',
@@ -384,7 +433,7 @@ final class RedistributionEndpointTest extends LotsTestCase
     {
         // Preparación: fija una clave de operación para ambos envíos.
         $this->signIn();
-        $flock = $this->flock();
+        $flock = $this->flockWithPlan();
         $house = PoultryHouse::factory()->create();
         $payload = ['version' => 1, 'quantity' => 10, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'REPLAY'];
         $key = (string) Str::uuid();

@@ -2,6 +2,7 @@
 
 namespace App\Actions\Lots;
 
+use App\Actions\ManagementPlans\AssignFlockPlanAction;
 use App\Enums\Lots\FlockStatus;
 use App\Events\Lots\FlockRedistributed;
 use App\Exceptions\Lots\LotsConflict;
@@ -14,6 +15,7 @@ use App\Services\Lots\FlockState;
 use App\Services\Lots\LotsHistory;
 use App\Services\Lots\LotsSnapshots;
 use App\Services\Lots\RunLotsCommand;
+use App\Services\ManagementPlans\PlanActivityLinker;
 use Illuminate\Support\Str;
 
 final readonly class RedistributeFlockAction
@@ -25,6 +27,8 @@ final readonly class RedistributeFlockAction
         private LotsSnapshots $snapshots,
         private LotsHistory $history,
         private FlockActivityJournal $activities,
+        private PlanActivityLinker $planActivities,
+        private AssignFlockPlanAction $plans,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -44,6 +48,7 @@ final readonly class RedistributeFlockAction
             $to = $receiverId === null ? null : $locked->get($receiverId);
             $this->state->version($from, (int) $data['version']);
             $this->state->open($from, true);
+            $planActivity = $this->planActivities->resolve($from, $data['plan_activity_id'] ?? null, 'flock_movement');
             $quantity = (int) $data['quantity'];
             $this->state->positive($quantity);
             if ($quantity > $from->current_quantity) {
@@ -132,6 +137,7 @@ final readonly class RedistributeFlockAction
                         'status' => FlockStatus::Active,
                         'version' => 1,
                     ])->save();
+                    $this->plans->inheritFuture($from, $destination, $time, $actor, $operationId, $source);
                 } else {
                     $type = 'partial_existing';
                     $destination = $to;
@@ -145,7 +151,7 @@ final readonly class RedistributeFlockAction
             if ($destination->public_id !== $from->public_id) {
                 $after[$destination->public_id] = $this->snapshots->flock($destination);
             }
-            $movement = $this->history->movement($operationId, $type, $from, $destination, $quantity, $before, $after, $time, $actor, $data['reason'] ?? null);
+            $movement = $this->history->movement($operationId, $type, $from, $destination, $quantity, $before, $after, $time, $actor, $data['reason'] ?? null, planActivityId: $planActivity?->id);
             $changedFlocks = [$from->public_id => $from];
             if ($destination->public_id !== $from->public_id) {
                 $changedFlocks[$destination->public_id] = $destination;

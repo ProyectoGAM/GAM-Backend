@@ -2,6 +2,7 @@
 
 namespace App\Actions\Lots;
 
+use App\Actions\ManagementPlans\AssignFlockPlanAction;
 use App\Enums\Lots\FlockStatus;
 use App\Events\Lots\FlockCreated;
 use App\Exceptions\Lots\LotsConflict;
@@ -22,7 +23,7 @@ use Illuminate\Support\Str;
 
 final readonly class CreateFlockAction
 {
-    public function __construct(private RunLotsCommand $commands, private FlockState $state, private LockPoultryHousesQuery $houses, private GetActiveSupplierQuery $suppliers, private LotsSnapshots $snapshots, private LotsHistory $history, private FlockActivityJournal $activities, private Clock $clock) {}
+    public function __construct(private RunLotsCommand $commands, private FlockState $state, private LockPoultryHousesQuery $houses, private GetActiveSupplierQuery $suppliers, private LotsSnapshots $snapshots, private LotsHistory $history, private FlockActivityJournal $activities, private Clock $clock, private AssignFlockPlanAction $plans) {}
 
     /** @param array<string, mixed> $data */
     public function execute(array $data, User $actor, string $source = 'api'): FlockOperation
@@ -54,6 +55,14 @@ final readonly class CreateFlockAction
                 'initial_quantity' => $quantity, 'current_quantity' => $quantity, 'entry_date' => $data['entry_date'],
                 'established_at' => $entry->utc(), 'status' => FlockStatus::Active, 'version' => 1, 'notes' => $data['notes'] ?? null,
             ])->save();
+            $this->plans->assignPublished(
+                $flock,
+                (string) $data['plan_template_id'],
+                (int) $data['plan_template_version'],
+                $actor,
+                $operationId,
+                $source,
+            );
             $after = $this->snapshots->flock($flock);
             $movement = $this->history->movement($operationId, 'admission', null, $flock, $quantity, [], [$flock->public_id => $after], $entry->utc(), $actor);
             $this->history->audit($flock, $actor, 'flock_created', 'Lote creado', $operationId, [], $after, $house->productionUnitId, $source);

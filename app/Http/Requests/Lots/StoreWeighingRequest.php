@@ -18,6 +18,7 @@ final class StoreWeighingRequest extends WeighingsRequest
             ...$this->commandRules(false),
             'id' => ['sometimes', 'ulid'],
             'flock_id' => ['required', 'ulid', 'exists:flocks,public_id'],
+            'plan_activity_id' => ['nullable', 'ulid'],
             'mode' => ['required', 'in:individual,group'],
             'unit' => ['required', 'in:g,kg'],
             'occurred_at' => $this->timeRules(),

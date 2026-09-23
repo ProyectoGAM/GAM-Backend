@@ -9,7 +9,10 @@ use App\Interfaces\FarmStructure\PoultryHouseOccupancyProvider;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\Lots\Breed;
 use App\Models\Lots\Flock;
+use App\Models\ManagementPlans\PlanTemplate;
 use App\Models\SuppliersAndCatalogs\Supplier;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -20,10 +23,13 @@ final class FlockEndpointTest extends LotsTestCase
     /** @return array<string, mixed> */
     private function payload(): array
     {
+        $plan = $this->createPublishedPlanSelection(User::query()->findOrFail(auth()->id()));
+
         return [
             'code' => 'TEST-A', 'breed_id' => Breed::factory()->create()->id,
             'supplier_id' => Supplier::factory()->create()->id, 'poultry_house_id' => PoultryHouse::factory()->create(['bird_capacity' => 100])->id,
             'initial_quantity' => 100, 'entry_date' => now(config('lots.timezone'))->subDays(7)->toDateString(),
+            ...$plan,
         ];
     }
 
@@ -43,6 +49,16 @@ final class FlockEndpointTest extends LotsTestCase
         $this->assertDatabaseHas('poultry_houses', ['id' => $payload['poultry_house_id'], 'bird_capacity' => 100]);
         $this->assertSame(100, $this->app->make(PoultryHouseOccupancyProvider::class)->occupancyFor($payload['poultry_house_id']));
         $this->assertDatabaseHas('activity_log', ['event' => 'flock_created', 'operation_id' => $response->json('data.operation_id')]);
+        $this->assertDatabaseHas('activity_log', ['event' => 'flock_plan_assigned', 'operation_id' => $response->json('data.operation_id')]);
+        $flockId = Flock::query()->where('public_id', $response->json('data.flock.id'))->value('id');
+        $plan = DB::table('flock_plans')->where('flock_id', $flockId)->first();
+        $this->assertNotNull($plan);
+        $revisionId = DB::table('flock_plan_revisions')->where('flock_plan_id', $plan->id)->value('id');
+        $this->assertNotNull($revisionId);
+        $this->assertDatabaseHas('flock_plan_activities', [
+            'flock_plan_revision_id' => $revisionId,
+            'title' => 'Pesaje de prueba',
+        ]);
         Event::assertDispatched(FlockCreated::class);
     }
 
@@ -68,12 +84,18 @@ final class FlockEndpointTest extends LotsTestCase
         $key = (string) Str::uuid();
         $first = $this->command('POST', '/flocks', $payload, $key)->assertCreated();
 
-        // Mutación: modifica el lote antes del reintento.
+        // Mutación: modifica el lote y retira la plantilla antes del reintento.
         $this->command('PATCH', '/flocks/'.$first->json('data.flock.id'), ['version' => 1, 'notes' => 'Revisado'])->assertOk();
+        PlanTemplate::query()->where('public_id', $payload['plan_template_id'])->update(['status' => 'retired']);
         $replay = $this->command('POST', '/flocks', $payload, $key)->assertCreated();
         $this->assertSame($first->json(), $replay->json());
         $this->assertDatabaseCount('flocks', 1);
         $this->assertDatabaseCount('flock_movements', 1);
+        $this->assertDatabaseCount('flock_plans', 1);
+        $this->assertDatabaseCount('flock_plan_revisions', 1);
+        $this->assertDatabaseCount('flock_plan_activities', 1);
+        $this->assertSame(1, DB::table('activity_log')->where('event', 'flock_plan_assigned')->count());
+        $this->assertSame(1, DB::table('activity_log')->where('event', 'flock_created')->count());
 
         // Request: la misma clave con otro contenido no puede crear otro ingreso.
         $this->command('POST', '/flocks', [...$payload, 'initial_quantity' => 99], $key)->assertConflict();
@@ -87,6 +109,22 @@ final class FlockEndpointTest extends LotsTestCase
         $this->signIn([]);
         $this->getJson('/api/v1/flocks')->assertForbidden();
         $this->command('POST', '/flocks', [])->assertForbidden();
+    }
+
+    // Flujo: exige una versión publicada explícita antes de admitir aves.
+    public function test_creation_requires_plan_template_and_version(): void
+    {
+        // Preparación: crea un alta válida y elimina la referencia al plan.
+        $this->signIn();
+        $payload = $this->payload();
+        unset($payload['plan_template_id'], $payload['plan_template_version']);
+
+        // Request: rechaza la admisión sin plantilla seleccionada.
+        $this->command('POST', '/flocks', $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['plan_template_id', 'plan_template_version']);
+        $this->assertDatabaseCount('flocks', 0);
+        $this->assertDatabaseCount('flock_operations', 0);
     }
 
     /** @return array<string, array{string, mixed}> */
@@ -169,9 +207,32 @@ final class FlockEndpointTest extends LotsTestCase
         // Request: comprueba rollback completo.
         $this->command('POST', '/flocks', $payload)->assertStatus(500);
         $this->assertDatabaseCount('flocks', 0);
+        $this->assertDatabaseCount('flock_plans', 0);
+        $this->assertDatabaseCount('flock_plan_revisions', 0);
+        $this->assertDatabaseCount('flock_plan_activities', 0);
         $this->assertDatabaseCount('flock_movements', 0);
         $this->assertDatabaseCount('flock_operations', 0);
+        $this->assertDatabaseCount('activity_log', 0);
         Event::assertNotDispatched(FlockCreated::class);
+    }
+
+    // Flujo: revierte el alta completa cuando la versión dejó de ser la publicada.
+    public function test_returns_409_and_rolls_back_when_selected_plan_version_is_unpublished(): void
+    {
+        // Preparación: solicita una versión distinta de la única versión publicada.
+        $this->signIn();
+        $payload = $this->payload();
+        $payload['plan_template_version']++;
+
+        // Request: comprueba el conflicto de versión y la ausencia de efectos parciales.
+        $this->command('POST', '/flocks', $payload)->assertConflict();
+        $this->assertDatabaseCount('flocks', 0);
+        $this->assertDatabaseCount('flock_plans', 0);
+        $this->assertDatabaseCount('flock_plan_revisions', 0);
+        $this->assertDatabaseCount('flock_plan_activities', 0);
+        $this->assertDatabaseCount('flock_movements', 0);
+        $this->assertDatabaseCount('flock_operations', 0);
+        $this->assertDatabaseCount('activity_log', 0);
     }
 
     // Flujo: finaliza con egreso, conserva historia y no crea mortalidad.

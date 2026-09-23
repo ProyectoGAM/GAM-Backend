@@ -12,7 +12,7 @@ final readonly class VaccinePolicy
      */
     public function viewAny(User $user): bool
     {
-        return ! $user->trashed() && $user->hasRole('admin');
+        return ! $user->trashed() && ($user->hasRole('admin') || $user->can('management-plans.manage'));
     }
 
     /**
@@ -28,7 +28,7 @@ final readonly class VaccinePolicy
      */
     public function create(User $user): bool
     {
-        return $this->viewAny($user);
+        return ! $user->trashed() && $user->hasRole('admin');
     }
 
     /**
@@ -36,11 +36,11 @@ final readonly class VaccinePolicy
      */
     public function update(User $user, Vaccine $vaccine): bool
     {
-        return $this->viewAny($user);
+        return $this->create($user);
     }
 
     public function changeStatus(User $user, Vaccine $vaccine): bool
     {
-        return $this->viewAny($user);
+        return $this->create($user);
     }
 }

@@ -17,6 +17,7 @@ use App\Services\Lots\FlockState;
 use App\Services\Lots\LotsHistory;
 use App\Services\Lots\LotsSnapshots;
 use App\Services\Lots\RunLotsCommand;
+use App\Services\ManagementPlans\PlanActivityLinker;
 use Illuminate\Support\Str;
 
 final readonly class RecordEggCollectionAction
@@ -29,6 +30,7 @@ final readonly class RecordEggCollectionAction
         private RecordEggStockTransactionAction $stock,
         private LotsSnapshots $snapshots,
         private LotsHistory $history,
+        private PlanActivityLinker $planActivities,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -49,12 +51,15 @@ final readonly class RecordEggCollectionAction
                 throw new LotsConflict('La cantidad debe ser un entero entre 1 y 2147483647.');
             }
             $time = $this->state->time($locked, $data['occurred_at'] ?? null);
+            $planActivity = $this->planActivities->resolve($locked, $data['plan_activity_id'] ?? null, 'egg_collection');
             $this->houses->execute([$locked->poultry_house_id]);
 
             $record = new EggCollection;
             $record->forceFill([
                 'public_id' => $data['public_id'] ?? (string) Str::ulid(),
                 'flock_id' => $locked->id,
+                'flock_plan_activity_id' => $planActivity?->id,
+                'operation_id' => $operationId,
                 'poultry_house_id' => $locked->poultry_house_id,
                 'production_unit_id' => $locked->production_unit_id,
                 'quantity' => $quantity,

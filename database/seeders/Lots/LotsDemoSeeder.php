@@ -14,6 +14,7 @@ use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
+use App\Models\ManagementPlans\PlanTemplate;
 use App\Models\SuppliersAndCatalogs\Supplier;
 use App\Models\User;
 use Closure;
@@ -26,6 +27,7 @@ final class LotsDemoSeeder extends Seeder
         if (! app()->environment('local')) {
             return;
         }
+        $planTemplate = PlanTemplate::query()->where('name', 'Plan inicial de manejo (demo)')->firstOrFail();
         $actor = User::query()->where('email', config('auth.admin.email'))->firstOrFail();
         $unit = ProductionUnit::query()->where('normalized_name', 'granja el ombú')->firstOrFail();
         $north = PoultryHouse::query()->where('production_unit_id', $unit->id)->where('normalized_name', 'galpón norte')->firstOrFail();
@@ -50,12 +52,14 @@ final class LotsDemoSeeder extends Seeder
         $a = $this->once($actor, 504, fn (string $key): FlockOperation => $create->execute([
             'code' => 'DEMO-LOT-A', 'breed_id' => $breedResult->result['catalog']['id'],
             'supplier_id' => $suppliers[0]->id, 'poultry_house_id' => $north->id, 'initial_quantity' => 100,
-            'entry_date' => $entryDate, 'idempotency_key' => $key,
+            'entry_date' => $entryDate, 'plan_template_id' => $planTemplate->public_id,
+            'plan_template_version' => 1, 'idempotency_key' => $key,
         ], $actor, 'seeder'));
         $b = $this->once($actor, 505, fn (string $key): FlockOperation => $create->execute([
             'code' => 'DEMO-LOT-B', 'breed_id' => $breedResult->result['catalog']['id'],
             'supplier_id' => $suppliers[1]->id, 'poultry_house_id' => $layers->id, 'initial_quantity' => 40,
-            'entry_date' => $entryDate, 'idempotency_key' => $key,
+            'entry_date' => $entryDate, 'plan_template_id' => $planTemplate->public_id,
+            'plan_template_version' => 1, 'idempotency_key' => $key,
         ], $actor, 'seeder'));
         $aId = $a->result['flock']['public_id'];
         $bId = $b->result['flock']['public_id'];
@@ -87,7 +91,9 @@ final class LotsDemoSeeder extends Seeder
         });
         $d = $this->once($actor, 512, fn (string $key): FlockOperation => $create->execute([
             'code' => 'DEMO-LOT-D', 'breed_id' => $otherBreed->result['catalog']['id'], 'origin' => 'Cría propia demo',
-            'poultry_house_id' => $quarantineHouse->id, 'initial_quantity' => 25, 'entry_date' => $entryDate, 'idempotency_key' => $key,
+            'poultry_house_id' => $quarantineHouse->id, 'initial_quantity' => 25, 'entry_date' => $entryDate,
+            'plan_template_id' => $planTemplate->public_id, 'plan_template_version' => 1,
+            'idempotency_key' => $key,
         ], $actor, 'seeder'));
         $this->once($actor, 513, function (string $key) use ($d, $status, $actor): FlockOperation {
             $flock = Flock::query()->where('public_id', $d->result['flock']['public_id'])->firstOrFail();

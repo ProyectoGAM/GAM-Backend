@@ -79,7 +79,7 @@ paths:
       tags: ["Lotes"]
       operationId: "createFlock"
       summary: "Registra una admisión de aves"
-      description: "Permiso requerido: flocks.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: flocks.manage. plan_template_id y plan_template_version son obligatorios y seleccionan una versión publicada; el lote, la copia completa e independiente del plan y la auditoría se confirman en la misma transacción e idempotencia. La plantilla debe seguir activa y la versión publicada seleccionada debe seguir vigente al confirmar el alta. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "flocks.manage"
       parameters:
         -
@@ -104,7 +104,11 @@ paths:
         "404":
           "$ref": "#/components/responses/NotFound"
         "409":
-          "$ref": "#/components/responses/Conflict"
+          description: "Conflicto de estado, incluida una plantilla retirada o inactiva, una versión que dejó de ser la publicada o una selección obsoleta. No se crea un lote incompleto."
+          content:
+            "application/problem+json":
+              schema:
+                "$ref": "#/components/schemas/Problem"
         "422":
           "$ref": "#/components/responses/InvalidInput"
   "/flocks/{flock}":
@@ -241,7 +245,7 @@ paths:
       tags: ["Redistribuciones"]
       operationId: "redistributeFlock"
       summary: "Redistribuye, une o traslada un lote"
-      description: "Permiso requerido: flocks.redistribute. Una cantidad parcial puede crear un lote en un galpón vacío o incorporarse a un receptor compatible. Si la cantidad coincide con todas las aves y se indica un receptor, finaliza el origen y conserva los datos del receptor; sin receptor, traslada el mismo lote a otro galpón. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: flocks.redistribute. plan_activity_id es opcional y sólo puede identificar una actividad flock_movement vigente del plan del lote origen; nunca se asocia por fecha o tipo. Una redistribución parcial que crea un lote nuevo copia al plan de destino las actividades futuras del plan origen y conserva su fecha de referencia; los manejos ya realizados aparecen como antecedentes con su operación original. Incorporar aves a un lote receptor existente no modifica el plan de ese receptor. Un traslado total conserva la identidad y el plan del lote. Si la cantidad coincide con todas las aves y se indica un receptor, finaliza el origen y conserva los datos del receptor; sin receptor, traslada el mismo lote a otro galpón. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "flocks.redistribute"
       parameters:
         -
@@ -256,7 +260,7 @@ paths:
               "$ref": "#/components/schemas/RedistributeFlock"
       responses:
         "201":
-          description: "Operación registrada o resultado original recuperado por idempotencia."
+          description: "Redistribución registrada. La respuesta del movimiento incluye el plan_activity_id elegido y operation_id como referencia inequívoca de la operación. Si se creó un lote nuevo, su copia del plan forma parte de la misma operación."
           content:
             "application/json":
               schema:
@@ -1504,6 +1508,10 @@ components:
         operation_id:
           type: "string"
           format: "uuid"
+        plan_activity_id:
+          type: ["string", "null"]
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          description: "Actividad flock_movement vigente seleccionada explícitamente; null indica que el movimiento quedó fuera de plan."
         type:
           type: "string"
           enum: ["admission", "partial_new", "partial_existing", "total", "total_existing", "departure", "mortality", "mortality_correction", "redistribution_reversal"]
@@ -1558,7 +1566,7 @@ components:
     Mortality:
       type: "object"
       additionalProperties: false
-      required: ["id", "flock_id", "poultry_house_id", "production_unit_id", "quantity", "occurred_at", "notes", "status", "version", "created_by", "mortality_category_id"]
+      required: ["id", "flock_id", "poultry_house_id", "production_unit_id", "quantity", "occurred_at", "notes", "status", "version", "created_by", "mortality_category_id", "plan_activity_id", "origin_operation_id"]
       properties:
         id:
           type: "string"
@@ -1600,10 +1608,17 @@ components:
         mortality_category_id:
           type: "integer"
           minimum: 1
+        plan_activity_id:
+          type: ["string", "null"]
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          description: "Actividad mortality vigente seleccionada explícitamente; null identifica un registro fuera de plan."
+        origin_operation_id:
+          type: ["string", "null"]
+          format: "uuid"
     EggCollection:
       type: "object"
       additionalProperties: false
-      required: ["id", "flock_id", "poultry_house_id", "production_unit_id", "quantity", "occurred_at", "notes", "status", "version", "created_by"]
+      required: ["id", "flock_id", "poultry_house_id", "production_unit_id", "quantity", "occurred_at", "notes", "status", "version", "created_by", "plan_activity_id", "origin_operation_id"]
       properties:
         id:
           type: "string"
@@ -1623,6 +1638,13 @@ components:
           type: "integer"
           minimum: 1
           maximum: 2147483647
+        plan_activity_id:
+          type: ["string", "null"]
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          description: "Actividad egg_collection vigente seleccionada explícitamente; null identifica una recolección fuera de plan."
+        origin_operation_id:
+          type: ["string", "null"]
+          format: "uuid"
         occurred_at:
           type: "string"
           format: "date-time"
@@ -1684,7 +1706,7 @@ components:
     CreateFlock:
       type: "object"
       additionalProperties: false
-      required: ["code", "breed_id", "poultry_house_id", "initial_quantity", "entry_date"]
+      required: ["code", "breed_id", "poultry_house_id", "initial_quantity", "entry_date", "plan_template_id", "plan_template_version"]
       properties:
         id:
           type: "string"
@@ -1715,6 +1737,15 @@ components:
         entry_date:
           type: "string"
           format: "date"
+        plan_template_id:
+          type: "string"
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          description: "Plantilla publicada elegida para crear la copia propia del lote."
+        plan_template_version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Número exacto de la versión publicada seleccionada; el servidor vuelve a verificar que siga vigente al crear el lote."
         notes:
           type: ["string", "null"]
           maxLength: 5000
@@ -1824,6 +1855,10 @@ components:
           type: ["string", "null"]
           minLength: 1
           maxLength: 500
+        plan_activity_id:
+          type: ["string", "null"]
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          description: "Actividad flock_movement vigente del plan del lote origen. La asociación es explícita y nunca se infiere por coincidencia de fecha o tipo."
       description: "Parcial: galpón vacío y código nuevos, o lote existente abierto de igual raza y su versión, conservando los datos del receptor. Total: con sólo otro galpón traslada el mismo lote (type=total); con destination_flock_id une las aves al receptor, finaliza el origen y conserva sus metadatos (type=total_existing). El código destino es obligatorio si la cantidad es menor que las aves vivas y no se indica un lote existente."
       oneOf:
         -
@@ -1881,6 +1916,10 @@ components:
           type: "integer"
           minimum: 1
           maximum: 2147483647
+        plan_activity_id:
+          type: ["string", "null"]
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          description: "Actividad mortality vigente del mismo lote, cuando se asocia explícitamente."
         mortality_category_id:
           type: "integer"
           minimum: 1
@@ -1961,6 +2000,10 @@ components:
           type: "integer"
           minimum: 1
           maximum: 2147483647
+        plan_activity_id:
+          type: ["string", "null"]
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          description: "Actividad egg_collection vigente del mismo lote, cuando se asocia explícitamente."
         occurred_at:
           type: "string"
           format: "date-time"

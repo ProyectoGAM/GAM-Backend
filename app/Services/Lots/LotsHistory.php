@@ -19,7 +19,7 @@ final readonly class LotsHistory
      * @param  array<string, array<string, mixed>>  $before
      * @param  array<string, array<string, mixed>>  $after
      */
-    public function movement(string $operationId, string $type, ?Flock $from, ?Flock $to, int $quantity, array $before, array $after, CarbonImmutable $time, User $actor, ?string $reason = null, ?int $reverses = null): FlockMovement
+    public function movement(string $operationId, string $type, ?Flock $from, ?Flock $to, int $quantity, array $before, array $after, CarbonImmutable $time, User $actor, ?string $reason = null, ?int $reverses = null, ?int $planActivityId = null): FlockMovement
     {
         $movement = new FlockMovement;
         $movement->forceFill([
@@ -31,6 +31,7 @@ final readonly class LotsHistory
             'before' => $before, 'after' => $after, 'occurred_at' => $time,
             'created_by' => $actor->id, 'reason' => $reason, 'reverses_movement_id' => $reverses,
             'reversal_verified' => true,
+            'flock_plan_activity_id' => $planActivityId,
         ])->save();
 
         return $movement->setRelation('sourceFlock', $from)->setRelation('destinationFlock', $to)

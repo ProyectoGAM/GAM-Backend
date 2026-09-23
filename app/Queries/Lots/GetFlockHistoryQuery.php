@@ -15,7 +15,7 @@ final readonly class GetFlockHistoryQuery
     /** @param array<string, mixed> $filters */
     public function execute(Flock $flock, array $filters): LengthAwarePaginator
     {
-        $query = FlockMovement::query()->with(['sourceFlock', 'destinationFlock', 'reversedMovement'])
+        $query = FlockMovement::query()->with(['sourceFlock', 'destinationFlock', 'reversedMovement', 'planActivity'])
             ->where(fn ($query) => $query->where('source_flock_id', $flock->id)->orWhere('destination_flock_id', $flock->id));
         if (isset($filters['type'])) {
             $query->where('type', $filters['type']);

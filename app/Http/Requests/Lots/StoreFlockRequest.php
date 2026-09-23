@@ -22,6 +22,8 @@ final class StoreFlockRequest extends LotsRequest
             'poultry_house_id' => ['required', 'integer', 'min:1'],
             'initial_quantity' => $this->quantityRules(),
             'entry_date' => ['required', 'date_format:Y-m-d'],
+            'plan_template_id' => ['required', 'ulid'],
+            'plan_template_version' => ['required', 'integer', 'min:1', 'max:2147483647'],
             'notes' => ['nullable', 'string', 'max:5000'],
         ];
     }

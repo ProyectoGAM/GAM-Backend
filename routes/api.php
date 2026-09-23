@@ -25,6 +25,10 @@ use App\Http\Controllers\Lots\FlockStatusController;
 use App\Http\Controllers\Lots\MortalityCategoryController;
 use App\Http\Controllers\Lots\MortalityController;
 use App\Http\Controllers\Lots\WeighingController;
+use App\Http\Controllers\ManagementPlans\FlockManagementHistoryController;
+use App\Http\Controllers\ManagementPlans\FlockPlanController;
+use App\Http\Controllers\ManagementPlans\ManagementExecutionController;
+use App\Http\Controllers\ManagementPlans\PlanTemplateController;
 use App\Http\Controllers\ReferenceData\ReferenceOptionsController;
 use App\Http\Controllers\ReportingAndAnalytics\ReportExportController;
 use App\Http\Controllers\ReportingAndAnalytics\ReportPresetController;
@@ -64,6 +68,25 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         ->name('shared-device.local-revoke');
 
     Route::middleware('auth:sanctum')->group(function (): void {
+        Route::middleware(['shared.device:any', 'shared.session.conditional'])->name('management-plans.')->group(function (): void {
+            Route::get('/plantillas-manejo', [PlanTemplateController::class, 'index'])->name('templates.index');
+            Route::post('/plantillas-manejo', [PlanTemplateController::class, 'store'])->name('templates.store');
+            Route::get('/plantillas-manejo/{planTemplate}', [PlanTemplateController::class, 'show'])->name('templates.show');
+            Route::patch('/plantillas-manejo/{planTemplate}', [PlanTemplateController::class, 'update'])->name('templates.update');
+            Route::post('/plantillas-manejo/{planTemplate}/publicacion', [PlanTemplateController::class, 'publish'])->name('templates.publish');
+            Route::post('/plantillas-manejo/{planTemplate}/retiro', [PlanTemplateController::class, 'retire'])->name('templates.retire');
+            Route::get('/flocks/{flock}/plan-manejo', [FlockPlanController::class, 'show'])->name('flock.show');
+            Route::post('/flocks/{flock}/plan-manejo', [FlockPlanController::class, 'assign'])->name('flock.assign');
+            Route::patch('/flocks/{flock}/plan-manejo', [FlockPlanController::class, 'update'])->name('flock.update');
+            Route::get('/flocks/{flock}/manejos', [FlockManagementHistoryController::class, 'index'])->name('history.index');
+            Route::post('/flocks/{flock}/vacunaciones', [ManagementExecutionController::class, 'applyVaccination'])->name('vaccinations.store');
+            Route::post('/flocks/{flock}/medicaciones', [ManagementExecutionController::class, 'applyMedicine'])->name('medications.store');
+            Route::post('/flocks/{flock}/cambios-racion', [ManagementExecutionController::class, 'changeRation'])->name('ration-changes.store');
+            Route::post('/flocks/{flock}/practicas', [ManagementExecutionController::class, 'recordManualPractice'])->name('manual-practices.store');
+            Route::post('/flocks/{flock}/manejos/{executionType}/{execution}/correcciones', [ManagementExecutionController::class, 'correctExecution'])->name('executions.correct');
+            Route::post('/medicines/{medicine}/ajustes-stock', [ManagementExecutionController::class, 'adjustMedicineStock'])->name('medicines.stock-adjustments.store');
+            Route::get('/medicines/{medicine}/stock', [ManagementExecutionController::class, 'showMedicineStock'])->name('medicines.stock.show');
+        });
         Route::middleware(['shared.device:any', 'shared.session.conditional'])->name('weighings.')->group(function (): void {
             Route::get('/configuracion-pesajes', [WeighingController::class, 'settings'])->name('settings.show');
             Route::put('/configuracion-pesajes', [WeighingController::class, 'updateSettings'])->name('settings.update');

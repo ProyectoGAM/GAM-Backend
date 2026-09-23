@@ -48,7 +48,7 @@ paths:
       tags: ["Pesajes"]
       operationId: recordWeighing
       summary: "Registra un pesaje individual o grupal"
-      description: "Permiso requerido: weighings.manage. Los valores fuera de rango requieren confirmación explícita y el primer conflicto no persiste efectos."
+      description: "Permiso requerido: weighings.manage. plan_activity_id es opcional y sólo puede identificar una actividad weighing vigente del mismo lote; el vínculo se elige explícitamente y nunca se infiere por coincidencia de tipo o fecha. La respuesta incluye origin_operation_id como referencia inequívoca a esta operación. Los valores fuera de rango requieren confirmación explícita y el primer conflicto no persiste efectos."
       security:
         - bearerAuth: []
         - sanctumCookie: []
@@ -353,6 +353,10 @@ components:
         unit: { type: string, enum: [g] }
         occurred_at: { type: string, format: date-time }
         notes: { type: [string, "null"], maxLength: 5000 }
+        plan_activity_id:
+          type: [string, "null"]
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          description: "Actividad weighing vigente del mismo lote, cuando se asocia explícitamente; null registra el pesaje fuera de plan."
         confirm_out_of_range: { type: boolean }
         measurements:
           type: array
@@ -373,6 +377,10 @@ components:
         unit: { type: string, enum: [kg] }
         occurred_at: { type: string, format: date-time }
         notes: { type: [string, "null"], maxLength: 5000 }
+        plan_activity_id:
+          type: [string, "null"]
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          description: "Actividad weighing vigente del mismo lote, cuando se asocia explícitamente; null registra el pesaje fuera de plan."
         confirm_out_of_range: { type: boolean }
         measurements:
           type: array
@@ -526,10 +534,18 @@ components:
     Weighing:
       type: object
       additionalProperties: false
-      required: [id, flock_id, poultry_house_id, production_unit_id, mode, occurred_at, unit, captured_unit, notes, stage, expected_range, reference, represented_bird_count, total_weight_g, average_weight_g, total_weight, average_weight, outside_expected_range, version, created_by, measurements]
+      required: [id, flock_id, plan_activity_id, origin_operation_id, poultry_house_id, production_unit_id, mode, occurred_at, unit, captured_unit, notes, stage, expected_range, reference, represented_bird_count, total_weight_g, average_weight_g, total_weight, average_weight, outside_expected_range, version, created_by, measurements]
       properties:
         id: { type: string }
         flock_id: { type: string }
+        plan_activity_id:
+          type: [string, "null"]
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          description: "Actividad weighing vigente asociada explícitamente; null identifica un pesaje fuera de plan."
+        origin_operation_id:
+          type: [string, "null"]
+          format: uuid
+          description: "Identificador inequívoco de la operación que registró este pesaje."
         poultry_house_id: { type: integer }
         production_unit_id: { type: integer }
         mode: { type: string, enum: [individual, group] }

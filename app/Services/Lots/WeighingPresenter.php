@@ -13,10 +13,11 @@ final readonly class WeighingPresenter
     public function weighing(Weighing|array $weighing): array
     {
         if ($weighing instanceof Weighing) {
-            $weighing->loadMissing('measurements', 'flock');
+            $weighing->loadMissing('measurements', 'flock', 'planActivity');
             $data = $weighing->toArray();
             $data['flock_id'] = $weighing->flock->public_id;
             $data['measurements'] = $weighing->measurements->all();
+            $data['plan_activity_id'] = $weighing->planActivity?->public_id;
         } else {
             $data = $weighing;
         }
@@ -53,6 +54,8 @@ final readonly class WeighingPresenter
         return [
             'id' => $data['public_id'] ?? null,
             'flock_id' => $data['flock_id'] ?? null,
+            'plan_activity_id' => $data['plan_activity_id'] ?? null,
+            'origin_operation_id' => $data['operation_id'] ?? null,
             'poultry_house_id' => isset($data['poultry_house_id']) ? (int) $data['poultry_house_id'] : null,
             'production_unit_id' => isset($data['production_unit_id']) ? (int) $data['production_unit_id'] : null,
             'mode' => $data['mode'] ?? null,

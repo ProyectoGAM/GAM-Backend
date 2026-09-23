@@ -7,6 +7,12 @@ use App\Models\Lots\Flock;
 use App\Models\Lots\FlockMovement;
 use App\Models\Lots\MortalityRecord;
 use App\Models\Lots\Weighing;
+use App\Models\ManagementPlans\FlockPlan;
+use App\Models\ManagementPlans\ManagementExecutionCorrection;
+use App\Models\ManagementPlans\ManualPractice;
+use App\Models\ManagementPlans\MedicineApplication;
+use App\Models\ManagementPlans\RationChange;
+use App\Models\ManagementPlans\VaccinationApplication;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -126,7 +132,7 @@ final readonly class FlockActivityJournal
 
         $terminalAuditId = DB::table('activity_log')->where('operation_id', $operationId)->max('id');
         $audits = DB::table('activity_log')
-            ->whereIn('subject_type', [Flock::class, MortalityRecord::class, EggCollection::class, Weighing::class])
+            ->whereIn('subject_type', [Flock::class, MortalityRecord::class, EggCollection::class, Weighing::class, FlockPlan::class, VaccinationApplication::class, MedicineApplication::class, RationChange::class, ManualPractice::class, ManagementExecutionCorrection::class])
             ->when(
                 $terminalAuditId !== null,
                 function ($query) use ($terminalAuditId): void {
@@ -168,6 +174,12 @@ final readonly class FlockActivityJournal
             MortalityRecord::class => (int) DB::table('mortality_records')->where('id', $audit->subject_id)->value('flock_id') === $flock->id,
             EggCollection::class => (int) DB::table('egg_collections')->where('id', $audit->subject_id)->value('flock_id') === $flock->id,
             Weighing::class => (int) DB::table('weighings')->where('id', $audit->subject_id)->value('flock_id') === $flock->id,
+            FlockPlan::class => (int) DB::table('flock_plans')->where('id', $audit->subject_id)->value('flock_id') === $flock->id,
+            VaccinationApplication::class => (int) DB::table('vaccination_applications')->where('id', $audit->subject_id)->value('flock_id') === $flock->id,
+            MedicineApplication::class => (int) DB::table('medicine_applications')->where('id', $audit->subject_id)->value('flock_id') === $flock->id,
+            RationChange::class => (int) DB::table('ration_changes')->where('id', $audit->subject_id)->value('flock_id') === $flock->id,
+            ManualPractice::class => (int) DB::table('manual_practices')->where('id', $audit->subject_id)->value('flock_id') === $flock->id,
+            ManagementExecutionCorrection::class => (int) DB::table('management_execution_corrections')->where('id', $audit->subject_id)->value('flock_id') === $flock->id,
             default => false,
         };
     }

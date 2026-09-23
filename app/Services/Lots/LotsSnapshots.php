@@ -36,6 +36,7 @@ final readonly class LotsSnapshots
     {
         return [
             'public_id' => $movement->public_id, 'operation_id' => $movement->operation_id,
+            'plan_activity_id' => $movement->planActivity?->public_id,
             'type' => $movement->type, 'quantity' => $movement->quantity,
             'source_flock_id' => $movement->sourceFlock?->public_id,
             'destination_flock_id' => $movement->destinationFlock?->public_id,
@@ -54,6 +55,8 @@ final readonly class LotsSnapshots
     {
         return [
             'public_id' => $record->public_id, 'flock_id' => $flock->public_id,
+            'plan_activity_id' => $record->planActivity?->public_id,
+            'origin_operation_id' => $record->operation_id,
             'poultry_house_id' => $record->poultry_house_id, 'production_unit_id' => $record->production_unit_id,
             'mortality_category_id' => $record->mortality_category_id, 'quantity' => $record->quantity,
             'occurred_at' => $record->occurred_at->toIso8601String(), 'notes' => $record->notes,
@@ -66,6 +69,8 @@ final readonly class LotsSnapshots
     {
         return [
             'public_id' => $record->public_id, 'flock_id' => $flock->public_id,
+            'plan_activity_id' => $record->planActivity?->public_id,
+            'origin_operation_id' => $record->operation_id,
             'poultry_house_id' => $record->poultry_house_id, 'production_unit_id' => $record->production_unit_id,
             'quantity' => $record->quantity,
             'occurred_at' => $record->occurred_at->toIso8601String(), 'notes' => $record->notes,

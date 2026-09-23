@@ -2,6 +2,7 @@
 
 namespace App\Models\Lots;
 
+use App\Models\ManagementPlans\FlockPlanActivity;
 use Carbon\CarbonImmutable;
 use Database\Factories\Lots\WeighingFactory;
 use Illuminate\Database\Eloquent\Collection;
@@ -15,6 +16,8 @@ use Illuminate\Support\Str;
  * @property int $id
  * @property string $public_id
  * @property int $flock_id
+ * @property int|null $flock_plan_activity_id
+ * @property string|null $operation_id
  * @property int $poultry_house_id
  * @property int $production_unit_id
  * @property string $mode
@@ -78,6 +81,12 @@ class Weighing extends Model
     public function flock(): BelongsTo
     {
         return $this->belongsTo(Flock::class);
+    }
+
+    /** @return BelongsTo<FlockPlanActivity, $this> */
+    public function planActivity(): BelongsTo
+    {
+        return $this->belongsTo(FlockPlanActivity::class, 'flock_plan_activity_id');
     }
 
     /** @return HasMany<WeighingMeasurement, $this> */

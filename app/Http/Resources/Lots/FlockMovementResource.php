@@ -16,6 +16,7 @@ final class FlockMovementResource extends JsonResource
         return [
             'id' => $data['public_id'] ?? null,
             'operation_id' => $data['operation_id'] ?? null,
+            'plan_activity_id' => $data['plan_activity_id'] ?? null,
             'type' => $data['type'] ?? null,
             'quantity' => $data['quantity'] ?? null,
             'source_flock_id' => $data['source_flock_id'] ?? null,

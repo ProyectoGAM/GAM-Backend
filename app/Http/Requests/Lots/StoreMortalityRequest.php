@@ -18,6 +18,7 @@ final class StoreMortalityRequest extends LotsRequest
             ...$this->commandRules(),
             'id' => ['sometimes', 'ulid'],
             'quantity' => $this->quantityRules(),
+            'plan_activity_id' => ['nullable', 'ulid'],
             'mortality_category_id' => ['required', 'integer', 'min:1'],
             'occurred_at' => $this->timeRules(),
             'notes' => ['nullable', 'string', 'max:5000'],

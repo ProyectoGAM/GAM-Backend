@@ -2,6 +2,7 @@
 
 namespace App\Models\Lots;
 
+use App\Models\ManagementPlans\FlockPlanActivity;
 use Carbon\CarbonImmutable;
 use Database\Factories\Lots\FlockMovementFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,6 +14,7 @@ use Illuminate\Support\Str;
  * @property int $id
  * @property string $public_id
  * @property string $operation_id
+ * @property int|null $flock_plan_activity_id
  * @property string $type
  * @property int|null $source_flock_id
  * @property int|null $destination_flock_id
@@ -65,6 +67,12 @@ class FlockMovement extends Model
     public function sourceFlock(): BelongsTo
     {
         return $this->belongsTo(Flock::class, 'source_flock_id');
+    }
+
+    /** @return BelongsTo<FlockPlanActivity, $this> */
+    public function planActivity(): BelongsTo
+    {
+        return $this->belongsTo(FlockPlanActivity::class, 'flock_plan_activity_id');
     }
 
     /** @return BelongsTo<Flock, $this> */

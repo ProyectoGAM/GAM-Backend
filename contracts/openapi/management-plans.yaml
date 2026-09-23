@@ -1,0 +1,696 @@
+openapi: 3.1.0
+info:
+  title: Plan de manejo de lotes
+  version: 1.0.0
+  description: |
+    Contrato backend de plantillas versionadas, planes propios del lote y manejos efectivos.
+    El contenido inicial del documento de prácticas es descriptivo: no determina productos,
+    dosis ni indicaciones clínicas. El día 1 es la fecha de ingreso del lote; la semana 1
+    abarca los días 1 a 7. Los tramos de semanas son inclusivos y pueden coexistir, incluida
+    la semana 9 de Recría y Desarrollo. El día inicial de una recurrencia quincenal lo
+    configura el usuario en la plantilla y puede ajustarlo en una revisión del lote.
+    Un tramo de ración puede omitir end_week para continuar hasta fin de ciclo.
+    Las actividades condicionales nunca generan ejecuciones por sí mismas.
+    El alta de /flocks requiere plan_template_id y plan_template_version publicados;
+    el lote, la copia completa del plan y las auditorías comparten transacción e
+    idempotencia. La redistribución parcial que crea lote copia actividades futuras
+    y conserva la fecha base; los manejos anteriores se consultan como antecedentes.
+    Crear o revisar un plan no mueve stock. No hay notificaciones ni recordatorios.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+  - sanctumCookie: []
+  - bearerAuth: []
+    sharedDeviceHeader: []
+    sharedSessionHeader: []
+  - sanctumCookie: []
+    sharedDeviceCookie: []
+    sharedSessionHeader: []
+tags:
+  - name: Plantillas
+  - name: Planes de lote
+  - name: Ejecuciones
+  - name: Historial
+  - name: Stock de medicamentos
+paths:
+  /plantillas-manejo:
+    get:
+      tags: [Plantillas]
+      summary: Lista plantillas de manejo
+      description: Requiere management-plans.view o management-plans.manage. Los borradores son visibles para gestores.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, retired] }
+      responses:
+        '200':
+          description: Plantillas paginadas.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TemplateCollection' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Plantillas]
+      summary: Crea una plantilla en borrador
+      description: Requiere management-plans.manage. No crea manejos ni movimientos de stock.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTemplate' }
+      responses:
+        '201':
+          description: Plantilla creada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TemplateEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Validation' }
+  /plantillas-manejo/{planTemplate}:
+    parameters: [{ $ref: '#/components/parameters/Template' }]
+    get:
+      tags: [Plantillas]
+      summary: Consulta una versión de plantilla
+      description: Requiere management-plans.view o management-plans.manage. Sin version consulta la publicada, o la actual si aún no se publicó.
+      parameters:
+        - name: version
+          in: query
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Plantilla y actividades de la versión consultada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TemplateEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Plantillas]
+      summary: Crea una nueva versión en borrador
+      description: Requiere management-plans.manage. Una versión publicada nunca se modifica.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviseTemplate' }
+      responses:
+        '200':
+          description: Nueva versión en borrador.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TemplateEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Validation' }
+  /plantillas-manejo/{planTemplate}/publicacion:
+    parameters: [{ $ref: '#/components/parameters/Template' }]
+    post:
+      tags: [Plantillas]
+      summary: Publica la versión actual
+      description: Requiere management-plans.manage. La versión previamente publicada queda retirada para nuevas asignaciones.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExpectedTemplateVersion' }
+      responses:
+        '200':
+          description: Versión publicada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TemplateEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /plantillas-manejo/{planTemplate}/retiro:
+    parameters: [{ $ref: '#/components/parameters/Template' }]
+    post:
+      tags: [Plantillas]
+      summary: Retira la plantilla de nuevas asignaciones
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExpectedTemplateVersion' }
+      responses:
+        '200':
+          description: Plantilla retirada; los planes existentes conservan sus copias.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TemplateEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /flocks/{flock}/plan-manejo:
+    parameters: [{ $ref: '#/components/parameters/Flock' }]
+    get:
+      tags: [Planes de lote]
+      summary: Consulta el plan propio del lote
+      description: Requiere management-plans.view o management-plans.manage.
+      parameters:
+        - name: include_revisions
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Copia del plan y revisiones solicitadas.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FlockPlanEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Planes de lote]
+      summary: Asigna explícitamente un plan a un lote anterior
+      description: Requiere management-plans.manage. No atribuye planes históricos automáticamente.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssignPlan' }
+      responses:
+        '201':
+          description: Plan copiado en una transacción auditada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FlockPlanEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    patch:
+      tags: [Planes de lote]
+      summary: Añade una revisión completa al plan del lote
+      description: Requiere management-plans.manage. Las actividades de revisiones anteriores y sus vínculos con ejecuciones permanecen.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RevisePlan' }
+      responses:
+        '200':
+          description: Nueva revisión vigente.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FlockPlanEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /flocks/{flock}/manejos:
+    parameters: [{ $ref: '#/components/parameters/Flock' }]
+    get:
+      tags: [Historial]
+      summary: Consulta cronológica paginada de manejos efectivos
+      description: Requiere management-plans.view. Incluye hechos fuera de plan, correcciones y antecedentes de fraccionamiento con su operación original. Programar una actividad no crea un hecho en esta lista.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - name: type
+          in: query
+          schema: { type: string }
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Manejos ordenados por fecha descendente y desempate estable.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HistoryCollection' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/Validation' }
+  /flocks/{flock}/vacunaciones:
+    parameters: [{ $ref: '#/components/parameters/Flock' }]
+    post:
+      tags: [Ejecuciones]
+      summary: Registra una aplicación de vacuna
+      description: Requiere management-plans.execute. El vínculo plan_activity_id es explícito y opcional. Un consumo de inventario informado se confirma junto con la aplicación.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VaccinationInput' }
+      responses:
+        '201': { $ref: '#/components/responses/ExecutionCreated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Validation' }
+  /flocks/{flock}/medicaciones:
+    parameters: [{ $ref: '#/components/parameters/Flock' }]
+    post:
+      tags: [Ejecuciones]
+      summary: Registra una aplicación de medicamento
+      description: Requiere management-plans.execute. quantity es un entero de unidades atómicas del medicamento; no se estructura dosis ni unidad. Se descuenta un saldo propio del medicamento, que puede quedar negativo y se señala en la respuesta.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MedicationInput' }
+      responses:
+        '201': { $ref: '#/components/responses/ExecutionCreated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Validation' }
+  /flocks/{flock}/cambios-racion:
+    parameters: [{ $ref: '#/components/parameters/Flock' }]
+    post:
+      tags: [Ejecuciones]
+      summary: Registra un cambio de ración
+      description: Requiere management-plans.execute. Puede referir alimento terminado; no infiere ni descuenta consumo diario.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RationInput' }
+      responses:
+        '201': { $ref: '#/components/responses/ExecutionCreated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /flocks/{flock}/practicas:
+    parameters: [{ $ref: '#/components/parameters/Flock' }]
+    post:
+      tags: [Ejecuciones]
+      summary: Registra una práctica manual tipada
+      description: Requiere management-plans.execute. Admite despique, colocación de nidos y otras prácticas.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PracticeInput' }
+      responses:
+        '201': { $ref: '#/components/responses/ExecutionCreated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /flocks/{flock}/manejos/{executionType}/{execution}/correcciones:
+    parameters:
+      - $ref: '#/components/parameters/Flock'
+      - name: executionType
+        in: path
+        required: true
+        schema: { type: string, enum: [vaccination, medication, ration_change, manual_practice] }
+      - name: execution
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/Ulid' }
+    post:
+      tags: [Ejecuciones]
+      summary: Registra una corrección compensatoria
+      description: Requiere management-plans.execute. Conserva la aplicación original; compensa el stock cuando corresponde.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '201': { $ref: '#/components/responses/ExecutionCreated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /medicines/{medicine}/ajustes-stock:
+    parameters: [{ $ref: '#/components/parameters/Medicine' }]
+    post:
+      tags: [Stock de medicamentos]
+      summary: Ajusta el saldo entero de un medicamento
+      description: Requiere management-plans.stock.manage. El movimiento es auditado e idempotente; un saldo negativo queda visible.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [quantity_delta, reason]
+              properties:
+                quantity_delta: { type: integer, minimum: -2147483647, maximum: 2147483647 }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '201':
+          description: Ajuste registrado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StockMovementEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /medicines/{medicine}/stock:
+    parameters: [{ $ref: '#/components/parameters/Medicine' }]
+    get:
+      tags: [Stock de medicamentos]
+      summary: Consulta el saldo y advertencia de un medicamento
+      description: Requiere management-plans.view o management-plans.stock.manage.
+      responses:
+        '200':
+          description: Saldo actual del medicamento.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StockBalanceEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    sanctumCookie:
+      type: apiKey
+      in: cookie
+      name: gam_session
+    sharedDeviceHeader:
+      type: apiKey
+      in: header
+      name: X-Shared-Device-Token
+    sharedDeviceCookie:
+      type: apiKey
+      in: cookie
+      name: gam_shared_device
+    sharedSessionHeader:
+      type: apiKey
+      in: header
+      name: X-GAM-Session
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+    Template:
+      name: planTemplate
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Ulid' }
+    Flock:
+      name: flock
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Ulid' }
+    Medicine:
+      name: medicine
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Ulid' }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100000 }
+    PerPage:
+      name: per_page
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100 }
+  responses:
+    Forbidden:
+      description: Permiso funcional insuficiente.
+    Conflict:
+      description: Versión, revisión, idempotencia o estado en conflicto; no se confirma una operación parcial.
+    Validation:
+      description: Datos inválidos o filtros fuera de límites.
+    NotFound:
+      description: Recurso inexistente.
+    ExecutionCreated:
+      description: Manejo efectivo registrado con operation_id y fotografía del módulo responsable.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ExecutionEnvelope' }
+  schemas:
+    Ulid:
+      type: string
+      pattern: '^[0-7][0-9A-HJKMNP-TV-Z]{25}$'
+    PlanActivityInput:
+      type: object
+      description: En day_recurrence se indica exactamente uno de end_day o end_week; start_day e interval_days son obligatorios.
+      additionalProperties: false
+      required: [type, title, timing_kind]
+      properties:
+        type:
+          type: string
+          enum: [vaccination, medication, ration_change, weighing, manual_practice, flock_movement, egg_collection, mortality]
+        title: { type: string, maxLength: 200 }
+        timing_kind: { type: string, enum: [day, week, week_range, day_recurrence, unscheduled] }
+        start_day: { type: [integer, 'null'], minimum: 1 }
+        end_day: { type: [integer, 'null'], minimum: 1 }
+        start_week: { type: [integer, 'null'], minimum: 1 }
+        end_week: { type: [integer, 'null'], minimum: 1, description: Ausente en un tramo abierto hasta fin de ciclo. }
+        interval_days: { type: [integer, 'null'], minimum: 1, description: Frecuencia desde start_day configurado por el usuario. }
+        conditional: { type: boolean, default: false }
+        condition: { type: [string, 'null'], maxLength: 1000 }
+        notes: { type: [string, 'null'], maxLength: 5000 }
+        catalog_ref:
+          oneOf:
+            - { $ref: '#/components/schemas/Ulid' }
+            - { type: integer, minimum: 1 }
+            - { type: string, pattern: '^[1-9][0-9]*$' }
+            - { type: 'null' }
+          description: Vacuna o medicamento por ULID, alimento terminado por ID de Producto. Su nombre se copia al plan.
+    PlanActivity:
+      type: object
+      required: [id, type, title, timing_kind, conditional, catalog_snapshot]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        type: { type: string }
+        title: { type: string }
+        timing_kind: { type: string, enum: [day, week, week_range, day_recurrence, unscheduled] }
+        start_day: { type: [integer, 'null'] }
+        end_day: { type: [integer, 'null'] }
+        start_week: { type: [integer, 'null'] }
+        end_week: { type: [integer, 'null'] }
+        interval_days: { type: [integer, 'null'] }
+        conditional: { type: boolean }
+        condition: { type: [string, 'null'] }
+        notes: { type: [string, 'null'] }
+        catalog_type: { type: [string, 'null'], enum: [vaccine, medicine, product, null] }
+        catalog_snapshot: { type: [object, 'null'], additionalProperties: true }
+    CreateTemplate:
+      type: object
+      additionalProperties: false
+      required: [name, activities]
+      properties:
+        name: { type: string, maxLength: 160 }
+        description: { type: [string, 'null'] }
+        activities:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: '#/components/schemas/PlanActivityInput' }
+    ReviseTemplate:
+      type: object
+      additionalProperties: false
+      required: [expected_version, activities]
+      properties:
+        expected_version: { type: integer, minimum: 1 }
+        name: { type: string, maxLength: 160 }
+        description: { type: [string, 'null'] }
+        activities:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: '#/components/schemas/PlanActivityInput' }
+      description: name y description son opcionales; activities define la nueva versión completa.
+    ExpectedTemplateVersion:
+      type: object
+      additionalProperties: false
+      required: [expected_version]
+      properties:
+        expected_version: { type: integer, minimum: 1 }
+    Template:
+      type: object
+      required: [id, name, status, current_version, version_status, activities]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        status: { type: string, enum: [active, retired] }
+        current_version: { type: integer }
+        published_version: { type: [integer, 'null'] }
+        version_status: { type: string, enum: [draft, published, retired] }
+        activities:
+          type: array
+          items: { $ref: '#/components/schemas/PlanActivity' }
+        operation_id: { type: string, format: uuid }
+    TemplateEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Template' }
+    TemplateCollection:
+      type: object
+      required: [data, links, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Template' }
+        links: { type: object }
+        meta: { type: object }
+    AssignPlan:
+      type: object
+      additionalProperties: false
+      required: [plan_template_id, plan_template_version]
+      properties:
+        plan_template_id: { $ref: '#/components/schemas/Ulid' }
+        plan_template_version: { type: integer, minimum: 1 }
+    RevisePlan:
+      type: object
+      additionalProperties: false
+      required: [expected_revision, reason, activities]
+      properties:
+        expected_revision: { type: integer, minimum: 1 }
+        reason: { type: string, maxLength: 500 }
+        activities:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: '#/components/schemas/PlanActivityInput' }
+    FlockPlan:
+      type: object
+      required: [id, flock_id, baseline_date, current_revision, revisions]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        flock_id: { $ref: '#/components/schemas/Ulid' }
+        baseline_date: { type: string, format: date }
+        current_revision: { type: integer }
+        source_template: { type: [object, 'null'], description: Procedencia; la interpretación histórica depende de las actividades copiadas. }
+        source_flock_id: { type: [string, 'null'] }
+        revisions:
+          type: array
+          items:
+            type: object
+            required: [id, number, activities]
+            properties:
+              id: { $ref: '#/components/schemas/Ulid' }
+              number: { type: integer }
+              reason: { type: [string, 'null'] }
+              operation_id: { type: string, format: uuid }
+              created_at: { type: [string, 'null'], format: date-time }
+              activities:
+                type: array
+                items: { $ref: '#/components/schemas/PlanActivity' }
+        operation_id: { type: string, format: uuid }
+    FlockPlanEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/FlockPlan' }
+    ExecutionBase:
+      type: object
+      properties:
+        plan_activity_id: { $ref: '#/components/schemas/Ulid' }
+        responsible_user_id: { type: integer, minimum: 1 }
+        occurred_at: { type: string, format: date-time }
+    VaccinationInput:
+      allOf:
+        - $ref: '#/components/schemas/ExecutionBase'
+        - type: object
+          required: [vaccine_id, occurred_at]
+          properties:
+            vaccine_id: { $ref: '#/components/schemas/Ulid' }
+            notes: { type: [string, 'null'], maxLength: 5000 }
+            stock_consumption:
+              type: object
+              required: [quantity, stock_location_id]
+              properties:
+                quantity: { type: string, description: Cantidad en la unidad base del producto de vacuna. }
+                stock_location_id: { type: integer, minimum: 1 }
+    MedicationInput:
+      allOf:
+        - $ref: '#/components/schemas/ExecutionBase'
+        - type: object
+          required: [medicine_id, quantity, reason, occurred_at]
+          properties:
+            medicine_id: { $ref: '#/components/schemas/Ulid' }
+            quantity: { type: integer, minimum: 1, maximum: 2147483647 }
+            reason: { type: string, maxLength: 500 }
+            notes: { type: [string, 'null'], maxLength: 5000, description: Puede describir la dosis libremente. }
+    RationInput:
+      allOf:
+        - $ref: '#/components/schemas/ExecutionBase'
+        - type: object
+          required: [ration_description, occurred_at]
+          properties:
+            ration_description: { type: string }
+            finished_feed_product_id: { type: [integer, 'null'] }
+            notes: { type: [string, 'null'] }
+    PracticeInput:
+      allOf:
+        - $ref: '#/components/schemas/ExecutionBase'
+        - type: object
+          required: [practice_type, notes, occurred_at]
+          properties:
+            practice_type: { type: string, enum: [beak_trimming, nest_placement, other] }
+            title: { type: string, maxLength: 200 }
+            notes: { type: string }
+    ExecutionEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [operation_id]
+          properties:
+            operation_id: { type: string, format: uuid }
+            vaccination_application: { type: object, additionalProperties: true }
+            medicine_application: { type: object, additionalProperties: true }
+            ration_change: { type: object, additionalProperties: true }
+            manual_practice: { type: object, additionalProperties: true }
+            management_execution_correction: { type: object, additionalProperties: true }
+            stock_balance: { type: object, additionalProperties: true }
+            warnings: { type: array, items: { type: object } }
+    HistoryEntry:
+      type: object
+      required: [id, operation_id, type, module, source, occurred_at, outside_plan, provenance, module_data]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        operation_id: { type: [string, 'null'], format: uuid }
+        type: { type: string }
+        module: { type: string }
+        source: { type: string, description: Tipo de registro propietario. }
+        flock_id: { $ref: '#/components/schemas/Ulid' }
+        occurred_at: { type: string, format: date-time }
+        plan_activity_id: { type: [string, 'null'] }
+        plan_activity_title: { type: [string, 'null'] }
+        performed: { type: boolean, const: true }
+        outside_plan: { type: boolean }
+        responsible: { type: object, additionalProperties: true }
+        provenance:
+          type: object
+          properties:
+            kind: { type: string, enum: [direct, antecedent] }
+            flock_id: { $ref: '#/components/schemas/Ulid' }
+        module_data: { type: object, additionalProperties: true }
+    HistoryCollection:
+      type: object
+      required: [data, links, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/HistoryEntry' }
+        links: { type: object }
+        meta: { type: object }
+    StockMovementEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [id, quantity_delta, balance_after, is_negative]
+          properties:
+            id: { $ref: '#/components/schemas/Ulid' }
+            quantity_delta: { type: integer }
+            balance_after: { type: integer }
+            is_negative: { type: boolean }
+            stock_warning: { type: [object, 'null'] }
+            operation_id: { type: string, format: uuid }
+    StockBalanceEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [medicine, quantity, version, is_negative]
+          properties:
+            medicine: { type: object, additionalProperties: true }
+            quantity: { type: integer }
+            version: { type: integer }
+            is_negative: { type: boolean }
+            stock_warning: { type: [object, 'null'] }
