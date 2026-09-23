@@ -15,6 +15,7 @@ use App\Models\Lots\Breed;
 use App\Models\Lots\EggCollection;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
+use App\Models\ManagementPlans\PlanTemplate;
 use App\Models\SuppliersAndCatalogs\Supplier;
 use App\Models\User;
 use Closure;
@@ -40,10 +41,12 @@ final class EggProductionDemoSeeder extends Seeder
         $accounts->execute($unit);
         $breed = Breed::query()->where('normalized_name', 'ponedoras demo')->firstOrFail();
         $supplier = Supplier::query()->orderBy('id')->firstOrFail();
+        $template = PlanTemplate::query()->where('name', 'Plan inicial de manejo (demo)')->firstOrFail();
         $created = $this->onceFlock($actor, 901, fn (string $key): FlockOperation => $flocks->execute([
             'code' => 'DEMO-EGG-PROD', 'breed_id' => $breed->id, 'supplier_id' => $supplier->id,
             'poultry_house_id' => $house->id, 'initial_quantity' => 120,
             'entry_date' => now(config('lots.timezone'))->subDays(60)->toDateString(), 'idempotency_key' => $key,
+            'plan_template_id' => $template->public_id, 'plan_template_version' => 1,
         ], $actor, 'seeder'));
         $flock = Flock::query()->where('public_id', $created->result['flock']['public_id'])->firstOrFail();
 

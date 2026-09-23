@@ -9,7 +9,7 @@ final readonly class ProductPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $this->allowed($user, 'products.view');
+        return ! $user->trashed() && ($this->allowed($user, 'products.view') || $user->can('management-plans.manage'));
     }
 
     public function view(User $user, Product $product): bool

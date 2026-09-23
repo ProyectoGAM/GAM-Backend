@@ -20,6 +20,7 @@ use App\Services\Lots\RunLotsCommand;
 use App\Services\Lots\WeighingBuilder;
 use App\Services\Lots\WeighingFlockProjection;
 use App\Services\Lots\WeighingPresenter;
+use App\Services\ManagementPlans\PlanActivityLinker;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
 
@@ -35,6 +36,7 @@ final readonly class RecordWeighingAction
         private LotsHistory $history,
         private LotsSnapshots $snapshots,
         private Clock $clock,
+        private PlanActivityLinker $planActivities,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -59,6 +61,7 @@ final readonly class RecordWeighingAction
                     throw new LotsConflict('La fecha del pesaje debe pertenecer a la existencia del lote y no puede ser futura.', code: 'WEIGHING_DATE_INVALID');
                 }
                 $historical = $this->projection->at($locked, $occurredAt);
+                $planActivity = $this->planActivities->resolve($locked, $data['plan_activity_id'] ?? null, 'weighing');
                 $built = $this->builder->build($data, $locked, $historical, $settings, null, $occurredAt);
                 $this->ensureConfirmation($built, (bool) ($data['confirm_out_of_range'] ?? false));
 
@@ -67,6 +70,8 @@ final readonly class RecordWeighingAction
                 $weighing->forceFill([
                     'public_id' => $data['id'] ?? (string) Str::ulid(),
                     'flock_id' => $locked->id,
+                    'flock_plan_activity_id' => $planActivity?->id,
+                    'operation_id' => $operationId,
                     'poultry_house_id' => $built['poultry_house_id'],
                     'production_unit_id' => $built['production_unit_id'],
                     'mode' => $built['mode'],

@@ -53,6 +53,8 @@ final class WeighingContractTest extends TestCase
         $weighing = (new WeighingResource([
             'id' => '01J00000000000000000000000',
             'flock_id' => '01J00000000000000000000001',
+            'plan_activity_id' => null,
+            'origin_operation_id' => '01J00000000000000000000002',
             'poultry_house_id' => 1,
             'production_unit_id' => 1,
             'mode' => 'individual',

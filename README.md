@@ -31,6 +31,8 @@ module-structure-example.md => ejemplo de estructura y alguna que otra aplicacio
 
 [contracts/openapi/weighings.yaml](contracts/openapi/weighings.yaml) => contrato API de pesajes y configuración global de referencia
 
+[contracts/openapi/management-plans.yaml](contracts/openapi/management-plans.yaml) => contrato API de plantillas, planes de lote, ejecuciones e historial de manejos
+
 [contracts/openapi/authentication.yaml](contracts/openapi/authentication.yaml) => contrato API de identidad y acceso
 
 [contracts/openapi/reference-data.yaml](contracts/openapi/reference-data.yaml) => catálogos dinámicos para formularios y filtros
@@ -39,7 +41,7 @@ Swagger UI (desarrollo): [http://localhost:8080/docs/](http://localhost:8080/doc
 
 La documentación se sirve desde el servicio `swagger-ui` de Compose y permite
 seleccionar los contratos de autenticación, Lotes/producción de huevos,
-mantenimientos, medicamentos, vacunas, pesajes y reporting. El
+mantenimientos, medicamentos, vacunas, pesajes, planes de manejo y reporting. El
 botón **Authorize** usa el token Bearer emitido por el login.
 
 docker compose -f compose.dev.yaml up -d --build
@@ -95,7 +97,7 @@ Para la comprobación adicional con un pepper temporal no persistido, reemplazá
 No ejecutes `docker compose down -v`: elimina los volúmenes y los datos existentes.
 ## Datos de prueba locales
 
-Cuando `APP_ENV=local`, `DatabaseSeeder` ejecuta también `LocalDemoDataSeeder` y carga datos ficticios pero coherentes de granjas, galpones, proveedores, productos, medicamentos, inventario, reservas, reportes y lotes con redistribuciones, mortalidad, recolección y pesajes. La carga es idempotente y no se ejecuta en otros ambientes.
+Cuando `APP_ENV=local`, `DatabaseSeeder` ejecuta también `LocalDemoDataSeeder` y carga datos ficticios pero coherentes de granjas, galpones, proveedores, productos, medicamentos, inventario, reservas, reportes, una plantilla publicada de plan de manejo y lotes con redistribuciones, mortalidad, recolección y pesajes. La carga es idempotente y no se ejecuta en otros ambientes.
 
 Para reconstruir la base local desde cero:
 

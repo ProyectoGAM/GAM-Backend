@@ -24,6 +24,7 @@ final class RedistributeFlockRequest extends LotsRequest
             'destination_public_id' => ['sometimes', 'prohibits:destination_flock_id', 'ulid'],
             'occurred_at' => $this->timeRules(),
             'reason' => ['nullable', 'string', 'max:500'],
+            'plan_activity_id' => ['nullable', 'ulid'],
         ];
     }
 }

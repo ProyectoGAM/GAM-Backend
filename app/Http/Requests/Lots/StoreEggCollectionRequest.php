@@ -18,6 +18,7 @@ final class StoreEggCollectionRequest extends LotsRequest
             ...$this->commandRules(false),
             'id' => ['sometimes', 'ulid'],
             'quantity' => $this->quantityRules(),
+            'plan_activity_id' => ['nullable', 'ulid'],
             'occurred_at' => $this->timeRules(),
             'notes' => ['sometimes', 'nullable', 'string', 'max:5000'],
         ];

@@ -16,11 +16,12 @@ use App\Services\Lots\FlockState;
 use App\Services\Lots\LotsHistory;
 use App\Services\Lots\LotsSnapshots;
 use App\Services\Lots\RunLotsCommand;
+use App\Services\ManagementPlans\PlanActivityLinker;
 use Illuminate\Support\Str;
 
 final readonly class RecordMortalityAction
 {
-    public function __construct(private RunLotsCommand $commands, private FlockState $state, private LockPoultryHousesQuery $houses, private LotsSnapshots $snapshots, private LotsHistory $history, private FlockActivityJournal $activities) {}
+    public function __construct(private RunLotsCommand $commands, private FlockState $state, private LockPoultryHousesQuery $houses, private LotsSnapshots $snapshots, private LotsHistory $history, private FlockActivityJournal $activities, private PlanActivityLinker $planActivities) {}
 
     /** @param array<string, mixed> $data */
     public function execute(Flock $flock, array $data, User $actor, string $source = 'api'): FlockOperation
@@ -39,11 +40,13 @@ final readonly class RecordMortalityAction
                 throw new LotsConflict('La categoría de mortalidad debe estar activa.');
             }
             $time = $this->state->time($locked, $data['occurred_at'] ?? null);
+            $planActivity = $this->planActivities->resolve($locked, $data['plan_activity_id'] ?? null, 'mortality');
             $this->houses->execute([$locked->poultry_house_id]);
             $before = $this->snapshots->flock($locked);
             $record = new MortalityRecord;
             $record->forceFill([
                 'public_id' => $data['public_id'] ?? (string) Str::ulid(), 'flock_id' => $locked->id,
+                'flock_plan_activity_id' => $planActivity?->id, 'operation_id' => $operationId,
                 'poultry_house_id' => $locked->poultry_house_id, 'production_unit_id' => $locked->production_unit_id,
                 'mortality_category_id' => $category->id, 'quantity' => $quantity, 'occurred_at' => $time,
                 'notes' => $data['notes'] ?? null, 'status' => 'recorded', 'version' => 1, 'created_by' => $actor->id,
@@ -57,7 +60,7 @@ final readonly class RecordMortalityAction
             $locked->version++;
             $locked->save();
             $after = $this->snapshots->flock($locked);
-            $movement = $this->history->movement($operationId, 'mortality', $locked, null, $quantity, [$locked->public_id => $before], [$locked->public_id => $after], $time, $actor);
+            $movement = $this->history->movement($operationId, 'mortality', $locked, null, $quantity, [$locked->public_id => $before], [$locked->public_id => $after], $time, $actor, planActivityId: $planActivity?->id);
             $snapshot = $this->snapshots->mortality($record, $locked);
             $this->history->audit($record, $actor, 'mortality_recorded', 'Mortalidad registrada', $operationId, [], $snapshot, $record->production_unit_id, $source);
             $this->history->audit($locked, $actor, 'flock_mortality_applied', 'Cantidad viva ajustada por mortalidad', $operationId, $before, $after, $locked->production_unit_id, $source);

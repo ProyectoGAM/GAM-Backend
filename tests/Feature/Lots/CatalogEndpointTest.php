@@ -64,6 +64,7 @@ final class CatalogEndpointTest extends LotsTestCase
         $this->command('POST', '/flocks', [
             'code' => 'RAZA-INACTIVA', 'breed_id' => $breed->id, 'origin' => 'Propio', 'initial_quantity' => 1,
             'entry_date' => now()->toDateString(), 'poultry_house_id' => $flock->poultry_house_id,
+            'plan_template_id' => (string) Str::ulid(), 'plan_template_version' => 1,
         ])->assertConflict();
     }
 
