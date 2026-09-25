@@ -19,7 +19,7 @@ final readonly class ChangeStockLocationStatusAction
         return DB::transaction(function () use ($location, $status, $actor): StockLocation {
             $locked = StockLocation::query()->whereKey($location->getKey())->lockForUpdate()->firstOrFail();
             if ($locked->system_managed) {
-                throw new InventoryConflict('La ubicación técnica de huevos está protegida.');
+                throw new InventoryConflict('La ubicación técnica está protegida y no puede cambiarse de estado de forma independiente.');
             }
 
             if ($status === StockLocationStatus::Inactive && $locked->stockBalances()->where('on_hand_quantity', '>', 0)->exists()) {

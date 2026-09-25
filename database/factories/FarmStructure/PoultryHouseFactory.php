@@ -3,6 +3,7 @@
 namespace Database\Factories\FarmStructure;
 
 use App\Enums\FarmStructure\PoultryHouseStatus;
+use App\Enums\FarmStructure\PoultryHouseType;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -18,6 +19,7 @@ class PoultryHouseFactory extends Factory
         return [
             'production_unit_id' => ProductionUnit::factory(),
             'name' => 'House '.fake()->unique()->numberBetween(1, 99999),
+            'type' => PoultryHouseType::Poultry,
             'bird_capacity' => fake()->numberBetween(500, 50000),
             'status' => PoultryHouseStatus::Operational,
         ];
@@ -34,6 +36,14 @@ class PoultryHouseFactory extends Factory
     {
         return $this->state(fn (): array => [
             'status' => PoultryHouseStatus::Inactive,
+        ]);
+    }
+
+    public function feed(): static
+    {
+        return $this->state(fn (): array => [
+            'type' => PoultryHouseType::Feed,
+            'bird_capacity' => null,
         ]);
     }
 }

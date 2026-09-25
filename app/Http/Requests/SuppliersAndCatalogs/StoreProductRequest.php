@@ -33,6 +33,8 @@ final class StoreProductRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
+            $this->validateRawMaterialAttributes($validator);
+
             if ($validator->errors()->hasAny(['sku', 'name'])) {
                 return;
             }
@@ -43,5 +45,20 @@ final class StoreProductRequest extends FormRequest
                 $validator->errors()->add('name', 'El nombre del producto ya está registrado.');
             }
         }];
+    }
+
+    private function validateRawMaterialAttributes(Validator $validator): void
+    {
+        if ($validator->errors()->hasAny(['kind', 'base_unit', 'stock_tracked'])
+            || $this->input('kind') !== ProductKind::RawMaterial->value) {
+            return;
+        }
+
+        if ($this->input('base_unit') !== BaseUnit::Gram->value) {
+            $validator->errors()->add('base_unit', 'Las materias primas deben usar gramos como unidad base.');
+        }
+        if ($this->has('stock_tracked') && $this->boolean('stock_tracked') === false) {
+            $validator->errors()->add('stock_tracked', 'Las materias primas deben controlar stock.');
+        }
     }
 }

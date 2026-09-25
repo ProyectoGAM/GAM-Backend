@@ -4,6 +4,7 @@ namespace App\Http\Resources\Inventory;
 
 use App\Http\Resources\SuppliersAndCatalogs\ProductResource;
 use App\Models\Inventory\StockBalance;
+use Brick\Math\BigDecimal;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -20,6 +21,7 @@ final class StockBalanceResource extends JsonResource
             'product' => ProductResource::make($this->whenLoaded('product')),
             'stock_location' => StockLocationResource::make($this->whenLoaded('stockLocation')),
             'available_quantity' => (string) $this->available_quantity,
+            'is_negative' => BigDecimal::of((string) $this->available_quantity)->isNegative(),
             'minimum_quantity' => (string) $this->minimum_quantity,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

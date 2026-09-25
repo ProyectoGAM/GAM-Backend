@@ -1,0 +1,288 @@
+openapi: 3.1.0
+info:
+  title: API de plantas de ración y stock de ingredientes
+  version: 1.0.0
+  description: >-
+    Consulta y alta idempotente del stock de materias primas que alimenta al
+    módulo de recetas. Las cantidades se almacenan en gramos y aceptan kg o g
+    como unidad de entrada. Los galpones existentes tienen tipo poultry por
+    defecto; las plantas de ración usan tipo feed, no admiten lotes ni
+    capacidad de aves, y su tipo no puede cambiarse después del alta. Las
+    plantas pueden estar operativas, en mantenimiento, fuera de servicio o
+    inactivas; los movimientos se permiten en cualquiera de esos estados y
+    sólo las inactivas se excluyen de los agregados.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+  - sessionCookie: []
+tags:
+  - name: Plantas de ración
+    description: Stock de materias primas por planta y por unidad productiva.
+paths:
+  /plantas-racion/{poultryHouse}/ingredientes:
+    parameters:
+      - $ref: '#/components/parameters/PoultryHouse'
+    post:
+      tags: [Plantas de ración]
+      operationId: createFeedIngredient
+      summary: Crea un ingrediente y registra su primera carga
+      description: >-
+        Requiere products.manage e inventory.move. La planta debe ser de tipo
+        feed. Idempotency-Key identifica la operación: el mismo contenido
+        devuelve la representación existente y una clave reutilizada con otros
+        datos devuelve 409. La cantidad positiva se normaliza a gramos. Si se
+        indica proveedor se registra una recepción; sin proveedor se registra
+        un saldo inicial.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateIngredient' }
+            example:
+              sku: MAIZ-026
+              nombre: Maíz partido
+              cantidad: '250'
+              unidad: kg
+              proveedor_id: 2
+      responses:
+        '201': { $ref: '#/components/responses/FeedIngredientResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /plantas-racion/{poultryHouse}/stock:
+    parameters:
+      - $ref: '#/components/parameters/PoultryHouse'
+    get:
+      tags: [Plantas de ración]
+      operationId: getFeedStockByPlant
+      summary: Consulta el stock de una planta de ración
+      description: Requiere inventory.view. Incluye saldos negativos y plantas inactivas.
+      responses:
+        '200': { $ref: '#/components/responses/FeedStockResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /unidades-productivas/{productionUnit}/stock-alimentacion:
+    parameters:
+      - $ref: '#/components/parameters/ProductionUnit'
+    get:
+      tags: [Plantas de ración]
+      operationId: getFeedStockByProductionUnit
+      summary: Suma el stock de las plantas activas de una unidad productiva
+      description: Requiere inventory.view. Excluye sólo las plantas inactivas.
+      responses:
+        '200': { $ref: '#/components/responses/FeedStockResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /stock-alimentacion:
+    get:
+      tags: [Plantas de ración]
+      operationId: getGlobalFeedStock
+      summary: Suma el stock de las plantas activas de todas las unidades
+      description: Requiere inventory.view. Excluye sólo las plantas inactivas.
+      responses:
+        '200': { $ref: '#/components/responses/FeedStockResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: Sanctum }
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: gam_session
+      description: Sesión Sanctum; la SPA requiere CSRF para escrituras.
+  parameters:
+    PoultryHouse:
+      name: poultryHouse
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    ProductionUnit:
+      name: productionUnit
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    CreateIngredient:
+      type: object
+      additionalProperties: false
+      required: [sku, nombre, cantidad]
+      properties:
+        sku: { type: string, minLength: 1, maxLength: 80 }
+        nombre: { type: string, minLength: 1, maxLength: 160 }
+        cantidad:
+          type: string
+          pattern: '^(?=.*[1-9])\d+(?:\.\d{1,6})?$'
+          description: Cantidad positiva declarada en la unidad indicada.
+        unidad: { type: string, enum: [g, kg], default: g }
+        proveedor_id: { type: [integer, 'null'], minimum: 1 }
+    Product:
+      type: object
+      required: [id, sku, name, kind, base_unit, stock_tracked, status]
+      properties:
+        id: { type: integer }
+        sku: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [raw_material] }
+        base_unit: { type: string, enum: [g] }
+        stock_tracked: { type: boolean }
+        status: { type: string, enum: [active, inactive] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    FeedStockDetail:
+      type: object
+      required: [plant_id, plant_name, poultry_house_id, production_unit_id, stock_location_id, stock_g, is_negative, included_in_totals]
+      properties:
+        plant_id: { type: integer }
+        plant_name: { type: string }
+        poultry_house_id: { type: integer }
+        production_unit_id: { type: integer }
+        stock_location_id: { type: integer }
+        stock_g: { type: string, pattern: '^-?\d+(?:\.\d{1,6})?$' }
+        is_negative: { type: boolean }
+        included_in_totals: { type: boolean }
+    FeedStockItem:
+      type: object
+      required: [product_id, product, total_g, is_negative, details]
+      properties:
+        product_id: { type: integer }
+        product: { $ref: '#/components/schemas/Product' }
+        total_g: { type: string, pattern: '^-?\d+(?:\.\d{1,6})?$' }
+        is_negative: { type: boolean }
+        details:
+          type: array
+          items: { $ref: '#/components/schemas/FeedStockDetail' }
+    FeedStockQuery:
+      type: object
+      required: [scope, scope_id, items]
+      properties:
+        scope: { type: string, enum: [plant, production_unit, global] }
+        scope_id: { type: [integer, 'null'] }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/FeedStockItem' }
+    InventoryMovementLine:
+      type: object
+      required: [id, product, product_id, stock_location_id, unit, physical_delta]
+      properties:
+        id: { type: integer }
+        product: { $ref: '#/components/schemas/Product' }
+        product_id: { type: integer }
+        stock_location_id: { type: integer }
+        unit: { type: string, enum: [g] }
+        physical_delta: { type: string, pattern: '^-?\d+(?:\.\d{1,6})?$' }
+    InventoryMovement:
+      type: object
+      required: [id, operation_id, type, supplier, reference_type, reference_id, reason, occurred_at, created_by, reverses_movement_id, lines, created_at]
+      properties:
+        id: { type: integer }
+        operation_id: { type: string, format: uuid }
+        type: { type: string, enum: [opening_balance, receipt] }
+        supplier: { type: [object, 'null'] }
+        reference_type: { type: [string, 'null'] }
+        reference_id: { type: [string, 'null'] }
+        reason: { type: [string, 'null'] }
+        occurred_at: { type: string, format: date-time }
+        created_by: { type: [integer, 'null'] }
+        reverses_movement_id: { type: [integer, 'null'] }
+        lines:
+          type: array
+          items: { $ref: '#/components/schemas/InventoryMovementLine' }
+        created_at: { type: string, format: date-time }
+    StockBalance:
+      type: object
+      required: [id, product_id, stock_location_id, product, stock_location, available_quantity, is_negative, minimum_quantity, created_at, updated_at]
+      properties:
+        id: { type: integer }
+        product_id: { type: integer }
+        stock_location_id: { type: integer }
+        product: { $ref: '#/components/schemas/Product' }
+        stock_location: { type: object }
+        available_quantity: { type: string, pattern: '^-?\d+(?:\.\d{1,6})?$' }
+        is_negative: { type: boolean }
+        minimum_quantity: { type: string, pattern: '^\d+(?:\.\d{1,6})?$' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    FeedIngredientCreated:
+      type: object
+      required: [product, movement, stock]
+      properties:
+        product: { $ref: '#/components/schemas/Product' }
+        movement: { $ref: '#/components/schemas/InventoryMovement' }
+        stock: { $ref: '#/components/schemas/StockBalance' }
+    PoultryHouse:
+      type: object
+      description: >-
+        Tipo inmutable. Un galpón poultry exige capacidad de aves positiva; una
+        planta feed debe exponer bird_capacity como null y no admite lotes.
+      required: [id, production_unit_id, name, type, bird_capacity, status]
+      properties:
+        id: { type: integer }
+        production_unit_id: { type: integer }
+        name: { type: string }
+        type: { type: string, enum: [poultry, feed], default: poultry }
+        bird_capacity: { type: [integer, 'null'], minimum: 1 }
+        status: { type: string, enum: [operational, maintenance, out_of_service, inactive] }
+    Problem:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        message: { type: string }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+  responses:
+    FeedStockResponse:
+      description: >-
+        Stock agrupado por ingrediente con detalle por planta. Si la consulta
+        es de una planta inactiva, total_g es 0 y el saldo conservado aparece
+        en details con included_in_totals en false.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data: { $ref: '#/components/schemas/FeedStockQuery' }
+    FeedIngredientResponse:
+      description: Resultado del alta idempotente de un ingrediente.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data: { $ref: '#/components/schemas/FeedIngredientCreated' }
+    Unauthenticated:
+      description: Autenticación requerida.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Forbidden:
+      description: Permiso funcional insuficiente.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    NotFound:
+      description: Planta o unidad inexistente.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Conflict:
+      description: Conflicto de estado o idempotencia.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    ValidationError:
+      description: Datos de entrada inválidos.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }

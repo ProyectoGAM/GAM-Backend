@@ -4,6 +4,7 @@ namespace App\Actions\FarmStructure;
 
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Enums\FarmStructure\PoultryHouseStatus;
+use App\Enums\FarmStructure\PoultryHouseType;
 use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Exceptions\FarmStructure\FarmStructureConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
@@ -41,6 +42,7 @@ final readonly class ChangePoultryHouseStatusAction
             }
 
             if ($status === PoultryHouseStatus::Inactive
+                && $lockedPoultryHouse->type === PoultryHouseType::Poultry
                 && $this->occupancyProvider->occupancyFor((int) $lockedPoultryHouse->getKey()) > 0) {
                 throw new FarmStructureConflict('Un galpón ocupado no puede desactivarse.');
             }
@@ -58,6 +60,7 @@ final readonly class ChangePoultryHouseStatusAction
                     'subject_snapshot' => [
                         'production_unit_id' => $lockedPoultryHouse->production_unit_id,
                         'name' => $lockedPoultryHouse->name,
+                        'type' => $lockedPoultryHouse->type->value,
                         'status' => $lockedPoultryHouse->status->value,
                     ],
                 ],

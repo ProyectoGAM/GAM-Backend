@@ -272,6 +272,47 @@ final class FlockEndpointTest extends LotsTestCase
         $this->assertDatabaseCount('activity_log', 0);
     }
 
+    // Flujo: rechaza la admisión de aves en una planta de ración.
+    public function test_creation_rejects_feed_house_as_bird_destination(): void
+    {
+        // Preparación: autentica al gestor y reemplaza el destino por una planta de ración.
+        $this->signIn();
+        $payload = $this->payload();
+        $feedHouse = PoultryHouse::factory()->feed()->create();
+        $payload['poultry_house_id'] = $feedHouse->getKey();
+
+        // Request: intenta admitir un lote en el galpón que no almacena aves.
+        $this->command('POST', '/flocks', $payload)
+            ->assertConflict()
+            ->assertJsonPath('detail', 'Las plantas de ración no pueden recibir aves ni lotes.');
+
+        // Verificación: confirma que la admisión no dejó registros parciales.
+        $this->assertDatabaseCount('flocks', 0);
+        $this->assertDatabaseCount('flock_movements', 0);
+    }
+
+    // Flujo: rechaza redistribuir aves hacia una planta de ración.
+    public function test_redistribution_rejects_feed_house_as_destination(): void
+    {
+        // Preparación: crea un lote con plan y una planta de ración destino.
+        $this->signIn();
+        $source = $this->flockWithPlan();
+        $feedHouse = PoultryHouse::factory()->feed()->create();
+
+        // Request: intenta mover aves hacia la planta de ración.
+        $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
+            'version' => 1,
+            'quantity' => 10,
+            'destination_poultry_house_id' => $feedHouse->getKey(),
+            'destination_code' => 'FEED-DESTINO',
+        ])->assertConflict()
+            ->assertJsonPath('detail', 'Las plantas de ración no pueden recibir aves ni lotes.');
+
+        // Verificación: conserva la cantidad y la historia del lote origen.
+        $this->assertSame(100, $source->fresh()->current_quantity);
+        $this->assertDatabaseCount('flock_movements', 0);
+    }
+
     // Flujo: finaliza con egreso, conserva historia y no crea mortalidad.
     public function test_finalization_releases_occupancy_and_records_departure(): void
     {

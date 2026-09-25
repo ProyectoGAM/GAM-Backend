@@ -3,6 +3,8 @@
 namespace App\Actions\SuppliersAndCatalogs;
 
 use App\DTO\AuditAndTraceability\AuditEntryData;
+use App\Enums\SuppliersAndCatalogs\BaseUnit;
+use App\Enums\SuppliersAndCatalogs\ProductKind;
 use App\Exceptions\SuppliersAndCatalogs\SuppliersAndCatalogsConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\SuppliersAndCatalogs\Product;
@@ -47,6 +49,7 @@ final readonly class UpdateProductAction
                 if ($locked->system_key === 'generic_egg' && array_intersect(array_keys($attributes), ['sku', 'name', 'kind', 'base_unit', 'stock_tracked'])) {
                     throw new SuppliersAndCatalogsConflict('El producto técnico Huevo está protegido por el módulo de stock de huevos.');
                 }
+                $this->assertRawMaterialAttributes($locked, $attributes);
                 $before = $this->snapshot($locked);
                 if (
                     array_key_exists('base_unit', $attributes)
@@ -97,6 +100,49 @@ final readonly class UpdateProductAction
         $unsupported = array_values(array_diff(array_keys($attributes), self::UPDATABLE_ATTRIBUTES));
         if ($unsupported !== []) {
             throw new SuppliersAndCatalogsConflict('Los campos '.implode(', ', $unsupported).' no están permitidos al actualizar un producto.');
+        }
+    }
+
+    /** @param array<string, mixed> $attributes */
+    private function assertRawMaterialAttributes(Product $product, array $attributes): void
+    {
+        $nextKind = ProductKind::tryFrom((string) ($attributes['kind'] ?? $product->kind->value));
+        $nextBaseUnit = BaseUnit::tryFrom((string) ($attributes['base_unit'] ?? $product->base_unit->value));
+        $nextStockTracked = array_key_exists('stock_tracked', $attributes)
+            ? (bool) $attributes['stock_tracked']
+            : $product->stock_tracked;
+
+        if ($nextKind === ProductKind::RawMaterial
+            && ($nextBaseUnit !== BaseUnit::Gram || ! $nextStockTracked)) {
+            throw new SuppliersAndCatalogsConflict('Las materias primas deben usar gramos como unidad base y controlar stock.');
+        }
+
+        $hasHistory = $product->movementLines()->exists() || $product->stockBalances()->exists();
+
+        if ($hasHistory && $product->kind !== ProductKind::RawMaterial && $nextKind === ProductKind::RawMaterial) {
+            throw new SuppliersAndCatalogsConflict('Un producto con historial no puede convertirse en materia prima.');
+        }
+
+        if ($product->kind !== ProductKind::RawMaterial) {
+            return;
+        }
+
+        $changedIngredientAttribute = collect(['kind', 'base_unit', 'stock_tracked'])
+            ->contains(function (string $attribute) use ($attributes, $product): bool {
+                if (! array_key_exists($attribute, $attributes)) {
+                    return false;
+                }
+
+                $current = $attribute === 'stock_tracked'
+                    ? (bool) $product->stock_tracked
+                    : $product->{$attribute}->value;
+
+                return $attribute === 'stock_tracked'
+                    ? (bool) $attributes[$attribute] !== $current
+                    : (string) $attributes[$attribute] !== (string) $current;
+            });
+        if ($hasHistory && $changedIngredientAttribute) {
+            throw new SuppliersAndCatalogsConflict('Una materia prima con historial no puede cambiar de tipo, unidad base ni control de stock.');
         }
     }
 
