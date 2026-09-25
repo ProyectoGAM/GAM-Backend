@@ -53,7 +53,10 @@ final class ReferenceOptionsEndpointTest extends TestCase
             ->assertJsonMissingPath('data.reservas')
             ->assertJsonMissingPath('data.lineas_reserva')
             ->assertJsonPath('data.types.base_units.0.value', 'unit')
-            ->assertJsonPath('data.types.booleans.0.value', 'true');
+            ->assertJsonPath('data.types.booleans.0.value', 'true')
+            ->assertJsonCount(2, 'data.statuses.production_units')
+            ->assertJsonPath('data.statuses.production_units.0.value', 'active')
+            ->assertJsonPath('data.statuses.production_units.1.value', 'inactive');
     }
 
     // Flujo: intenta consultar referencias sin sesión y confirma el límite de autenticación.

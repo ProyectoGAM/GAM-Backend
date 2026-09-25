@@ -17,6 +17,10 @@ final class PoultryHouseResource extends JsonResource
             'production_unit_id' => $this->production_unit_id,
             'name' => $this->name,
             'bird_capacity' => $this->bird_capacity,
+            'current_occupancy' => $this->when(
+                array_key_exists('current_occupancy', $this->resource->getAttributes()),
+                fn (): int => (int) $this->resource->getAttribute('current_occupancy'),
+            ),
             'status' => $this->status->value,
             'production_unit' => ProductionUnitResource::make($this->whenLoaded('productionUnit')),
             'created_at' => $this->created_at,

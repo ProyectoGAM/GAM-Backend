@@ -81,6 +81,14 @@ final class PoultryHouseEndpointTest extends TestCase
                 return 80;
             }
 
+            /** @param list<int> $poultryHouseIds
+             * @return array<int, int>
+             */
+            public function occupanciesFor(array $poultryHouseIds): array
+            {
+                return array_fill_keys($poultryHouseIds, 80);
+            }
+
             public function openFlocksCountFor(int $poultryHouseId): int
             {
                 return 1;
@@ -130,6 +138,63 @@ final class PoultryHouseEndpointTest extends TestCase
             'event' => 'poultry_house_status_changed',
             'subject_id' => $poultryHouse->getKey(),
         ]);
+    }
+
+    // Flujo: lista ocupación actual por galpón con una consulta agrupada y la incluye en el detalle.
+    public function test_list_and_detail_expose_current_occupancy_from_batch_provider(): void
+    {
+        // Preparación: crea dos galpones y configura un proveedor que sólo resuelve lotes de IDs.
+        $productionUnit = ProductionUnit::factory()->create();
+        $firstHouse = PoultryHouse::factory()->for($productionUnit)->create(['name' => 'House A']);
+        $secondHouse = PoultryHouse::factory()->for($productionUnit)->create(['name' => 'House B']);
+        $provider = new class implements PoultryHouseOccupancyProvider
+        {
+            /** @var list<list<int>> */
+            public array $requestedBatches = [];
+
+            public function occupancyFor(int $poultryHouseId): int
+            {
+                throw new \LogicException('The list query must use the batch occupancy method.');
+            }
+
+            /** @param list<int> $poultryHouseIds
+             * @return array<int, int>
+             */
+            public function occupanciesFor(array $poultryHouseIds): array
+            {
+                $this->requestedBatches[] = $poultryHouseIds;
+
+                return [
+                    (int) $this->requestedBatches[0][0] => 10,
+                    (int) $this->requestedBatches[0][1] => 20,
+                ];
+            }
+
+            public function openFlocksCountFor(int $poultryHouseId): int
+            {
+                return 0;
+            }
+        };
+        $this->app->instance(PoultryHouseOccupancyProvider::class, $provider);
+        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.view']), ['*']);
+
+        // Acción: consulta la colección y luego el detalle individual de un galpón.
+        $this->getJson("/api/v1/production-units/{$productionUnit->getKey()}/poultry-houses")
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $firstHouse->getKey())
+            ->assertJsonPath('data.0.current_occupancy', 10)
+            ->assertJsonPath('data.1.id', $secondHouse->getKey())
+            ->assertJsonPath('data.1.current_occupancy', 20);
+
+        $this->getJson("/api/v1/poultry-houses/{$secondHouse->getKey()}")
+            ->assertOk()
+            ->assertJsonPath('data.current_occupancy', 20);
+
+        // Verificación: prueba una llamada por colección y una llamada batch para el detalle.
+        $this->assertSame([
+            [(int) $firstHouse->getKey(), (int) $secondHouse->getKey()],
+            [(int) $secondHouse->getKey()],
+        ], $provider->requestedBatches);
     }
 
     /** @param list<string> $permissions */

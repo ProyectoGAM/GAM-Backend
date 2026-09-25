@@ -33,6 +33,43 @@ final class FlockEndpointTest extends LotsTestCase
         ];
     }
 
+    // Flujo: suma current_quantity de lotes activos y en cuarentena y devuelve cero para galpones sin ocupación.
+    public function test_batch_occupancy_uses_current_quantity_for_active_and_quarantined_flocks(): void
+    {
+        // Preparación: crea un galpón por estado para respetar la unicidad de lote abierto por galpón.
+        $activeHouse = PoultryHouse::factory()->create();
+        $quarantinedHouse = PoultryHouse::factory()->create();
+        $finishedHouse = PoultryHouse::factory()->create();
+        Flock::factory()->create([
+            'poultry_house_id' => $activeHouse->getKey(),
+            'initial_quantity' => 150,
+            'current_quantity' => 100,
+        ]);
+        Flock::factory()->quarantined()->create([
+            'poultry_house_id' => $quarantinedHouse->getKey(),
+            'initial_quantity' => 50,
+            'current_quantity' => 40,
+        ]);
+        Flock::factory()->finished()->create([
+            'poultry_house_id' => $finishedHouse->getKey(),
+            'initial_quantity' => 75,
+        ]);
+
+        // Consulta: obtiene la ocupación de los tres galpones mediante la consulta agrupada.
+        $occupancies = $this->app->make(PoultryHouseOccupancyProvider::class)->occupanciesFor([
+            (int) $activeHouse->getKey(),
+            (int) $quarantinedHouse->getKey(),
+            (int) $finishedHouse->getKey(),
+        ]);
+
+        // Verificación: suma current_quantity de estados abiertos y devuelve cero para el lote finalizado.
+        $this->assertSame([
+            (int) $activeHouse->getKey() => 100,
+            (int) $quarantinedHouse->getKey() => 40,
+            (int) $finishedHouse->getKey() => 0,
+        ], $occupancies);
+    }
+
     // Flujo: registra un lote, cuenta ocupación y comprueba auditoría y semana.
     public function test_creation_uses_public_contract_and_physical_capacity_is_unchanged(): void
     {
