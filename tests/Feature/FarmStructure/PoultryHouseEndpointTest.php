@@ -46,6 +46,111 @@ final class PoultryHouseEndpointTest extends TestCase
         ]);
     }
 
+    // Flujo: crea una planta de ración y expone sus campos avícolas como nulos.
+    public function test_valid_feed_payload_creates_ration_plant_without_bird_capacity(): void
+    {
+        // Preparación: crea la unidad productiva y autentica al gestor.
+        $productionUnit = ProductionUnit::factory()->create();
+        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.manage']), ['*']);
+
+        // Request: registra la planta sin enviar capacidad de aves.
+        $response = $this->postJson(
+            "/api/v1/production-units/{$productionUnit->getKey()}/poultry-houses",
+            ['name' => 'Planta de ración A', 'type' => 'feed'],
+        )->assertCreated()
+            ->assertJsonPath('data.type', 'feed')
+            ->assertJsonPath('data.bird_capacity', null)
+            ->assertJsonPath('data.current_occupancy', null);
+
+        // Verificación: confirma el tipo feed y la ausencia de capacidad física.
+        $this->assertDatabaseHas('poultry_houses', [
+            'id' => $response->json('data.id'),
+            'production_unit_id' => $productionUnit->getKey(),
+            'type' => 'feed',
+            'bird_capacity' => null,
+        ]);
+    }
+
+    // Flujo: rechaza capacidad de aves al crear una planta de ración.
+    public function test_feed_payload_rejects_bird_capacity(): void
+    {
+        // Preparación: crea la unidad productiva y autentica al gestor.
+        $productionUnit = ProductionUnit::factory()->create();
+        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.manage']), ['*']);
+
+        // Request: intenta enviar una capacidad incompatible con el tipo feed.
+        $this->postJson(
+            "/api/v1/production-units/{$productionUnit->getKey()}/poultry-houses",
+            ['name' => 'Planta inválida', 'type' => 'feed', 'bird_capacity' => 100],
+        )->assertUnprocessable()
+            ->assertJsonValidationErrors('bird_capacity');
+
+        // Verificación: confirma que el registro inválido no se persistió.
+        $this->assertDatabaseMissing('poultry_houses', ['production_unit_id' => $productionUnit->getKey()]);
+    }
+
+    // Flujo: impide cambiar el tipo de un galpón ya creado.
+    public function test_type_is_immutable_after_creation(): void
+    {
+        // Preparación: crea un galpón avícola y autentica al gestor.
+        $poultryHouse = PoultryHouse::factory()->create();
+        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.manage']), ['*']);
+
+        // Request: intenta convertir el galpón avícola en una planta de ración.
+        $this->patchJson("/api/v1/poultry-houses/{$poultryHouse->getKey()}", [
+            'type' => 'feed',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('type');
+
+        // Verificación: conserva el tipo original en la base.
+        $this->assertDatabaseHas('poultry_houses', [
+            'id' => $poultryHouse->getKey(),
+            'type' => 'poultry',
+        ]);
+    }
+
+    // Flujo: permite inactivar una planta de ración sin consultar ocupación de aves.
+    public function test_feed_house_can_become_inactive_with_stock_independently_of_bird_occupancy(): void
+    {
+        // Preparación: crea una planta y evita que el flujo consulte ocupación de lotes.
+        $poultryHouse = PoultryHouse::factory()->feed()->create();
+        $this->mock(PoultryHouseOccupancyProvider::class)
+            ->shouldNotReceive('occupancyFor');
+        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.manage']), ['*']);
+
+        // Request: cambia el estado de la planta a inactivo.
+        $this->patchJson("/api/v1/poultry-houses/{$poultryHouse->getKey()}/status", [
+            'status' => 'inactive',
+        ])->assertOk()
+            ->assertJsonPath('data.type', 'feed')
+            ->assertJsonPath('data.status', 'inactive');
+
+        // Verificación: confirma la transición persistida.
+        $this->assertDatabaseHas('poultry_houses', [
+            'id' => $poultryHouse->getKey(),
+            'type' => 'feed',
+            'status' => 'inactive',
+        ]);
+    }
+
+    // Flujo: filtra galpones por tipo y no calcula ocupación para plantas de ración.
+    public function test_list_filters_feed_houses_and_exposes_null_occupancy(): void
+    {
+        // Preparación: crea un galpón avícola y una planta en la misma unidad.
+        $productionUnit = ProductionUnit::factory()->create();
+        PoultryHouse::factory()->for($productionUnit)->create(['name' => 'House A']);
+        PoultryHouse::factory()->for($productionUnit)->feed()->create(['name' => 'Planta A']);
+        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.view']), ['*']);
+
+        // Request: consulta únicamente las plantas de ración.
+        $this->getJson("/api/v1/production-units/{$productionUnit->getKey()}/poultry-houses?type=feed")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.type', 'feed')
+            ->assertJsonPath('data.0.bird_capacity', null)
+            ->assertJsonPath('data.0.current_occupancy', null);
+    }
+
     // Flujo: intenta crear un galpón en una unidad inactiva y verifica el conflicto.
     public function test_returns_409_when_creating_poultry_house_in_inactive_unit(): void
     {

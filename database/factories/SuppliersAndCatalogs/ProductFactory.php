@@ -13,17 +13,13 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class ProductFactory extends Factory
 {
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function definition(): array
     {
         return [
             'sku' => fake()->unique()->bothify('SKU-#####'),
             'name' => fake()->unique()->words(2, true),
-            'kind' => ProductKind::RawMaterial,
+            'kind' => ProductKind::Supply,
             'base_unit' => BaseUnit::Kilogram,
             'stock_tracked' => true,
             'status' => ProductStatus::Active,
@@ -35,6 +31,16 @@ class ProductFactory extends Factory
         return $this->state(fn (): array => [
             'kind' => ProductKind::Vaccine,
             'base_unit' => BaseUnit::Dose,
+            'stock_tracked' => true,
+            'status' => ProductStatus::Active,
+        ]);
+    }
+
+    public function rawMaterial(): static
+    {
+        return $this->state(fn (): array => [
+            'kind' => ProductKind::RawMaterial,
+            'base_unit' => BaseUnit::Gram,
             'stock_tracked' => true,
             'status' => ProductStatus::Active,
         ]);

@@ -13,6 +13,7 @@ use App\Http\Controllers\IdentityAndAccess\AuthController;
 use App\Http\Controllers\IdentityAndAccess\SharedDeviceController;
 use App\Http\Controllers\IdentityAndAccess\UserManagementController;
 use App\Http\Controllers\Inventory\EggStockController;
+use App\Http\Controllers\Inventory\FeedStockController;
 use App\Http\Controllers\Inventory\InventoryMovementController;
 use App\Http\Controllers\Inventory\InventoryReadController;
 use App\Http\Controllers\Inventory\StockLocationController;
@@ -240,6 +241,15 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             ->name('poultry-houses.update');
         Route::patch('/poultry-houses/{poultryHouse}/status', [PoultryHouseStatusController::class, 'update'])
             ->name('poultry-houses.status.update');
+
+        Route::get('/stock-alimentacion', [FeedStockController::class, 'global'])
+            ->name('feed-stock.global');
+        Route::get('/unidades-productivas/{productionUnit}/stock-alimentacion', [FeedStockController::class, 'byProductionUnit'])
+            ->name('feed-stock.production-units.show');
+        Route::get('/plantas-racion/{poultryHouse}/stock', [FeedStockController::class, 'byHouse'])
+            ->name('feed-stock.plants.show');
+        Route::post('/plantas-racion/{poultryHouse}/ingredientes', [FeedStockController::class, 'store'])
+            ->name('feed-stock.ingredients.store');
 
         Route::get('/poultry-houses/{poultryHouse}/maintenances', [MaintenanceController::class, 'index'])->name('maintenances.index');
         Route::get('/poultry-houses/{poultryHouse}/maintenances/latest', [MaintenanceController::class, 'latest'])->name('maintenances.latest');

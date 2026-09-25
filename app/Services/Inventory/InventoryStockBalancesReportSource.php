@@ -5,9 +5,13 @@ namespace App\Services\Inventory;
 use App\DTO\ReportingAndAnalytics\ReportQueryData;
 use App\DTO\ReportingAndAnalytics\ReportResultData;
 use App\DTO\ReportingAndAnalytics\ReportSourceDefinition;
+use App\Enums\FarmStructure\PoultryHouseStatus;
+use App\Enums\FarmStructure\PoultryHouseType;
 use App\Enums\SuppliersAndCatalogs\BaseUnit;
+use App\Enums\SuppliersAndCatalogs\ProductKind;
 use App\Interfaces\ReportingAndAnalytics\ReportSource;
 use App\Models\Inventory\StockBalance;
+use Illuminate\Contracts\Database\Query\Expression;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\LazyCollection;
@@ -69,6 +73,7 @@ final class InventoryStockBalancesReportSource implements ReportSource
         $grouped = $query->groupings !== [] || $query->metrics !== [];
 
         if ($grouped) {
+            $builder = $this->applyAggregateVisibility($builder);
             $builder = $this->applyGrouping($builder, $query);
             $resultColumns = [...$query->groupings, ...$query->metrics];
         } else {
@@ -103,17 +108,26 @@ final class InventoryStockBalancesReportSource implements ReportSource
     {
         $builder = $this->applyFilters($this->baseQuery(), $query);
         $grouped = $query->groupings !== [] || $query->metrics !== [];
-        $resultColumns = $grouped ? [...$query->groupings, ...$query->metrics] : $query->columns;
 
         if ($grouped) {
+            $builder = $this->applyAggregateVisibility($builder);
             $builder = $this->applyGrouping($builder, $query);
+            $resultColumns = [...$query->groupings, ...$query->metrics];
         } else {
+            $resultColumns = $query->columns;
             $builder->select($this->detailSelects());
         }
 
-        return $this->applySorts($builder, $query, $grouped)
-            ->lazy(500)
-            ->map(fn (object $row): array => $this->rowToArray($row, $resultColumns));
+        /** @var LazyCollection<int, object> $rows */
+        $rows = $this->applySorts($builder, $query, $grouped)->lazy(500);
+
+        /** @var LazyCollection<int, array<string, mixed>> $mappedRows */
+        $mappedRows = $rows->map(
+            /** @return array<string, mixed> */
+            fn (object $row): array => $this->rowToArray($row, $resultColumns),
+        );
+
+        return $mappedRows;
     }
 
     private function baseQuery(): QueryBuilder
@@ -122,11 +136,12 @@ final class InventoryStockBalancesReportSource implements ReportSource
             ->join('products', 'products.id', '=', 'stock_balances.product_id')
             ->join('stock_locations', 'stock_locations.id', '=', 'stock_balances.stock_location_id')
             ->leftJoin('production_units', 'production_units.id', '=', 'stock_locations.production_unit_id')
+            ->leftJoin('poultry_houses', 'poultry_houses.id', '=', 'stock_locations.poultry_house_id')
             ->where('products.stock_tracked', true)
             ->getQuery();
     }
 
-    /** @return list<string> */
+    /** @return list<string|Expression> */
     private function detailSelects(): array
     {
         return [
@@ -166,10 +181,24 @@ final class InventoryStockBalancesReportSource implements ReportSource
                 'neq' => $builder->where($column, '<>', $filter['value']),
                 'in' => $builder->whereIn($column, $filter['value']),
                 'not_in' => $builder->whereNotIn($column, $filter['value']),
+                default => throw new \InvalidArgumentException('Operador de filtro no soportado.'),
             };
         }
 
         return $builder;
+    }
+
+    /**
+     * Oculta de los agregados el saldo de materias primas de plantas de ración inactivas.
+     *
+     * El detalle conserva todas las filas para permitir consultar el saldo histórico de la ubicación.
+     */
+    private function applyAggregateVisibility(QueryBuilder $builder): QueryBuilder
+    {
+        return $builder->whereRaw(
+            "NOT (products.kind = ? AND COALESCE(poultry_houses.type, '') = ? AND COALESCE(poultry_houses.status, '') = ?)",
+            [ProductKind::RawMaterial->value, PoultryHouseType::Feed->value, PoultryHouseStatus::Inactive->value],
+        );
     }
 
     private function applyGrouping(QueryBuilder $builder, ReportQueryData $query): QueryBuilder

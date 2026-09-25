@@ -3,6 +3,7 @@
 namespace App\Actions\FarmStructure;
 
 use App\DTO\AuditAndTraceability\AuditEntryData;
+use App\Enums\FarmStructure\PoultryHouseType;
 use App\Exceptions\FarmStructure\FarmStructureConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Interfaces\FarmStructure\PoultryHouseOccupancyProvider;
@@ -18,7 +19,7 @@ final readonly class UpdatePoultryHouseAction
         private PoultryHouseOccupancyProvider $occupancyProvider,
     ) {}
 
-    /** @param array{name?: string, bird_capacity?: int} $attributes */
+    /** @param array{name?: string, type?: string, bird_capacity?: int|null} $attributes */
     public function execute(PoultryHouse $poultryHouse, array $attributes, User $actor): PoultryHouse
     {
         return DB::transaction(function () use ($poultryHouse, $attributes, $actor): PoultryHouse {
@@ -26,6 +27,17 @@ final readonly class UpdatePoultryHouseAction
             $query->getQuery()->lockForUpdate();
             $lockedPoultryHouse = $query->firstOrFail();
             $before = $this->snapshot($lockedPoultryHouse);
+
+            if (array_key_exists('type', $attributes)
+                && PoultryHouseType::from($attributes['type']) !== $lockedPoultryHouse->type) {
+                throw new FarmStructureConflict('El tipo de galpón no puede modificarse.');
+            }
+            unset($attributes['type']);
+
+            if ($lockedPoultryHouse->type === PoultryHouseType::Feed
+                && array_key_exists('bird_capacity', $attributes)) {
+                throw new FarmStructureConflict('Las plantas de ración no pueden tener capacidad de aves.');
+            }
 
             if (array_key_exists('bird_capacity', $attributes)) {
                 $capacity = BirdCapacity::fromInt($attributes['bird_capacity']);
@@ -57,12 +69,13 @@ final readonly class UpdatePoultryHouseAction
         });
     }
 
-    /** @return array{production_unit_id: int, name: string, bird_capacity: int, status: string} */
+    /** @return array{production_unit_id: int, name: string, type: string, bird_capacity: int|null, status: string} */
     private function snapshot(PoultryHouse $poultryHouse): array
     {
         return [
             'production_unit_id' => $poultryHouse->production_unit_id,
             'name' => $poultryHouse->name,
+            'type' => $poultryHouse->type->value,
             'bird_capacity' => $poultryHouse->bird_capacity,
             'status' => $poultryHouse->status->value,
         ];

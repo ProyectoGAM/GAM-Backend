@@ -3,6 +3,7 @@
 namespace App\Models\FarmStructure;
 
 use App\Enums\FarmStructure\PoultryHouseStatus;
+use App\Enums\FarmStructure\PoultryHouseType;
 use Database\Factories\FarmStructure\PoultryHouseFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -17,13 +18,14 @@ use Illuminate\Support\Str;
  * @property int $production_unit_id
  * @property string $name
  * @property string $normalized_name
- * @property int $bird_capacity
+ * @property PoultryHouseType $type
+ * @property int|null $bird_capacity
  * @property PoultryHouseStatus $status
  * @property-read ProductionUnit $productionUnit
  * @property-read Carbon $created_at
  * @property-read Carbon $updated_at
  */
-#[Fillable(['production_unit_id', 'name', 'bird_capacity', 'status'])]
+#[Fillable(['production_unit_id', 'name', 'type', 'bird_capacity', 'status'])]
 class PoultryHouse extends Model
 {
     /** @use HasFactory<PoultryHouseFactory> */
@@ -33,6 +35,7 @@ class PoultryHouse extends Model
     protected function casts(): array
     {
         return [
+            'type' => PoultryHouseType::class,
             'bird_capacity' => 'integer',
             'status' => PoultryHouseStatus::class,
         ];

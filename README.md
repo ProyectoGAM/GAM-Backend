@@ -37,18 +37,23 @@ module-structure-example.md => ejemplo de estructura y alguna que otra aplicacio
 
 [contracts/openapi/reference-data.yaml](contracts/openapi/reference-data.yaml) => catálogos dinámicos para formularios y filtros
 
+[feed-stock-implementation.md](feed-stock-implementation.md) => plantas de ración y stock de ingredientes en gramos
+
+[contracts/openapi/feed-stock.yaml](contracts/openapi/feed-stock.yaml) => contrato API de plantas de ración y stock de ingredientes
+
 Swagger UI (desarrollo): [http://localhost:8080/docs/](http://localhost:8080/docs/)
 
 La documentación se sirve desde el servicio `swagger-ui` de Compose y permite
 seleccionar los contratos de autenticación, Lotes/producción de huevos,
-mantenimientos, medicamentos, vacunas, pesajes, planes de manejo y reporting. El
+mantenimientos, medicamentos, vacunas, pesajes, planes de manejo, plantas de
+ración y reporting. El
 botón **Authorize** usa el token Bearer emitido por el login.
 
 docker compose -f compose.dev.yaml up -d --build
 
 ## Tests y Artisan
 
-La estrategia oficial de testing ejecuta PHPUnit dentro del contenedor `api`. PHPUnit usa PostgreSQL en `DB_HOST=postgres` y deriva la base aislada agregando `_testing` al `DB_DATABASE` normal del entorno. Con la configuración local actual, la base normal es `sga_backend` y la de testing es `sga_backend_testing`; las credenciales se heredan del servicio PostgreSQL definido en Compose.
+La estrategia oficial de testing ejecuta PHPUnit dentro del contenedor `api`. PHPUnit usa PostgreSQL en `DB_HOST=postgres` y deriva la base aislada agregando `_testing` al `DB_DATABASE` normal del entorno. Con la configuración local actual, la base normal es `gam` y la de testing es `gam_testing`; las credenciales se heredan del servicio PostgreSQL definido en Compose.
 
 ```bash
 docker compose -f compose.dev.yaml exec -T \
@@ -79,31 +84,35 @@ docker compose -f compose.dev.yaml exec -T \
   -e DB_CONNECTION=pgsql \
   -e DB_HOST=postgres \
   -e DB_PORT=5432 \
-  -e DB_DATABASE=sga_backend_testing \
+  -e DB_DATABASE=gam_testing \
   api php artisan config:show database.default
 docker compose -f compose.dev.yaml exec -T \
   -e APP_ENV=testing \
   -e DB_CONNECTION=pgsql \
   -e DB_HOST=postgres \
   -e DB_PORT=5432 \
-  -e DB_DATABASE=sga_backend_testing \
+  -e DB_DATABASE=gam_testing \
   api php artisan config:show database.connections.pgsql.database
 ```
 
-La salida debe ser `pgsql` y `sga_backend_testing` (la base normal local es `sga_backend`; en otro entorno, sustituir ambos nombres por `<DB_DATABASE>` y `<DB_DATABASE>_testing`).
+La salida debe ser `pgsql` y `gam_testing` (la base normal local es `gam`; en otro entorno, sustituir ambos nombres por `<DB_DATABASE>` y `<DB_DATABASE>_testing`).
 
 Para la comprobación adicional con un pepper temporal no persistido, reemplazá el valor vacío por `-e IDENTITY_PIN_PEPPER=test-only-temporary-value`.
 
 No ejecutes `docker compose down -v`: elimina los volúmenes y los datos existentes.
 ## Datos de prueba locales
 
-Cuando `APP_ENV=local`, `DatabaseSeeder` ejecuta también `LocalDemoDataSeeder` y carga datos ficticios pero coherentes de granjas, galpones, proveedores, productos, medicamentos, inventario, reservas, reportes, una plantilla publicada de plan de manejo y lotes con redistribuciones, mortalidad, recolección y pesajes. La carga es idempotente y no se ejecuta en otros ambientes.
+Cuando `APP_ENV=local`, `DatabaseSeeder` ejecuta también `LocalDemoDataSeeder` y carga datos ficticios pero coherentes de granjas, galpones avícolas y plantas de ración, proveedores, productos, medicamentos, inventario, reservas, reportes, una plantilla publicada de plan de manejo y lotes con redistribuciones, mortalidad, recolección y pesajes. La carga es idempotente y no se ejecuta en otros ambientes.
 
 Para reconstruir la base local desde cero:
 
 ```bash
 docker compose -f compose.dev.yaml exec api php artisan migrate:fresh --seed --force
 ```
+
+Para una base local que conserva el demo anterior, esta reconstrucción reemplaza
+los balances y movimientos de maíz y soja que estaban expresados en kg por su
+representación canónica en gramos.
 
 Las decisiones para corregir, regenerar o reconstruir datos de prueba del entorno local no requieren confirmación adicional: son datos ficticios, no pertenecen a producción y su reemplazo no afecta negativamente el desarrollo. Esta autorización se limita a `APP_ENV=local` y no aplica a datos reales ni a otros entornos.
 

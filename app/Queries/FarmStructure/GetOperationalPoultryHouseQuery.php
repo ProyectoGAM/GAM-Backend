@@ -4,6 +4,7 @@ namespace App\Queries\FarmStructure;
 
 use App\DTO\FarmStructure\OperationalPoultryHouseData;
 use App\Enums\FarmStructure\PoultryHouseStatus;
+use App\Enums\FarmStructure\PoultryHouseType;
 use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Interfaces\FarmStructure\PoultryHouseOccupancyProvider;
 use App\Models\FarmStructure\PoultryHouse;
@@ -17,6 +18,7 @@ final readonly class GetOperationalPoultryHouseQuery
     public function execute(int $poultryHouseId): OperationalPoultryHouseData
     {
         $poultryHouse = PoultryHouse::query()
+            ->where('type', PoultryHouseType::Poultry)
             ->where('status', PoultryHouseStatus::Operational)
             ->whereHas(
                 'productionUnit',

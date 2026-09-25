@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Inventory;
 
+use App\Enums\SuppliersAndCatalogs\BaseUnit;
 use App\Models\Inventory\InventoryMovement;
+use Illuminate\Validation\Rule;
 
 final class TransferStockRequest extends InventoryCommandRequest
 {
@@ -21,6 +23,7 @@ final class TransferStockRequest extends InventoryCommandRequest
             'lines.*.from_stock_location_id' => ['required', 'integer', 'exists:stock_locations,id'],
             'lines.*.to_stock_location_id' => ['required', 'integer', 'exists:stock_locations,id', 'different:lines.*.from_stock_location_id'],
             'lines.*.quantity' => ['required', 'string', 'regex:/^(?=.*[1-9])\d+(?:\.\d{1,6})?$/'],
+            'lines.*.unit' => ['sometimes', 'nullable', Rule::in([BaseUnit::Gram->value, BaseUnit::Kilogram->value])],
             'reason' => ['sometimes', 'nullable', 'string', 'max:255'],
             'occurred_at' => ['sometimes', 'date'],
         ];

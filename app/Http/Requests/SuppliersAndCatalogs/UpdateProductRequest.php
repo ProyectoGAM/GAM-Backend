@@ -3,6 +3,7 @@
 namespace App\Http\Requests\SuppliersAndCatalogs;
 
 use App\Enums\SuppliersAndCatalogs\BaseUnit;
+use App\Enums\SuppliersAndCatalogs\ProductKind;
 use App\Models\SuppliersAndCatalogs\Product;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
@@ -36,6 +37,7 @@ final class UpdateProductRequest extends FormRequest
             if (! $product instanceof Product) {
                 return;
             }
+            $this->validateRawMaterialAttributes($validator, $product);
             if ($this->filled('sku') && Product::query()->where('sku', trim($this->string('sku')->toString()))->whereKeyNot($product->getKey())->exists()) {
                 $validator->errors()->add('sku', 'El SKU ya está registrado.');
             }
@@ -43,5 +45,29 @@ final class UpdateProductRequest extends FormRequest
                 $validator->errors()->add('name', 'El nombre del producto ya está registrado.');
             }
         }];
+    }
+
+    private function validateRawMaterialAttributes(Validator $validator, Product $product): void
+    {
+        if ($validator->errors()->hasAny(['kind', 'base_unit', 'stock_tracked'])) {
+            return;
+        }
+
+        $nextKind = $this->input('kind', $product->kind->value);
+        if ($nextKind !== ProductKind::RawMaterial->value) {
+            return;
+        }
+
+        $nextBaseUnit = $this->input('base_unit', $product->base_unit->value);
+        if ($nextBaseUnit !== BaseUnit::Gram->value) {
+            $validator->errors()->add('base_unit', 'Las materias primas deben usar gramos como unidad base.');
+        }
+
+        $nextStockTracked = $this->has('stock_tracked')
+            ? $this->boolean('stock_tracked')
+            : $product->stock_tracked;
+        if (! $nextStockTracked) {
+            $validator->errors()->add('stock_tracked', 'Las materias primas deben controlar stock.');
+        }
     }
 }

@@ -19,7 +19,7 @@ final readonly class UpdateStockLocationAction
         return DB::transaction(function () use ($location, $attributes, $actor): StockLocation {
             $locked = StockLocation::query()->whereKey($location->getKey())->lockForUpdate()->firstOrFail();
             if ($locked->system_managed) {
-                throw new InventoryConflict('La ubicación técnica de huevos está protegida.');
+                throw new InventoryConflict('La ubicación técnica está protegida y no puede modificarse de forma independiente.');
             }
             $before = $this->snapshot($locked);
             $locked->fill($attributes)->save();

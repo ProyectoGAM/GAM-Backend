@@ -2,8 +2,10 @@
 
 namespace App\Actions\FarmStructure;
 
+use App\Actions\Inventory\CreateFeedStockLocationAction;
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Enums\FarmStructure\PoultryHouseStatus;
+use App\Enums\FarmStructure\PoultryHouseType;
 use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Exceptions\FarmStructure\FarmStructureConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
@@ -15,9 +17,12 @@ use Illuminate\Support\Facades\DB;
 
 final readonly class CreatePoultryHouseAction
 {
-    public function __construct(private AuditRecorder $auditRecorder) {}
+    public function __construct(
+        private AuditRecorder $auditRecorder,
+        private CreateFeedStockLocationAction $createFeedStockLocation,
+    ) {}
 
-    /** @param array{name: string, bird_capacity: int} $attributes */
+    /** @param array{name: string, type?: string, bird_capacity?: int} $attributes */
     public function execute(ProductionUnit $productionUnit, array $attributes, User $actor): PoultryHouse
     {
         return DB::transaction(function () use ($productionUnit, $attributes, $actor): PoultryHouse {
@@ -29,12 +34,25 @@ final readonly class CreatePoultryHouseAction
                 throw new FarmStructureConflict('Los galpones sólo pueden crearse en una unidad productiva activa.');
             }
 
-            $capacity = BirdCapacity::fromInt($attributes['bird_capacity']);
+            $type = PoultryHouseType::from($attributes['type'] ?? PoultryHouseType::Poultry->value);
+            if ($type === PoultryHouseType::Feed && array_key_exists('bird_capacity', $attributes)) {
+                throw new FarmStructureConflict('Las plantas de ración no pueden tener capacidad de aves.');
+            }
+
+            $capacity = $type === PoultryHouseType::Poultry
+                ? BirdCapacity::fromInt((int) ($attributes['bird_capacity'] ?? 0))
+                : null;
             $poultryHouse = $lockedProductionUnit->poultryHouses()->create([
                 'name' => $attributes['name'],
-                'bird_capacity' => $capacity->value(),
+                'type' => $type,
+                'bird_capacity' => $capacity?->value(),
                 'status' => PoultryHouseStatus::Operational,
             ]);
+
+            if ($type === PoultryHouseType::Feed) {
+                $this->createFeedStockLocation->execute($poultryHouse, $actor);
+            }
+
             $snapshot = $this->snapshot($poultryHouse);
 
             $this->auditRecorder->record(AuditEntryData::forSubject(
@@ -53,12 +71,13 @@ final readonly class CreatePoultryHouseAction
         });
     }
 
-    /** @return array{production_unit_id: int, name: string, bird_capacity: int, status: string} */
+    /** @return array{production_unit_id: int, name: string, type: string, bird_capacity: int|null, status: string} */
     private function snapshot(PoultryHouse $poultryHouse): array
     {
         return [
             'production_unit_id' => $poultryHouse->production_unit_id,
             'name' => $poultryHouse->name,
+            'type' => $poultryHouse->type->value,
             'bird_capacity' => $poultryHouse->bird_capacity,
             'status' => $poultryHouse->status->value,
         ];

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\FarmStructure;
 
 use App\Actions\FarmStructure\CreatePoultryHouseAction;
 use App\Actions\FarmStructure\UpdatePoultryHouseAction;
+use App\Enums\FarmStructure\PoultryHouseType;
 use App\Http\Requests\FarmStructure\ListPoultryHousesRequest;
 use App\Http\Requests\FarmStructure\StorePoultryHouseRequest;
 use App\Http\Requests\FarmStructure\UpdatePoultryHouseRequest;
@@ -37,8 +38,11 @@ final readonly class PoultryHouseController
     ): JsonResponse {
         /** @var User $actor */
         $actor = $request->user();
-        $data = $request->safe()->only(['name', 'bird_capacity']);
-        $data['bird_capacity'] = (int) $data['bird_capacity'];
+        $data = $request->safe()->only(['name', 'type', 'bird_capacity']);
+        $data['type'] ??= PoultryHouseType::Poultry->value;
+        if (array_key_exists('bird_capacity', $data) && $data['bird_capacity'] !== null) {
+            $data['bird_capacity'] = (int) $data['bird_capacity'];
+        }
         $poultryHouse = $action->execute($productionUnit, $data, $actor);
 
         return (new PoultryHouseResource($poultryHouse))
@@ -61,7 +65,7 @@ final readonly class PoultryHouseController
     ): PoultryHouseResource {
         /** @var User $actor */
         $actor = $request->user();
-        $data = $request->safe()->only(['name', 'bird_capacity']);
+        $data = $request->safe()->only(['name', 'type', 'bird_capacity']);
 
         if (array_key_exists('bird_capacity', $data)) {
             $data['bird_capacity'] = (int) $data['bird_capacity'];

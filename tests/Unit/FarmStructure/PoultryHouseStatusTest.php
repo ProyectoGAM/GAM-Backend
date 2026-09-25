@@ -3,6 +3,7 @@
 namespace Tests\Unit\FarmStructure;
 
 use App\Enums\FarmStructure\PoultryHouseStatus;
+use App\Enums\FarmStructure\PoultryHouseType;
 use PHPUnit\Framework\TestCase;
 
 final class PoultryHouseStatusTest extends TestCase
@@ -37,5 +38,13 @@ final class PoultryHouseStatusTest extends TestCase
         $this->assertFalse(
             PoultryHouseStatus::Inactive->canTransitionTo(PoultryHouseStatus::Maintenance),
         );
+    }
+
+    // Flujo: conserva los valores públicos de los tipos de galpón.
+    public function test_poultry_house_types_use_stable_values(): void
+    {
+        // Acción: obtiene los valores de los dos tipos soportados.
+        $this->assertSame('poultry', PoultryHouseType::Poultry->value);
+        $this->assertSame('feed', PoultryHouseType::Feed->value);
     }
 }

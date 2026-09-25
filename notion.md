@@ -25,6 +25,7 @@ No se consultó ni modificó Notion durante esta entrega. Al sincronizar, mover 
 | Módulo / tarjeta Notion | Estado en código | Documentación fuente | Contrato | Trabajo restante |
 |---|---|---|---|---|
 | **06 — Manejo productivo y sanidad** | **Medicamentos, Vacunas y Pesajes implementados; módulo aún incompleto** | [medication-implementation-plan.md](medication-implementation-plan.md), [vaccination-implementation.md](vaccination-implementation.md) y [weighing-implementation.md](weighing-implementation.md) | [medication.yaml](contracts/openapi/medication.yaml), [vaccination.yaml](contracts/openapi/vaccination.yaml) y [weighings.yaml](contracts/openapi/weighings.yaml) | Completar Plan de Manejo, aplicaciones y las demás secciones; mantener la tarjeta en implementación |
+| **Alimentación — plantas de ración** | **Avance parcial: plantas feed y stock de ingredientes implementados; recetas y notificaciones pendientes** | [feed-stock-implementation.md](feed-stock-implementation.md) | [feed-stock.yaml](contracts/openapi/feed-stock.yaml) | Ejecutar aceptación manual, definir recetas y conectar notificaciones cuando esos módulos estén disponibles |
 
 ## Módulo 06 — Manejo productivo y sanidad
 

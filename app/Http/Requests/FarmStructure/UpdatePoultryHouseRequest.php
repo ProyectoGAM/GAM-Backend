@@ -19,6 +19,7 @@ final class UpdatePoultryHouseRequest extends FarmStructureRequest
         return [
             'name' => ['sometimes', 'required', 'string', 'max:120'],
             'bird_capacity' => ['sometimes', 'required', 'integer', 'min:1'],
+            'type' => ['prohibited'],
         ];
     }
 
@@ -50,6 +51,14 @@ final class UpdatePoultryHouseRequest extends FarmStructureRequest
                     $validator->errors()->add('name', 'El nombre ya está registrado en esta unidad productiva.');
                 }
             },
+        ];
+    }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return [
+            'type.prohibited' => 'El tipo de galpón no puede modificarse.',
         ];
     }
 }

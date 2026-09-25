@@ -26,6 +26,7 @@ abstract class InventoryCommandRequest extends FormRequest
             'lines.min' => 'Debes indicar al menos una línea.',
             'lines.max' => 'No puedes enviar más de 100 líneas.',
             'lines.*.quantity.regex' => 'La cantidad debe tener hasta seis decimales y ser positiva.',
+            'lines.*.unit.in' => 'La unidad de entrada debe ser g o kg.',
             'lines.*.counted_quantity.regex' => 'La cantidad contada debe tener hasta seis decimales y no ser negativa.',
         ];
     }

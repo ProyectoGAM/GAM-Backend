@@ -8,7 +8,7 @@ use JsonException;
 final readonly class InventoryMovementCommand
 {
     /**
-     * @param  list<array{product_id:int, stock_location_id:int, on_hand_delta:string}>  $lines
+     * @param  list<array{product_id:int, stock_location_id:int, on_hand_delta:string, unit?:string|null}>  $lines
      * @param  array<string, mixed>|null  $idempotencyPayload
      */
     public function __construct(
