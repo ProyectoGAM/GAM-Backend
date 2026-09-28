@@ -76,7 +76,11 @@ paths:
     get:
       tags: [Plantillas]
       summary: Consulta una versión de plantilla
-      description: Requiere management-plans.view o management-plans.manage. Sin version consulta la publicada, o la actual si aún no se publicó.
+      description: >-
+        Requiere management-plans.view o management-plans.manage. Con solo permiso de consulta
+        se accede únicamente a versiones publicadas alguna vez; los borradores son exclusivos
+        de gestores. Sin version consulta la publicada, o la actual si aún no se publicó y el
+        actor es gestor.
       parameters:
         - name: version
           in: query

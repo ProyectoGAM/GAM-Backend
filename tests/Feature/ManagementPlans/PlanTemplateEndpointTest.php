@@ -120,6 +120,50 @@ final class PlanTemplateEndpointTest extends LotsTestCase
         $this->command('POST', '/plantillas-manejo', $this->templatePayload())->assertForbidden();
     }
 
+    // Flujo: la consulta simple no revela borradores actuales ni descartados.
+    public function test_view_only_user_cannot_read_unpublished_template_versions(): void
+    {
+        // Preparación: un gestor crea la primera versión en borrador.
+        $this->signIn(['management-plans.manage']);
+        $created = $this->command('POST', '/plantillas-manejo', $this->templatePayload())->assertCreated();
+        $templateId = $created->json('data.id');
+        $url = '/api/v1/plantillas-manejo/'.$templateId;
+        $this->getJson($url)->assertOk()->assertJsonPath('data.version_status', 'draft');
+
+        // Consulta: el lector no puede abrir la plantilla inédita, aunque conozca su ID.
+        $this->signIn(['management-plans.view']);
+        $this->getJson('/api/v1/plantillas-manejo')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson($url)->assertForbidden();
+        $this->getJson($url.'?version=1')->assertForbidden();
+
+        // Mutación: se publica la primera versión y se crea una segunda en borrador.
+        $this->signIn(['management-plans.manage']);
+        $this->command('POST', '/plantillas-manejo/'.$templateId.'/publicacion', ['expected_version' => 1])->assertOk();
+        $this->command('PATCH', '/plantillas-manejo/'.$templateId, [
+            'expected_version' => 1, 'activities' => $this->templatePayload('Pesaje pendiente')['activities'],
+        ])->assertOk();
+
+        // Consulta: el lector ve la publicada, pero no la revisión pendiente.
+        $this->signIn(['management-plans.view']);
+        $this->getJson($url)->assertOk()->assertJsonPath('data.version_status', 'published');
+        $this->getJson($url.'?version=2')->assertForbidden();
+        $this->json('GET', $url, ['version' => 2])->assertForbidden();
+
+        // Mutación: el gestor descarta el segundo borrador y publica la tercera versión.
+        $this->signIn(['management-plans.manage']);
+        $this->command('PATCH', '/plantillas-manejo/'.$templateId, [
+            'expected_version' => 2, 'activities' => $this->templatePayload('Pesaje definitivo')['activities'],
+        ])->assertOk();
+        $this->getJson($url.'?version=2')->assertOk()->assertJsonPath('data.version_status', 'retired');
+        $this->command('POST', '/plantillas-manejo/'.$templateId.'/publicacion', ['expected_version' => 3])->assertOk();
+
+        // Consulta: el lector conserva acceso a versiones publicadas, pero no al borrador descartado.
+        $this->signIn(['management-plans.view']);
+        $this->getJson($url.'?version=1')->assertOk()->assertJsonPath('data.version_status', 'retired');
+        $this->getJson($url.'?version=2')->assertForbidden();
+        $this->getJson($url)->assertOk()->assertJsonPath('data.version_status', 'published');
+    }
+
     // Flujo: admite tramos paralelos, fin abierto y comienzo quincenal configurable.
     public function test_temporal_contract_keeps_parallel_week_nine_and_open_ranges(): void
     {
