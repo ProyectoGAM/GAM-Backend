@@ -192,27 +192,34 @@ services:
     security_opt:
       - no-new-privileges:true
 
-  api:
+  app-init:
     <<: *app-service
+    restart: "no"
     command:
       - /bin/sh
-      - -c
+      - -ec
       - |
-        set -eu
         php artisan optimize:clear
         php artisan migrate --force --isolated --no-interaction
-        if [ "$${APP_ENV:-production}" = "local" ]; then
-          php artisan db:seed --force --no-interaction
-        fi
-        exec /usr/local/sbin/php-fpm -F
-    expose:
-      - "9000"
     depends_on:
       postgres:
         condition: service_healthy
       postgres-test-database:
         condition: service_completed_successfully
       storage-test-permissions:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  api:
+    <<: *app-service
+    command:
+      - php-fpm
+      - -F
+    expose:
+      - "9000"
+    depends_on:
+      app-init:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
@@ -229,6 +236,21 @@ services:
       retries: 10
       start_period: 20s
 
+  seed:
+    <<: *app-service
+    profiles:
+      - tools
+    restart: "no"
+    command:
+      - php
+      - artisan
+      - db:seed
+      - --force
+      - --no-interaction
+    depends_on:
+      app-init:
+        condition: service_completed_successfully
+        
   storage-test-permissions:
     image: alpine:3.22
     restart: "no"

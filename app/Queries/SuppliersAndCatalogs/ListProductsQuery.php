@@ -12,6 +12,7 @@ final readonly class ListProductsQuery
     public function execute(array $filters): LengthAwarePaginator
     {
         return Product::query()
+            ->withResourceMetadata()
             ->when($filters['search'] ?? null, fn (Builder $query, string $search): Builder => $query->where('name', 'ilike', '%'.$search.'%'))
             ->when($filters['kind'] ?? null, fn (Builder $query, string $kind): Builder => $query->where('kind', $kind))
             ->when($filters['status'] ?? null, fn (Builder $query, string $status): Builder => $query->where('status', $status))

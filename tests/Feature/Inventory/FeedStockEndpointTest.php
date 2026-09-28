@@ -346,6 +346,35 @@ final class FeedStockEndpointTest extends TestCase
         $this->assertDatabaseCount('inventory_movements', 0);
     }
 
+    /** Flujo: expone si una ubicación manual o técnica está administrada por el sistema. */
+    public function test_stock_location_reads_expose_system_managed_for_manual_and_feed_locations(): void
+    {
+        $actor = $this->signIn(['inventory.manage', 'inventory.view']);
+
+        // Preparación: crea una ubicación manual mediante el endpoint público.
+        $manual = $this->postJson('/api/v1/stock-locations', ['name' => 'Ubicacion manual de prueba'])
+            ->assertCreated();
+        $manualLocationId = $manual->json('data.id');
+
+        // Preparación: crea una planta y recupera la ubicación técnica asociada.
+        $house = $this->feedHouse($actor);
+        $feedLocation = StockLocation::query()->where('poultry_house_id', $house->getKey())->firstOrFail();
+
+        // Consulta: verifica que el listado expone ambos valores booleanos.
+        $listedLocations = $this->getJson('/api/v1/stock-locations?per_page=100')->assertOk();
+        $locationsById = collect($listedLocations->json('data'))->keyBy('id');
+        $this->assertSame(false, data_get($locationsById->get($manualLocationId), 'system_managed'));
+        $this->assertSame(true, data_get($locationsById->get($feedLocation->getKey()), 'system_managed'));
+
+        // Consulta: verifica el mismo campo en el detalle de cada ubicación.
+        $this->getJson('/api/v1/stock-locations/'.$manualLocationId)
+            ->assertOk()
+            ->assertJsonPath('data.system_managed', false);
+        $this->getJson('/api/v1/stock-locations/'.$feedLocation->getKey())
+            ->assertOk()
+            ->assertJsonPath('data.system_managed', true);
+    }
+
     // Flujo: protege la ubicación técnica de edición y cambios de estado independientes.
     public function test_feed_location_cannot_be_updated_or_deactivated_independently(): void
     {

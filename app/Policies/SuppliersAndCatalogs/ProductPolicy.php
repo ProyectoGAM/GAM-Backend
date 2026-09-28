@@ -24,7 +24,7 @@ final readonly class ProductPolicy
 
     public function update(User $user, Product $product): bool
     {
-        if ($product->vaccine()->exists()) {
+        if ($this->hasVaccine($product)) {
             return ! $user->trashed() && $user->hasRole('admin');
         }
 
@@ -33,7 +33,7 @@ final readonly class ProductPolicy
 
     public function changeStatus(User $user, Product $product): bool
     {
-        if ($product->vaccine()->exists()) {
+        if ($this->hasVaccine($product)) {
             return ! $user->trashed() && $user->hasRole('admin');
         }
 
@@ -43,5 +43,12 @@ final readonly class ProductPolicy
     private function allowed(User $user, string $permission): bool
     {
         return $user->hasRole('admin') || $user->checkPermissionTo($permission);
+    }
+
+    private function hasVaccine(Product $product): bool
+    {
+        return $product->relationLoaded('vaccine')
+            ? $product->getRelation('vaccine') !== null
+            : $product->vaccine()->exists();
     }
 }

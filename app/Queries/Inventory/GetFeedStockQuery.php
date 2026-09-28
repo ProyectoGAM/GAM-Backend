@@ -10,6 +10,7 @@ use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\StockBalance;
 use Brick\Math\BigDecimal;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 final readonly class GetFeedStockQuery
 {
@@ -21,7 +22,11 @@ final readonly class GetFeedStockQuery
         }
 
         $balances = StockBalance::query()
-            ->with(['product', 'stockLocation.poultryHouse', 'stockLocation.productionUnit'])
+            ->with([
+                'product' => static fn (BelongsTo $productRelation): Builder => $productRelation->getQuery()->withResourceMetadata(),
+                'stockLocation.poultryHouse',
+                'stockLocation.productionUnit',
+            ])
             ->whereHas('stockLocation', fn (Builder $query): Builder => $query->whereNotNull('poultry_house_id'))
             ->when($house !== null, fn (Builder $query): Builder => $query->whereHas('stockLocation', fn (Builder $locations): Builder => $locations->where('poultry_house_id', $house->getKey())))
             ->when($productionUnit !== null, fn (Builder $query): Builder => $query->whereHas('stockLocation', fn (Builder $locations): Builder => $locations->where('production_unit_id', $productionUnit->getKey())))

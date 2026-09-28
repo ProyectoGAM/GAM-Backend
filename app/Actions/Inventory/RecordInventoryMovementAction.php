@@ -20,6 +20,8 @@ use App\Models\User;
 use App\Queries\SuppliersAndCatalogs\GetActiveSupplierQuery;
 use App\ValueObjects\Inventory\InventoryQuantity;
 use Brick\Math\BigDecimal;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -295,7 +297,12 @@ final readonly class RecordInventoryMovementAction
                     ],
                 ));
 
-                return $movement->load(['lines.product', 'lines.stockLocation', 'supplier', 'creator']);
+                return $movement->load([
+                    'lines.product' => static fn (BelongsTo $productRelation): Builder => $productRelation->getQuery()->withResourceMetadata(),
+                    'lines.stockLocation',
+                    'supplier',
+                    'creator',
+                ]);
             }, 3);
         } catch (QueryException $exception) {
             if (! $this->isUniqueViolation($exception)) {
@@ -413,7 +420,12 @@ final readonly class RecordInventoryMovementAction
             throw new InventoryConflict('La clave Idempotency-Key ya fue utilizada con otros datos.');
         }
 
-        return $movement->load(['lines.product', 'lines.stockLocation', 'supplier', 'creator']);
+        return $movement->load([
+            'lines.product' => static fn (BelongsTo $productRelation): Builder => $productRelation->getQuery()->withResourceMetadata(),
+            'lines.stockLocation',
+            'supplier',
+            'creator',
+        ]);
     }
 
     private function isUniqueViolation(QueryException $exception): bool

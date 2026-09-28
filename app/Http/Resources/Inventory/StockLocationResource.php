@@ -17,6 +17,7 @@ final class StockLocationResource extends JsonResource
             'id' => (int) $this->getKey(),
             'name' => $this->name,
             'status' => $this->status->value,
+            'system_managed' => $this->system_managed,
             'production_unit' => ProductionUnitResource::make($this->whenLoaded('productionUnit')),
             'poultry_house_id' => $this->poultry_house_id === null ? null : (int) $this->poultry_house_id,
             'created_at' => $this->created_at,

@@ -8,6 +8,6 @@ final readonly class GetProductQuery
 {
     public function execute(int $productId): Product
     {
-        return Product::query()->whereKey($productId)->firstOrFail();
+        return Product::query()->withResourceMetadata()->whereKey($productId)->firstOrFail();
     }
 }
