@@ -9,6 +9,8 @@ use App\Models\Inventory\EggStockAccount;
 use App\Models\Inventory\StockBalance;
 use App\Models\User;
 use Brick\Math\BigDecimal;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\DB;
 
 final readonly class SetMinimumStockAction
@@ -40,7 +42,10 @@ final readonly class SetMinimumStockAction
                 upId: null,
             ));
 
-            return $locked->load(['product', 'stockLocation']);
+            return $locked->load([
+                'product' => static fn (BelongsTo $productRelation): Builder => $productRelation->getQuery()->withResourceMetadata(),
+                'stockLocation',
+            ]);
         });
     }
 }

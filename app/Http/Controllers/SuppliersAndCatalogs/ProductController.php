@@ -24,12 +24,14 @@ final readonly class ProductController
         return ProductResource::collection($query->execute($request->validated()));
     }
 
-    public function store(StoreProductRequest $request, CreateProductAction $action): JsonResponse
+    public function store(StoreProductRequest $request, CreateProductAction $action, GetProductQuery $query): JsonResponse
     {
         /** @var User $actor */
         $actor = $request->user();
 
-        return (new ProductResource($action->execute($request->safe()->only(['sku', 'name', 'kind', 'base_unit', 'stock_tracked']), $actor)))->response()->setStatusCode(Response::HTTP_CREATED);
+        $product = $action->execute($request->safe()->only(['sku', 'name', 'kind', 'base_unit', 'stock_tracked']), $actor);
+
+        return (new ProductResource($query->execute((int) $product->getKey())))->response()->setStatusCode(Response::HTTP_CREATED);
     }
 
     public function show(ViewProductRequest $request, Product $product, GetProductQuery $query): ProductResource
@@ -37,11 +39,13 @@ final readonly class ProductController
         return new ProductResource($query->execute((int) $product->getKey()));
     }
 
-    public function update(UpdateProductRequest $request, Product $product, UpdateProductAction $action): ProductResource
+    public function update(UpdateProductRequest $request, Product $product, UpdateProductAction $action, GetProductQuery $query): ProductResource
     {
         /** @var User $actor */
         $actor = $request->user();
 
-        return new ProductResource($action->execute($product, $request->safe()->only(['sku', 'name', 'kind', 'base_unit', 'stock_tracked']), $actor));
+        $updated = $action->execute($product, $request->safe()->only(['sku', 'name', 'kind', 'base_unit', 'stock_tracked']), $actor);
+
+        return new ProductResource($query->execute((int) $updated->getKey()));
     }
 }

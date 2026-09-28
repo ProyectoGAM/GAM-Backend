@@ -5,6 +5,7 @@ namespace App\Queries\Inventory;
 use App\Models\Inventory\StockBalance;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 final readonly class ListStockBalancesQuery
 {
@@ -12,7 +13,10 @@ final readonly class ListStockBalancesQuery
     public function execute(array $filters): LengthAwarePaginator
     {
         return StockBalance::query()
-            ->with(['product', 'stockLocation'])
+            ->with([
+                'product' => static fn (BelongsTo $productRelation): Builder => $productRelation->getQuery()->withResourceMetadata(),
+                'stockLocation',
+            ])
             ->when($filters['product_id'] ?? null, fn (Builder $query, int $productId): Builder => $query->where('product_id', $productId))
             ->when($filters['stock_location_id'] ?? null, fn (Builder $query, int $locationId): Builder => $query->where('stock_location_id', $locationId))
             ->when($filters['below_minimum'] ?? false, fn (Builder $query): Builder => $query->whereColumn('on_hand_quantity', '<', 'minimum_quantity'))

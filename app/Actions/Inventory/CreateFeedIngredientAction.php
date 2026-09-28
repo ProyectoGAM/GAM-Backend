@@ -19,6 +19,8 @@ use App\Models\Inventory\StockLocation;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\User;
 use App\ValueObjects\Inventory\InventoryQuantity;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -176,8 +178,12 @@ final readonly class CreateFeedIngredientAction
             $stock = StockBalance::query()
                 ->where('product_id', $product->getKey())
                 ->where('stock_location_id', $location->getKey())
-                ->with(['product', 'stockLocation'])
+                ->with([
+                    'product' => static fn (BelongsTo $productRelation): Builder => $productRelation->getQuery()->withResourceMetadata(),
+                    'stockLocation',
+                ])
                 ->firstOrFail();
+            $product = Product::query()->withResourceMetadata()->findOrFail($product->getKey());
 
             return compact('product', 'movement', 'stock');
         }, 3);
@@ -227,7 +233,10 @@ final readonly class CreateFeedIngredientAction
         $stock = StockBalance::query()
             ->where('product_id', $line->product_id)
             ->where('stock_location_id', $line->stock_location_id)
-            ->with(['product', 'stockLocation'])
+            ->with([
+                'product' => static fn (BelongsTo $productRelation): Builder => $productRelation->getQuery()->withResourceMetadata(),
+                'stockLocation',
+            ])
             ->firstOrFail();
 
         return ['product' => $line->product, 'movement' => $movement, 'stock' => $stock];
