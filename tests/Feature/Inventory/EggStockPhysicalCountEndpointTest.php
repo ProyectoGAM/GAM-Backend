@@ -107,6 +107,71 @@ final class EggStockPhysicalCountEndpointTest extends TestCase
         $this->getJson("/api/v1/production-units/{$unit->id}/egg-stock")->assertJsonPath('data.balance', 6);
     }
 
+    /** Request: reproduce el conteo real de 12.381 huevos a uno y conserva un solo efecto compensatorio. */
+    public function test_large_negative_physical_count_is_idempotent_and_sets_balance_to_counted_quantity(): void
+    {
+        // PreparaciÃ³n: fija el saldo teÃ³rico del caso real y autentica al actor autorizado.
+        $actor = $this->signIn(['egg-stock.adjust', 'egg-stock.move', 'egg-stock.view']);
+        $unit = ProductionUnit::factory()->create();
+        $this->receipt($unit, 12381);
+        $key = '00000000-0000-4000-8000-000000000123';
+        $payload = [
+            'counted_quantity' => 1,
+            'expected_balance' => 12381,
+            'reason' => 'Conteo fÃ­sico del 28/09/2026',
+            'occurred_at' => '2026-09-28',
+        ];
+
+        // Request: confirma un conteo muy inferior al saldo usando una clave repetible.
+        $first = $this->requestCount($unit, $payload, $key)->assertCreated();
+        $countId = $first->json('data.id');
+
+        // VerificaciÃ³n: conserva la diferencia firmada, actor, auditorÃ­a y saldo contado.
+        $first->assertJsonPath('data.balance_before', 12381)
+            ->assertJsonPath('data.counted_quantity', 1)
+            ->assertJsonPath('data.quantity', 12380)
+            ->assertJsonPath('data.difference', -12380)
+            ->assertJsonPath('data.actor.id', $actor->id);
+        $this->assertSame(1, DB::table('egg_stock_transactions')
+            ->where('production_unit_id', $unit->id)
+            ->where('type', 'physical_count')
+            ->count());
+        $this->assertSame(1, DB::table('inventory_movements')
+            ->where('reference_type', 'egg_stock_transaction')
+            ->where('reference_id', $countId)
+            ->count());
+        $this->assertSame('-12380.000000', (string) DB::table('inventory_movement_lines')
+            ->whereIn('inventory_movement_id', DB::table('inventory_movements')
+                ->where('reference_id', $countId)
+                ->select('id'))
+            ->value('on_hand_delta'));
+        $this->assertDatabaseHas('activity_log', [
+            'event' => 'egg_stock_physical_count_recorded',
+            'causer_id' => $actor->id,
+        ]);
+        $this->getJson("/api/v1/production-units/{$unit->id}/egg-stock")
+            ->assertJsonPath('data.balance', 1);
+        $this->getJson("/api/v1/production-units/{$unit->id}/egg-stock/movements?type=physical_count")
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $countId);
+
+        // Request: repite el comando exacto y luego cambia el conteo con la misma clave.
+        $replay = $this->requestCount($unit, $payload, $key)->assertCreated();
+        $this->requestCount($unit, [...$payload, 'counted_quantity' => 2], $key)
+            ->assertStatus(409);
+
+        // VerificaciÃ³n: el replay no duplica el descuento, el conteo ni el movimiento compensatorio.
+        $this->assertSame($countId, $replay->json('data.id'));
+        $this->assertSame(1, DB::table('egg_stock_transactions')
+            ->where('production_unit_id', $unit->id)
+            ->where('type', 'physical_count')
+            ->count());
+        $this->assertSame(1, DB::table('inventory_movements')
+            ->where('reference_type', 'egg_stock_transaction')
+            ->where('reference_id', $countId)
+            ->count());
+    }
+
     /** Request: registra evidencia de conteo aunque la diferencia contra el saldo sea cero. */
     public function test_equal_count_records_audit_history_without_zero_quantity_movement(): void
     {
