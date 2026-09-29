@@ -35,7 +35,11 @@ jobs:
 
       - name: Run PHPUnit
         run: |
+          TEST_APP_KEY="$(sed -n 's/.*name="APP_KEY" value="\([^"]*\)".*/\1/p' phpunit.xml)"
+          test -n "${TEST_APP_KEY}"
+
           docker compose -f compose.dev.yaml exec -T \
+            -e APP_KEY="${TEST_APP_KEY}" \
             -e APP_ENV=testing \
             -e DB_CONNECTION=pgsql \
             -e DB_HOST=postgres \
@@ -50,7 +54,7 @@ jobs:
             -e TELESCOPE_ENABLED=false \
             -e NIGHTWATCH_ENABLED=false \
             -e IDENTITY_PIN_PEPPER=test-only-temporary-value \
-            api php artisan test --compact
+            api php artisan test --compact --do-not-cache-result
 
       - name: Check formatting
         run: |
