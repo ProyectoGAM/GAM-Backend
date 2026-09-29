@@ -1,0 +1,67 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+  push:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Compose
+        run: docker compose -f compose.dev.yaml config --quiet
+
+      - name: Start backend services
+        run: docker compose -f compose.dev.yaml up -d --build api
+
+      - name: Run PHPUnit
+        run: |
+          docker compose -f compose.dev.yaml exec -T \
+            -e APP_ENV=testing \
+            -e DB_CONNECTION=pgsql \
+            -e DB_HOST=postgres \
+            -e DB_PORT=5432 \
+            -e DB_DATABASE=gam_testing \
+            -e CACHE_STORE=array \
+            -e QUEUE_CONNECTION=sync \
+            -e SESSION_DRIVER=array \
+            -e MAIL_MAILER=array \
+            -e BROADCAST_CONNECTION=null \
+            -e PULSE_ENABLED=false \
+            -e TELESCOPE_ENABLED=false \
+            -e NIGHTWATCH_ENABLED=false \
+            -e IDENTITY_PIN_PEPPER=test-only-temporary-value \
+            api php artisan test --compact
+
+      - name: Check formatting
+        run: |
+          docker compose -f compose.dev.yaml exec -T \
+            api vendor/bin/pint --test --format agent
+
+      - name: Run PHPStan
+        run: |
+          docker compose -f compose.dev.yaml exec -T \
+            api vendor/bin/phpstan analyse --memory-limit=1G
+
+      - name: Stop services
+        if: always()
+        run: docker compose -f compose.dev.yaml down -v --remove-orphans
