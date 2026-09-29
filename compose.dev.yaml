@@ -137,7 +137,7 @@ services:
       - -ec
       - |
         until pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"; do sleep 1; done
-        /docker-entrypoint-initdb.d/01-create-test-database.sh
+        sh /docker-entrypoint-initdb.d/01-create-test-database.sh
     depends_on:
       postgres:
         condition: service_healthy
