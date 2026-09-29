@@ -31,7 +31,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(AssignTraceContext::class);
         $middleware->trimStrings(except: ['pin', 'pin_confirmation']);
         $middleware->statefulApi();
-
+        $middleware->trustProxies(at: '*');
+        
         $middleware->alias([
             'ability' => CheckForAnyAbility::class,
             'abilities' => CheckAbilities::class,
