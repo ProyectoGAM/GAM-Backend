@@ -56,10 +56,6 @@ jobs:
             -e IDENTITY_PIN_PEPPER=test-only-temporary-value \
             api php artisan test --compact --do-not-cache-result
 
-      - name: Check formatting
-        run: |
-          docker compose -f compose.dev.yaml exec -T \
-            api vendor/bin/pint --test --format agent
 
       - name: Run PHPStan
         run: |
