@@ -107,6 +107,24 @@ final readonly class SavePlanTemplateAction
         });
     }
 
+    /** @param array<string, mixed> $data */
+    public function activate(PlanTemplate $template, array $data, User $actor, string $source = 'api'): FlockOperation
+    {
+        return $this->commands->execute($actor, 'management-plans.manage', 'management_plan.template.activate', $data['idempotency_key'], ['template' => $template->public_id, ...$data], function (string $operationId) use ($template, $data, $actor, $source): array {
+            $current = PlanTemplate::query()->whereKey($template->id)->lockForUpdate()->firstOrFail();
+            if ($current->status !== 'retired' || $current->current_version !== (int) $data['expected_version']) {
+                throw new LotsConflict('La plantilla cambió o ya está activa.');
+            }
+            $before = $this->snapshot($current);
+            $current->status = 'active';
+            $current->save();
+            $snapshot = $this->snapshot($current);
+            $this->history->audit($current, $actor, 'plan_template_activated', 'Plantilla de manejo reactivada', $operationId, $before, $snapshot, null, $source);
+
+            return ['template' => $snapshot];
+        });
+    }
+
     /** @param array<int, array<string, mixed>> $activities */
     private function version(PlanTemplate $template, int $number, string $name, ?string $description, array $activities, User $actor, string $operationId): PlanTemplateVersion
     {

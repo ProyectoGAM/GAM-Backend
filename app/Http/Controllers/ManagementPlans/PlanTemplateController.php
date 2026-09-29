@@ -11,6 +11,7 @@ use App\Http\Requests\ManagementPlans\ViewPlanTemplateRequest;
 use App\Http\Resources\ManagementPlans\PlanTemplateResource;
 use App\Models\ManagementPlans\PlanTemplate;
 use App\Models\ManagementPlans\PlanTemplateVersion;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -25,6 +26,11 @@ final readonly class PlanTemplateController
         }
         if (isset($filters['status'])) {
             $query->where('status', $filters['status']);
+        }
+        if (isset($filters['has_draft'])) {
+            $query->where(fn (Builder $drafts): Builder => $drafts
+                ->whereNull('published_version')
+                ->orWhereColumn('current_version', '>', 'published_version'));
         }
 
         return PlanTemplateResource::collection($query->orderByDesc('created_at')->orderByDesc('id')
@@ -66,6 +72,13 @@ final readonly class PlanTemplateController
     public function retire(PublishPlanTemplateRequest $request, PlanTemplate $planTemplate, SavePlanTemplateAction $action): PlanTemplateResource
     {
         $operation = $action->retire($planTemplate, $request->attributesForAction(), $request->actor());
+
+        return new PlanTemplateResource([...$operation->result['template'], 'operation_id' => $operation->operation_id]);
+    }
+
+    public function activate(PublishPlanTemplateRequest $request, PlanTemplate $planTemplate, SavePlanTemplateAction $action): PlanTemplateResource
+    {
+        $operation = $action->activate($planTemplate, $request->attributesForAction(), $request->actor());
 
         return new PlanTemplateResource([...$operation->result['template'], 'operation_id' => $operation->operation_id]);
     }
