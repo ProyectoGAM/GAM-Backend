@@ -19,6 +19,9 @@ final readonly class CorrectEggStockTransactionAction
     /** @param array<string, mixed> $data @return array<string, mixed> */
     public function execute(EggStockTransaction $transaction, array $data, User $actor, string $source = 'api'): array
     {
+        if ($transaction->type === 'physical_count') {
+            throw new LotsConflict('Un conteo físico no se corrige como una transacción histórica. Registra un nuevo conteo.');
+        }
         if ($transaction->reference_type === 'egg_collection') {
             throw new LotsConflict('Las transacciones originadas por una recolección deben corregirse desde su endpoint.');
         }

@@ -1135,6 +1135,34 @@ paths:
         "404": {"$ref": "#/components/responses/NotFound"}
         "409": {"$ref": "#/components/responses/Conflict"}
         "422": {"$ref": "#/components/responses/InvalidInput"}
+  "/production-units/{productionUnit}/egg-stock/counts":
+    post:
+      tags: ["Stock de huevos"]
+      operationId: "recordEggStockPhysicalCount"
+      summary: "Registra un conteo físico de huevos y compensa la diferencia"
+      description: "Permiso requerido: egg-stock.adjust. El actor se toma de la sesión; el saldo teórico se compara y bloquea dentro de la transacción. El conteo igual conserva auditoría sin crear movimiento de saldo."
+      x-permission: "egg-stock.adjust"
+      parameters:
+        - "$ref": "#/components/parameters/ProductionUnit"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/RecordEggStockPhysicalCount"
+      responses:
+        "201":
+          description: "Conteo guardado como transacción y movimiento compensatorio cuando la diferencia no es cero."
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/EggStockTransactionResponse"
+        "401": {"$ref": "#/components/responses/Unauthenticated"}
+        "403": {"$ref": "#/components/responses/Forbidden"}
+        "404": {"$ref": "#/components/responses/NotFound"}
+        "409": {"$ref": "#/components/responses/Conflict"}
+        "422": {"$ref": "#/components/responses/InvalidInput"}
   "/egg-stock/movements/{movement}":
     get:
       tags: ["Stock de huevos"]
@@ -1380,7 +1408,7 @@ components:
       in: "query"
       schema:
         type: "string"
-        enum: ["collection_receipt", "manual_receipt", "distribution_preparation", "loss"]
+        enum: ["collection_receipt", "manual_receipt", "distribution_preparation", "loss", "physical_count"]
     CatalogStatus:
       name: "status"
       in: "query"
@@ -2064,7 +2092,7 @@ components:
     EggStockTransaction:
       type: "object"
       additionalProperties: false
-      required: ["id", "production_unit_id", "type", "quantity", "occurred_at", "reason", "notes", "status", "version", "reference", "inventory_references", "revisions"]
+      required: ["id", "production_unit_id", "type", "quantity", "balance_before", "counted_quantity", "difference", "occurred_at", "reason", "actor", "notes", "status", "version", "reference", "inventory_references", "revisions"]
       properties:
         id:
           type: "string"
@@ -2074,17 +2102,41 @@ components:
           minimum: 1
         type:
           type: "string"
-          enum: ["collection_receipt", "manual_receipt", "distribution_preparation", "loss"]
+          enum: ["collection_receipt", "manual_receipt", "distribution_preparation", "loss", "physical_count"]
         quantity:
           type: "integer"
-          minimum: 1
+          minimum: 0
+          maximum: 1002147483646
+          description: "En un conteo físico, magnitud absoluta de la diferencia; cero cuando coincide con el saldo."
+        balance_before:
+          type: ["integer", "null"]
+          description: "Saldo teórico bloqueado al registrar el conteo; nulo en otros movimientos."
+        counted_quantity:
+          type: ["integer", "null"]
+          minimum: 0
           maximum: 2147483647
+          description: "Huevos contados físicamente; nulo en otros movimientos."
+        difference:
+          type: ["integer", "null"]
+          description: "Diferencia firmada entre conteo físico y saldo teórico; nula en otros movimientos."
         occurred_at:
           type: "string"
           format: "date-time"
         reason:
           type: ["string", "null"]
           maxLength: 500
+        actor:
+          oneOf:
+            - type: "object"
+              additionalProperties: false
+              required: ["id", "name"]
+              properties:
+                id:
+                  type: "integer"
+                  minimum: 1
+                name:
+                  type: "string"
+            - type: "null"
         notes:
           type: ["string", "null"]
           maxLength: 5000
@@ -2184,6 +2236,27 @@ components:
         notes:
           type: ["string", "null"]
           maxLength: 5000
+    RecordEggStockPhysicalCount:
+      type: "object"
+      additionalProperties: false
+      required: ["counted_quantity", "expected_balance", "reason", "occurred_at"]
+      properties:
+        counted_quantity:
+          type: "integer"
+          minimum: 0
+          maximum: 2147483647
+        expected_balance:
+          type: "integer"
+          minimum: -999999999999
+          maximum: 999999999999
+          description: "Saldo teórico mostrado al preparar el conteo; evita confirmar una vista desactualizada."
+        reason:
+          type: "string"
+          minLength: 1
+          maxLength: 500
+        occurred_at:
+          type: "string"
+          format: "date-time"
     CorrectEggStockTransaction:
       type: "object"
       additionalProperties: false

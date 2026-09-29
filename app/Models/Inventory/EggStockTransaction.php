@@ -32,6 +32,9 @@ class EggStockTransaction extends Model
     {
         return [
             'quantity' => 'integer',
+            'balance_before' => 'integer',
+            'counted_quantity' => 'integer',
+            'difference' => 'integer',
             'version' => 'integer',
             'occurred_at' => 'immutable_datetime',
         ];

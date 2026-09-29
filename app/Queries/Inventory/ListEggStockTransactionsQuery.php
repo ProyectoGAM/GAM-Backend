@@ -11,7 +11,7 @@ final readonly class ListEggStockTransactionsQuery
 {
     public function execute(ProductionUnit $unit, array $filters): LengthAwarePaginator
     {
-        $query = EggStockTransaction::query()->where('production_unit_id', $unit->getKey())->with('revisions');
+        $query = EggStockTransaction::query()->where('production_unit_id', $unit->getKey())->with(['revisions', 'creator']);
         foreach (['status', 'type'] as $field) {
             if (isset($filters[$field])) {
                 $query->where($field, $filters[$field]);

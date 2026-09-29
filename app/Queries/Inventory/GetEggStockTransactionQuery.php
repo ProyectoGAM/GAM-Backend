@@ -9,7 +9,7 @@ final readonly class GetEggStockTransactionQuery
 {
     public function execute(EggStockTransaction $transaction): EggStockTransaction
     {
-        $transaction->load(['revisions', 'productionUnit']);
+        $transaction->load(['revisions', 'productionUnit', 'creator']);
         $transaction->setAttribute('inventory_references', InventoryMovement::query()->where('reference_type', 'egg_stock_transaction')->where('reference_id', $transaction->public_id)->orWhere(function ($query) use ($transaction): void {
             $query->where('reference_type', 'egg_stock_revision')->where('reference_id', $transaction->public_id);
         })->pluck('id')->all());

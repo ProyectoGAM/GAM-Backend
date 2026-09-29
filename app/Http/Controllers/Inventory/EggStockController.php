@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Inventory;
 
 use App\Actions\Inventory\CancelEggStockTransactionAction;
 use App\Actions\Inventory\CorrectEggStockTransactionAction;
+use App\Actions\Inventory\RecordEggStockPhysicalCountAction;
 use App\Actions\Inventory\RecordManualEggStockAction;
 use App\Http\Requests\Inventory\CancelEggStockTransactionRequest;
 use App\Http\Requests\Inventory\CorrectEggStockTransactionRequest;
 use App\Http\Requests\Inventory\ListEggStockTransactionsRequest;
 use App\Http\Requests\Inventory\StoreEggStockIssueRequest;
+use App\Http\Requests\Inventory\StoreEggStockPhysicalCountRequest;
 use App\Http\Requests\Inventory\StoreEggStockReceiptRequest;
 use App\Http\Requests\Inventory\ViewEggStockRequest;
 use App\Http\Resources\Inventory\EggStockTransactionResource;
@@ -50,6 +52,18 @@ final readonly class EggStockController
         $result = $action->execute($productionUnit, $data, $request->actor(), -1, (string) $data['type']);
 
         return response()->json(['data' => $result], 201);
+    }
+
+    public function physicalCount(
+        StoreEggStockPhysicalCountRequest $request,
+        ProductionUnit $productionUnit,
+        RecordEggStockPhysicalCountAction $action,
+        GetEggStockTransactionQuery $query,
+    ): JsonResponse {
+        $result = $action->execute($productionUnit, $request->attributesForAction(), $request->actor());
+        $transaction = EggStockTransaction::query()->where('public_id', $result['transaction'])->firstOrFail();
+
+        return (new EggStockTransactionResource($query->execute($transaction)))->response()->setStatusCode(201);
     }
 
     public function update(CorrectEggStockTransactionRequest $request, EggStockTransaction $movement, CorrectEggStockTransactionAction $action): JsonResponse

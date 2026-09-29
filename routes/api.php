@@ -230,6 +230,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('/production-units/{productionUnit}/egg-stock/movements', [EggStockController::class, 'index'])->name('egg-stock.index');
         Route::post('/production-units/{productionUnit}/egg-stock/receipts', [EggStockController::class, 'receipt'])->name('egg-stock.receipts.store');
         Route::post('/production-units/{productionUnit}/egg-stock/issues', [EggStockController::class, 'issue'])->name('egg-stock.issues.store');
+        Route::post('/production-units/{productionUnit}/egg-stock/counts', [EggStockController::class, 'physicalCount'])->name('egg-stock.counts.store');
         Route::get('/egg-stock/movements/{movement}', [EggStockController::class, 'show'])->name('egg-stock.show');
         Route::patch('/egg-stock/movements/{movement}', [EggStockController::class, 'update'])->name('egg-stock.update');
         Route::post('/egg-stock/movements/{movement}/cancellation', [EggStockController::class, 'cancel'])->name('egg-stock.cancel');
