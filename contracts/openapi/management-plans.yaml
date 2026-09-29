@@ -38,13 +38,17 @@ paths:
     get:
       tags: [Plantillas]
       summary: Lista plantillas de manejo
-      description: Requiere management-plans.view o management-plans.manage. Los borradores son visibles para gestores.
+      description: Requiere management-plans.view o management-plans.manage. Los borradores son visibles para gestores. El filtro has_draft requiere management-plans.manage y se aplica antes de paginar.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PerPage'
         - name: status
           in: query
           schema: { type: string, enum: [active, retired] }
+        - name: has_draft
+          in: query
+          description: Solo para gestores; incluye plantillas sin publicación o con una versión posterior a la publicada.
+          schema: { type: integer, enum: [1] }
       responses:
         '200':
           description: Plantillas paginadas.
@@ -52,6 +56,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/TemplateCollection' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/Validation' }
     post:
       tags: [Plantillas]
       summary: Crea una plantilla en borrador
@@ -76,7 +81,11 @@ paths:
     get:
       tags: [Plantillas]
       summary: Consulta una versión de plantilla
-      description: Requiere management-plans.view o management-plans.manage. Sin version consulta la publicada, o la actual si aún no se publicó.
+      description: >-
+        Requiere management-plans.view o management-plans.manage. Con solo permiso de consulta
+        se accede únicamente a versiones publicadas alguna vez; los borradores son exclusivos
+        de gestores. Sin version consulta la publicada, o la actual si aún no se publicó y el
+        actor es gestor.
       parameters:
         - name: version
           in: query
@@ -144,6 +153,27 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/TemplateEnvelope' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /plantillas-manejo/{planTemplate}/activacion:
+    parameters: [{ $ref: '#/components/parameters/Template' }]
+    post:
+      tags: [Plantillas]
+      summary: Reactiva una plantilla retirada
+      description: Requiere management-plans.manage. Solo cambia el estado de la plantilla a active; conserva sus versiones, actividades y copias de lote. Una plantilla nunca publicada sigue sin poder asignarse hasta su publicación. Registra auditoría.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExpectedTemplateVersion' }
+      responses:
+        '200':
+          description: Plantilla reactivada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TemplateEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Validation' }
   /flocks/{flock}/plan-manejo:
     parameters: [{ $ref: '#/components/parameters/Flock' }]
     get:
