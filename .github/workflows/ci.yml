@@ -57,7 +57,7 @@ jobs:
             api php artisan test --compact --do-not-cache-result
 
       - name: Run PHPStan
-        run: docker compose -f compose.dev.yaml exec -T api vendor/bin/phpstan analyse --memory-limit=1G
+        run: docker compose -f compose.dev.yaml exec -T api vendor/bin/phpstan analyse app --memory-limit=1G
 
       - name: Stop services
         if: always()
