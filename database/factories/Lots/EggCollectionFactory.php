@@ -2,10 +2,8 @@
 
 namespace Database\Factories\Lots;
 
-use App\Models\Inventory\StockLocation;
 use App\Models\Lots\EggCollection;
 use App\Models\Lots\Flock;
-use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -22,8 +20,8 @@ class EggCollectionFactory extends Factory
             'public_id' => (string) Str::ulid(), 'flock_id' => Flock::factory(),
             'poultry_house_id' => fn (array $data): int => Flock::query()->findOrFail($data['flock_id'])->poultry_house_id,
             'production_unit_id' => fn (array $data): int => Flock::query()->findOrFail($data['flock_id'])->production_unit_id,
-            'product_id' => Product::factory(), 'stock_location_id' => StockLocation::factory(),
-            'quantity' => 2, 'occurred_at' => now()->startOfSecond(), 'status' => 'recorded', 'version' => 1, 'created_by' => User::factory(),
+            'quantity' => 2,
+            'occurred_at' => now()->startOfSecond(), 'status' => 'recorded', 'version' => 1, 'created_by' => User::factory(),
         ];
     }
 }

@@ -2,9 +2,9 @@
 
 namespace App\Models\SuppliersAndCatalogs;
 
+use App\Enums\SuppliersAndCatalogs\SupplierStatus;
 use App\Models\Geography\Locality;
 use App\Models\Inventory\InventoryMovement;
-use App\Modules\SuppliersAndCatalogs\Domain\Enums\SupplierStatus;
 use Database\Factories\SuppliersAndCatalogs\SupplierFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -14,6 +14,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
+/**
+ * @property int $id
+ * @property string $name
+ * @property SupplierStatus $status
+ */
 #[Fillable(['locality_id', 'name', 'address', 'status'])]
 class Supplier extends Model
 {
@@ -47,5 +52,11 @@ class Supplier extends Model
     public function inventoryMovements(): HasMany
     {
         return $this->hasMany(InventoryMovement::class);
+    }
+
+    /** @return HasMany<Vaccine, $this> */
+    public function vaccines(): HasMany
+    {
+        return $this->hasMany(Vaccine::class);
     }
 }

@@ -12,7 +12,7 @@ ENV APP_ENV=production \
 
 # Extensiones necesarias para Laravel, PostgreSQL, Redis, Horizon,
 # Media Library, backups y cálculos habituales del dominio.
-COPY --from=ghcr.io/mlocati/php-extension-installer:2 \
+COPY --from=mlocati/php-extension-installer:2 \
     /usr/bin/install-php-extensions \
     /usr/local/bin/install-php-extensions
 

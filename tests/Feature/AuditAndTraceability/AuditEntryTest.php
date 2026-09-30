@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\AuditAndTraceability;
 
+use App\Actions\IdentityAndAccess\RegisterUserAction;
+use App\DTO\AuditAndTraceability\AuditEntryData;
+use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\User;
-use App\Modules\AuditAndTraceability\Application\Contracts\AuditRecorder;
-use App\Modules\AuditAndTraceability\Application\Data\AuditEntryData;
-use App\Modules\IdentityAndAccess\Application\Actions\RegisterUserAction;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -21,12 +21,16 @@ final class AuditEntryTest extends TestCase
     // Flujo: registra un usuario y comprueba la auditoría con trazabilidad y datos protegidos.
     public function test_registration_records_an_append_only_audit_entry_with_trace_context(): void
     {
-        // Acción 1: registra el usuario mediante la API.
-        $response = $this->postJson('/api/v1/autenticacion/registro', [
-            'nombre' => 'Audited User',
-            'correo_electronico' => 'audited.user@example.test',
+        // Acción 1: crea un administrador de prueba y registra el usuario mediante la API administrativa.
+        $admin = User::factory()->create();
+        $admin->givePermissionTo(Permission::findOrCreate('identity.users.manage', 'web'));
+        Sanctum::actingAs($admin, ['api:access']);
+        $response = $this->postJson('/api/v1/users', [
+            'name' => 'Audited User',
+            'email' => 'audited.user@example.test',
             'password' => 'correct-password',
             'password_confirmation' => 'correct-password',
+            'role' => 'employee',
         ]);
 
         // Verificación: confirma respuesta, usuario creado y entrada de auditoría.
@@ -42,7 +46,7 @@ final class AuditEntryTest extends TestCase
         $this->assertSame('identity', $entry->log_name);
         $this->assertSame('api', $entry->source);
         $this->assertSame(User::class, $entry->subject_type);
-        $this->assertNull($entry->causer_id);
+        $this->assertSame($admin->getKey(), $entry->causer_id);
         $this->assertNotSame('', $entry->operation_id);
         $this->assertSame($response->headers->get('X-Trace-Id'), $entry->trace_id);
         $this->assertSame([
@@ -61,7 +65,7 @@ final class AuditEntryTest extends TestCase
 
         // Acción: cierra la sesión autenticada.
         $this->withToken($token->plainTextToken)
-            ->postJson('/api/v1/autenticacion/cerrar-sesion')
+            ->postJson('/api/v1/auth/logout')
             ->assertOk();
 
         // Verificación: confirma revocación del token y auditoría del actor.
@@ -101,7 +105,7 @@ final class AuditEntryTest extends TestCase
         // Acción: autentica al usuario y consulta las entradas filtradas.
         Sanctum::actingAs($user, ['*']);
 
-        $this->getJson('/api/v1/auditoria/entradas?event=stock_moved&por_pagina=10')
+        $this->getJson('/api/v1/audit/entries?event=stock_moved&per_page=10')
             ->assertOk()
             ->assertJsonPath('data.0.event', 'stock_moved')
             ->assertJsonPath('data.0.description', 'Movimiento de stock realizado')
@@ -115,7 +119,7 @@ final class AuditEntryTest extends TestCase
         // Acción: intenta consultar la auditoría sin autorización.
         Sanctum::actingAs(User::factory()->create(), ['*']);
 
-        $this->getJson('/api/v1/auditoria/entradas')->assertForbidden();
+        $this->getJson('/api/v1/audit/entries')->assertForbidden();
     }
 
     // Flujo: fuerza un fallo de auditoría; verifica que la operación de negocio se revierte.

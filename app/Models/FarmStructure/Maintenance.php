@@ -2,9 +2,9 @@
 
 namespace App\Models\FarmStructure;
 
+use App\Enums\FarmStructure\MaintenanceStatus;
 use App\Models\User;
-use App\Modules\FarmStructure\Domain\Enums\MaintenanceStatus;
-use App\Shared\Money;
+use App\ValueObjects\Money;
 use Database\Factories\FarmStructure\MaintenanceFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Casts\Attribute;

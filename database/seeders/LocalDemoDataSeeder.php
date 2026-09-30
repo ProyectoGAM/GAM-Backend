@@ -2,6 +2,16 @@
 
 namespace Database\Seeders;
 
+use App\Enums\FarmStructure\PoultryHouseStatus;
+use App\Enums\FarmStructure\ProductionUnitStatus;
+use App\Enums\Inventory\InventoryMovementType;
+use App\Enums\Inventory\StockLocationStatus;
+use App\Enums\ReportingAndAnalytics\ReportExportFormat;
+use App\Enums\ReportingAndAnalytics\ReportExportStatus;
+use App\Enums\SuppliersAndCatalogs\BaseUnit;
+use App\Enums\SuppliersAndCatalogs\ProductKind;
+use App\Enums\SuppliersAndCatalogs\ProductStatus;
+use App\Enums\SuppliersAndCatalogs\SupplierStatus;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Geography\Department;
@@ -15,21 +25,17 @@ use App\Models\ReportingAndAnalytics\ReportPreset;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\SuppliersAndCatalogs\Supplier;
 use App\Models\User;
-use App\Modules\FarmStructure\Domain\Enums\PoultryHouseStatus;
-use App\Modules\FarmStructure\Domain\Enums\ProductionUnitStatus;
-use App\Modules\Inventory\Domain\Enums\InventoryMovementType;
-use App\Modules\Inventory\Domain\Enums\StockLocationStatus;
-use App\Modules\ReportingAndAnalytics\Application\Services\ReportExportWriter;
-use App\Modules\ReportingAndAnalytics\Application\Services\ReportQueryNormalizer;
-use App\Modules\ReportingAndAnalytics\Application\Services\ReportSourceRegistry;
-use App\Modules\ReportingAndAnalytics\Domain\Enums\ReportExportFormat;
-use App\Modules\ReportingAndAnalytics\Domain\Enums\ReportExportStatus;
-use App\Modules\SuppliersAndCatalogs\Domain\Enums\BaseUnit;
-use App\Modules\SuppliersAndCatalogs\Domain\Enums\ProductKind;
-use App\Modules\SuppliersAndCatalogs\Domain\Enums\ProductStatus;
-use App\Modules\SuppliersAndCatalogs\Domain\Enums\SupplierStatus;
+use App\Services\ReportingAndAnalytics\ReportExportWriter;
+use App\Services\ReportingAndAnalytics\ReportQueryNormalizer;
+use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
 use Database\Seeders\FarmStructure\MaintenanceDemoSeeder;
+use Database\Seeders\Inventory\FeedStockDemoSeeder;
+use Database\Seeders\Lots\EggProductionDemoSeeder;
 use Database\Seeders\Lots\LotsDemoSeeder;
+use Database\Seeders\Lots\WeighingDemoSeeder;
+use Database\Seeders\ManagementPlans\ManagementPlanDemoSeeder;
+use Database\Seeders\SuppliersAndCatalogs\MedicineDemoSeeder;
+use Database\Seeders\SuppliersAndCatalogs\VaccineDemoSeeder;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -49,13 +55,19 @@ final class LocalDemoDataSeeder extends Seeder
         $this->seedPoultryHouses($units);
         $this->call(MaintenanceDemoSeeder::class);
         $suppliers = $this->seedSuppliers($localities);
+        $this->call(MedicineDemoSeeder::class);
         $products = $this->seedProducts();
+        $this->call(VaccineDemoSeeder::class);
         $locations = $this->seedStockLocations($units);
+        $this->call(FeedStockDemoSeeder::class);
 
         $this->seedBalances($products, $locations);
         $this->seedMovements($admin, $products, $locations, $suppliers);
         $this->seedReports($admin);
+        $this->call(ManagementPlanDemoSeeder::class);
         $this->call(LotsDemoSeeder::class);
+        $this->call(EggProductionDemoSeeder::class);
+        $this->call(WeighingDemoSeeder::class);
     }
 
     /** @return array<string, Locality> */
@@ -121,6 +133,7 @@ final class LocalDemoDataSeeder extends Seeder
             $house->forceFill([
                 'production_unit_id' => $units[$definition['unit']]->getKey(),
                 'name' => $definition['name'],
+                'type' => 'poultry',
                 'bird_capacity' => $definition['capacity'],
                 'status' => $definition['status'],
             ])->save();
@@ -154,11 +167,10 @@ final class LocalDemoDataSeeder extends Seeder
     private function seedProducts(): array
     {
         $definitions = [
-            'corn' => ['sku' => 'MAIZ-025', 'name' => 'Maíz en grano', 'kind' => ProductKind::RawMaterial, 'unit' => BaseUnit::Kilogram],
-            'soy' => ['sku' => 'SOJA-025', 'name' => 'Harina de soja', 'kind' => ProductKind::RawMaterial, 'unit' => BaseUnit::Kilogram],
+            'corn' => ['sku' => 'MAIZ-025', 'name' => 'Maíz en grano', 'kind' => ProductKind::RawMaterial, 'unit' => BaseUnit::Gram],
+            'soy' => ['sku' => 'SOJA-025', 'name' => 'Harina de soja', 'kind' => ProductKind::RawMaterial, 'unit' => BaseUnit::Gram],
             'vaccine' => ['sku' => 'VAC-001', 'name' => 'Vacuna aviar Newcastle', 'kind' => ProductKind::Vaccine, 'unit' => BaseUnit::Dose],
             'disinfectant' => ['sku' => 'DESINF-005', 'name' => 'Desinfectante concentrado', 'kind' => ProductKind::Supply, 'unit' => BaseUnit::Liter],
-            'eggs' => ['sku' => 'HUEVO-001', 'name' => 'Huevos clasificados', 'kind' => ProductKind::Egg, 'unit' => BaseUnit::Unit],
         ];
         $products = [];
 
@@ -182,10 +194,7 @@ final class LocalDemoDataSeeder extends Seeder
     private function seedStockLocations(array $units): array
     {
         $definitions = [
-            'ombu_feed' => ['name' => 'Depósito de alimentos - El Ombú', 'unit' => 'Granja El Ombú'],
             'ombu_supplies' => ['name' => 'Cámara de insumos - El Ombú', 'unit' => 'Granja El Ombú'],
-            'santa_clara_feed' => ['name' => 'Depósito de alimentos - Santa Clara', 'unit' => 'Granja Santa Clara'],
-            'santa_clara_eggs' => ['name' => 'Cámara de huevos - Santa Clara', 'unit' => 'Granja Santa Clara'],
         ];
         $locations = [];
 
@@ -206,13 +215,8 @@ final class LocalDemoDataSeeder extends Seeder
     private function seedBalances(array $products, array $locations): void
     {
         $balances = [
-            ['product' => 'corn', 'location' => 'ombu_feed', 'on_hand' => '1240.000000', 'minimum' => '500.000000'],
-            ['product' => 'soy', 'location' => 'ombu_feed', 'on_hand' => '680.000000', 'minimum' => '300.000000'],
             ['product' => 'vaccine', 'location' => 'ombu_supplies', 'on_hand' => '120.000000', 'minimum' => '50.000000'],
             ['product' => 'disinfectant', 'location' => 'ombu_supplies', 'on_hand' => '85.500000', 'minimum' => '30.000000'],
-            ['product' => 'corn', 'location' => 'santa_clara_feed', 'on_hand' => '760.000000', 'minimum' => '400.000000'],
-            ['product' => 'soy', 'location' => 'santa_clara_feed', 'on_hand' => '420.000000', 'minimum' => '250.000000'],
-            ['product' => 'eggs', 'location' => 'santa_clara_eggs', 'on_hand' => '432.000000', 'minimum' => '200.000000'],
         ];
 
         foreach ($balances as $definition) {
@@ -237,79 +241,58 @@ final class LocalDemoDataSeeder extends Seeder
     private function seedMovements(User $admin, array $products, array $locations, array $suppliers): void
     {
         $this->saveMovement(
-            '00000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000011',
             InventoryMovementType::OpeningBalance,
             null,
             'Carga inicial de existencias al comenzar la temporada.',
             now()->subDays(30),
             [
-                $this->movementLine($products['corn'], $locations['ombu_feed'], '1000.000000'),
-                $this->movementLine($products['soy'], $locations['ombu_feed'], '800.000000'),
                 $this->movementLine($products['vaccine'], $locations['ombu_supplies'], '150.000000'),
                 $this->movementLine($products['disinfectant'], $locations['ombu_supplies'], '100.000000'),
-                $this->movementLine($products['corn'], $locations['santa_clara_feed'], '700.000000'),
-                $this->movementLine($products['soy'], $locations['santa_clara_feed'], '400.000000'),
-                $this->movementLine($products['eggs'], $locations['santa_clara_eggs'], '500.000000'),
             ],
             $admin,
         );
 
         $this->saveMovement(
-            '00000000-0000-4000-8000-000000000002',
+            '00000000-0000-4000-8000-000000000012',
             InventoryMovementType::Receipt,
             $suppliers['Agroinsumos del Sur']->getKey(),
-            'Recepción de materias primas y alimento para las dos granjas.',
+            'Recepción de vacunas y suministros para las dos granjas.',
             now()->subDays(15),
             [
-                $this->movementLine($products['corn'], $locations['ombu_feed'], '500.000000'),
-                $this->movementLine($products['soy'], $locations['ombu_feed'], '200.000000'),
-                $this->movementLine($products['corn'], $locations['santa_clara_feed'], '200.000000'),
-                $this->movementLine($products['soy'], $locations['santa_clara_feed'], '100.000000'),
+                $this->movementLine($products['vaccine'], $locations['ombu_supplies'], '20.000000'),
             ],
             $admin,
         );
 
         $this->saveMovement(
-            '00000000-0000-4000-8000-000000000003',
+            '00000000-0000-4000-8000-000000000013',
             InventoryMovementType::Issue,
             null,
-            'Consumo semanal para alimentación, vacunación y limpieza.',
+            'Consumo semanal de vacunas y suministros para las granjas.',
             now()->subDays(7),
             [
-                $this->movementLine($products['corn'], $locations['ombu_feed'], '-260.000000'),
-                $this->movementLine($products['soy'], $locations['ombu_feed'], '-320.000000'),
-                $this->movementLine($products['vaccine'], $locations['ombu_supplies'], '-30.000000'),
+                $this->movementLine($products['vaccine'], $locations['ombu_supplies'], '-50.000000'),
                 $this->movementLine($products['disinfectant'], $locations['ombu_supplies'], '-14.500000'),
-                $this->movementLine($products['corn'], $locations['santa_clara_feed'], '-140.000000'),
-                $this->movementLine($products['soy'], $locations['santa_clara_feed'], '-80.000000'),
             ],
             $admin,
         );
 
-        $this->saveMovement(
-            '00000000-0000-4000-8000-000000000004',
-            InventoryMovementType::Loss,
-            null,
-            'Merma registrada durante la clasificación de huevos.',
-            now()->subDays(3),
-            [$this->movementLine($products['eggs'], $locations['santa_clara_eggs'], '-68.000000')],
-            $admin,
-        );
     }
 
     private function seedReports(User $admin): void
     {
-        $sourceKey = 'inventario.saldos-stock';
+        $sourceKey = 'inventory.stock-balances';
         $query = app(ReportQueryNormalizer::class)->normalize($sourceKey, [
-            'columnas' => ['producto', 'unidad_base', 'ubicacion_stock', 'cantidad_disponible', 'cantidad_minima'],
-            'filtros' => [],
-            'desde' => null,
-            'hasta' => null,
-            'ordenamientos' => [['campo' => 'producto', 'direccion' => 'asc']],
-            'agrupaciones' => [],
-            'metricas' => [],
-            'pagina' => 1,
-            'por_pagina' => 50,
+            'columns' => ['product', 'base_unit', 'stock_location', 'available_quantity', 'minimum_quantity'],
+            'filters' => [],
+            'from' => null,
+            'to' => null,
+            'sorts' => [['field' => 'product', 'direction' => 'asc']],
+            'groupings' => [],
+            'metrics' => [],
+            'page' => 1,
+            'per_page' => 50,
         ]);
         $configuration = $query->toArray();
 

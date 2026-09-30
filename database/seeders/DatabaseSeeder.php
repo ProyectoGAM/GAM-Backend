@@ -14,7 +14,7 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call([AdminUserSeeder::class, GeographySeeder::class]);
+        $this->call([IdentityPermissionSeeder::class, AdminUserSeeder::class, GeographySeeder::class]);
 
         if (app()->environment('local')) {
             $this->call(LocalDemoDataSeeder::class);

@@ -2,13 +2,14 @@
 
 namespace Tests\Feature\Lots;
 
+use App\Enums\Lots\FlockStatus;
+use App\Interfaces\AuditAndTraceability\AuditRecorder;
+use App\Interfaces\FarmStructure\PoultryHouseOccupancyProvider;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\Lots\Breed;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockMovement;
-use App\Modules\AuditAndTraceability\Application\Contracts\AuditRecorder;
-use App\Modules\FarmStructure\Application\PublicApi\Contracts\PoultryHouseOccupancyProvider;
-use App\Modules\Lots\Domain\Enums\FlockStatus;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -19,15 +20,18 @@ final class RedistributionEndpointTest extends LotsTestCase
     {
         // Preparación: crea origen y galpón destino con capacidad disponible.
         $this->signIn();
-        $flock = $this->flock();
+        $flock = $this->flockWithPlan(100, activities: [
+            ['type' => 'weighing', 'title' => 'Pesaje pasado', 'timing_kind' => 'week', 'start_week' => 1],
+            ['type' => 'vaccination', 'title' => 'Vacuna futura', 'timing_kind' => 'week', 'start_week' => 10],
+        ]);
         $house = PoultryHouse::factory()->create(['bird_capacity' => 40]);
         $publicId = (string) Str::ulid();
 
         // Request: redistribuye cuarenta aves a una identidad generada offline.
-        $response = $this->command('POST', "/lotes/{$flock->public_id}/redistribuciones", [
-            'version' => 1, 'cantidad' => 40, 'galpon_destino_id' => $house->id, 'codigo_destino' => 'NUEVO-40', 'id_destino' => $publicId,
-        ])->assertCreated()->assertJsonPath('data.lote.cantidad_viva', 60)
-            ->assertJsonPath('data.lote_destino.id', $publicId)->assertJsonPath('data.movimiento.tipo', 'partial_new');
+        $response = $this->command('POST', "/flocks/{$flock->public_id}/redistributions", [
+            'version' => 1, 'quantity' => 40, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'NUEVO-40', 'destination_public_id' => $publicId,
+        ])->assertCreated()->assertJsonPath('data.flock.current_quantity', 60)
+            ->assertJsonPath('data.destination_flock.id', $publicId)->assertJsonPath('data.movement.type', 'partial_new');
         $destination = Flock::query()->where('public_id', $publicId)->firstOrFail();
         $this->assertSame($flock->breed_id, $destination->breed_id);
         $this->assertSame($flock->supplier_id, $destination->supplier_id);
@@ -37,9 +41,54 @@ final class RedistributionEndpointTest extends LotsTestCase
         $this->assertDatabaseHas('flock_movements', ['source_flock_id' => $flock->id, 'destination_flock_id' => $destination->id, 'quantity' => 40]);
         $this->assertDatabaseHas('poultry_houses', ['id' => $house->id, 'bird_capacity' => 40]);
 
+        // Verificación: el lote nuevo tiene un plan propio con las actividades futuras y su procedencia.
+        $sourcePlan = DB::table('flock_plans')->where('flock_id', $flock->id)->first();
+        $destinationPlan = DB::table('flock_plans')->where('flock_id', $destination->id)->first();
+        $this->assertNotNull($sourcePlan);
+        $this->assertNotNull($destinationPlan);
+        $this->assertNotSame($sourcePlan->id, $destinationPlan->id);
+        $this->assertSame($flock->id, $destinationPlan->source_flock_id);
+        $this->assertSame($sourcePlan->baseline_date, $destinationPlan->baseline_date);
+        $this->assertSame($sourcePlan->plan_template_version_id, $destinationPlan->plan_template_version_id);
+        $sourceRevisionId = DB::table('flock_plan_revisions')->where('flock_plan_id', $sourcePlan->id)->value('id');
+        $destinationRevisionId = DB::table('flock_plan_revisions')->where('flock_plan_id', $destinationPlan->id)->value('id');
+        $sourceFutureActivityId = DB::table('flock_plan_activities')
+            ->where('flock_plan_revision_id', $sourceRevisionId)->where('title', 'Vacuna futura')->value('id');
+        $this->assertSame('Vacuna futura', DB::table('flock_plan_activities')
+            ->where('flock_plan_revision_id', $destinationRevisionId)->value('title'));
+        $this->assertNotNull($sourceFutureActivityId);
+        $this->assertSame($sourceFutureActivityId, DB::table('flock_plan_activities')
+            ->where('flock_plan_revision_id', $destinationRevisionId)->value('copied_from_activity_id'));
+        $this->assertDatabaseMissing('flock_plan_activities', [
+            'flock_plan_revision_id' => $destinationRevisionId, 'title' => 'Pesaje pasado',
+        ]);
+
         // Consulta: ambos lotes exponen el mismo movimiento y su fotografía histórica.
-        $this->getJson("/api/v1/lotes/{$publicId}/historial")->assertOk()->assertJsonPath('data.0.id', $response->json('data.movimiento.id'));
-        $this->getJson("/api/v1/lotes/{$flock->public_id}/historial")->assertOk()->assertJsonPath("data.0.antes.{$flock->public_id}.cantidad_viva", 100);
+        $this->getJson("/api/v1/flocks/{$publicId}/history")->assertOk()->assertJsonPath('data.0.id', $response->json('data.movement.id'));
+        $this->getJson("/api/v1/flocks/{$flock->public_id}/history")->assertOk()->assertJsonPath("data.0.before.{$flock->public_id}.current_quantity", 100);
+    }
+
+    // Flujo: revierte toda la división cuando el lote legado todavía no tiene plan.
+    public function test_partial_new_split_without_source_plan_rolls_back_every_change(): void
+    {
+        // Preparación: usa un lote legado sin asignación y un galpón disponible.
+        $this->signIn();
+        $source = $this->flock();
+        $house = PoultryHouse::factory()->create();
+
+        // Request: intenta crear un lote nuevo y recibe conflicto por el plan ausente.
+        $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
+            'version' => 1, 'quantity' => 20, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'SIN-PLAN',
+        ])->assertConflict();
+
+        // Verificación: se revierten el descuento, el lote destino, la operación y la auditoría.
+        $this->assertSame(100, $source->fresh()->current_quantity);
+        $this->assertSame(1, $source->fresh()->version);
+        $this->assertDatabaseCount('flocks', 1);
+        $this->assertDatabaseCount('flock_plans', 0);
+        $this->assertDatabaseCount('flock_movements', 0);
+        $this->assertDatabaseCount('flock_operations', 0);
+        $this->assertDatabaseCount('activity_log', 0);
     }
 
     // Flujo: agrega aves a un lote existente sin sobrescribir su procedencia ni edad.
@@ -54,30 +103,53 @@ final class RedistributionEndpointTest extends LotsTestCase
         $original = $destination->only(['supplier_id', 'entry_date', 'initial_quantity', 'code']);
 
         // Request: incrementa el destinatario utilizando versiones de ambos lotes.
-        $this->command('POST', "/lotes/{$source->public_id}/redistribuciones", [
-            'version' => 1, 'cantidad' => 30, 'lote_destino_id' => $destination->public_id, 'version_destino' => 1,
-        ])->assertCreated()->assertJsonPath('data.lote.cantidad_viva', 70)
-            ->assertJsonPath('data.lote_destino.cantidad_viva', 50)->assertJsonPath('data.movimiento.tipo', 'partial_existing');
+        $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
+            'version' => 1, 'quantity' => 30, 'destination_flock_id' => $destination->public_id, 'destination_version' => 1,
+        ])->assertCreated()->assertJsonPath('data.flock.current_quantity', 70)
+            ->assertJsonPath('data.destination_flock.current_quantity', 50)->assertJsonPath('data.movement.type', 'partial_existing');
         $this->assertEquals($original, $destination->fresh()->only(array_keys($original)));
         $this->assertDatabaseCount('flocks', 2);
         $this->assertSame(120, (int) Flock::query()->sum('current_quantity'));
     }
 
-    // Flujo: redistribuye dentro de un galpón lleno sin contabilizar dos veces las aves.
-    public function test_same_house_redistribution_uses_net_occupancy(): void
+    // Flujo: mantiene la ocupación derivada por galpón al incorporar aves a otro lote.
+    public function test_existing_recipient_occupancy_is_derived_per_house(): void
     {
         // Preparación: ocupa exactamente toda la capacidad física.
         $this->signIn();
         $house = PoultryHouse::factory()->create(['bird_capacity' => 100]);
         $breed = Breed::factory()->create();
         $source = $this->flock(80, $breed, $house);
-        $destination = $this->flock(20, $breed, $house);
+        $destination = $this->flock(20, $breed);
 
-        // Request: cambia la agrupación sin añadir ocupación al galpón.
-        $this->command('POST', "/lotes/{$source->public_id}/redistribuciones", [
-            'version' => 1, 'cantidad' => 10, 'lote_destino_id' => $destination->public_id, 'version_destino' => 1,
+        // Request: incorpora aves y conserva la ocupación física de cada galpón.
+        $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
+            'version' => 1, 'quantity' => 10, 'destination_flock_id' => $destination->public_id, 'destination_version' => 1,
         ])->assertCreated();
-        $this->assertSame(100, $this->app->make(PoultryHouseOccupancyProvider::class)->occupancyFor($house->id));
+        $this->assertSame(70, $this->app->make(PoultryHouseOccupancyProvider::class)->occupancyFor($house->id));
+        $this->assertSame(30, $this->app->make(PoultryHouseOccupancyProvider::class)->occupancyFor($destination->poultry_house_id));
+    }
+
+    // Flujo: exige un galpón vacío para una división que crea un lote nuevo.
+    public function test_new_split_rejects_occupied_and_same_source_houses(): void
+    {
+        // Preparación: ocupa un galpón destino y conserva el origen en otro.
+        $this->signIn();
+        $source = $this->flock();
+        $occupiedHouse = PoultryHouse::factory()->create();
+        $this->flock(10, $source->breed, $occupiedHouse);
+
+        // Requests: rechaza tanto el galpón ocupado como el propio galpón del origen.
+        $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
+            'version' => 1, 'quantity' => 10, 'destination_poultry_house_id' => $occupiedHouse->id, 'destination_code' => 'OCUPADO',
+        ])->assertConflict();
+        $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
+            'version' => 1, 'quantity' => 10, 'destination_poultry_house_id' => $source->poultry_house_id, 'destination_code' => 'MISMO-GALPON',
+        ])->assertConflict();
+
+        // Verificación: no se crean lotes ni movimientos compensatorios.
+        $this->assertDatabaseCount('flocks', 2);
+        $this->assertDatabaseCount('flock_movements', 0);
     }
 
     // Flujo: traslada el lote completo entre UP conservando identidad e historial.
@@ -90,34 +162,40 @@ final class RedistributionEndpointTest extends LotsTestCase
         $house = PoultryHouse::factory()->create();
 
         // Request: traslada todas las aves sin crear un lote destinatario.
-        $this->command('POST', "/lotes/{$flock->public_id}/redistribuciones", [
-            'version' => 1, 'cantidad' => 30, 'galpon_destino_id' => $house->id,
-        ])->assertCreated()->assertJsonPath('data.lote.id', $flock->public_id)
-            ->assertJsonPath('data.lote.galpon_id', $house->id)->assertJsonPath('data.movimiento.tipo', 'total')
-            ->assertJsonPath('data.movimiento.galpon_origen_id', $oldHouse);
+        $this->command('POST', "/flocks/{$flock->public_id}/redistributions", [
+            'version' => 1, 'quantity' => 30, 'destination_poultry_house_id' => $house->id,
+        ])->assertCreated()->assertJsonPath('data.flock.id', $flock->public_id)
+            ->assertJsonPath('data.flock.poultry_house_id', $house->id)->assertJsonPath('data.movement.type', 'total')
+            ->assertJsonPath('data.movement.source_poultry_house_id', $oldHouse);
         $this->assertDatabaseCount('flocks', 1);
         $this->assertSame($house->production_unit_id, $flock->fresh()->production_unit_id);
         $this->assertSame(0, $this->app->make(PoultryHouseOccupancyProvider::class)->occupancyFor($oldHouse));
         $this->assertSame(FlockStatus::Active, $flock->fresh()->status);
     }
 
-    // Flujo: rechaza mezclas de raza y fusiones totales ambiguas.
-    public function test_incompatible_breed_and_total_merge_are_rejected(): void
+    // Flujo: rechaza mezclas de raza y conserva los datos del receptor en una unión total.
+    public function test_incompatible_breed_is_rejected_and_total_merge_finishes_source(): void
     {
         // Preparación: configura un destino inicialmente incompatible.
         $this->signIn();
         $source = $this->flock();
-        $destination = $this->flock();
-        $payload = ['version' => 1, 'cantidad' => 10, 'lote_destino_id' => $destination->public_id, 'version_destino' => 1];
+        $destination = $this->flock(20);
+        $payload = ['version' => 1, 'quantity' => 10, 'destination_flock_id' => $destination->public_id, 'destination_version' => 1];
 
         // Request: no permite combinar razas diferentes.
-        $this->command('POST', "/lotes/{$source->public_id}/redistribuciones", $payload)->assertConflict();
+        $this->command('POST', "/flocks/{$source->public_id}/redistributions", $payload)->assertConflict();
         $destination->forceFill(['breed_id' => $source->breed_id])->save();
 
-        // Request: una redistribución total requiere galpón, no fusión con otro lote.
-        $this->command('POST', "/lotes/{$source->public_id}/redistribuciones", [...$payload, 'cantidad' => 100])->assertConflict();
-        $this->assertDatabaseCount('flock_movements', 0);
-        $this->assertSame(200, (int) Flock::query()->sum('current_quantity'));
+        // Request: une todas las aves sin egreso ficticio y finaliza el origen.
+        $this->command('POST', "/flocks/{$source->public_id}/redistributions", [...$payload, 'quantity' => 100])
+            ->assertCreated()->assertJsonPath('data.movement.type', 'total_existing')
+            ->assertJsonPath('data.flock.status', 'finished')
+            ->assertJsonPath('data.destination_flock.current_quantity', 120);
+        $this->assertDatabaseCount('flock_movements', 1);
+        $this->assertDatabaseMissing('flock_movements', ['type' => 'departure']);
+        $this->assertSame(120, (int) Flock::query()->sum('current_quantity'));
+        $this->getJson("/api/v1/flocks/{$source->public_id}/history?type=total_existing")
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.type', 'total_existing');
     }
 
     // Flujo: valida destino exclusivo y versión obligatoria del destinatario.
@@ -127,14 +205,14 @@ final class RedistributionEndpointTest extends LotsTestCase
         $this->signIn();
         $source = $this->flock();
         $destination = $this->flock(20, $source->breed);
-        $url = "/lotes/{$source->public_id}/redistribuciones";
-        $payload = ['version' => 1, 'cantidad' => 10, 'lote_destino_id' => $destination->public_id];
+        $url = "/flocks/{$source->public_id}/redistributions";
+        $payload = ['version' => 1, 'quantity' => 10, 'destination_flock_id' => $destination->public_id];
 
         // Requests: rechaza ausencia de versión, destinos ambiguos y versión obsoleta.
-        $this->command('POST', $url, $payload)->assertUnprocessable()->assertJsonValidationErrors('version_destino');
-        $this->command('POST', $url, [...$payload, 'version_destino' => 1, 'galpon_destino_id' => $destination->poultry_house_id])->assertUnprocessable();
-        $this->command('POST', $url, [...$payload, 'version_destino' => 2])->assertConflict();
-        $this->command('POST', $url, [...$payload, 'version_destino' => 1, 'lote_destino_id' => $source->public_id])->assertConflict();
+        $this->command('POST', $url, $payload)->assertUnprocessable()->assertJsonValidationErrors('destination_version');
+        $this->command('POST', $url, [...$payload, 'destination_version' => 1, 'destination_poultry_house_id' => $destination->poultry_house_id])->assertUnprocessable();
+        $this->command('POST', $url, [...$payload, 'destination_version' => 2])->assertConflict();
+        $this->command('POST', $url, [...$payload, 'destination_version' => 1, 'destination_flock_id' => $source->public_id])->assertConflict();
         $this->assertDatabaseCount('flock_movements', 0);
     }
 
@@ -145,14 +223,14 @@ final class RedistributionEndpointTest extends LotsTestCase
         $this->signIn();
         $flock = $this->flock(100);
         $house = PoultryHouse::factory()->create(['bird_capacity' => 10]);
-        $payload = ['version' => 1, 'cantidad' => 101, 'galpon_destino_id' => $house->id, 'codigo_destino' => 'SIN-CUPO'];
-        $url = "/lotes/{$flock->public_id}/redistribuciones";
+        $payload = ['version' => 1, 'quantity' => 101, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'SIN-CUPO'];
+        $url = "/flocks/{$flock->public_id}/redistributions";
 
         // Requests: comprueba faltante de aves, capacidad y estado del origen.
         $this->command('POST', $url, $payload)->assertConflict();
-        $this->command('POST', $url, [...$payload, 'cantidad' => 20])->assertConflict();
+        $this->command('POST', $url, [...$payload, 'quantity' => 20])->assertConflict();
         $flock->forceFill(['status' => FlockStatus::Quarantined])->save();
-        $this->command('POST', $url, [...$payload, 'cantidad' => 10])->assertConflict();
+        $this->command('POST', $url, [...$payload, 'quantity' => 10])->assertConflict();
         $this->assertDatabaseCount('flocks', 1);
         $this->assertSame(100, $flock->fresh()->current_quantity);
     }
@@ -167,10 +245,10 @@ final class RedistributionEndpointTest extends LotsTestCase
         $destination = PoultryHouse::factory()->create(['status' => 'maintenance']);
 
         // Requests: falla el destino cerrado y permite el traslado al habilitarlo.
-        $payload = ['version' => 1, 'cantidad' => 20, 'galpon_destino_id' => $destination->id];
-        $this->command('POST', "/lotes/{$flock->public_id}/redistribuciones", $payload)->assertConflict();
+        $payload = ['version' => 1, 'quantity' => 20, 'destination_poultry_house_id' => $destination->id];
+        $this->command('POST', "/flocks/{$flock->public_id}/redistributions", $payload)->assertConflict();
         $destination->forceFill(['status' => 'operational'])->save();
-        $this->command('POST', "/lotes/{$flock->public_id}/redistribuciones", $payload)->assertCreated();
+        $this->command('POST', "/flocks/{$flock->public_id}/redistributions", $payload)->assertCreated();
     }
 
     // Flujo: revierte una redistribución parcial conservando el movimiento original.
@@ -178,19 +256,19 @@ final class RedistributionEndpointTest extends LotsTestCase
     {
         // Preparación: registra una redistribución sin operaciones posteriores.
         $this->signIn();
-        $flock = $this->flock();
+        $flock = $this->flockWithPlan();
         $house = PoultryHouse::factory()->create();
-        $operation = $this->command('POST', "/lotes/{$flock->public_id}/redistribuciones", [
-            'version' => 1, 'cantidad' => 40, 'galpon_destino_id' => $house->id, 'codigo_destino' => 'A-REVERTIR',
+        $operation = $this->command('POST', "/flocks/{$flock->public_id}/redistributions", [
+            'version' => 1, 'quantity' => 40, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'A-REVERTIR',
         ])->assertCreated();
         $movement = FlockMovement::query()->firstOrFail();
         $original = $movement->getAttributes();
 
         // Request: repone las cantidades mediante un nuevo movimiento enlazado.
-        $this->command('POST', '/redistribuciones/'.$operation->json('data.movimiento.id').'/reversiones', [
-            'version' => 2, 'version_destino' => 1, 'motivo' => 'Se seleccionó un galpón equivocado',
-        ])->assertOk()->assertJsonPath('data.lote.cantidad_viva', 100)
-            ->assertJsonPath('data.lote_destino.estado', 'finished')->assertJsonPath('data.lote_destino.cantidad_viva', 0);
+        $this->command('POST', '/redistributions/'.$operation->json('data.movement.id').'/reversals', [
+            'version' => 2, 'destination_version' => 1, 'reason' => 'Se seleccionó un galpón equivocado',
+        ])->assertOk()->assertJsonPath('data.flock.current_quantity', 100)
+            ->assertJsonPath('data.destination_flock.status', 'finished')->assertJsonPath('data.destination_flock.current_quantity', 0);
         $this->assertEquals($original, $movement->fresh()->getAttributes());
         $this->assertDatabaseHas('flock_movements', ['type' => 'redistribution_reversal', 'reverses_movement_id' => $movement->id]);
         $this->assertDatabaseCount('flocks', 2);
@@ -203,17 +281,132 @@ final class RedistributionEndpointTest extends LotsTestCase
         $this->signIn();
         $flock = $this->flock();
         $house = PoultryHouse::factory()->create();
-        $operation = $this->command('POST', "/lotes/{$flock->public_id}/redistribuciones", [
-            'version' => 1, 'cantidad' => 100, 'galpon_destino_id' => $house->id,
+        $operation = $this->command('POST', "/flocks/{$flock->public_id}/redistributions", [
+            'version' => 1, 'quantity' => 100, 'destination_poultry_house_id' => $house->id,
         ])->assertCreated();
-        $this->command('PATCH', "/lotes/{$flock->public_id}", ['version' => 2, 'observaciones' => 'Inspeccionado'])->assertOk();
+        $this->command('PATCH', "/flocks/{$flock->public_id}", ['version' => 2, 'notes' => 'Inspeccionado'])->assertOk();
 
         // Request: rechaza la reversión sin borrar ni reescribir la historia.
-        $this->command('POST', '/redistribuciones/'.$operation->json('data.movimiento.id').'/reversiones', [
-            'version' => 3, 'motivo' => 'No corresponde revertir sobre cambios posteriores',
+        $this->command('POST', '/redistributions/'.$operation->json('data.movement.id').'/reversals', [
+            'version' => 3, 'reason' => 'No corresponde revertir sobre cambios posteriores',
         ])->assertConflict();
         $this->assertDatabaseCount('flock_movements', 1);
         $this->assertSame($house->id, $flock->fresh()->poultry_house_id);
+    }
+
+    // Flujo: una recolección posterior del receptor también invalida la reversión.
+    public function test_reversal_rejects_later_egg_collection_activity(): void
+    {
+        // Preparación: redistribuye aves y habilita los permisos de recolección.
+        $this->signIn(['flocks.view', 'flocks.manage', 'flocks.redistribute', 'flocks.finalize', 'egg-collections.view', 'egg-collections.manage', 'egg-stock.view', 'egg-stock.move', 'egg-stock.adjust']);
+        $source = $this->flockWithPlan();
+        $house = PoultryHouse::factory()->create();
+        $operation = $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
+            'version' => 1, 'quantity' => 20, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'RECEPTOR-EGG',
+        ])->assertCreated();
+        $destination = Flock::query()->where('code', 'RECEPTOR-EGG')->firstOrFail();
+
+        // Mutación: registra una recolección sobre el lote receptor.
+        $this->command('POST', "/flocks/{$destination->public_id}/collections", ['quantity' => 4])->assertCreated();
+
+        // Request: rechaza la compensación porque la actividad posterior está journalizada.
+        $this->command('POST', '/redistributions/'.$operation->json('data.movement.id').'/reversals', [
+            'version' => 2, 'destination_version' => 1, 'reason' => 'La recolección ya fue registrada',
+        ])->assertConflict();
+        $this->assertDatabaseCount('flock_movements', 1);
+    }
+
+    // Flujo: un pesaje posterior del receptor también invalida la compensación.
+    public function test_reversal_rejects_later_weighing_activity(): void
+    {
+        // Preparación: crea una redistribución parcial y habilita el módulo de pesajes.
+        $this->signIn(['flocks.view', 'flocks.manage', 'flocks.redistribute', 'flocks.finalize', 'weighings.view', 'weighings.manage']);
+        $source = $this->flockWithPlan();
+        $house = PoultryHouse::factory()->create();
+        $operation = $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
+            'version' => 1, 'quantity' => 20, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'RECEPTOR-PESO',
+        ])->assertCreated();
+        $destination = Flock::query()->where('code', 'RECEPTOR-PESO')->firstOrFail();
+
+        // Mutación: registra un pesaje posterior sobre el receptor.
+        $this->command('POST', '/pesajes', [
+            'flock_id' => $destination->public_id,
+            'mode' => 'individual',
+            'unit' => 'g',
+            'measurements' => [['weight' => '20.0']],
+        ])->assertCreated();
+
+        // Request: rechaza la compensación porque el pesaje quedó journalizado.
+        $this->command('POST', '/redistributions/'.$operation->json('data.movement.id').'/reversals', [
+            'version' => 2, 'destination_version' => 1, 'reason' => 'El pesaje ya fue registrado',
+        ])->assertConflict();
+        $this->assertDatabaseCount('flock_movements', 1);
+    }
+
+    // Flujo: deshace una unión total y reactiva el origen sólo con su galpón libre.
+    public function test_total_existing_reversal_restores_source_and_receiver_snapshots(): void
+    {
+        // Preparación: une un lote origen a un receptor compatible en otro galpón.
+        $this->signIn();
+        $breed = Breed::factory()->create();
+        $source = $this->flock(100, $breed);
+        $destination = $this->flock(20, $breed);
+        $operation = $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
+            'version' => 1, 'quantity' => 100, 'destination_flock_id' => $destination->public_id, 'destination_version' => 1,
+        ])->assertCreated()->assertJsonPath('data.movement.type', 'total_existing');
+        $movement = FlockMovement::query()->firstOrFail();
+
+        // Request: compensa la unión y restaura ambos estados históricos.
+        $this->command('POST', '/redistributions/'.$operation->json('data.movement.id').'/reversals', [
+            'version' => 2, 'destination_version' => 2, 'reason' => 'Unión anulada',
+        ])->assertOk()->assertJsonPath('data.flock.current_quantity', 100)
+            ->assertJsonPath('data.flock.status', 'active')
+            ->assertJsonPath('data.destination_flock.current_quantity', 20);
+        $this->assertSame(FlockStatus::Active, $source->fresh()->status);
+        $this->assertSame(20, $destination->fresh()->current_quantity);
+        $this->assertDatabaseHas('flock_movements', ['type' => 'redistribution_reversal', 'reverses_movement_id' => $movement->id]);
+    }
+
+    // Flujo: impide devolver un traslado total a un galpón ocupado después.
+    public function test_total_reversal_rejects_new_occupation_of_return_house(): void
+    {
+        // Preparación: traslada el lote completo y ocupa su galpón anterior.
+        $this->signIn();
+        $source = $this->flock();
+        $oldHouse = $source->poultry_house_id;
+        $destination = PoultryHouse::factory()->create();
+        $operation = $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
+            'version' => 1, 'quantity' => 100, 'destination_poultry_house_id' => $destination->id,
+        ])->assertCreated();
+        $this->flock(10, $source->breed, PoultryHouse::query()->findOrFail($oldHouse));
+
+        // Request: rechaza la reversión porque el galpón de retorno dejó de estar libre.
+        $this->command('POST', '/redistributions/'.$operation->json('data.movement.id').'/reversals', [
+            'version' => 2, 'reason' => 'El galpón de retorno fue ocupado',
+        ])->assertConflict();
+        $this->assertSame($destination->id, $source->fresh()->poultry_house_id);
+        $this->assertDatabaseCount('flock_movements', 1);
+    }
+
+    // Flujo: una redistribución histórica sin verificación completa nunca se autoriza por ausencia de journal.
+    public function test_unverified_legacy_redistribution_is_not_reversible(): void
+    {
+        // Preparación: crea una redistribución y la marca como historial incierto.
+        $this->signIn();
+        $source = $this->flockWithPlan();
+        $house = PoultryHouse::factory()->create();
+        $operation = $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
+            'version' => 1, 'quantity' => 20, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'LEGACY-UNCERTAIN',
+        ])->assertCreated();
+        $movement = FlockMovement::query()->firstOrFail();
+        $movement->forceFill(['reversal_verified' => false])->save();
+
+        // Request: rechaza la compensación sin tocar las fotografías ni las cantidades.
+        $this->command('POST', '/redistributions/'.$operation->json('data.movement.id').'/reversals', [
+            'version' => 2, 'destination_version' => 1, 'reason' => 'Historial incompleto',
+        ])->assertConflict();
+        $this->assertDatabaseCount('flock_movements', 1);
+        $this->assertSame(80, $source->fresh()->current_quantity);
     }
 
     // Flujo: la auditoría y los cambios de ambos lotes forman una única transacción.
@@ -226,8 +419,8 @@ final class RedistributionEndpointTest extends LotsTestCase
         $this->mock(AuditRecorder::class)->shouldReceive('record')->once()->andThrow(new RuntimeException('Fallo controlado de redistribución'));
 
         // Request: comprueba reversión de las dos cantidades y de la operación.
-        $this->command('POST', "/lotes/{$source->public_id}/redistribuciones", [
-            'version' => 1, 'cantidad' => 10, 'lote_destino_id' => $destination->public_id, 'version_destino' => 1,
+        $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
+            'version' => 1, 'quantity' => 10, 'destination_flock_id' => $destination->public_id, 'destination_version' => 1,
         ])->assertStatus(500);
         $this->assertSame(100, $source->fresh()->current_quantity);
         $this->assertSame(20, $destination->fresh()->current_quantity);
@@ -240,16 +433,17 @@ final class RedistributionEndpointTest extends LotsTestCase
     {
         // Preparación: fija una clave de operación para ambos envíos.
         $this->signIn();
-        $flock = $this->flock();
+        $flock = $this->flockWithPlan();
         $house = PoultryHouse::factory()->create();
-        $payload = ['version' => 1, 'cantidad' => 10, 'galpon_destino_id' => $house->id, 'codigo_destino' => 'REPLAY'];
+        $payload = ['version' => 1, 'quantity' => 10, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'REPLAY'];
         $key = (string) Str::uuid();
 
         // Requests: repite exactamente la misma redistribución.
-        $first = $this->command('POST', "/lotes/{$flock->public_id}/redistribuciones", $payload, $key)->assertCreated();
-        $second = $this->command('POST', "/lotes/{$flock->public_id}/redistribuciones", $payload, $key)->assertCreated();
+        $first = $this->command('POST', "/flocks/{$flock->public_id}/redistributions", $payload, $key)->assertCreated();
+        $second = $this->command('POST', "/flocks/{$flock->public_id}/redistributions", $payload, $key)->assertCreated();
         $this->assertSame($first->json(), $second->json());
         $this->assertDatabaseCount('flocks', 2);
         $this->assertDatabaseCount('flock_movements', 1);
+        $this->assertDatabaseCount('flock_activities', 2);
     }
 }

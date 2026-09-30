@@ -110,9 +110,6 @@ return new class extends Migration
             $table->foreignId('flock_id')->constrained()->restrictOnDelete();
             $table->foreignId('poultry_house_id')->constrained()->restrictOnDelete();
             $table->foreignId('production_unit_id')->constrained()->restrictOnDelete();
-            $table->foreignId('product_id')->constrained()->restrictOnDelete();
-            $table->foreignId('stock_location_id')->constrained()->restrictOnDelete();
-            $table->foreignId('inventory_movement_id')->nullable()->constrained()->restrictOnDelete();
             $table->unsignedInteger('quantity');
             $table->timestampTz('occurred_at');
             $table->text('notes')->nullable();

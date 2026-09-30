@@ -2,21 +2,34 @@
 
 namespace App\Models\SuppliersAndCatalogs;
 
+use App\Enums\SuppliersAndCatalogs\BaseUnit;
+use App\Enums\SuppliersAndCatalogs\ProductKind;
+use App\Enums\SuppliersAndCatalogs\ProductStatus;
 use App\Models\Inventory\InventoryMovementLine;
 use App\Models\Inventory\StockBalance;
-use App\Modules\SuppliersAndCatalogs\Domain\Enums\BaseUnit;
-use App\Modules\SuppliersAndCatalogs\Domain\Enums\ProductKind;
-use App\Modules\SuppliersAndCatalogs\Domain\Enums\ProductStatus;
 use Database\Factories\SuppliersAndCatalogs\ProductFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
-/** @property BaseUnit $base_unit */
-#[Fillable(['sku', 'name', 'kind', 'base_unit', 'stock_tracked', 'status'])]
+/**
+ * @property int $id
+ * @property string $sku
+ * @property string $name
+ * @property string $normalized_name
+ * @property BaseUnit $base_unit
+ * @property ProductKind $kind
+ * @property ProductStatus $status
+ * @property bool $stock_tracked
+ * @property bool $has_movement_lines
+ * @property bool $has_stock_balances
+ */
+#[Fillable(['sku', 'name', 'kind', 'base_unit', 'stock_tracked', 'status', 'system_key'])]
 class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */
@@ -30,7 +43,24 @@ class Product extends Model
             'base_unit' => BaseUnit::class,
             'stock_tracked' => 'boolean',
             'status' => ProductStatus::class,
+            'has_movement_lines' => 'boolean',
+            'has_stock_balances' => 'boolean',
         ];
+    }
+
+    /**
+     * Load the data ProductResource needs without querying once per product.
+     *
+     * @param  Builder<Product>  $query
+     */
+    public function scopeWithResourceMetadata(Builder $query): Builder
+    {
+        return $query
+            ->with(['vaccine:id,product_id,public_id'])
+            ->withExists([
+                'movementLines as has_movement_lines',
+                'stockBalances as has_stock_balances',
+            ]);
     }
 
     /** Normaliza el nombre para mantener la unicidad sin alterar el valor mostrado. */
@@ -60,5 +90,11 @@ class Product extends Model
     public function movementLines(): HasMany
     {
         return $this->hasMany(InventoryMovementLine::class);
+    }
+
+    /** @return HasOne<Vaccine, $this> */
+    public function vaccine(): HasOne
+    {
+        return $this->hasOne(Vaccine::class);
     }
 }

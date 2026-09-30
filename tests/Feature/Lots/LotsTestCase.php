@@ -2,9 +2,13 @@
 
 namespace Tests\Feature\Lots;
 
+use App\Actions\ManagementPlans\AssignFlockPlanAction;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\Lots\Breed;
 use App\Models\Lots\Flock;
+use App\Models\Lots\FlockMovement;
+use App\Models\ManagementPlans\PlanTemplate;
+use App\Models\ManagementPlans\PlanTemplateActivity;
 use App\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Str;
@@ -36,6 +40,81 @@ abstract class LotsTestCase extends TestCase
             'breed_id' => $breed?->id ?? Breed::factory(),
             'poultry_house_id' => $house?->id ?? PoultryHouse::factory(),
         ]);
+    }
+
+    /** @param list<array<string, mixed>> $activities */
+    protected function flockWithPlan(int $quantity = 100, ?Breed $breed = null, ?PoultryHouse $house = null, array $activities = []): Flock
+    {
+        $flock = $this->flock($quantity, $breed, $house);
+        $actor = User::query()->findOrFail(auth()->id());
+        $selection = $this->createPublishedPlanSelection($actor, $activities);
+        $this->attachPublishedPlan($flock, $actor, $selection);
+
+        return $flock;
+    }
+
+    /** @param list<array<string, mixed>> $activities
+     * @return array{plan_template_id: string, plan_template_version: int}
+     */
+    protected function createPublishedPlanSelection(User $actor, array $activities = []): array
+    {
+        $template = PlanTemplate::factory()->published()->create([
+            'name' => 'Plan de prueba', 'description' => 'Plantilla publicada para pruebas.', 'created_by' => $actor->id,
+        ]);
+        $version = $template->versions()->where('number', 1)->firstOrFail();
+        $activities = $activities === [] ? [[
+            'type' => 'weighing', 'title' => 'Pesaje de prueba', 'timing_kind' => 'week', 'start_week' => 1,
+        ]] : $activities;
+        foreach ($activities as $index => $activity) {
+            $attributes = [
+                'sort_order' => $index + 1, 'type' => 'weighing', 'title' => 'Actividad de prueba '.($index + 1),
+                'timing_kind' => 'week', 'start_week' => 1, 'conditional' => false, 'condition' => null,
+                'notes' => null, 'catalog_type' => null, 'catalog_id' => null, 'catalog_snapshot' => null,
+                ...$activity,
+            ];
+            if ($index === 0) {
+                $version->activities()->firstOrFail()->forceFill($attributes)->save();
+
+                continue;
+            }
+            PlanTemplateActivity::factory()->for($version, 'version')->create($attributes);
+        }
+
+        return ['plan_template_id' => $template->public_id, 'plan_template_version' => 1];
+    }
+
+    /** @param array{plan_template_id: string, plan_template_version: int} $selection */
+    protected function attachPublishedPlan(Flock $flock, User $actor, array $selection): void
+    {
+        $this->app->make(AssignFlockPlanAction::class)->assignPublished(
+            $flock,
+            $selection['plan_template_id'],
+            $selection['plan_template_version'],
+            $actor,
+            (string) Str::uuid(),
+            'test',
+        );
+    }
+
+    protected function flockWithHistory(int $quantity = 100, ?Breed $breed = null, ?PoultryHouse $house = null): Flock
+    {
+        // Preparación: crea la admisión histórica que la proyección de pesajes consulta.
+        $flock = $this->flock($quantity, $breed, $house);
+        FlockMovement::factory()->create([
+            'destination_flock_id' => $flock->id,
+            'quantity' => $quantity,
+            'occurred_at' => $flock->established_at,
+            'created_by' => auth()->id(),
+            'after' => [$flock->public_id => [
+                'public_id' => $flock->public_id,
+                'poultry_house_id' => $flock->poultry_house_id,
+                'production_unit_id' => $flock->production_unit_id,
+                'current_quantity' => $quantity,
+                'entry_date' => $flock->entry_date->format('Y-m-d'),
+            ]],
+        ]);
+
+        return $flock;
     }
 
     /** @param array<string, mixed> $payload */

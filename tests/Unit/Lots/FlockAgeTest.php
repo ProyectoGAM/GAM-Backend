@@ -2,7 +2,7 @@
 
 namespace Tests\Unit\Lots;
 
-use App\Modules\Lots\Domain\ValueObjects\FlockAge;
+use App\ValueObjects\Lots\FlockAge;
 use Carbon\CarbonImmutable;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;

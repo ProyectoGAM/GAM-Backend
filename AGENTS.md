@@ -168,3 +168,12 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Run `vendor/bin/phpunit` to call the test runner directly. It accepts the same file path and `--filter=testName` arguments.
 
 </laravel-boost-guidelines>
+
+## Identity and access invariants
+
+- Public registration is intentionally unavailable; only the authenticated management endpoint creates users.
+- Web personal sessions use Sanctum stateful cookies and CSRF. Native personal sessions use expiring Bearer PATs.
+- Shared-device credentials are separate from personal tokens. Native requests use X-Shared-Device-Token; web requests use the HttpOnly gam_shared_device cookie.
+- Shared employee requests require the current auth_sessions record, X-GAM-Session and the current device generation.
+- PIN is an exact four-character numeric string, hashed with Argon2id after the deployment pepper HMAC. Never log or audit passwords, PINs, tokens or device secrets.
+- Admin, delivery and employee channel permissions are checked server-side; local frontend mode and role data are never authorization evidence.

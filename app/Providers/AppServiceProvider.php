@@ -24,9 +24,21 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         RateLimiter::for('auth', function (Request $request): Limit {
-            $email = Str::lower($request->string('correo_electronico')->toString());
+            $email = Str::lower($request->string('email')->toString());
 
             return Limit::perMinute(5)->by($email.'|'.$request->ip());
+        });
+
+        RateLimiter::for('auth-account', fn (Request $request): Limit => Limit::perMinute(5)->by(
+            'auth-account|'.Str::lower($request->string('email')->toString()),
+        ));
+
+        RateLimiter::for('pairing', fn (Request $request): Limit => Limit::perMinute(5)->by('pairing|'.$request->ip()));
+        RateLimiter::for('pin', fn (Request $request): Limit => Limit::perMinute(30)->by('pin|'.$request->ip()));
+        RateLimiter::for('shared-device', function (Request $request): Limit {
+            $device = $request->attributes->get('shared_device');
+
+            return Limit::perMinute(30)->by('shared-device|'.($device?->getKey() ?? $request->ip()));
         });
 
         RateLimiter::for('reporting', function (Request $request): Limit {
@@ -34,6 +46,23 @@ class AppServiceProvider extends ServiceProvider
             $key = $actor === null ? $request->ip() : $actor->getAuthIdentifier();
 
             return Limit::perMinute(30)->by('reporting|'.$key);
+        });
+
+        RateLimiter::for('delivery-commands', function (Request $request): Limit {
+            $actor = $request->user();
+            $key = $actor === null ? $request->ip() : $actor->getAuthIdentifier();
+
+            return Limit::perMinute(60)->by('delivery-command|'.$key);
+        });
+
+        RateLimiter::for('delivery-location', function (Request $request): Limit {
+            $actor = $request->user();
+            $delivery = $request->route('reparto');
+            $deliveryKey = is_object($delivery) && method_exists($delivery, 'getRouteKey')
+                ? $delivery->getRouteKey()
+                : (string) $delivery;
+
+            return Limit::perMinute(120)->by('delivery-location|'.($actor?->getAuthIdentifier() ?? $request->ip()).'|'.$deliveryKey);
         });
     }
 }

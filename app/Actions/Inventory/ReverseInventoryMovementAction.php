@@ -1,0 +1,52 @@
+<?php
+
+namespace App\Actions\Inventory;
+
+use App\DTO\Inventory\InventoryMovementCommand;
+use App\Enums\Inventory\InventoryMovementType;
+use App\Exceptions\Inventory\InventoryConflict;
+use App\Models\Inventory\InventoryMovement;
+use App\Models\User;
+use Brick\Math\BigDecimal;
+use Illuminate\Support\Facades\DB;
+
+final readonly class ReverseInventoryMovementAction
+{
+    public function __construct(private RecordInventoryMovementAction $recordMovement) {}
+
+    /** @param array<string, mixed> $attributes */
+    public function execute(InventoryMovement $movement, array $attributes, User $actor, string $source = 'api'): InventoryMovement
+    {
+        return DB::transaction(function () use ($movement, $attributes, $actor, $source): InventoryMovement {
+            $locked = InventoryMovement::query()
+                ->whereKey($movement->getKey())
+                ->lockForUpdate()
+                ->firstOrFail()
+                ->load('lines');
+            if (InventoryMovement::query()->where('reverses_movement_id', $locked->getKey())->exists()) {
+                throw new InventoryConflict('El movimiento ya fue revertido.');
+            }
+
+            $lines = array_map(static fn ($line): array => [
+                'product_id' => (int) $line->product_id,
+                'stock_location_id' => (int) $line->stock_location_id,
+                'on_hand_delta' => (string) BigDecimal::of((string) $line->on_hand_delta)->negated(),
+            ], $locked->lines->all());
+
+            return $this->recordMovement->execute(new InventoryMovementCommand(
+                type: InventoryMovementType::Reversal,
+                lines: $lines,
+                operationId: (string) ($attributes['operation_id'] ?? $attributes['idempotency_key']),
+                referenceType: 'inventory_movement',
+                referenceId: (string) $locked->getKey(),
+                reason: (string) $attributes['reason'],
+                reversesMovementId: (int) $locked->getKey(),
+                idempotencyPayload: [
+                    'type' => InventoryMovementType::Reversal->value,
+                    'movement_id' => (int) $locked->getKey(),
+                    'reason' => (string) $attributes['reason'],
+                ],
+            ), $actor, $source);
+        }, 3);
+    }
+}

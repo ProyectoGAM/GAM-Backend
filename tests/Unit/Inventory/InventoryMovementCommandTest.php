@@ -2,8 +2,8 @@
 
 namespace Tests\Unit\Inventory;
 
-use App\Modules\Inventory\Application\Data\InventoryMovementCommand;
-use App\Modules\Inventory\Domain\Enums\InventoryMovementType;
+use App\DTO\Inventory\InventoryMovementCommand;
+use App\Enums\Inventory\InventoryMovementType;
 use PHPUnit\Framework\TestCase;
 
 final class InventoryMovementCommandTest extends TestCase

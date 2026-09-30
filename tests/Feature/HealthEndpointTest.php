@@ -8,10 +8,10 @@ final class HealthEndpointTest extends TestCase
 {
     public function test_the_health_endpoint_returns_a_spanish_success_response(): void
     {
-        $this->getJson('/estado')
+        $this->getJson('/status')
             ->assertOk()
             ->assertJson([
-                'estado' => 'ok',
+                'status' => 'ok',
                 'message' => 'La aplicación está disponible.',
             ]);
     }

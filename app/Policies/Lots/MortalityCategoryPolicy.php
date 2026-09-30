@@ -4,7 +4,7 @@ namespace App\Policies\Lots;
 
 use App\Models\Lots\MortalityCategory;
 use App\Models\User;
-use App\Modules\Lots\Application\Services\LotsAuthorization;
+use App\Services\Lots\LotsAuthorization;
 
 final readonly class MortalityCategoryPolicy
 {

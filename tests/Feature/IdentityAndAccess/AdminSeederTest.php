@@ -51,8 +51,8 @@ final class AdminSeederTest extends TestCase
         $this->seed();
 
         // Acción 2: inicia sesión con las credenciales sembradas.
-        $response = $this->postJson('/api/v1/autenticacion/inicio-sesion', [
-            'correo_electronico' => config('auth.admin.email'),
+        $response = $this->postJson('/api/v1/auth/login', [
+            'email' => config('auth.admin.email'),
             'password' => config('auth.admin.password'),
             'device_name' => 'seed-test',
         ]);
@@ -61,9 +61,9 @@ final class AdminSeederTest extends TestCase
 
         // Acción 3: usa el token para consultar administración.
         $this->withToken($response->json('access_token'))
-            ->getJson('/administracion')
+            ->getJson('/administration')
             ->assertOk()
-            ->assertJsonPath('user.correo_electronico', config('auth.admin.email'));
+            ->assertJsonPath('user.email', config('auth.admin.email'));
     }
 
     // Flujo: elimina lógicamente al administrador, vuelve a sembrar y verifica su restauración.

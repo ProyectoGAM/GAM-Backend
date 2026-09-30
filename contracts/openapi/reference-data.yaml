@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: API de opciones de referencia
+  title: API de opciones de reference
   version: 1.0.0
   description: |
     Catálogos vivos para construir formularios y filtros sin pedir al usuario
@@ -14,7 +14,7 @@ tags:
   - name: Referencias
     description: Opciones de entidades, estados y valores de dominio.
 paths:
-  /referencias/opciones:
+  /reference/options:
     get:
       tags: [Referencias]
       operationId: listarOpcionesDeReferencia
@@ -35,7 +35,7 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ReferenceOptions'
-        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
 components:
   securitySchemes:
     bearerAuth:
@@ -59,25 +59,25 @@ components:
         items: { $ref: '#/components/schemas/Option' }
     ReferenceOptions:
       type: object
-      required: [departamentos, localidades, unidades_productivas, galpones, proveedores, productos, ubicaciones_stock, saldos_inventario, movimientos, tipos, estados, auditoria]
+      required: [departments, localities, production_units, poultry_houses, suppliers, products, stock_locations, inventory_balances, movements, types, statuses, audit]
       properties:
-        departamentos: { type: array, items: { $ref: '#/components/schemas/Option' } }
-        localidades: { type: array, items: { $ref: '#/components/schemas/Option' } }
-        unidades_productivas: { type: array, items: { $ref: '#/components/schemas/Option' } }
-        galpones: { type: array, items: { $ref: '#/components/schemas/Option' } }
-        proveedores: { type: array, items: { $ref: '#/components/schemas/Option' } }
-        productos: { type: array, items: { $ref: '#/components/schemas/Option' } }
-        ubicaciones_stock: { type: array, items: { $ref: '#/components/schemas/Option' } }
-        saldos_inventario: { type: array, items: { $ref: '#/components/schemas/Option' } }
-        movimientos: { type: array, items: { $ref: '#/components/schemas/Option' } }
-        tipos: { $ref: '#/components/schemas/OptionMap' }
-        estados: { $ref: '#/components/schemas/OptionMap' }
-        auditoria:
+        departments: { type: array, items: { $ref: '#/components/schemas/Option' } }
+        localities: { type: array, items: { $ref: '#/components/schemas/Option' } }
+        production_units: { type: array, items: { $ref: '#/components/schemas/Option' } }
+        poultry_houses: { type: array, items: { $ref: '#/components/schemas/Option' } }
+        suppliers: { type: array, items: { $ref: '#/components/schemas/Option' } }
+        products: { type: array, items: { $ref: '#/components/schemas/Option' } }
+        stock_locations: { type: array, items: { $ref: '#/components/schemas/Option' } }
+        inventory_balances: { type: array, items: { $ref: '#/components/schemas/Option' } }
+        movements: { type: array, items: { $ref: '#/components/schemas/Option' } }
+        types: { $ref: '#/components/schemas/OptionMap' }
+        statuses: { $ref: '#/components/schemas/OptionMap' }
+        audit:
           type: object
-          required: [eventos, origenes]
+          required: [events, sources]
           properties:
-            eventos: { type: array, items: { $ref: '#/components/schemas/Option' } }
-            origenes: { type: array, items: { $ref: '#/components/schemas/Option' } }
+            events: { type: array, items: { $ref: '#/components/schemas/Option' } }
+            sources: { type: array, items: { $ref: '#/components/schemas/Option' } }
   responses:
-    NoAutenticado:
+    Unauthenticated:
       description: El token no existe o ya no es válido.

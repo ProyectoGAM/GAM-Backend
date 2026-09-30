@@ -2,6 +2,7 @@
 
 namespace App\Models\Lots;
 
+use App\Models\ManagementPlans\FlockPlanActivity;
 use Carbon\CarbonImmutable;
 use Database\Factories\Lots\FlockMovementFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,6 +14,7 @@ use Illuminate\Support\Str;
  * @property int $id
  * @property string $public_id
  * @property string $operation_id
+ * @property int|null $flock_plan_activity_id
  * @property string $type
  * @property int|null $source_flock_id
  * @property int|null $destination_flock_id
@@ -25,6 +27,7 @@ use Illuminate\Support\Str;
  * @property CarbonImmutable $occurred_at
  * @property int $created_by
  * @property int|null $reverses_movement_id
+ * @property bool $reversal_verified
  * @property-read Flock|null $sourceFlock
  * @property-read Flock|null $destinationFlock
  * @property-read FlockMovement|null $reversedMovement
@@ -54,13 +57,22 @@ class FlockMovement extends Model
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['before' => 'array', 'after' => 'array', 'quantity' => 'integer', 'occurred_at' => 'immutable_datetime'];
+        return [
+            'before' => 'array', 'after' => 'array', 'quantity' => 'integer',
+            'occurred_at' => 'immutable_datetime', 'reversal_verified' => 'boolean',
+        ];
     }
 
     /** @return BelongsTo<Flock, $this> */
     public function sourceFlock(): BelongsTo
     {
         return $this->belongsTo(Flock::class, 'source_flock_id');
+    }
+
+    /** @return BelongsTo<FlockPlanActivity, $this> */
+    public function planActivity(): BelongsTo
+    {
+        return $this->belongsTo(FlockPlanActivity::class, 'flock_plan_activity_id');
     }
 
     /** @return BelongsTo<Flock, $this> */

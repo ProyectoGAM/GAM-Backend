@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\FarmStructure;
 
+use App\Actions\FarmStructure\UpdateMaintenanceAction;
 use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\FarmStructure\Maintenance;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\User;
-use App\Modules\FarmStructure\Application\Actions\UpdateMaintenanceAction;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\FarmStructure\MaintenanceDemoSeeder;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;

@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\Lots;
 
-use App\Modules\Lots\Http\Resources\EggCollectionResource;
-use App\Modules\Lots\Http\Resources\FlockMovementResource;
-use App\Modules\Lots\Http\Resources\FlockResource;
-use App\Modules\Lots\Http\Resources\LotsCatalogResource;
-use App\Modules\Lots\Http\Resources\MortalityResource;
+use App\Http\Resources\Lots\EggCollectionResource;
+use App\Http\Resources\Lots\FlockMovementResource;
+use App\Http\Resources\Lots\FlockResource;
+use App\Http\Resources\Lots\LotsCatalogResource;
+use App\Http\Resources\Lots\MortalityResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Symfony\Component\Yaml\Yaml;
@@ -27,7 +27,8 @@ final class LotsContractTest extends TestCase
         $contract = $this->contract();
         $actual = [];
         foreach (Route::getRoutes() as $route) {
-            if (! str_starts_with((string) $route->getName(), 'api.v1.lots.')) {
+            $routeName = (string) $route->getName();
+            if (! str_starts_with($routeName, 'api.v1.lots.') && ! str_starts_with($routeName, 'api.v1.egg-stock.')) {
                 continue;
             }
             foreach ($route->methods() as $method) {
@@ -48,10 +49,10 @@ final class LotsContractTest extends TestCase
                 }
             }
         }
-        $this->assertCount(28, $actual);
+        $this->assertCount(37, $actual);
         $this->assertEqualsCanonicalizing($expected, $actual);
         $this->assertSame([['bearerAuth' => []]], $contract['security']);
-        $this->assertSame('05 — Lotes y cría', $contract['info']['title']);
+        $this->assertSame('09 — Producción y stock de huevos', $contract['info']['title']);
     }
 
     // Flujo: comprueba que los Resources no introduzcan campos distintos del contrato público.
@@ -66,7 +67,7 @@ final class LotsContractTest extends TestCase
             'EggCollection' => EggCollectionResource::class,
             'Catalog' => LotsCatalogResource::class,
         ];
-        $request = Request::create('/api/v1/lotes');
+        $request = Request::create('/api/v1/flocks');
 
         // Consulta: serializa sólo las claves y las compara con sus esquemas.
         foreach ($resources as $name => $resource) {

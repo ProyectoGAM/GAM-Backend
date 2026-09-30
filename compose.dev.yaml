@@ -55,6 +55,11 @@ x-app-environment: &app-environment
   SESSION_DOMAIN: localhost
   SESSION_SECURE_COOKIE: "false"
   SESSION_SAME_SITE: lax
+  SESSION_LIFETIME: 129600
+  SESSION_EXPIRE_ON_CLOSE: "false"
+
+  IDENTITY_PIN_PEPPER: ${IDENTITY_PIN_PEPPER:-gam-local-only-change-me}
+  IDENTITY_PIN_PEPPER_VERSION: ${IDENTITY_PIN_PEPPER_VERSION:-v1}
 
   MAIL_MAILER: smtp
   MAIL_HOST: mailpit
@@ -105,7 +110,7 @@ services:
     volumes:
       # PostgreSQL 18 usa /var/lib/postgresql como volumen principal.
       - postgres-data:/var/lib/postgresql
-      # Crea la base de testing solo al inicializar el volumen por primera vez.
+      # Crea la base de testing al inicializar un volumen nuevo.
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
@@ -113,6 +118,29 @@ services:
       timeout: 5s
       retries: 20
       start_period: 10s
+    networks:
+      - gam-dev
+
+  postgres-test-database:
+    image: postgres:18-alpine
+    restart: "no"
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-gam}
+      POSTGRES_USER: ${DB_USERNAME:-gam}
+      PGPASSWORD: ${DB_PASSWORD:-gam_dev_password}
+      PGHOST: postgres
+      PGPORT: 5432
+    volumes:
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        until pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"; do sleep 1; done
+        sh /docker-entrypoint-initdb.d/01-create-test-database.sh
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - gam-dev
 
@@ -164,24 +192,35 @@ services:
     security_opt:
       - no-new-privileges:true
 
-  api:
+  app-init:
     <<: *app-service
+    restart: "no"
     command:
       - /bin/sh
-      - -c
+      - -ec
       - |
-        set -eu
         php artisan optimize:clear
         php artisan migrate --force --isolated --no-interaction
-        if [ "$${APP_ENV:-production}" = "local" ]; then
-          php artisan db:seed --force --no-interaction
-        fi
-        exec /usr/local/sbin/php-fpm -F
-    expose:
-      - "9000"
     depends_on:
       postgres:
         condition: service_healthy
+      postgres-test-database:
+        condition: service_completed_successfully
+      storage-test-permissions:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  api:
+    <<: *app-service
+    command:
+      - php-fpm
+      - -F
+    expose:
+      - "9000"
+    depends_on:
+      app-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:
@@ -196,6 +235,34 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+
+  seed:
+    <<: *app-service
+    profiles:
+      - tools
+    restart: "no"
+    command:
+      - php
+      - artisan
+      - db:seed
+      - --force
+      - --no-interaction
+    depends_on:
+      app-init:
+        condition: service_completed_successfully
+        
+  storage-test-permissions:
+    image: alpine:3.22
+    restart: "no"
+    user: root
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        mkdir -p /var/www/html/storage/framework/testing/disks/local/report-exports
+        chown -R 33:33 /var/www/html/storage/framework/testing
+    volumes:
+      - storage-data:/var/www/html/storage
 
   horizon:
     <<: *app-service
@@ -252,9 +319,16 @@ services:
       BASE_URL: /docs
       URLS: >-
         [{"url":"/docs/openapi/authentication.yaml","name":"Autenticación"},
+         {"url":"/docs/openapi/lots.yaml","name":"Lotes y producción de huevos"},
+         {"url":"/docs/openapi/weighings.yaml","name":"Pesajes"},
+         {"url":"/docs/openapi/management-plans.yaml","name":"Planes de manejo"},
          {"url":"/docs/openapi/maintenance.yaml","name":"Mantenimientos"},
+         {"url":"/docs/openapi/medication.yaml","name":"Medicamentos"},
+         {"url":"/docs/openapi/vaccination.yaml","name":"Vacunas"},
+         {"url":"/docs/openapi/feed-stock.yaml","name":"Plantas de ración y stock"},
          {"url":"/docs/openapi/reporting.yaml","name":"Reportes e indicadores"},
-         {"url":"/docs/openapi/reference-data.yaml","name":"Opciones de referencia"}]
+         {"url":"/docs/openapi/reference-data.yaml","name":"Opciones de referencia"},
+         {"url":"/docs/openapi/deliveries.yaml","name":"Repartos"}]
       URLS_PRIMARY_NAME: Autenticación
     volumes:
       - ./contracts/openapi:/usr/share/nginx/html/openapi:ro
@@ -285,7 +359,7 @@ services:
         condition: service_healthy
     healthcheck:
       test:
-          ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/estado >/dev/null || exit 1"]
+          ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/status >/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5

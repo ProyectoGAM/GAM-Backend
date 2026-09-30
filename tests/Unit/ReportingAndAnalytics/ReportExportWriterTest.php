@@ -2,14 +2,14 @@
 
 namespace Tests\Unit\ReportingAndAnalytics;
 
+use App\DTO\ReportingAndAnalytics\ReportQueryData;
+use App\DTO\ReportingAndAnalytics\ReportResultData;
+use App\DTO\ReportingAndAnalytics\ReportSourceDefinition;
+use App\Enums\ReportingAndAnalytics\ReportExportFormat;
+use App\Enums\ReportingAndAnalytics\ReportExportStatus;
+use App\Interfaces\ReportingAndAnalytics\ReportSource;
 use App\Models\ReportingAndAnalytics\ReportExport;
-use App\Modules\ReportingAndAnalytics\Application\Data\ReportQueryData;
-use App\Modules\ReportingAndAnalytics\Application\Data\ReportResultData;
-use App\Modules\ReportingAndAnalytics\Application\Services\ReportExportWriter;
-use App\Modules\ReportingAndAnalytics\Domain\Contracts\ReportSource;
-use App\Modules\ReportingAndAnalytics\Domain\Data\ReportSourceDefinition;
-use App\Modules\ReportingAndAnalytics\Domain\Enums\ReportExportFormat;
-use App\Modules\ReportingAndAnalytics\Domain\Enums\ReportExportStatus;
+use App\Services\ReportingAndAnalytics\ReportExportWriter;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\LazyCollection;
 use Tests\TestCase;
@@ -63,7 +63,7 @@ final class ReportExportWriterTest extends TestCase
         return new ReportQueryData(
             sourceKey: 'test.source',
             definitionVersion: '1.0',
-            columns: ['nombre', 'valor'],
+            columns: ['name', 'value'],
             filters: [],
             from: null,
             to: null,
@@ -88,8 +88,8 @@ final class ReportExportWriterTest extends TestCase
                     description: 'Fuente usada por las pruebas del escritor.',
                     permission: 'reports.view',
                     columns: [
-                        'nombre' => ['label' => 'Nombre', 'tipo' => 'string'],
-                        'valor' => ['label' => 'Valor', 'tipo' => 'string'],
+                        'name' => ['label' => 'Nombre', 'type' => 'string'],
+                        'value' => ['label' => 'Valor', 'type' => 'string'],
                     ],
                     filters: [],
                     groupings: [],
@@ -97,7 +97,7 @@ final class ReportExportWriterTest extends TestCase
                     sorts: [],
                     formats: ['xlsx', 'pdf'],
                     limits: ['max_page_size' => 100, 'max_range_days' => 366, 'max_export_rows' => 100],
-                    defaultSort: 'nombre:asc',
+                    defaultSort: 'name:asc',
                 );
             }
 
@@ -109,8 +109,8 @@ final class ReportExportWriterTest extends TestCase
             public function rows(ReportQueryData $query): LazyCollection
             {
                 return LazyCollection::make([
-                    ['nombre' => 'normal', 'valor' => '12'],
-                    ['nombre' => 'formula', 'valor' => '=1+1'],
+                    ['name' => 'normal', 'value' => '12'],
+                    ['name' => 'formula', 'value' => '=1+1'],
                 ]);
             }
         };

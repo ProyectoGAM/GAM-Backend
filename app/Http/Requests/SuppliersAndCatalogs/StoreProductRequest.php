@@ -1,0 +1,64 @@
+<?php
+
+namespace App\Http\Requests\SuppliersAndCatalogs;
+
+use App\Enums\SuppliersAndCatalogs\BaseUnit;
+use App\Enums\SuppliersAndCatalogs\ProductKind;
+use App\Models\SuppliersAndCatalogs\Product;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
+
+final class StoreProductRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return $this->user()?->can('create', Product::class) ?? false;
+    }
+
+    /** @return array<string, array<int, mixed>> */
+    public function rules(): array
+    {
+        return [
+            'sku' => ['required', 'string', 'max:80'],
+            'name' => ['required', 'string', 'max:160'],
+            'kind' => ['required', Rule::enum(ProductKind::class)],
+            'base_unit' => ['required', Rule::enum(BaseUnit::class)],
+            'stock_tracked' => ['sometimes', 'boolean'],
+        ];
+    }
+
+    /** @return array<int, callable> */
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            $this->validateRawMaterialAttributes($validator);
+
+            if ($validator->errors()->hasAny(['sku', 'name'])) {
+                return;
+            }
+            if (Product::query()->where('sku', trim($this->string('sku')->toString()))->exists()) {
+                $validator->errors()->add('sku', 'El SKU ya está registrado.');
+            }
+            if (Product::query()->where('normalized_name', Str::lower(trim($this->string('name')->toString())))->exists()) {
+                $validator->errors()->add('name', 'El nombre del producto ya está registrado.');
+            }
+        }];
+    }
+
+    private function validateRawMaterialAttributes(Validator $validator): void
+    {
+        if ($validator->errors()->hasAny(['kind', 'base_unit', 'stock_tracked'])
+            || $this->input('kind') !== ProductKind::RawMaterial->value) {
+            return;
+        }
+
+        if ($this->input('base_unit') !== BaseUnit::Gram->value) {
+            $validator->errors()->add('base_unit', 'Las materias primas deben usar gramos como unidad base.');
+        }
+        if ($this->has('stock_tracked') && $this->boolean('stock_tracked') === false) {
+            $validator->errors()->add('stock_tracked', 'Las materias primas deben controlar stock.');
+        }
+    }
+}

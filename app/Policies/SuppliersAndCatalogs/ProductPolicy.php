@@ -9,7 +9,7 @@ final readonly class ProductPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $this->allowed($user, 'products.view');
+        return ! $user->trashed() && ($this->allowed($user, 'products.view') || $user->can('management-plans.manage'));
     }
 
     public function view(User $user, Product $product): bool
@@ -24,16 +24,31 @@ final readonly class ProductPolicy
 
     public function update(User $user, Product $product): bool
     {
+        if ($this->hasVaccine($product)) {
+            return ! $user->trashed() && $user->hasRole('admin');
+        }
+
         return $this->create($user);
     }
 
     public function changeStatus(User $user, Product $product): bool
     {
+        if ($this->hasVaccine($product)) {
+            return ! $user->trashed() && $user->hasRole('admin');
+        }
+
         return $this->create($user);
     }
 
     private function allowed(User $user, string $permission): bool
     {
         return $user->hasRole('admin') || $user->checkPermissionTo($permission);
+    }
+
+    private function hasVaccine(Product $product): bool
+    {
+        return $product->relationLoaded('vaccine')
+            ? $product->getRelation('vaccine') !== null
+            : $product->vaccine()->exists();
     }
 }

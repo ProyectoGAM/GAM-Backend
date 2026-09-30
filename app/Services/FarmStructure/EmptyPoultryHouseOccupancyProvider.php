@@ -1,0 +1,26 @@
+<?php
+
+namespace App\Services\FarmStructure;
+
+use App\Interfaces\FarmStructure\PoultryHouseOccupancyProvider;
+
+final readonly class EmptyPoultryHouseOccupancyProvider implements PoultryHouseOccupancyProvider
+{
+    public function occupancyFor(int $poultryHouseId): int
+    {
+        return 0;
+    }
+
+    /** @param list<int> $poultryHouseIds
+     * @return array<int, int>
+     */
+    public function occupanciesFor(array $poultryHouseIds): array
+    {
+        return array_fill_keys($poultryHouseIds, 0);
+    }
+
+    public function openFlocksCountFor(int $poultryHouseId): int
+    {
+        return 0;
+    }
+}

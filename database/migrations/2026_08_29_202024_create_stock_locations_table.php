@@ -18,6 +18,7 @@ return new class extends Migration
             $table->string('name', 160);
             $table->string('normalized_name', 160)->unique();
             $table->string('status', 20)->default('active');
+            $table->boolean('system_managed')->default(false);
             $table->timestamps();
 
             $table->index(['status', 'name']);

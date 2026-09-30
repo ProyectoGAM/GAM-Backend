@@ -2,11 +2,11 @@
 
 namespace Database\Factories\Lots;
 
+use App\Enums\Lots\FlockStatus;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\Lots\Breed;
 use App\Models\Lots\Flock;
 use App\Models\SuppliersAndCatalogs\Supplier;
-use App\Modules\Lots\Domain\Enums\FlockStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 

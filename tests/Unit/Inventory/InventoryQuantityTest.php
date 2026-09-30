@@ -2,8 +2,8 @@
 
 namespace Tests\Unit\Inventory;
 
-use App\Modules\Inventory\Domain\ValueObjects\InventoryQuantity;
-use App\Modules\SuppliersAndCatalogs\Domain\Enums\BaseUnit;
+use App\Enums\SuppliersAndCatalogs\BaseUnit;
+use App\ValueObjects\Inventory\InventoryQuantity;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 

@@ -2,12 +2,11 @@
 
 namespace Tests\Feature\Lots;
 
-use App\Models\Inventory\StockBalance;
+use App\Actions\Lots\UpdateFlockAction;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\User;
-use App\Modules\Lots\Application\Actions\UpdateFlockAction;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\LocalDemoDataSeeder;
 use Database\Seeders\Lots\LotsDemoSeeder;
@@ -35,9 +34,12 @@ final class LotsDemoSeederTest extends LotsTestCase
         $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-B', 'initial_quantity' => 40, 'current_quantity' => 48]);
         $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-C', 'current_quantity' => 0, 'status' => 'finished']);
         $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-D', 'current_quantity' => 25, 'status' => 'quarantined']);
-        $this->assertDatabaseCount('flocks', 4);
-        $this->assertDatabaseCount('flock_operations', 13);
-        $product = Product::query()->where('sku', 'HUEVO-LOTES-DEMO')->firstOrFail();
+        $this->assertDatabaseHas('flocks', ['code' => 'DEMO-EGG-PROD', 'current_quantity' => 120, 'status' => 'active']);
+        $this->assertDatabaseCount('flocks', 5);
+        $this->assertSame([], DB::table('flocks')->select('poultry_house_id')->whereIn('status', ['active', 'quarantined'])->groupBy('poultry_house_id')->havingRaw('COUNT(*) > 1')->pluck('poultry_house_id')->all());
+        $this->assertDatabaseCount('flock_operations', 21);
+        $product = Product::query()->where('system_key', 'generic_egg')->firstOrFail();
+        $this->assertDatabaseMissing('products', ['sku' => 'HUEVO-LOTES-DEMO']);
         $before = Flock::query()->orderBy('id')->get()->toArray();
         $auditCount = DB::table('activity_log')->where('log_name', 'lots')->count();
 
@@ -45,8 +47,9 @@ final class LotsDemoSeederTest extends LotsTestCase
         $this->seed(LocalDemoDataSeeder::class);
         $this->assertSame($before, Flock::query()->orderBy('id')->get()->toArray());
         $this->assertSame($auditCount, DB::table('activity_log')->where('log_name', 'lots')->count());
-        $this->assertDatabaseCount('flock_operations', 13);
-        $this->assertSame('12.000000', StockBalance::query()->where('product_id', $product->id)->firstOrFail()->on_hand_quantity);
+        $this->assertDatabaseCount('flock_operations', 21);
+        $this->assertSame([], DB::table('flocks')->select('poultry_house_id')->whereIn('status', ['active', 'quarantined'])->groupBy('poultry_house_id')->havingRaw('COUNT(*) > 1')->pluck('poultry_house_id')->all());
+        $this->assertDatabaseHas('stock_balances', ['product_id' => $product->id, 'on_hand_quantity' => '477.000000']);
         $this->assertSame(0, DB::table('activity_log')->where('log_name', 'lots')->where('source', '<>', 'seeder')->count());
     }
 

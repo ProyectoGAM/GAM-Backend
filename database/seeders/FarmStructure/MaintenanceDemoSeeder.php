@@ -2,10 +2,10 @@
 
 namespace Database\Seeders\FarmStructure;
 
+use App\Actions\FarmStructure\CreateMaintenanceAction;
 use App\Models\FarmStructure\Maintenance;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\User;
-use App\Modules\FarmStructure\Application\Actions\CreateMaintenanceAction;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;

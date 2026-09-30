@@ -1,0 +1,19 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 5
+    paths:
+        - app/Models/SuppliersAndCatalogs/Medicine.php
+        - app/Policies/SuppliersAndCatalogs/MedicinePolicy.php
+        - app/Providers/SuppliersAndCatalogsServiceProvider.php
+        - app/Actions/SuppliersAndCatalogs/CreateMedicineAction.php
+        - app/Queries/SuppliersAndCatalogs/ListMedicinesQuery.php
+        - app/Exceptions/SuppliersAndCatalogs/MedicineConflict.php
+        - app/Http/Controllers/SuppliersAndCatalogs/MedicineController.php
+        - app/Http/Requests/SuppliersAndCatalogs/StoreMedicineRequest.php
+        - app/Http/Requests/SuppliersAndCatalogs/ListMedicinesRequest.php
+        - app/Http/Resources/SuppliersAndCatalogs/MedicineResource.php
+        - database/factories/SuppliersAndCatalogs/MedicineFactory.php
+        - database/seeders/SuppliersAndCatalogs/MedicineDemoSeeder.php
+    tmpDir: storage/framework/cache/phpstan-medicines

@@ -2,10 +2,10 @@
 
 namespace Database\Factories\ReportingAndAnalytics;
 
+use App\Enums\ReportingAndAnalytics\ReportExportFormat;
+use App\Enums\ReportingAndAnalytics\ReportExportStatus;
 use App\Models\ReportingAndAnalytics\ReportExport;
 use App\Models\User;
-use App\Modules\ReportingAndAnalytics\Domain\Enums\ReportExportFormat;
-use App\Modules\ReportingAndAnalytics\Domain\Enums\ReportExportStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -26,7 +26,7 @@ final class ReportExportFactory extends Factory
             'operation_id' => Str::uuid()->toString(),
             'idempotency_key_hash' => hash('sha256', Str::uuid()->toString()),
             'payload_hash' => hash('sha256', fake()->sentence()),
-            'source_key' => 'inventario.saldos-stock',
+            'source_key' => 'inventory.stock-balances',
             'definition_version' => '1.0',
             'query' => [],
             'format' => ReportExportFormat::Xlsx,

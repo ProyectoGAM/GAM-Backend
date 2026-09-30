@@ -1,6 +1,6 @@
 GAM: http://localhost:8080
 
-Estado de la aplicación: http://localhost:8080/estado
+Estado de la aplicación: http://localhost:8080/status
 
 Mailpit: http://localhost:8025
 
@@ -9,7 +9,7 @@ Horizon: http://localhost:8080/horizon
 Pulse: http://localhost:8080/pulse
 
 
-[notion.md](notion.md) => módulos implementados pendientes de reflejar en el Kanban de Notion
+[notion.md](notion.md) => seguimiento de módulos completos y parcialmente implementados en el Kanban de Notion
 
 architecture.md => arquitectura
 
@@ -21,21 +21,39 @@ module-structure-example.md => ejemplo de estructura y alguna que otra aplicacio
 
 [lots-implementation.md](lots-implementation.md) => implementación e histórico de lotes y crías
 
+[egg-production-implementation.md](egg-production-implementation.md) => implementación e histórico de producción y stock de huevos
+
+[weighing-implementation.md](weighing-implementation.md) => implementación de pesajes individuales y grupales, configuración de referencia, correcciones, distribución y evolución; avance parcial del módulo 06
+
+[medication-implementation-plan.md](medication-implementation-plan.md) => catálogo de medicamentos implementado: alta y consulta sólo para administradores; avance parcial del módulo 06
+
+[contracts/openapi/medication.yaml](contracts/openapi/medication.yaml) => contrato API del catálogo de medicamentos
+
+[contracts/openapi/weighings.yaml](contracts/openapi/weighings.yaml) => contrato API de pesajes y configuración global de referencia
+
+[contracts/openapi/management-plans.yaml](contracts/openapi/management-plans.yaml) => contrato API de plantillas, planes de lote, ejecuciones e historial de manejos
+
 [contracts/openapi/authentication.yaml](contracts/openapi/authentication.yaml) => contrato API de identidad y acceso
 
 [contracts/openapi/reference-data.yaml](contracts/openapi/reference-data.yaml) => catálogos dinámicos para formularios y filtros
 
+[feed-stock-implementation.md](feed-stock-implementation.md) => plantas de ración y stock de ingredientes en gramos
+
+[contracts/openapi/feed-stock.yaml](contracts/openapi/feed-stock.yaml) => contrato API de plantas de ración y stock de ingredientes
+
 Swagger UI (desarrollo): [http://localhost:8080/docs/](http://localhost:8080/docs/)
 
 La documentación se sirve desde el servicio `swagger-ui` de Compose y permite
-seleccionar los contratos de autenticación, mantenimientos y reporting. El
+seleccionar los contratos de autenticación, Lotes/producción de huevos,
+mantenimientos, medicamentos, vacunas, pesajes, planes de manejo, plantas de
+ración y reporting. El
 botón **Authorize** usa el token Bearer emitido por el login.
 
 docker compose -f compose.dev.yaml up -d --build
 
 ## Tests y Artisan
 
-La estrategia oficial de testing ejecuta PHPUnit dentro del contenedor `api`. PHPUnit usa `DB_HOST=postgres` y la base aislada `gam_test`; las credenciales se heredan del servicio PostgreSQL definido en Compose.
+La estrategia oficial de testing ejecuta PHPUnit dentro del contenedor `api`. PHPUnit usa PostgreSQL en `DB_HOST=postgres` y deriva la base aislada agregando `_testing` al `DB_DATABASE` normal del entorno. Con la configuración local actual, la base normal es `gam` y la de testing es `gam_testing`; las credenciales se heredan del servicio PostgreSQL definido en Compose.
 
 ```bash
 docker compose -f compose.dev.yaml exec -T \
@@ -43,7 +61,6 @@ docker compose -f compose.dev.yaml exec -T \
   -e DB_CONNECTION=pgsql \
   -e DB_HOST=postgres \
   -e DB_PORT=5432 \
-  -e DB_DATABASE=gam_test \
   -e CACHE_STORE=array \
   -e QUEUE_CONNECTION=sync \
   -e SESSION_DRIVER=array \
@@ -52,22 +69,40 @@ docker compose -f compose.dev.yaml exec -T \
   -e PULSE_ENABLED=false \
   -e TELESCOPE_ENABLED=false \
   -e NIGHTWATCH_ENABLED=false \
-  api vendor/bin/phpunit --configuration phpunit.xml
+  -e IDENTITY_PIN_PEPPER= \
+  api php artisan test --compact
 docker compose -f compose.dev.yaml exec api php artisan optimize:clear
 ```
 
-Las variables de testing se inyectan antes de iniciar PHP para que el bootstrap de Laravel no pueda tomar la base de desarrollo del contenedor.
+El bootstrap de PHPUnit conserva la conexión PostgreSQL y transforma el nombre normal configurado en `<DB_DATABASE>_testing`. Además, `Tests\TestCase` aborta antes de los traits de base de datos si `APP_ENV` no es `testing`, la conexión no es PostgreSQL o la base efectiva no termina en `_testing`.
 
-El init script de PostgreSQL crea `gam_test` únicamente cuando se inicializa el volumen por primera vez. Si el volumen ya existe y la base aún no fue creada, ejecutá una vez:
+Compose crea esa base automáticamente dentro de la instancia PostgreSQL existente mediante `postgres-test-database`; el servicio es idempotente y también cubre volúmenes ya inicializados. Para verificar la conexión efectiva:
 
 ```bash
-docker compose -f compose.dev.yaml exec -T postgres sh -lc 'psql -U "$POSTGRES_USER" -d postgres -c "CREATE DATABASE gam_test;"'
+docker compose -f compose.dev.yaml exec -T \
+  -e APP_ENV=testing \
+  -e DB_CONNECTION=pgsql \
+  -e DB_HOST=postgres \
+  -e DB_PORT=5432 \
+  -e DB_DATABASE=gam_testing \
+  api php artisan config:show database.default
+docker compose -f compose.dev.yaml exec -T \
+  -e APP_ENV=testing \
+  -e DB_CONNECTION=pgsql \
+  -e DB_HOST=postgres \
+  -e DB_PORT=5432 \
+  -e DB_DATABASE=gam_testing \
+  api php artisan config:show database.connections.pgsql.database
 ```
+
+La salida debe ser `pgsql` y `gam_testing` (la base normal local es `gam`; en otro entorno, sustituir ambos nombres por `<DB_DATABASE>` y `<DB_DATABASE>_testing`).
+
+Para la comprobación adicional con un pepper temporal no persistido, reemplazá el valor vacío por `-e IDENTITY_PIN_PEPPER=test-only-temporary-value`.
 
 No ejecutes `docker compose down -v`: elimina los volúmenes y los datos existentes.
 ## Datos de prueba locales
 
-Cuando `APP_ENV=local`, `DatabaseSeeder` ejecuta también `LocalDemoDataSeeder` y carga datos ficticios pero coherentes de granjas, galpones, proveedores, productos, inventario, reservas, reportes y lotes con redistribuciones, mortalidad y recolección. La carga es idempotente y no se ejecuta en otros ambientes.
+Cuando `APP_ENV=local`, `DatabaseSeeder` ejecuta también `LocalDemoDataSeeder` y carga datos ficticios pero coherentes de granjas, galpones avícolas y plantas de ración, proveedores, productos, medicamentos, inventario, reservas, reportes, una plantilla publicada de plan de manejo y lotes con redistribuciones, mortalidad, recolección y pesajes. La carga es idempotente y no se ejecuta en otros ambientes.
 
 Para reconstruir la base local desde cero:
 
@@ -75,4 +110,22 @@ Para reconstruir la base local desde cero:
 docker compose -f compose.dev.yaml exec api php artisan migrate:fresh --seed --force
 ```
 
+Para una base local que conserva el demo anterior, esta reconstrucción reemplaza
+los balances y movimientos de maíz y soja que estaban expresados en kg por su
+representación canónica en gramos.
+
+Las decisiones para corregir, regenerar o reconstruir datos de prueba del entorno local no requieren confirmación adicional: son datos ficticios, no pertenecen a producción y su reemplazo no afecta negativamente el desarrollo. Esta autorización se limita a `APP_ENV=local` y no aplica a datos reales ni a otros entornos.
+
 Cada módulo nuevo debe incluir su seeder de datos demo y registrarlo en `LocalDemoDataSeeder` (o en un seeder del módulo invocado por este), para que sus datos estén disponibles automáticamente cuando el ambiente sea local.
+
+## Autenticación multi-login
+
+Define ADMIN_PASSWORD e IDENTITY_PIN_PEPPER en el entorno antes de sembrar datos. La web usa cookies stateful y CSRF; nativo usa PAT Bearer. El acceso compartido se vincula con un código de 10 caracteres y conserva una credencial de dispositivo independiente.
+
+La guía operativa y las rutas están en identity-access-implementation.md. El contrato OpenAPI está en contracts/openapi/authentication.yaml.
+
+Pruebas backend con Docker Compose:
+
+    docker compose -f compose.dev.yaml exec -T api vendor/bin/phpunit --configuration phpunit.xml tests/Feature/IdentityAndAccess
+
+Si se revoca un dispositivo, hay que vincularlo otra vez; si se deshabilita o cambia el PIN, el empleado vuelve al selector aunque la tablet siga vinculada.

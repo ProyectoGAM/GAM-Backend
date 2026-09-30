@@ -34,7 +34,7 @@ No depende de Lotes, Alertas ni Notificaciones para esta etapa.
 - Las escrituras usan FormRequests, Policies, Actions, transacciones PostgreSQL y auditoría síncrona. Las lecturas usan Queries y Resources sin relaciones implícitas en la respuesta.
 - Se creó `Money` como valor inmutable compartido. El costo se almacena en `DECIMAL(19,4)`, se recibe como texto decimal y se normaliza según la moneda sin utilizar float ni redondear silenciosamente.
 - Se agregó idempotencia al alta y control de versión para correcciones y cancelaciones.
-- Se integraron las convenciones de `main`: campos y filtros HTTP en español mediante `PublicInputMapper`, conservando los identificadores internos en inglés.
+- Se integraron las convenciones de `main`: los campos y filtros HTTP se publican con identificadores en inglés, conservando los textos humanos en español.
 - Se agregó `MaintenanceDemoSeeder`, invocado por `LocalDemoDataSeeder` sólo en ambiente local. Crea cuatro mantenimientos pasados para los tres galpones demo mediante la Action y su auditoría, identificada con origen `seeder`. Repetirlo no duplica hechos ni sobrescribe fechas o correcciones existentes.
 - Se actualizaron el README y la documentación de arquitectura. No se agregaron dependencias.
 
@@ -60,24 +60,24 @@ Los permisos son globales en la empresa. No hay asignaciones usuario–UP, filtr
 
 El alta exige `Idempotency-Key` como UUID. La clave se limita al actor autenticado: un reintento con igual contenido normalizado devuelve el mantenimiento existente sin duplicar la auditoría; si el contenido cambia, devuelve `409`. La repetición puede devolver el estado actual de un registro corregido o cancelado.
 
-Las correcciones y cancelaciones exigen `version` y `motivo`. La Action bloquea la fila y verifica la versión antes de escribir; una versión obsoleta devuelve `409`. Cada operación confirmada incrementa la versión.
+Las correcciones y cancelaciones exigen `version` y `reason`. La Action bloquea la fila y verifica la versión antes de escribir; una versión obsoleta devuelve `409`. Cada operación confirmada incrementa la versión.
 
 ### Contrato de integración
 
 | Método | Ruta bajo /api/v1 | Uso |
 |---|---|---|
-| GET | /galpones/{poultryHouse}/mantenimientos | Histórico paginado |
-| POST | /galpones/{poultryHouse}/mantenimientos | Registrar un hecho realizado |
-| GET | /galpones/{poultryHouse}/mantenimientos/ultimo | Último vigente o data null |
-| GET | /mantenimientos/{maintenance} | Detalle, incluidos cancelados |
-| PATCH | /mantenimientos/{maintenance} | Corrección auditada |
-| POST | /mantenimientos/{maintenance}/cancelacion | Cancelación con motivo |
+| GET | /poultry-houses/{poultryHouse}/maintenances | Histórico paginado |
+| POST | /poultry-houses/{poultryHouse}/maintenances | Registrar un hecho realizado |
+| GET | /poultry-houses/{poultryHouse}/maintenances/latest | Último vigente o data null |
+| GET | /maintenances/{maintenance} | Detalle, incluidos cancelados |
+| PATCH | /maintenances/{maintenance} | Corrección auditada |
+| POST | /maintenances/{maintenance}/cancellation | Cancelación con motivo |
 
-El alta recibe `fecha_mantenimiento`, `descripcion`, `costo_importe`, `costo_moneda` y `responsable_id`. No admite cambiar `galpon_id` desde el cuerpo, editar directamente `estado` ni enviar `programado_para`.
+El alta recibe `maintenance_date`, `description`, `cost_amount`, `cost_currency` y `responsible_user_id`. No admite cambiar `poultry_house_id` desde el cuerpo, editar directamente `status` ni enviar `scheduled_for`.
 
-El campo `costo` de salida tiene forma `{"importe": "1250.50", "moneda": "UYU"}`. La moneda siempre debe enviarse explícitamente; el ejemplo no establece una moneda única para el sistema. El responsable se devuelve como `responsable: {id, nombre}`. Los estados estables siguen siendo `completed` y `cancelled`; las columnas y snapshots internos permanecen en inglés.
+El campo `cost` de salida tiene forma `{"amount": "1250.50", "currency": "UYU"}`. La moneda siempre debe enviarse explícitamente; el ejemplo no establece una moneda única para el sistema. El responsable se devuelve como `responsible: {id, name}`. Los estados estables siguen siendo `completed` y `cancelled`; las columnas y snapshots internos permanecen en inglés.
 
-El histórico permite `estado`, `fecha_desde`, `fecha_hasta`, `por_pagina` de 1 a 100 (por defecto 50) y `pagina` de 1 a 100000. Los enlaces de paginación conservan esos filtros. Los errores de autenticación, autorización, validación, inexistencia y conflicto siguen `application/problem+json`.
+El histórico permite `status`, `date_from`, `date_to`, `per_page` de 1 a 100 (por defecto 50) y `page` de 1 a 100000. Los enlaces de paginación conservan esos filtros. Los errores de autenticación, autorización, validación, inexistencia y conflicto siguen `application/problem+json`.
 
 La auditoría utiliza los eventos `maintenance_created`, `maintenance_corrected` y `maintenance_cancelled`, con actor, sujeto, UP, resultado, cambios y snapshot permitido, además de `operation_id` y `trace_id`. Si falla la auditoría se revierte toda la operación. Sus lecturas continúan requiriendo `audit.view` en el endpoint existente de auditoría.
 

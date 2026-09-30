@@ -2,14 +2,15 @@
 
 namespace Tests\Feature\Lots;
 
+use App\Actions\Lots\CreateFlockAction;
+use App\Actions\Lots\RecordMortalityAction;
+use App\Exceptions\Lots\LotsConflict;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\Lots\Breed;
 use App\Models\Lots\Flock;
 use App\Models\Lots\MortalityCategory;
+use App\Models\ManagementPlans\PlanTemplate;
 use App\Models\User;
-use App\Modules\Lots\Application\Actions\CreateFlockAction;
-use App\Modules\Lots\Application\Actions\RecordMortalityAction;
-use App\Modules\Lots\Domain\Exceptions\LotsConflict;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\Concurrency;
 use Illuminate\Support\Facades\DB;
@@ -23,11 +24,57 @@ final class LotsConcurrencyTest extends TestCase
         runDatabaseMigrations as private migrateIsolatedDatabase;
     }
 
+    private ?string $originalAppKey = null;
+
+    private bool $hadOriginalEnvAppKey = false;
+
+    private ?string $originalEnvAppKey = null;
+
+    private bool $hadOriginalServerAppKey = false;
+
+    private ?string $originalServerAppKey = null;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->originalAppKey = getenv('APP_KEY') === false ? null : getenv('APP_KEY');
+        $this->hadOriginalEnvAppKey = array_key_exists('APP_KEY', $_ENV);
+        $this->originalEnvAppKey = $_ENV['APP_KEY'] ?? null;
+        $this->hadOriginalServerAppKey = array_key_exists('APP_KEY', $_SERVER);
+        $this->originalServerAppKey = $_SERVER['APP_KEY'] ?? null;
+        $applicationKey = (string) config('app.key');
+        putenv('APP_KEY='.$applicationKey);
+        $_ENV['APP_KEY'] = $applicationKey;
+        $_SERVER['APP_KEY'] = $applicationKey;
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->originalAppKey === null) {
+            putenv('APP_KEY');
+        } else {
+            putenv('APP_KEY='.$this->originalAppKey);
+        }
+        if ($this->hadOriginalEnvAppKey) {
+            $_ENV['APP_KEY'] = $this->originalEnvAppKey;
+        } else {
+            unset($_ENV['APP_KEY']);
+        }
+        if ($this->hadOriginalServerAppKey) {
+            $_SERVER['APP_KEY'] = $this->originalServerAppKey;
+        } else {
+            unset($_SERVER['APP_KEY']);
+        }
+
+        parent::tearDown();
+    }
+
     /** Los procesos secundarios necesitan datos confirmados, nunca la base de desarrollo. */
     public function runDatabaseMigrations(): void
     {
-        if (! app()->environment('testing') || config('database.default') !== 'pgsql' || DB::connection()->getDatabaseName() !== 'gam_lots_test') {
-            $this->markTestSkipped('La concurrencia real requiere la base PostgreSQL aislada gam_lots_test.');
+        if (! app()->environment('testing') || config('database.default') !== 'pgsql' || ! str_ends_with(DB::connection()->getDatabaseName(), '_testing')) {
+            $this->markTestSkipped('La concurrencia real requiere una base PostgreSQL aislada con sufijo _testing.');
         }
         $this->migrateIsolatedDatabase();
     }
@@ -40,23 +87,35 @@ final class LotsConcurrencyTest extends TestCase
         return $actor;
     }
 
+    /** @return array{plan_template_id: string, plan_template_version: int} */
+    private function publishedPlanSelection(User $actor): array
+    {
+        $template = PlanTemplate::factory()->published()->create([
+            'name' => 'Plan concurrente', 'description' => null, 'created_by' => $actor->id,
+        ]);
+
+        return ['plan_template_id' => $template->public_id, 'plan_template_version' => 1];
+    }
+
     // Flujo: dos procesos compiten por las mismas plazas sin superar capacidad física.
     public function test_concurrent_admissions_cannot_overbook_the_same_house(): void
     {
         // Preparación: confirma referencias compartidas y dos usuarios diferentes.
         $house = PoultryHouse::factory()->create(['bird_capacity' => 100]);
         $breed = Breed::factory()->create();
+        $planSelection = $this->publishedPlanSelection($this->actor('flocks.manage'));
         $commands = [];
         foreach ([1, 2] as $number) {
             $commands[] = [
                 'actor_id' => $this->actor('flocks.manage')->id,
                 'data' => ['code' => 'CONCURRENT-'.$number, 'breed_id' => $breed->id, 'origin' => 'Propio',
-                    'poultry_house_id' => $house->id, 'initial_quantity' => 70,
-                    'entry_date' => now(config('lots.timezone'))->subDay()->toDateString(), 'idempotency_key' => (string) Str::uuid()],
+                    'poultry_house_id' => $house->id, 'initial_quantity' => 30,
+                    'entry_date' => now(config('lots.timezone'))->subDay()->toDateString(), 'idempotency_key' => (string) Str::uuid(),
+                    ...$planSelection],
             ];
         }
 
-        // Mutación: ejecuta simultáneamente dos admisiones que no caben juntas.
+        // Mutación: ejecuta simultáneamente dos admisiones incompatibles aunque juntas cabrían.
         $tasks = [];
         foreach ($commands as $command) {
             $tasks[] = static function () use ($command): string {
@@ -72,9 +131,12 @@ final class LotsConcurrencyTest extends TestCase
         $results = Concurrency::driver('process')->run($tasks, timeout: 30);
         sort($results);
         $this->assertSame(['conflict', 'created'], $results);
-        $this->assertSame(70, (int) Flock::query()->sum('current_quantity'));
+        $this->assertSame(30, (int) Flock::query()->sum('current_quantity'));
         $this->assertDatabaseCount('flock_movements', 1);
         $this->assertDatabaseCount('flock_operations', 1);
+        $this->assertDatabaseCount('flock_plans', 1);
+        $this->assertDatabaseCount('flock_plan_revisions', 1);
+        $this->assertDatabaseCount('activity_log', 2);
     }
 
     // Flujo: escrituras simultáneas con la misma versión no descuentan dos veces las aves.
@@ -114,10 +176,13 @@ final class LotsConcurrencyTest extends TestCase
     public function test_concurrent_duplicate_keys_produce_exactly_one_operation(): void
     {
         // Preparación: utiliza un único actor y exactamente el mismo comando.
-        $actorId = $this->actor('flocks.manage')->id;
+        $actor = $this->actor('flocks.manage');
+        $actorId = $actor->id;
+        $planSelection = $this->publishedPlanSelection($actor);
         $data = ['code' => 'SAME-KEY', 'breed_id' => Breed::factory()->create()->id, 'origin' => 'Propio',
             'poultry_house_id' => PoultryHouse::factory()->create(['bird_capacity' => 10])->id, 'initial_quantity' => 10,
-            'entry_date' => now(config('lots.timezone'))->subDay()->toDateString(), 'idempotency_key' => (string) Str::uuid()];
+            'entry_date' => now(config('lots.timezone'))->subDay()->toDateString(), 'idempotency_key' => (string) Str::uuid(),
+            ...$planSelection];
         $task = static function () use ($actorId, $data): string {
             return app(CreateFlockAction::class)->execute($data, User::query()->findOrFail($actorId))->operation_id;
         };
@@ -128,6 +193,11 @@ final class LotsConcurrencyTest extends TestCase
         $this->assertDatabaseCount('flocks', 1);
         $this->assertDatabaseCount('flock_operations', 1);
         $this->assertDatabaseCount('flock_movements', 1);
-        $this->assertDatabaseCount('activity_log', 1);
+        $this->assertDatabaseCount('flock_plans', 1);
+        $this->assertDatabaseCount('flock_plan_revisions', 1);
+        $this->assertDatabaseCount('flock_plan_activities', 1);
+        $this->assertDatabaseCount('activity_log', 2);
+        $this->assertSame(1, DB::table('activity_log')->where('event', 'flock_plan_assigned')->count());
+        $this->assertSame(1, DB::table('activity_log')->where('event', 'flock_created')->count());
     }
 }

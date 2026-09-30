@@ -1,0 +1,35 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 5
+    paths:
+        - app/Actions/Inventory/AdjustStockToCountAction.php
+        - app/Actions/Inventory/RecordInventoryMovementAction.php
+        - app/Actions/SuppliersAndCatalogs/ChangeProductStatusAction.php
+        - app/Actions/SuppliersAndCatalogs/ChangeVaccineStatusAction.php
+        - app/Actions/SuppliersAndCatalogs/CreateProductAction.php
+        - app/Actions/SuppliersAndCatalogs/CreateVaccineAction.php
+        - app/Actions/SuppliersAndCatalogs/UpdateProductAction.php
+        - app/Actions/SuppliersAndCatalogs/UpdateVaccineAction.php
+        - app/Exceptions/SuppliersAndCatalogs/VaccineConflict.php
+        - app/Http/Controllers/SuppliersAndCatalogs/VaccineController.php
+        - app/Http/Controllers/SuppliersAndCatalogs/VaccineStatusController.php
+        - app/Http/Requests/SuppliersAndCatalogs/ChangeVaccineStatusRequest.php
+        - app/Http/Requests/SuppliersAndCatalogs/ListVaccinesRequest.php
+        - app/Http/Requests/SuppliersAndCatalogs/StoreVaccineRequest.php
+        - app/Http/Requests/SuppliersAndCatalogs/UpdateVaccineRequest.php
+        - app/Http/Requests/SuppliersAndCatalogs/ViewVaccineRequest.php
+        - app/Http/Resources/SuppliersAndCatalogs/VaccineResource.php
+        - app/Models/SuppliersAndCatalogs/Product.php
+        - app/Models/SuppliersAndCatalogs/Supplier.php
+        - app/Models/SuppliersAndCatalogs/Vaccine.php
+        - app/Policies/SuppliersAndCatalogs/ProductPolicy.php
+        - app/Policies/SuppliersAndCatalogs/VaccinePolicy.php
+        - app/Providers/SuppliersAndCatalogsServiceProvider.php
+        - app/Queries/SuppliersAndCatalogs/ListVaccinesQuery.php
+        - database/factories/SuppliersAndCatalogs/ProductFactory.php
+        - database/factories/SuppliersAndCatalogs/VaccineFactory.php
+        - database/seeders/LocalDemoDataSeeder.php
+        - database/seeders/SuppliersAndCatalogs/VaccineDemoSeeder.php
+    tmpDir: storage/framework/cache/phpstan-vaccines

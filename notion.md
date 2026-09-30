@@ -1,21 +1,71 @@
 # Seguimiento de módulos en Notion
 
-Registro local de funcionalidades implementadas que todavía deben reflejarse en el Kanban de Notion. Este archivo permite preparar la actualización sin afirmar que Notion fue modificado.
+## Entrega multi-login GAM
+
+Implementado en backend y frontend: login web con cookie stateful/CSRF, login nativo con PAT, vinculación de dispositivos compartidos, PIN Argon2id con pepper, sesiones revocables y auditoría transaccional. El contrato está en `contracts/openapi/authentication.yaml`.
+
+La validación automatizada se ejecutó con Docker Compose. Los builds firmados Android/iOS y la validación de navegador físico requieren sus plataformas/toolchains respectivas.
+
+Registro local del avance de los módulos, tanto completos como parcialmente implementados. Este archivo permite preparar la actualización del Kanban sin afirmar que Notion fue modificado.
 
 ## Estado general
 
-No se consultó ni modificó Notion durante esta entrega por falta de acceso al tablero. Cuando haya acceso, actualizar las tarjetas correspondientes y moverlas a `Do Test` únicamente si la validación manual aún no fue realizada. No marcar una tarjeta como probada sólo porque la suite automatizada haya pasado.
+No se consultó ni modificó Notion durante esta entrega. Al sincronizar, mover una tarjeta de módulo a `Do Test` únicamente cuando su alcance esté implementado y falte la validación manual. Una funcionalidad terminada dentro de un módulo incompleto se registra como avance parcial, sin mover la tarjeta del módulo a `Do Test` ni darla por terminada. Las pruebas automatizadas no sustituyen la aceptación manual.
 
 ## Módulos implementados pendientes de reflejar
 
 | Módulo / tarjeta Notion | Estado en código | Documentación fuente | Contrato | Pendiente |
 |---|---|---|---|---|
 | **07 — Mantenimiento de instalaciones** | Implementado en `develop` | [maintenance-implementation.md](maintenance-implementation.md) | [maintenance.yaml](contracts/openapi/maintenance.yaml) | Sincronizar la tarjeta y ejecutar Do Test |
-| **05 — Lotes y cría** | Implementado en `Lotes` | [lots-implementation.md](lots-implementation.md) | [lots.yaml](contracts/openapi/lots.yaml) | Sincronizar la tarjeta y ejecutar Do Test manual |
+| **05 — Lotes y cría** | Implementado; las altas nuevas exigen un plan publicado | [lots-implementation.md](lots-implementation.md) | [lots.yaml](contracts/openapi/lots.yaml) y [management-plans.yaml](contracts/openapi/management-plans.yaml) | Sincronizar la tarjeta y ejecutar Do Test manual con selección de plan |
+| **09 — Producción y stock de huevos** | Implementado en `ProduccionStockHuevos` | [egg-production-implementation.md](egg-production-implementation.md) | [lots.yaml](contracts/openapi/lots.yaml) | Pendiente: actualizar la tarjeta y ejecutar Do Test manual |
+
+## Módulos parcialmente implementados
+
+| Módulo / tarjeta Notion | Estado en código | Documentación fuente | Contrato | Trabajo restante |
+|---|---|---|---|---|
+| **06 — Manejo productivo y sanidad** | **Catálogos de Medicamentos y Vacunas, Pesajes y backend de Plan de Manejo y aplicaciones implementados; módulo aún incompleto** | [medication-implementation-plan.md](medication-implementation-plan.md), [vaccination-implementation.md](vaccination-implementation.md) y [weighing-implementation.md](weighing-implementation.md) | [medication.yaml](contracts/openapi/medication.yaml), [vaccination.yaml](contracts/openapi/vaccination.yaml), [weighings.yaml](contracts/openapi/weighings.yaml) y [management-plans.yaml](contracts/openapi/management-plans.yaml) | Validar manualmente los nuevos flujos; definir y completar las secciones pendientes, incluidas próximas aplicaciones y notificaciones si se incorporan al alcance. Mantener la tarjeta en implementación |
+| **Alimentación — plantas de ración** | **Avance parcial: plantas feed y stock de ingredientes implementados; recetas y notificaciones pendientes** | [feed-stock-implementation.md](feed-stock-implementation.md) | [feed-stock.yaml](contracts/openapi/feed-stock.yaml) | Ejecutar aceptación manual, definir recetas y conectar notificaciones cuando esos módulos estén disponibles |
+
+## Módulo 06 — Manejo productivo y sanidad
+
+**Medicamentos y Vacunas están implementados en su alcance de catálogo, Pesajes como manejo productivo de lotes y el backend de Plan de Manejo y aplicaciones como flujos operativos. El módulo completo todavía no está listo.** Este avance no debe registrarse como un módulo terminado pendiente de mover.
+
+Disponible en código:
+
+- Alta y consulta paginada de medicamentos mediante `/api/v1/medicines`, exclusivamente para administradores activos.
+- Nombre, descripción y proveedor; se permiten nombres repetidos y se conserva la identidad individual de cada ficha.
+- Idempotencia, auditoría transaccional, búsqueda, filtro por proveedor y datos demo locales.
+- CRUD backend de vacunas mediante `/api/v1/vacunas`, exclusivamente para administradores activos.
+- SKU y nombre único, descripción, detalles opcionales, proveedor y baja lógica con conflicto cuando existe stock positivo.
+- Relación 1:1 con el Product de Inventario, unidad `dose` predeterminada, saldos y movimientos compartidos, idempotencia, auditoría atómica y locks de concurrencia.
+- Configuración global versionada de rangos de peso para etapas `chick` y `adult`, administrable mediante `/api/v1/configuracion-pesajes`.
+- Registro individual y grupal de pesajes mediante `/api/v1/pesajes`, con gramos normalizados, confirmación explícita de valores fuera de rango, proyección histórica del lote y correcciones auditadas.
+- Listado, detalle, evolución por lote y distribución individual consumible por el frontend externo, con salida en gramos o kilogramos y límite de 1000 puntos de evolución.
+- Permisos `weighings.view`, `weighings.manage` y `weighing-settings.manage`, idempotencia, control optimista, locks transaccionales y soporte para autenticación personal o compartida.
+- Plantillas de manejo versionadas: alta en borrador, revisión, publicación, retiro y reactivación auditados. Los gestores pueden filtrar borradores antes de paginar; quienes solo consultan ven versiones publicadas.
+- El alta de un lote exige una plantilla publicada y copia sus actividades dentro de la misma operación. Los lotes anteriores pueden recibir un plan mediante asignación explícita; cada lote conserva sus revisiones y actividades propias.
+- Aplicaciones de vacunas y medicamentos por lote con fecha efectiva, responsable, vínculo opcional con una actividad del plan, idempotencia y auditoría. Se registran también cambios de ración y prácticas manuales.
+- Historial paginado de manejos efectivos, incluidos antecedentes de fraccionamiento y correcciones compensatorias. Las actividades previstas no se convierten automáticamente en ejecuciones.
+- La vacunación puede descontar stock del Inventario en la misma transacción cuando se informa el consumo. La medicación descuenta un saldo propio del medicamento, admite ajustes auditados y advierte si queda negativo.
+
+Los catálogos no registran intervenciones ni modifican stock por sí mismos. Las aplicaciones son operaciones separadas del plan: requieren fecha efectiva y no crean hechos futuros. El consumo de vacuna es opcional y explícito; no se infiere de la actividad prevista.
+
+No hay calendario de próximas aplicaciones, recordatorios ni notificaciones. Tampoco se estructuran dosis o unidades clínicas: en medicamentos la cantidad es un entero de stock y la dosis puede describirse en notas. Estos posibles alcances y cualquier otra sección pendiente requieren definición funcional antes de darlos por implementados. La mortalidad ya pertenece a Lotes y no debe duplicarse aquí. Los catálogos son propiedad técnica de `SuppliersAndCatalogs`; Pesajes pertenece a `Lots` y los planes y aplicaciones a `ManagementPlans`.
+
+Validación automatizada registrada el 2026-09-05: 52 pruebas aprobadas con 826 aserciones, incluyendo regresiones seleccionadas, y una prueba de concurrencia separada con 4 aserciones. La aceptación manual del catálogo sigue pendiente y puede documentarse por separado, sin cambiar el estado incompleto del módulo.
+
+Validación de Vacunas registrada el 2026-09-08: 16 pruebas específicas aprobadas con 107 aserciones; suite completa aprobada con variables de testing válidas, 271 pruebas y 1803 aserciones; Larastan, Pint y `git diff --check` correctos. La guía [vaccination-implementation.md](vaccination-implementation.md) contiene el procedimiento de Do Test y las observaciones técnicas pendientes de autenticación compartida, validación interna y cobertura. La tarjeta debe permanecer en implementación hasta resolverlas y completar la aceptación manual.
+
+Validación de Pesajes registrada el 2026-09-09: 37 pruebas focalizadas aprobadas con 441 aserciones; suite completa aprobada con `APP_KEY` y pepper temporales válidos, 305 pruebas y 2226 aserciones; contrato final aprobado con 5 pruebas y 197 aserciones; Larastan, Pint, rutas y `git diff --check` correctos. Las revisiones funcional y de seguridad cerraron sin bloqueadores. La guía [weighing-implementation.md](weighing-implementation.md) contiene fórmulas, contrato, datos demo y procedimiento de Do Test. Esta sección está lista para aceptación manual, pero la tarjeta del Módulo 06 debe permanecer en implementación.
+
+Validación de Plan de Manejo registrada el 2026-09-29: 19 pruebas del módulo aprobadas con 340 aserciones, incluidos contrato OpenAPI, plantillas, aplicaciones e historial. Este resultado automatizado no sustituye la aceptación manual de los nuevos flujos ni cambia el estado parcial del módulo.
 
 ## Módulo 05 — Lotes y cría
 
 Incluye el ciclo de vida de lotes, altas, estados, semana actual, capacidad derivada por ocupación, redistribución parcial hacia lotes nuevos o existentes, traslado total conservando identidad, finalización, historial, auditoría, mortalidad y recolección de huevos integrada atómicamente con Inventario.
+
+El alta de un lote exige `plan_template_id` y `plan_template_version` de una plantilla activa y publicada. El lote, su copia independiente del plan, el movimiento y las auditorías se confirman en la misma transacción idempotente; una selección retirada u obsoleta no deja un lote parcial. Los lotes anteriores sin plan pueden recibirlo mediante una asignación explícita. Al crear un lote por redistribución parcial, se heredan las actividades futuras del plan de origen y los manejos anteriores permanecen como antecedentes.
 
 Decisiones relevantes:
 
@@ -24,8 +74,15 @@ Decisiones relevantes:
 - El traslado total conserva el lote y su identidad; no se borra ni se fusiona.
 - Las correcciones son compensaciones auditadas y no modifican el histórico original.
 - El soporte offline implementado cubre idempotencia, ULID público y conflictos por versión; el almacenamiento y la sincronización del dispositivo quedan fuera de este backend.
+- Las revisiones del plan de cada lote conservan sus actividades y vínculos históricos sin modificar las copias anteriores.
 
 Validación automatizada registrada: 151 pruebas aprobadas y 981 aserciones antes de integrar cambios posteriores de `develop`. La guía [lots-implementation.md](lots-implementation.md) contiene el procedimiento completo de Do Test, incluyendo evidencia requerida, escenarios de redistribución, mortalidad, huevos, permisos, auditoría y concurrencia.
+
+## Módulo 09 — Producción y stock de huevos
+
+Implementado en `ProduccionStockHuevos`. La documentación [egg-production-implementation.md](egg-production-implementation.md) describe el registro por lote de huevo genérico, la cuenta corriente por UP, ingresos manuales, preparaciones de reparto, pérdidas, correcciones append-only, integración atómica con Inventario, métricas y seeder demo.
+
+La tarjeta de Notion con el título exacto **`09 — Producción y stock de huevos`** queda pendiente de actualización. La aceptación manual **Do Test** también queda pendiente; la validación automatizada no sustituye esa revisión. Al sincronizar la tarjeta, adjuntar el contrato [lots.yaml](contracts/openapi/lots.yaml), la evidencia de saldos y auditoría, y el resultado de cada escenario manual.
 
 ## Instrucciones para sincronizar en Notion
 
@@ -33,10 +90,10 @@ Validación automatizada registrada: 151 pruebas aprobadas y 981 aserciones ante
 2. Comprobar si otra persona ya actualizó la tarjeta; evitar duplicar contenido o retroceder su estado.
 3. Copiar el resumen y las decisiones desde el documento fuente correspondiente.
 4. Adjuntar o enlazar el contrato OpenAPI y registrar las pruebas automatizadas.
-5. Mover la tarjeta a `Do Test` si corresponde. La aceptación manual debe ejecutarse en un ambiente local o QA, nunca en producción.
+5. Para módulos completos, mover la tarjeta a `Do Test` si falta aceptación manual. Para módulos parciales, actualizar las secciones terminadas y el trabajo restante manteniendo el módulo en implementación. La aceptación manual debe ejecutarse en un ambiente local o QA, nunca en producción.
 6. Registrar responsable, fecha, rama o commit, ambiente, casos ejecutados, respuestas HTTP, auditoría y cualquier bloqueo.
 7. Después de completar Do Test, actualizar este archivo con la fecha y el enlace a la tarjeta de Notion.
 
 ## Criterio de mantenimiento
 
-Cada módulo nuevo debe agregarse a la tabla cuando su implementación esté disponible en código pero todavía no exista evidencia de sincronización en el Kanban. Al completarse Notion y Do Test, conservar el enlace histórico y actualizar el estado en esta página.
+Registrar cada módulo en la tabla correspondiente a su avance real. Una entrega parcial debe indicar qué sección está implementada y qué falta para completar el módulo; no debe aparecer como módulo terminado pendiente de mover. Al sincronizar Notion y completar la aceptación correspondiente, conservar el enlace histórico y actualizar el estado en esta página.

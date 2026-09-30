@@ -2,6 +2,7 @@
 
 namespace App\Models\Lots;
 
+use App\Models\ManagementPlans\FlockPlanActivity;
 use Carbon\CarbonImmutable;
 use Database\Factories\Lots\EggCollectionFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,6 +14,8 @@ use Illuminate\Support\Str;
  * @property int $id
  * @property string $public_id
  * @property int $flock_id
+ * @property int|null $flock_plan_activity_id
+ * @property string|null $operation_id
  * @property int $poultry_house_id
  * @property int $production_unit_id
  * @property int $quantity
@@ -21,18 +24,13 @@ use Illuminate\Support\Str;
  * @property string|null $notes
  * @property CarbonImmutable $occurred_at
  * @property int $created_by
- * @property int $product_id
- * @property int $stock_location_id
- * @property int|null $inventory_movement_id
- * @property-read Flock $flock
  */
 class EggCollection extends Model
 {
-    /** Conserva el instante aunque PostgreSQL use una zona horaria distinta de UTC. */
-    protected $dateFormat = 'Y-m-d H:i:sP';
-
     /** @use HasFactory<EggCollectionFactory> */
     use HasFactory;
+
+    protected $dateFormat = 'Y-m-d H:i:sP';
 
     protected static function booted(): void
     {
@@ -49,12 +47,22 @@ class EggCollection extends Model
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['quantity' => 'integer', 'version' => 'integer', 'occurred_at' => 'immutable_datetime'];
+        return [
+            'quantity' => 'integer',
+            'version' => 'integer',
+            'occurred_at' => 'immutable_datetime',
+        ];
     }
 
     /** @return BelongsTo<Flock, $this> */
     public function flock(): BelongsTo
     {
         return $this->belongsTo(Flock::class);
+    }
+
+    /** @return BelongsTo<FlockPlanActivity, $this> */
+    public function planActivity(): BelongsTo
+    {
+        return $this->belongsTo(FlockPlanActivity::class, 'flock_plan_activity_id');
     }
 }
