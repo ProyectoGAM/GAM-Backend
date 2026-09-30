@@ -327,7 +327,8 @@ services:
          {"url":"/docs/openapi/vaccination.yaml","name":"Vacunas"},
          {"url":"/docs/openapi/feed-stock.yaml","name":"Plantas de ración y stock"},
          {"url":"/docs/openapi/reporting.yaml","name":"Reportes e indicadores"},
-         {"url":"/docs/openapi/reference-data.yaml","name":"Opciones de referencia"}]
+         {"url":"/docs/openapi/reference-data.yaml","name":"Opciones de referencia"},
+         {"url":"/docs/openapi/deliveries.yaml","name":"Repartos"}]
       URLS_PRIMARY_NAME: Autenticación
     volumes:
       - ./contracts/openapi:/usr/share/nginx/html/openapi:ro

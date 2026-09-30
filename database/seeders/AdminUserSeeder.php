@@ -84,6 +84,8 @@ final class AdminUserSeeder extends Seeder
             Permission::findOrCreate('identity.pins.manage', 'web'),
             Permission::findOrCreate('identity.shared-devices.manage', 'web'),
             Permission::findOrCreate('identity.sessions.manage', 'web'),
+            Permission::findOrCreate('delivery.monitor', 'web'),
+            Permission::findOrCreate('delivery.history', 'web'),
         ];
         $role = Role::findOrCreate('admin', 'web');
         $role->syncPermissions($permissions);

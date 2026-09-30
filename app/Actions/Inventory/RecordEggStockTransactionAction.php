@@ -114,7 +114,7 @@ final readonly class RecordEggStockTransactionAction
         }
 
         return match ($logicalType) {
-            'collection_receipt', 'manual_receipt' => InventoryMovementType::Receipt,
+            'collection_receipt', 'manual_receipt', 'distribution_return' => InventoryMovementType::Receipt,
             'distribution_preparation' => InventoryMovementType::Issue,
             'loss' => InventoryMovementType::Loss,
             default => throw new InventoryConflict('El tipo de movimiento de huevos no es válido.'),
