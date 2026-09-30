@@ -40,7 +40,7 @@ final class ManagementPlanContractTest extends TestCase
         }
 
         // Verificación: cada mutación exige clave y cada ruta está documentada.
-        $this->assertCount(17, $actual);
+        $this->assertCount(18, $actual);
         $this->assertEqualsCanonicalizing($expected, $actual);
     }
 

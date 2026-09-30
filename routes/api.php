@@ -77,6 +77,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::patch('/plantillas-manejo/{planTemplate}', [PlanTemplateController::class, 'update'])->name('templates.update');
             Route::post('/plantillas-manejo/{planTemplate}/publicacion', [PlanTemplateController::class, 'publish'])->name('templates.publish');
             Route::post('/plantillas-manejo/{planTemplate}/retiro', [PlanTemplateController::class, 'retire'])->name('templates.retire');
+            Route::post('/plantillas-manejo/{planTemplate}/activacion', [PlanTemplateController::class, 'activate'])->name('templates.activate');
             Route::get('/flocks/{flock}/plan-manejo', [FlockPlanController::class, 'show'])->name('flock.show');
             Route::post('/flocks/{flock}/plan-manejo', [FlockPlanController::class, 'assign'])->name('flock.assign');
             Route::patch('/flocks/{flock}/plan-manejo', [FlockPlanController::class, 'update'])->name('flock.update');
