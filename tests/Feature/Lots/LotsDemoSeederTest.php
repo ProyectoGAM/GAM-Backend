@@ -30,14 +30,16 @@ final class LotsDemoSeederTest extends LotsTestCase
 
         // Mutación: ejecuta la misma entrada que usa migrate --seed en desarrollo.
         $this->seed(DatabaseSeeder::class);
-        $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-A', 'current_quantity' => 70, 'status' => 'active']);
-        $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-B', 'initial_quantity' => 40, 'current_quantity' => 48]);
-        $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-C', 'current_quantity' => 0, 'status' => 'finished']);
-        $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-D', 'current_quantity' => 25, 'status' => 'quarantined']);
-        $this->assertDatabaseHas('flocks', ['code' => 'DEMO-EGG-PROD', 'current_quantity' => 120, 'status' => 'active']);
-        $this->assertDatabaseCount('flocks', 5);
+        $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-A', 'current_quantity' => 70, 'status' => 'active', 'is_grouped' => false]);
+        $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-B', 'initial_quantity' => 40, 'current_quantity' => 48, 'is_grouped' => true]);
+        $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-C', 'current_quantity' => 0, 'status' => 'finished', 'is_grouped' => false]);
+        $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-D', 'current_quantity' => 25, 'status' => 'quarantined', 'is_grouped' => false]);
+        $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-E', 'current_quantity' => 40, 'status' => 'active', 'is_grouped' => true]);
+        $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-F', 'current_quantity' => 0, 'status' => 'finished', 'is_grouped' => false]);
+        $this->assertDatabaseHas('flocks', ['code' => 'DEMO-EGG-PROD', 'current_quantity' => 120, 'status' => 'active', 'is_grouped' => false]);
+        $this->assertDatabaseCount('flocks', 7);
         $this->assertSame([], DB::table('flocks')->select('poultry_house_id')->whereIn('status', ['active', 'quarantined'])->groupBy('poultry_house_id')->havingRaw('COUNT(*) > 1')->pluck('poultry_house_id')->all());
-        $this->assertDatabaseCount('flock_operations', 21);
+        $this->assertDatabaseCount('flock_operations', 24);
         $product = Product::query()->where('system_key', 'generic_egg')->firstOrFail();
         $this->assertDatabaseMissing('products', ['sku' => 'HUEVO-LOTES-DEMO']);
         $before = Flock::query()->orderBy('id')->get()->toArray();
@@ -47,7 +49,7 @@ final class LotsDemoSeederTest extends LotsTestCase
         $this->seed(LocalDemoDataSeeder::class);
         $this->assertSame($before, Flock::query()->orderBy('id')->get()->toArray());
         $this->assertSame($auditCount, DB::table('activity_log')->where('log_name', 'lots')->count());
-        $this->assertDatabaseCount('flock_operations', 21);
+        $this->assertDatabaseCount('flock_operations', 24);
         $this->assertSame([], DB::table('flocks')->select('poultry_house_id')->whereIn('status', ['active', 'quarantined'])->groupBy('poultry_house_id')->havingRaw('COUNT(*) > 1')->pluck('poultry_house_id')->all());
         $this->assertDatabaseHas('stock_balances', ['product_id' => $product->id, 'on_hand_quantity' => '477.000000']);
         $this->assertSame(0, DB::table('activity_log')->where('log_name', 'lots')->where('source', '<>', 'seeder')->count());
