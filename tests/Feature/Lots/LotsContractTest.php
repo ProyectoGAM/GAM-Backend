@@ -5,6 +5,7 @@ namespace Tests\Feature\Lots;
 use App\Http\Resources\Lots\EggCollectionResource;
 use App\Http\Resources\Lots\FlockMovementResource;
 use App\Http\Resources\Lots\FlockResource;
+use App\Http\Resources\Lots\FlockSnapshotResource;
 use App\Http\Resources\Lots\LotsCatalogResource;
 use App\Http\Resources\Lots\MortalityResource;
 use Illuminate\Http\Request;
@@ -62,6 +63,7 @@ final class LotsContractTest extends TestCase
         $schemas = $this->contract()['components']['schemas'];
         $resources = [
             'Flock' => FlockResource::class,
+            'FlockSnapshot' => FlockSnapshotResource::class,
             'Movement' => FlockMovementResource::class,
             'Mortality' => MortalityResource::class,
             'EggCollection' => EggCollectionResource::class,
@@ -71,7 +73,7 @@ final class LotsContractTest extends TestCase
 
         // Consulta: serializa sólo las claves y las compara con sus esquemas.
         foreach ($resources as $name => $resource) {
-            $fields = (new $resource(['before' => [], 'after' => []]))->resolve($request);
+            $fields = (new $resource(['before' => [], 'after' => [], 'is_grouped' => false]))->resolve($request);
             $this->assertEqualsCanonicalizing(array_keys($schemas[$name]['properties']), array_keys($fields), $name);
         }
     }

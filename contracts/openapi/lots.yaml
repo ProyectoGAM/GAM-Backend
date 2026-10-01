@@ -1456,7 +1456,7 @@ components:
     Flock:
       type: "object"
       additionalProperties: false
-      required: ["id", "code", "breed_id", "supplier_id", "supplier_name", "origin", "poultry_house_id", "production_unit_id", "initial_quantity", "current_quantity", "entry_date", "established_at", "age_days", "current_week", "status", "version", "notes", "finalized_at", "finalization_reason"]
+      required: ["id", "code", "breed_id", "supplier_id", "supplier_name", "origin", "poultry_house_id", "production_unit_id", "initial_quantity", "current_quantity", "entry_date", "established_at", "age_days", "current_week", "is_grouped", "status", "version", "notes", "finalized_at", "finalization_reason"]
       properties:
         id:
           type: "string"
@@ -1498,6 +1498,81 @@ components:
           format: "date-time"
           pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
           description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
+        age_days:
+          type: "integer"
+          minimum: 0
+        current_week:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        is_grouped:
+          type: "boolean"
+          description: "Indica si el lote recibió aves de otro lote mediante una incorporación parcial o unión total. Una vez agrupado, conserva este valor aunque se revierta la incorporación."
+        status:
+          type: "string"
+          enum: ["active", "quarantined", "finished"]
+        version:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+          description: "Versión actual obtenida al consultar el recurso."
+        notes:
+          type: ["string", "null"]
+          maxLength: 5000
+        finalized_at:
+          type: ["string", "null"]
+          format: "date-time"
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
+          description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
+        finalization_reason:
+          type: ["string", "null"]
+          minLength: 1
+          maxLength: 500
+    FlockSnapshot:
+      type: "object"
+      additionalProperties: false
+      description: "Fotografía de una operación. La clasificación de agrupación se consulta en el recurso actual del lote."
+      required: ["id", "code", "breed_id", "supplier_id", "supplier_name", "origin", "poultry_house_id", "production_unit_id", "initial_quantity", "current_quantity", "entry_date", "established_at", "age_days", "current_week", "status", "version", "notes", "finalized_at", "finalization_reason"]
+      properties:
+        id:
+          type: "string"
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+          example: "01J00000000000000000000000"
+        code:
+          type: "string"
+          minLength: 1
+          maxLength: 60
+          pattern: "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+        breed_id:
+          type: "integer"
+          minimum: 1
+        supplier_id:
+          type: ["integer", "null"]
+          minimum: 1
+        supplier_name:
+          type: ["string", "null"]
+        origin:
+          type: ["string", "null"]
+        poultry_house_id:
+          type: "integer"
+          minimum: 1
+        production_unit_id:
+          type: "integer"
+          minimum: 1
+        initial_quantity:
+          type: "integer"
+          minimum: 1
+          maximum: 2147483647
+        current_quantity:
+          type: "integer"
+          minimum: 0
+        entry_date:
+          type: "string"
+          format: "date"
+        established_at:
+          type: "string"
+          format: "date-time"
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
         age_days:
           type: "integer"
           minimum: 0
@@ -1585,12 +1660,12 @@ components:
           type: "object"
           description: "Fotografías previas indexadas por ULID; objeto vacío para una admisión."
           additionalProperties:
-            "$ref": "#/components/schemas/Flock"
+            "$ref": "#/components/schemas/FlockSnapshot"
         after:
           type: "object"
           description: "Fotografías posteriores indexadas por ULID."
           additionalProperties:
-            "$ref": "#/components/schemas/Flock"
+            "$ref": "#/components/schemas/FlockSnapshot"
     Mortality:
       type: "object"
       additionalProperties: false
@@ -1720,9 +1795,9 @@ components:
           type: "string"
           format: "uuid"
         flock:
-          "$ref": "#/components/schemas/Flock"
+          "$ref": "#/components/schemas/FlockSnapshot"
         destination_flock:
-          "$ref": "#/components/schemas/Flock"
+          "$ref": "#/components/schemas/FlockSnapshot"
         movement:
           "$ref": "#/components/schemas/Movement"
         mortality:

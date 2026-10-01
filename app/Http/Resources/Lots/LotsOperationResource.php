@@ -22,8 +22,8 @@ final class LotsOperationResource extends JsonResource
         $operation = $this->resource;
         $result = ['operation_id' => $operation->operation_id];
         $resources = [
-            'flock' => ['flock', FlockResource::class],
-            'destination' => ['destination_flock', FlockResource::class],
+            'flock' => ['flock', FlockSnapshotResource::class],
+            'destination' => ['destination_flock', FlockSnapshotResource::class],
             'movement' => ['movement', FlockMovementResource::class],
             'mortality' => ['mortality', MortalityResource::class],
             'collection' => ['collection', EggCollectionResource::class],
