@@ -377,6 +377,10 @@ final class FlockEndpointTest extends LotsTestCase
 
         // Consulta: los permisos funcionales permiten ambas unidades.
         $this->getJson('/api/v1/flocks?per_page=1')->assertOk()->assertJsonPath('meta.total', 2);
+        $this->getJson('/api/v1/flocks?production_unit_id='.$a->production_unit_id.'&search='.$a->code)
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $a->public_id)
+            ->assertJsonPath('data.0.is_grouped', false);
+        $this->getJson("/api/v1/flocks/{$a->public_id}")->assertOk()->assertJsonPath('data.is_grouped', false);
         $this->getJson("/api/v1/poultry-houses/{$a->poultry_house_id}/flocks")->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $a->public_id);
         $this->getJson('/api/v1/flocks?search='.$b->code)->assertOk()->assertJsonPath('data.0.id', $b->public_id);
         $this->getJson('/api/v1/flocks?per_page=101')->assertUnprocessable();
