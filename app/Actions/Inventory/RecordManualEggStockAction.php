@@ -4,6 +4,7 @@ namespace App\Actions\Inventory;
 
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Enums\FarmStructure\ProductionUnitStatus;
+use App\Exceptions\Inventory\InventoryConflict;
 use App\Exceptions\Lots\LotsConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\FarmStructure\ProductionUnit;
@@ -17,6 +18,10 @@ final readonly class RecordManualEggStockAction
     /** @param array<string, mixed> $data @return array<string, mixed> */
     public function execute(ProductionUnit $unit, array $data, User $actor, int $sign = 1, string $type = 'manual_receipt', string $source = 'api'): array
     {
+        if ($type === 'distribution_preparation') {
+            throw new InventoryConflict('La preparación de reparto se registra mediante la carga del reparto.');
+        }
+
         $command = $this->commands->execute($actor, 'egg-stock.move', 'egg-stock.record', $data['idempotency_key'], ['unit' => $unit->id, ...$data, 'type' => $type], function (string $operationId) use ($unit, $data, $actor, $sign, $type, $source): array {
             $lockedUnit = ProductionUnit::query()->whereKey($unit->getKey())->lockForUpdate()->firstOrFail();
             if ($lockedUnit->status !== ProductionUnitStatus::Active) {

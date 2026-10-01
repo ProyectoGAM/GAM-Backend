@@ -25,8 +25,8 @@ La estructura sigue la arquitectura Laravel convencional descrita en `architectu
 - Inventario agrega `egg_stock_accounts`, `egg_stock_transactions`, `egg_stock_transaction_revisions` y `egg_stock_commands`.
 - `EnsureEggStockAccountAction` materializa de forma idempotente una cuenta técnica por UP, con el producto protegido `Huevo` (`system_key=generic_egg`, `kind=egg`, `base_unit=unit`) y una ubicación técnica exclusiva.
 - El saldo real sólo se consulta en `stock_balances`. Una UP sin movimientos responde saldo cero; la cuenta se crea al primer movimiento y los seeders la precrean.
-- `EggStockTransaction` es la proyección lógica de cada entrada o salida. Sus tipos estables son `collection_receipt`, `manual_receipt`, `distribution_preparation` y `loss`.
-- Los movimientos físicos de Inventario son `receipt` para entradas, `issue` para preparación de reparto, `loss` para pérdidas y `adjustment` para correcciones o compensaciones.
+- `EggStockTransaction` es la proyección lógica de cada entrada, salida o ajuste. Sus tipos incluyen `collection_receipt`, `manual_receipt`, `distribution_preparation`, `distribution_return`, `loss` y `physical_count`.
+- Los movimientos físicos de Inventario son `receipt` para ingresos y devoluciones, `issue` para salidas externas, `loss` para pérdidas y `adjustment` para diferencias de conteo.
 - Las cuentas técnicas no pueden operarse mediante endpoints genéricos de Inventario. Las Actions especializadas validan producto, ubicación, unidad y UP, y protegen su desactivación o reutilización.
 
 ## Registro de producción e ingreso automático
@@ -41,13 +41,15 @@ Corregir o cancelar una recolección no cambia aves ni versión del lote. La rec
 
 ## Cuenta corriente de huevos
 
-Las operaciones manuales se ejecutan desde Inventario, siempre sobre la cuenta técnica de una UP:
+La cuenta técnica de una UP registra estas operaciones:
 
 | Tipo lógico | Movimiento físico | Uso |
 |---|---|---|
 | `collection_receipt` | `receipt` | Ingreso automático de una recolección. |
 | `manual_receipt` | `receipt` | Ajuste o carga manual sin lote. |
-| `distribution_preparation` | `issue` | Retiro para preparar un reparto futuro. |
+| `distribution_preparation` | `issue` | Salida externa visible en el historial de Inventario. |
+| `distribution_return` | `receipt` | Devolución externa visible en el historial de Inventario. |
+| `physical_count` | `adjustment` | Diferencia compensatoria entre el saldo teórico y el conteo físico. |
 | `loss` | `loss` | Huevos caídos, rotos u otra pérdida posterior. |
 
 El saldo se obtiene exclusivamente de `stock_balances` y puede ser negativo para cuentas de huevos. Ningún otro producto o ubicación del inventario puede tener saldo negativo. Los reportes generales de saldos y movimientos exponen UP como columna, filtro y agrupación y aumentan sus versiones de definición.
@@ -103,15 +105,15 @@ Todas las rutas son relativas a `/api/v1`, usan Bearer token y mantienen errores
 | GET | `/production-units/{up}/egg-stock/movements` | Cuenta corriente paginada. | `egg-stock.view` |
 | GET | `/egg-stock/movements/{movement}` | Detalle, revisiones y referencias físicas. | `egg-stock.view` |
 | POST | `/production-units/{up}/egg-stock/receipts` | Entrada manual. | `egg-stock.move` |
-| POST | `/production-units/{up}/egg-stock/issues` | Preparación de reparto o pérdida. | `egg-stock.move` |
+| POST | `/production-units/{up}/egg-stock/issues` | Pérdida manual. La preparación se crea con la carga del reparto. | `egg-stock.move` |
 | PATCH | `/egg-stock/movements/{movement}` | Corrección de una operación manual. | `egg-stock.adjust` |
 | POST | `/egg-stock/movements/{movement}/cancellation` | Cancelación de una operación manual. | `egg-stock.adjust` |
 
-Las cantidades aceptan sólo enteros entre 1 y `2147483647`. Las salidas requieren `kind=distribution_preparation|loss`; motivo y observaciones son texto controlado. Para cambios de UP, dirección o tipo se debe cancelar y registrar una operación nueva.
+Las cantidades manuales aceptan sólo enteros entre 1 y `2147483647`; la salida manual admite sólo `loss`. Los movimientos externos `distribution_preparation` y `distribution_return` se muestran en el historial de Inventario como registros de solo lectura; Inventario no registra operaciones de esos módulos.
 
 ## Datos demo y despliegue
 
-`database/seeders/Lots/EggProductionDemoSeeder.php` está registrado en `LocalDemoDataSeeder` y sólo corre con `APP_ENV=local`. Usa las mismas Actions que la API y crea un único producto técnico `Huevo`, una cuenta por UP, recolecciones, una entrada manual, una preparación de reparto, una pérdida y una corrección. Sus claves idempotentes evitan duplicados al repetir el seeder.
+`database/seeders/Lots/EggProductionDemoSeeder.php` está registrado en `LocalDemoDataSeeder` y sólo corre con `APP_ENV=local`. Usa las mismas Actions que la API y crea un único producto técnico `Huevo`, una cuenta por UP, recolecciones, una entrada manual, una pérdida y una corrección. Sus claves idempotentes evitan duplicados al repetir el seeder.
 
 Como no existen datos reales, el cambio reemplaza la estructura anterior y se valida desde cero:
 
@@ -132,7 +134,7 @@ La suite específica y `migrate:fresh --seed` fueron ejecutadas durante la imple
 1. Levantar Compose, cargar la demo desde [README.md](README.md) y autenticar un usuario con permisos funcionales.
 2. Registrar una recolección en un lote activo. Verificar que el histórico del lote aumenta, que la cuenta de la UP recibe un `receipt` y que la cantidad viva y la versión del lote permanecen iguales.
 3. Repetir la misma clave y confirmar que no se duplica el ingreso. Consultar métricas y comprobar que sólo cuentan recolecciones vigentes.
-4. Registrar una entrada manual, una salida `distribution_preparation` y una salida `loss`; comprobar saldo, referencias físicas y que ninguna cambia las métricas de producción. Confirmar que una salida puede dejar saldo negativo sólo en huevos.
+4. Registrar una entrada manual y una salida `loss`; comprobar saldo y referencias. Confirmar que los tipos externos `distribution_preparation` y `distribution_return` se leen en el historial de Inventario sin habilitar acciones de edición.
 5. Corregir una entrada de `4000` a `400`, corregir sólo observaciones y corregir moviendo explícitamente la fecha. Revisar compensaciones, revisiones `before/after`, versiones y auditoría.
 6. Cancelar una recolección y una operación manual. Confirmar estado `cancelled`, compensación completa, histórico intacto y bloqueo de correcciones posteriores sin nueva operación.
 7. Intentar operar las cuentas técnicas mediante endpoints genéricos de Inventario, cambiar el producto o ubicación técnica y registrar sobre una UP inactiva. Cada caso debe responder `403`, `409` o `422` sin escrituras parciales.

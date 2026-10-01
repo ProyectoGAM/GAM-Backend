@@ -54,7 +54,6 @@ final class EggProductionDemoSeeder extends Seeder
         $collection = EggCollection::query()->where('public_id', $first->result['collection']['public_id'])->firstOrFail();
         $this->onceFlock($actor, 903, fn (string $key): FlockOperation => $corrections->execute($collection, ['version' => $collection->version, 'quantity' => 400, 'correction_reason' => 'Corrección de digitación demo.', 'idempotency_key' => $key], $actor, source: 'seeder'));
         $this->onceEggStock($actor, 904, fn (string $key): array => $manual->execute($unit, ['quantity' => 100, 'reason' => 'Ingreso manual demo.', 'idempotency_key' => $key], $actor, source: 'seeder'));
-        $this->onceEggStock($actor, 905, fn (string $key): array => $manual->execute($unit, ['quantity' => 20, 'type' => 'distribution_preparation', 'reason' => 'Preparación de reparto demo.', 'idempotency_key' => $key], $actor, -1, 'distribution_preparation', 'seeder'));
         $this->onceEggStock($actor, 906, fn (string $key): array => $manual->execute($unit, ['quantity' => 3, 'type' => 'loss', 'reason' => 'Rotura demo.', 'idempotency_key' => $key], $actor, -1, 'loss', 'seeder'));
     }
 

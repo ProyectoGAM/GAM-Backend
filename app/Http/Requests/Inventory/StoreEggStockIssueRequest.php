@@ -12,6 +12,6 @@ final class StoreEggStockIssueRequest extends EggStockRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        return [...$this->commandRules(), 'quantity' => $this->quantityRules(), 'type' => ['required', 'in:distribution_preparation,loss'], 'occurred_at' => ['sometimes', 'date'], 'reason' => ['required', 'string', 'max:500'], 'notes' => ['sometimes', 'nullable', 'string', 'max:5000']];
+        return [...$this->commandRules(), 'quantity' => $this->quantityRules(), 'type' => ['required', 'in:loss'], 'occurred_at' => ['sometimes', 'date'], 'reason' => ['required', 'string', 'max:500'], 'notes' => ['sometimes', 'nullable', 'string', 'max:5000']];
     }
 }

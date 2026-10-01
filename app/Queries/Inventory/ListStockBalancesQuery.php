@@ -13,6 +13,7 @@ final readonly class ListStockBalancesQuery
     public function execute(array $filters): LengthAwarePaginator
     {
         return StockBalance::query()
+            ->whereDoesntHave('product', static fn (Builder $query): Builder => $query->where('system_key', 'generic_egg'))
             ->with([
                 'product' => static fn (BelongsTo $productRelation): Builder => $productRelation->getQuery()->withResourceMetadata(),
                 'stockLocation',

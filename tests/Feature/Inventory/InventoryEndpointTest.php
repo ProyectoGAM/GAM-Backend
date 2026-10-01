@@ -3,6 +3,7 @@
 namespace Tests\Feature\Inventory;
 
 use App\Enums\SuppliersAndCatalogs\BaseUnit;
+use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\StockBalance;
 use App\Models\Inventory\StockLocation;
 use App\Models\SuppliersAndCatalogs\Product;
@@ -51,6 +52,59 @@ final class InventoryEndpointTest extends TestCase
             ->assertJsonPath('data.0.available_quantity', '8.000000')
             ->assertJsonMissingPath('data.0.physical_quantity')
             ->assertJsonMissingPath('data.0.reserved_quantity');
+    }
+
+    // Flujo: oculta la cuenta técnica de huevos sin alterar el saldo ni su historial especializado.
+    public function test_inventory_balance_pages_exclude_the_technical_egg_product(): void
+    {
+        [$actor, $product, $location, $supplier] = $this->inventoryScenario();
+        $actor->givePermissionTo(Permission::findOrCreate('egg-stock.move', 'web'));
+        $actor->givePermissionTo(Permission::findOrCreate('egg-stock.view', 'web'));
+        $unit = ProductionUnit::factory()->create();
+
+        // Acción 1: crea saldo ordinario en Existencias.
+        $this->postJson('/api/v1/inventory/receipts', [
+            'supplier_id' => $supplier->getKey(),
+            'lines' => [['product_id' => $product->getKey(), 'stock_location_id' => $location->getKey(), 'quantity' => '3.000000']],
+        ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated();
+
+        // Acción 2: crea la cuenta y el movimiento técnicos por el flujo de Egg Stock.
+        $this->postJson("/api/v1/production-units/{$unit->getKey()}/egg-stock/receipts", [
+            'quantity' => 9,
+            'reason' => 'Ingreso técnico para prueba',
+        ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated();
+        $eggProduct = Product::query()->where('system_key', 'generic_egg')->firstOrFail();
+
+        // Consulta 1: pagina sin filtro y conserva el total sólo del saldo ordinario.
+        $this->getJson('/api/v1/inventory/balances?per_page=1')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('meta.per_page', 1)
+            ->assertJsonPath('meta.current_page', 1)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.product_id', $product->getKey());
+
+        // Consulta 2: la página siguiente no vuelve a contar ni revela el saldo técnico.
+        $this->getJson('/api/v1/inventory/balances?per_page=1&page=2')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('meta.current_page', 2)
+            ->assertJsonCount(0, 'data');
+
+        // Consulta 3: el filtro explícito por Huevo también queda vacío y con total cero.
+        $this->getJson('/api/v1/inventory/balances?product_id='.$eggProduct->getKey().'&per_page=1')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 0)
+            ->assertJsonPath('meta.per_page', 1)
+            ->assertJsonCount(0, 'data');
+
+        // Consulta 4: el saldo canónico y su historial siguen disponibles en Egg Stock.
+        $this->getJson("/api/v1/production-units/{$unit->getKey()}/egg-stock")
+            ->assertOk()
+            ->assertJsonPath('data.balance', 9);
+        $this->getJson("/api/v1/production-units/{$unit->getKey()}/egg-stock/movements")
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1);
     }
 
     // Flujo: repite el mismo ingreso; verifica que la idempotencia evita duplicados.

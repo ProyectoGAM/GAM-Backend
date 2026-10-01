@@ -1112,7 +1112,7 @@ paths:
       tags: ["Stock de huevos"]
       operationId: "recordEggStockIssue"
       summary: "Registra una salida de huevos"
-      description: "Permiso requerido: egg-stock.move. El tipo admite distribution_preparation o loss y puede dejar balance negativo."
+      description: "Permiso requerido: egg-stock.move. Esta operacion manual solo admite el tipo loss y puede dejar balance negativo. La preparacion se registra con la carga del reparto para evitar un doble descuento."
       x-permission: "egg-stock.move"
       parameters:
         - "$ref": "#/components/parameters/ProductionUnit"
@@ -1408,7 +1408,7 @@ components:
       in: "query"
       schema:
         type: "string"
-        enum: ["collection_receipt", "manual_receipt", "distribution_preparation", "loss", "physical_count"]
+        enum: ["collection_receipt", "manual_receipt", "distribution_preparation", "distribution_return", "loss", "physical_count"]
     CatalogStatus:
       name: "status"
       in: "query"
@@ -2102,7 +2102,7 @@ components:
           minimum: 1
         type:
           type: "string"
-          enum: ["collection_receipt", "manual_receipt", "distribution_preparation", "loss", "physical_count"]
+          enum: ["collection_receipt", "manual_receipt", "distribution_preparation", "distribution_return", "loss", "physical_count"]
         quantity:
           type: "integer"
           minimum: 0
@@ -2225,7 +2225,7 @@ components:
           maximum: 2147483647
         type:
           type: "string"
-          enum: ["distribution_preparation", "loss"]
+          enum: ["loss"]
         occurred_at:
           type: "string"
           format: "date-time"

@@ -7,6 +7,7 @@ use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
 use App\Services\IdentityAndAccess\PinHasher;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
@@ -442,6 +443,91 @@ final class DeliveryEndpointTest extends TestCase
             'type' => 'distribution_return',
             'quantity' => 80,
         ]);
+    }
+
+    /** Integra conteo, carga, entrega y devolución sin duplicar el débito del saldo central. */
+    public function test_physical_count_and_delivery_return_share_history_and_charge_only_delivery_loads(): void
+    {
+        // Preparación: habilita inventario y reparto para un mismo actor y acredita diez huevos.
+        $this->signIn([
+            'egg-stock.adjust', 'egg-stock.move', 'egg-stock.view',
+            'delivery.start', 'delivery.view-own', 'delivery.update-own',
+        ]);
+        $unit = ProductionUnit::factory()->create();
+        $this->postJson("/api/v1/production-units/{$unit->id}/egg-stock/receipts", [
+            'quantity' => 10,
+            'reason' => 'Saldo inicial',
+        ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated();
+
+        // Request: rechaza la preparación manual; la carga del reparto es el único débito autorizado.
+        $this->postJson("/api/v1/production-units/{$unit->id}/egg-stock/issues", [
+            'quantity' => 6,
+            'type' => 'distribution_preparation',
+            'reason' => 'Preparación duplicada',
+        ], ['Idempotency-Key' => (string) Str::uuid()])->assertUnprocessable()
+            ->assertJsonValidationErrors('type');
+
+        // Request: inicia carga por seis y confirma el débito único del stock de huevos.
+        $started = $this->command('POST', '/repartos', [
+            'production_unit_id' => $unit->id,
+            'quantity' => 6,
+        ])->assertCreated()->assertJsonPath('data.loaded_quantity', 6);
+        $deliveryId = $started->json('data.id');
+        $this->getJson("/api/v1/production-units/{$unit->id}/egg-stock")
+            ->assertJsonPath('data.balance', 4);
+
+        // Request: registra cuatro entregados sin volver a descontarlos del saldo central.
+        $this->command('POST', "/repartos/{$deliveryId}/entregas", [
+            'client_reference' => 'demo-001',
+            'status' => 'delivered',
+            'items' => [['unit' => 'huevo', 'amount' => '4', 'eggs_per_unit' => 1]],
+        ])->assertOk();
+        $this->getJson("/api/v1/production-units/{$unit->id}/egg-stock")
+            ->assertJsonPath('data.balance', 4);
+
+        // Request: devuelve los dos huevos restantes y cierra el reparto sin diferencia.
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", [
+            'returned_quantity' => 2,
+            'notes' => 'Nota general de cierre.',
+        ])->assertOk()
+            ->assertJsonPath('data.close_notes', 'Nota general de cierre.');
+
+        // Migración: simula el CHECK antiguo aplicado con una devolución histórica, sin conteos físicos.
+        DB::statement('ALTER TABLE egg_stock_transactions DROP CONSTRAINT egg_stock_transactions_values_check');
+        DB::statement("ALTER TABLE egg_stock_transactions ADD CONSTRAINT egg_stock_transactions_values_check CHECK (quantity > 0 AND version > 0 AND status IN ('recorded', 'cancelled') AND type IN ('collection_receipt', 'manual_receipt', 'distribution_preparation', 'distribution_return', 'loss'))");
+
+        // Reparación: añade physical_count al CHECK existente sin borrar la devolución histórica.
+        $transactionTypesMigration = require base_path('database/migrations/2026_10_01_000001_reconcile_egg_stock_transaction_types.php');
+        $transactionTypesMigration->up();
+
+        // Request: registra un conteo igual al saldo luego de la devolución, con magnitud cero.
+        $this->postJson("/api/v1/production-units/{$unit->id}/egg-stock/counts", [
+            'counted_quantity' => 6,
+            'expected_balance' => 6,
+            'reason' => 'Conteo posterior al reparto',
+            'occurred_at' => now()->toDateString(),
+        ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated()
+            ->assertJsonPath('data.type', 'physical_count')
+            ->assertJsonPath('data.quantity', 0);
+
+        // Verificación: el saldo es 10 menos 6 cargados más 2 devueltos; ambos tipos conviven en el historial.
+        $this->getJson("/api/v1/production-units/{$unit->id}/egg-stock")
+            ->assertJsonPath('data.balance', 6);
+        $this->assertDatabaseCount('egg_stock_transactions', 4);
+        $this->assertDatabaseHas('egg_stock_transactions', [
+            'reference_type' => 'delivery', 'reference_id' => $deliveryId,
+            'type' => 'distribution_preparation', 'quantity' => 6,
+        ]);
+        $this->assertDatabaseHas('egg_stock_transactions', [
+            'reference_type' => 'delivery', 'reference_id' => $deliveryId,
+            'type' => 'distribution_return', 'quantity' => 2,
+        ]);
+        $this->getJson("/api/v1/production-units/{$unit->id}/egg-stock/movements?type=physical_count")
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.type', 'physical_count');
+        $this->getJson("/api/v1/production-units/{$unit->id}/egg-stock/movements?type=distribution_return")
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.type', 'distribution_return');
+        $this->getJson("/api/v1/production-units/{$unit->id}/egg-stock/movements")
+            ->assertOk()->assertJsonCount(4, 'data');
     }
 
     public function test_driver_can_query_only_their_active_delivery(): void
