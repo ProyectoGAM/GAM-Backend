@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuditAndTraceability\AuditEntryController;
+use App\Http\Controllers\Deliveries\DeliveryController;
 use App\Http\Controllers\FarmStructure\MaintenanceController;
 use App\Http\Controllers\FarmStructure\PoultryHouseController;
 use App\Http\Controllers\FarmStructure\PoultryHouseStatusController;
@@ -76,6 +77,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::patch('/plantillas-manejo/{planTemplate}', [PlanTemplateController::class, 'update'])->name('templates.update');
             Route::post('/plantillas-manejo/{planTemplate}/publicacion', [PlanTemplateController::class, 'publish'])->name('templates.publish');
             Route::post('/plantillas-manejo/{planTemplate}/retiro', [PlanTemplateController::class, 'retire'])->name('templates.retire');
+            Route::post('/plantillas-manejo/{planTemplate}/activacion', [PlanTemplateController::class, 'activate'])->name('templates.activate');
             Route::get('/flocks/{flock}/plan-manejo', [FlockPlanController::class, 'show'])->name('flock.show');
             Route::post('/flocks/{flock}/plan-manejo', [FlockPlanController::class, 'assign'])->name('flock.assign');
             Route::patch('/flocks/{flock}/plan-manejo', [FlockPlanController::class, 'update'])->name('flock.update');
@@ -137,6 +139,32 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::delete('/sessions/{session}', [AuthController::class, 'revokeSession'])->name('auth.sessions.revoke');
         Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
         Route::post('/auth/confirm-password', [AuthController::class, 'confirmPassword'])->name('auth.confirm-password');
+
+        Route::post('/repartos', [DeliveryController::class, 'store'])
+            ->middleware('throttle:delivery-commands')
+            ->name('deliveries.store');
+        Route::get('/repartos/actuales', [DeliveryController::class, 'current'])
+            ->name('deliveries.current');
+        Route::get('/repartos/clientes', [DeliveryController::class, 'clients'])
+            ->name('deliveries.clients');
+        Route::get('/repartos/unidades', [DeliveryController::class, 'units'])
+            ->name('deliveries.units');
+        Route::get('/repartos', [DeliveryController::class, 'index'])
+            ->name('deliveries.index');
+        Route::get('/repartos/{reparto}', [DeliveryController::class, 'show'])
+            ->name('deliveries.show');
+        Route::post('/repartos/{reparto}/entregas', [DeliveryController::class, 'stop'])
+            ->middleware('throttle:delivery-commands')
+            ->name('deliveries.stops.store');
+        Route::post('/repartos/{reparto}/cargas', [DeliveryController::class, 'load'])
+            ->middleware('throttle:delivery-commands')
+            ->name('deliveries.loads.store');
+        Route::post('/repartos/{reparto}/ubicaciones/lote', [DeliveryController::class, 'locations'])
+            ->middleware('throttle:delivery-location')
+            ->name('deliveries.locations.store');
+        Route::post('/repartos/{reparto}/cierre', [DeliveryController::class, 'close'])
+            ->middleware('throttle:delivery-commands')
+            ->name('deliveries.close');
 
         Route::get('/users', [UserManagementController::class, 'index'])
             ->middleware('permission:identity.users.manage')

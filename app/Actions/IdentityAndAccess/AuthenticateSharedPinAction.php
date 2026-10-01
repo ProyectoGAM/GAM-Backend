@@ -35,25 +35,7 @@ final class AuthenticateSharedPinAction
             throw new IdentityException(403, 'SHARED_LOGIN_FORBIDDEN', 'El usuario no tiene habilitado el acceso compartido.');
         }
 
-        $this->ensureNotBlocked($user);
-
-        if ($user->pin_daily_failed_attempts >= (int) config('identity.pin.daily_max_attempts', 20)) {
-            throw $this->blocked($user->pin_daily_window_started_at?->addDay());
-        }
-
-        try {
-            $valid = is_string($user->pin_hash) && $this->pinHasher->check($pin, $user->pin_hash);
-        } catch (\Throwable $exception) {
-            if ($exception instanceof \RuntimeException) {
-                throw new IdentityException(503, 'IDENTITY_NOT_CONFIGURED', 'La autenticación no está configurada.');
-            }
-
-            throw $exception;
-        }
-
-        if (! $valid) {
-            throw $this->recordFailure($user);
-        }
+        $this->verifyPin($user, $pin);
 
         return DB::transaction(function () use ($device, $user): array {
             $lockedDevice = SharedDevice::query()->whereKey($device->getKey())->lockForUpdate()->firstOrFail();
@@ -100,25 +82,7 @@ final class AuthenticateSharedPinAction
             throw new IdentityException(403, 'SHARED_LOGIN_FORBIDDEN', 'El usuario no tiene habilitado el acceso compartido.');
         }
 
-        $this->ensureNotBlocked($user);
-
-        if ($user->pin_daily_failed_attempts >= (int) config('identity.pin.daily_max_attempts', 20)) {
-            throw $this->blocked($user->pin_daily_window_started_at?->addDay());
-        }
-
-        try {
-            $valid = is_string($user->pin_hash) && $this->pinHasher->check($pin, $user->pin_hash);
-        } catch (\Throwable $exception) {
-            if ($exception instanceof \RuntimeException) {
-                throw new IdentityException(503, 'IDENTITY_NOT_CONFIGURED', 'La autenticación no está configurada.');
-            }
-
-            throw $exception;
-        }
-
-        if (! $valid) {
-            throw $this->recordFailure($user);
-        }
+        $this->verifyPin($user, $pin);
 
         return DB::transaction(function () use ($device, $user): AuthSession {
             $lockedDevice = SharedDevice::query()->whereKey($device->getKey())->lockForUpdate()->firstOrFail();
@@ -150,6 +114,35 @@ final class AuthenticateSharedPinAction
 
             return $session;
         });
+    }
+
+    public function verifyPin(User $user, string $pin): void
+    {
+        $user->refresh();
+        if (! $user->pin_enabled || ! is_string($user->pin_hash)) {
+            throw $this->invalidPin();
+        }
+
+        $this->ensureNotBlocked($user);
+
+        if ($user->pin_daily_failed_attempts >= (int) config('identity.pin.daily_max_attempts', 20)) {
+            throw $this->blocked($user->pin_daily_window_started_at?->addDay());
+        }
+
+        try {
+            $valid = $this->pinHasher->check($pin, $user->pin_hash);
+        } catch (\RuntimeException) {
+            throw new IdentityException(503, 'IDENTITY_NOT_CONFIGURED', 'La autenticación no está configurada.');
+        }
+
+        if (! $valid) {
+            throw $this->recordFailure($user);
+        }
+
+        User::query()->whereKey($user->getKey())->update([
+            'pin_failed_attempts' => 0,
+            'pin_failed_window_started_at' => null,
+        ]);
     }
 
     private function ensureNotBlocked(User $user): void

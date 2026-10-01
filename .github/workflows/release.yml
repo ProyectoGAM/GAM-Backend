@@ -1,0 +1,100 @@
+name: Backend Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: backend-production
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create release tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="v0.1.${GITHUB_RUN_NUMBER}"
+
+          git fetch --tags --force origin
+
+          if git ls-remote --exit-code origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            EXISTING_SHA="$(git rev-list -n 1 "${TAG}")"
+
+            if [[ "${EXISTING_SHA}" != "${GITHUB_SHA}" ]]; then
+              echo "The tag ${TAG} already points to another commit."
+              exit 1
+            fi
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "${TAG}" "${GITHUB_SHA}" -m "Release ${TAG}"
+            git push origin "${TAG}"
+          fi
+
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+
+  deploy:
+    needs: release
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Deploy exact backend tag
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          DEPLOY_SCRIPT: ${{ vars.VPS_BACKEND_DEPLOY_SCRIPT }}
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
+          RELEASE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "${VPS_HOST}"
+          test -n "${VPS_USER}"
+          test -n "${VPS_SSH_KEY}"
+          test -n "${VPS_KNOWN_HOSTS}"
+          test -n "${DEPLOY_SCRIPT}"
+
+          install -d -m 700 "${HOME}/.ssh"
+
+          printf '%s\n' "${VPS_SSH_KEY}" > "${HOME}/.ssh/gam_deploy"
+          printf '%s\n' "${VPS_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
+
+          chmod 600 "${HOME}/.ssh/gam_deploy"
+          chmod 644 "${HOME}/.ssh/known_hosts"
+
+          printf -v REMOTE_COMMAND \
+            'bash %q %q %q' \
+            "${DEPLOY_SCRIPT}" \
+            "${RELEASE_TAG}" \
+            "${RELEASE_SHA}"
+
+          ssh \
+            -i "${HOME}/.ssh/gam_deploy" \
+            -p "${VPS_PORT}" \
+            -o BatchMode=yes \
+            "${VPS_USER}@${VPS_HOST}" \
+            "${REMOTE_COMMAND}"

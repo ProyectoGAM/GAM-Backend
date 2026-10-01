@@ -47,5 +47,22 @@ class AppServiceProvider extends ServiceProvider
 
             return Limit::perMinute(30)->by('reporting|'.$key);
         });
+
+        RateLimiter::for('delivery-commands', function (Request $request): Limit {
+            $actor = $request->user();
+            $key = $actor === null ? $request->ip() : $actor->getAuthIdentifier();
+
+            return Limit::perMinute(60)->by('delivery-command|'.$key);
+        });
+
+        RateLimiter::for('delivery-location', function (Request $request): Limit {
+            $actor = $request->user();
+            $delivery = $request->route('reparto');
+            $deliveryKey = is_object($delivery) && method_exists($delivery, 'getRouteKey')
+                ? $delivery->getRouteKey()
+                : (string) $delivery;
+
+            return Limit::perMinute(120)->by('delivery-location|'.($actor?->getAuthIdentifier() ?? $request->ip()).'|'.$deliveryKey);
+        });
     }
 }

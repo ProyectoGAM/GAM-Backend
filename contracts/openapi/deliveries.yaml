@@ -1,0 +1,369 @@
+openapi: 3.1.0
+info:
+  title: GAM Delivery API
+  version: 1.0.0
+  description: Operación móvil de repartos, sincronización offline y monitoreo administrativo.
+servers:
+  - url: /
+tags:
+  - name: Repartos
+paths:
+  /api/v1/repartos:
+    post:
+      tags: [Repartos]
+      summary: Inicia un reparto y reserva la carga de huevos
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StartDelivery' }
+      responses:
+        '201': { $ref: '#/components/responses/Delivery' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    get:
+      tags: [Repartos]
+      summary: Lista repartos actuales e históricos
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [active, completed, cancelled] } }
+        - { name: driver_id, in: query, schema: { type: integer } }
+        - { name: date_from, in: query, schema: { type: string, format: date } }
+        - { name: date_to, in: query, schema: { type: string, format: date } }
+        - { name: per_page, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        '200': { $ref: '#/components/responses/DeliveryPage' }
+  /api/v1/repartos/actuales:
+    get:
+      tags: [Repartos]
+      summary: Lista los repartos activos para monitoreo
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/DeliveryPage' }
+  /api/v1/repartos/clientes:
+    get:
+      tags: [Repartos]
+      summary: Consulta clientes disponibles sin asignarlos a un reparto ni fijar un orden de visita
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: search, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 50 } }
+      responses:
+        '200':
+          description: Catálogo acotado de clientes disponibles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/DeliveryClient' } }
+  /api/v1/repartos/unidades:
+    get:
+      tags: [Repartos]
+      summary: Obtiene las presentaciones y equivalencias vigentes para cargar huevos
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Catálogo autoritativo de conversiones
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/DeliveryUnit' } }
+  /api/v1/repartos/{reparto}:
+    get:
+      tags: [Repartos]
+      summary: Consulta el detalle de un reparto
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: reparto, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { $ref: '#/components/responses/Delivery' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/repartos/{reparto}/entregas:
+    post:
+      tags: [Repartos]
+      summary: Registra o reintenta una visita a un cliente
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: reparto, in: path, required: true, schema: { type: string } }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeliveryStopInput' }
+      responses:
+        '200': { $ref: '#/components/responses/DeliveryStop' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/repartos/{reparto}/cargas:
+    post:
+      tags: [Repartos]
+      summary: Agrega una carga de huevos durante un reparto activo y actualiza inventario
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: reparto, in: path, required: true, schema: { type: string } }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddDeliveryLoad' }
+      responses:
+        '200': { $ref: '#/components/responses/Delivery' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/repartos/{reparto}/ubicaciones/lote:
+    post:
+      tags: [Repartos]
+      summary: Publica un lote de posiciones GPS con deduplicación por evento
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: reparto, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [locations]
+              properties:
+                locations:
+                  type: array
+                  maxItems: 100
+                  items: { $ref: '#/components/schemas/DeliveryLocationInput' }
+      responses:
+        '200':
+          description: Resultado de aceptación del lote
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [accepted, duplicates, pending]
+                    properties:
+                      accepted: { type: integer }
+                      duplicates: { type: integer }
+                      pending: { type: integer }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/repartos/{reparto}/cierre:
+    post:
+      tags: [Repartos]
+      summary: Cierra el reparto y registra el sobrante como devolución al stock
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: reparto, in: path, required: true, schema: { type: string } }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CloseDelivery' }
+      responses:
+        '200': { $ref: '#/components/responses/Delivery' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    StartDelivery:
+      type: object
+      required: [pin]
+      description: Enviar items para cargas con presentaciones; quantity se conserva para clientes anteriores. No enviar ambos.
+      properties:
+        pin: { type: string, pattern: '^[0-9]{4}$', description: PIN personal del repartidor; se valida en el servidor y no se guarda en el reparto }
+        production_unit_id: { type: integer, nullable: true }
+        quantity: { type: integer, minimum: 1, description: 'Formato anterior: huevos sueltos' }
+        items: { type: array, minItems: 1, maxItems: 20, items: { $ref: '#/components/schemas/DeliveryLoadItemInput' } }
+        vehicle_reference: { type: string, maxLength: 120 }
+    AddDeliveryLoad:
+      type: object
+      description: Enviar items o quantity, nunca ambos.
+      properties:
+        quantity: { type: integer, minimum: 1, description: 'Formato anterior: huevos sueltos' }
+        items: { type: array, minItems: 1, maxItems: 20, items: { $ref: '#/components/schemas/DeliveryLoadItemInput' } }
+    DeliveryUnit:
+      type: object
+      required: [id, label, category, eggs_per_unit]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        category: { type: string }
+        eggs_per_unit: { type: integer, minimum: 1 }
+    DeliveryLoadItemInput:
+      type: object
+      required: [unit, amount, eggs_per_unit]
+      properties:
+        unit: { type: string, description: Identificador del catálogo /repartos/unidades }
+        amount: { type: string, pattern: '^[0-9]{1,10}([.][0-9]{1,3})?$', description: 'Acepta cantidades fraccionarias como 0.5' }
+        eggs_per_unit: { type: integer, minimum: 1, description: Equivalencia mostrada al registrar; el servidor rechaza valores desactualizados }
+    DeliveryLoadItem:
+      allOf:
+        - $ref: '#/components/schemas/DeliveryLoadItemInput'
+        - type: object
+          properties:
+            label: { type: string }
+            category: { type: string }
+            eggs: { type: integer, minimum: 1 }
+    DeliveryStopItem:
+      allOf:
+        - $ref: '#/components/schemas/DeliveryLoadItemInput'
+        - type: object
+          required: [label, eggs]
+          properties:
+            label: { type: string }
+            eggs: { type: integer, minimum: 1 }
+    DeliveryUnitBalanceRow:
+      type: object
+      required: [unit, label, eggs_per_unit, loaded_amount, delivered_amount, remaining_amount, loaded_eggs, delivered_eggs]
+      properties:
+        unit: { type: string }
+        label: { type: string }
+        eggs_per_unit: { type: integer, minimum: 1, description: Equivalencia conservada de la carga }
+        loaded_amount: { type: string, description: Cantidad exacta en esta presentación }
+        delivered_amount: { type: string, description: Cantidad entregada en esta presentación }
+        remaining_amount: { type: string, nullable: true, description: Nulo si existen entregas o devoluciones antiguas sin presentación }
+        loaded_eggs: { type: integer }
+        delivered_eggs: { type: integer }
+    DeliveryUnitBalances:
+      type: object
+      required: [rows, unallocated_delivered_eggs, unallocated_returned_eggs]
+      properties:
+        rows: { type: array, items: { $ref: '#/components/schemas/DeliveryUnitBalanceRow' } }
+        unallocated_delivered_eggs: { type: integer, description: Huevos de entregas antiguas sin presentación; no se asignan a una unidad por suposición }
+        unallocated_returned_eggs: { type: integer }
+    DeliveryClient:
+      type: object
+      required: [id, name, address, latitude, longitude]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        address: { type: string }
+        latitude: { type: number }
+        longitude: { type: number }
+    DeliveryStopInput:
+      type: object
+      required: [client_reference, status]
+      properties:
+        client_reference: { type: string, maxLength: 80 }
+        status: { type: string, enum: [delivered, not_delivered] }
+        items: { type: array, minItems: 1, maxItems: 20, items: { $ref: '#/components/schemas/DeliveryLoadItemInput' }, description: 'Obligatorio para delivered y prohibido para not_delivered. El servidor calcula los huevos desde la equivalencia registrada en la carga.' }
+        visit_reason: { type: string, nullable: true, maxLength: 120 }
+        notes: { type: string, nullable: true, maxLength: 2000 }
+    DeliveryLocationInput:
+      type: object
+      required: [client_event_id, latitude, longitude, captured_at]
+      properties:
+        client_event_id: { type: string, format: uuid }
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+        accuracy: { type: number, minimum: 0 }
+        speed: { type: number, nullable: true, minimum: 0 }
+        captured_at: { type: string, format: date-time }
+    CloseDelivery:
+      type: object
+      required: [returned_quantity, pin]
+      properties:
+        pin: { type: string, pattern: '^[0-9]{4}$', description: PIN personal del repartidor; el cierre requiere conexión y no se encola }
+        returned_quantity: { type: integer, minimum: 0 }
+        notes: { type: string, nullable: true, maxLength: 2000 }
+    Delivery:
+      type: object
+      required: [id, status, loaded_quantity, delivered_quantity, returned_quantity, remaining_quantity, stops_summary]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [active, completed, cancelled] }
+        driver: { type: object, nullable: true }
+        production_unit: { type: object, nullable: true }
+        vehicle_reference: { type: string, nullable: true }
+        loaded_quantity: { type: integer }
+        delivered_quantity: { type: integer }
+        returned_quantity: { type: integer }
+        remaining_quantity: { type: integer }
+        unit_balances: { $ref: '#/components/schemas/DeliveryUnitBalances', description: Disponible cuando se consultan las cargas y visitas del reparto }
+        stops_summary: { type: object }
+        latest_location: { $ref: '#/components/schemas/DeliveryLocation', nullable: true }
+        stops: { type: array, items: { $ref: '#/components/schemas/DeliveryStop' } }
+        loads: { type: array, items: { $ref: '#/components/schemas/DeliveryLoad' } }
+        locations: { type: array, items: { $ref: '#/components/schemas/DeliveryLocation' } }
+    DeliveryStop:
+      type: object
+      required: [id, client_reference, status, delivered_quantity]
+      properties:
+        id: { type: integer }
+        client_reference: { type: string }
+        status: { type: string, enum: [pending, delivered, not_delivered] }
+        delivered_quantity: { type: integer, minimum: 0 }
+        items: { type: array, nullable: true, items: { $ref: '#/components/schemas/DeliveryStopItem' }, description: Nulo solo para registros de desarrollo anteriores sin detalle por presentación }
+        visit_reason: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        client_name: { type: string }
+        address: { type: string }
+        latitude: { type: number }
+        longitude: { type: number }
+        sequence: { type: integer }
+        visited_at: { type: string, format: date-time, nullable: true }
+    DeliveryLoad:
+      type: object
+      properties:
+        id: { type: integer }
+        idempotency_key: { type: string, format: uuid }
+        quantity: { type: integer }
+        items: { type: array, items: { $ref: '#/components/schemas/DeliveryLoadItem' } }
+        type: { type: string }
+        created_at: { type: string, format: date-time }
+    DeliveryLocation:
+      allOf:
+        - $ref: '#/components/schemas/DeliveryLocationInput'
+        - type: object
+          properties:
+            id: { type: integer }
+            received_at: { type: string, format: date-time }
+  responses:
+    Delivery:
+      description: Reparto
+      content:
+        application/json:
+          schema: { type: object, properties: { data: { $ref: '#/components/schemas/Delivery' } } }
+    DeliveryPage:
+      description: Repartos paginados
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { type: array, items: { $ref: '#/components/schemas/Delivery' } }
+              meta: { type: object }
+              links: { type: object }
+    DeliveryStop:
+      description: Visita registrada
+      content:
+        application/json:
+          schema: { type: object, properties: { data: { $ref: '#/components/schemas/DeliveryStop' } } }
+    Conflict:
+      description: Conflicto de estado o idempotencia
+    Forbidden:
+      description: Permiso insuficiente
+    NotFound:
+      description: Recurso no encontrado
+    ValidationError:
+      description: Error de validación
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum

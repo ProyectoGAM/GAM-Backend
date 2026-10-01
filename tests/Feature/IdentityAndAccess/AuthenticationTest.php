@@ -3,9 +3,11 @@
 namespace Tests\Feature\IdentityAndAccess;
 
 use App\Models\User;
+use Database\Seeders\IdentityPermissionSeeder;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class AuthenticationTest extends TestCase
@@ -92,6 +94,25 @@ class AuthenticationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.id', $user->id)
             ->assertJsonPath('session.kind', 'personal');
+    }
+
+    public function test_delivery_role_can_use_web_login_with_a_personal_account(): void
+    {
+        $this->seed(IdentityPermissionSeeder::class);
+        $user = User::factory()->create([
+            'email' => 'delivery-web-login@example.test',
+            'password' => 'correct-password',
+        ]);
+        $user->assignRole(Role::findByName('delivery', 'web'));
+
+        $this->withHeader('Origin', 'http://localhost:4200')
+            ->postJson('/api/v1/auth/web/login', [
+                'email' => 'delivery-web-login@example.test',
+                'password' => 'correct-password',
+            ])
+            ->assertOk()
+            ->assertJsonPath('user.id', $user->id)
+            ->assertJsonMissingPath('access_token');
     }
 
     // Flujo: intenta iniciar sesión con contraseña incorrecta y verifica que no se emite token.

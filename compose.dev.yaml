@@ -137,7 +137,7 @@ services:
       - -ec
       - |
         until pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"; do sleep 1; done
-        /docker-entrypoint-initdb.d/01-create-test-database.sh
+        sh /docker-entrypoint-initdb.d/01-create-test-database.sh
     depends_on:
       postgres:
         condition: service_healthy
@@ -327,7 +327,8 @@ services:
          {"url":"/docs/openapi/vaccination.yaml","name":"Vacunas"},
          {"url":"/docs/openapi/feed-stock.yaml","name":"Plantas de ración y stock"},
          {"url":"/docs/openapi/reporting.yaml","name":"Reportes e indicadores"},
-         {"url":"/docs/openapi/reference-data.yaml","name":"Opciones de referencia"}]
+         {"url":"/docs/openapi/reference-data.yaml","name":"Opciones de referencia"},
+         {"url":"/docs/openapi/deliveries.yaml","name":"Repartos"}]
       URLS_PRIMARY_NAME: Autenticación
     volumes:
       - ./contracts/openapi:/usr/share/nginx/html/openapi:ro
