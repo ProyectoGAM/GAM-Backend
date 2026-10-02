@@ -111,6 +111,7 @@ final readonly class RedistributeFlockAction
                     'version' => $from->version + 1,
                 ])->save();
                 $to->current_quantity += $quantity;
+                $to->is_grouped = true;
                 $to->version++;
                 $to->save();
                 $destination = $to;
@@ -142,6 +143,7 @@ final readonly class RedistributeFlockAction
                     $type = 'partial_existing';
                     $destination = $to;
                     $destination->current_quantity += $quantity;
+                    $destination->is_grouped = true;
                     $destination->version++;
                     $destination->save();
                 }

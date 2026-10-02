@@ -23,6 +23,7 @@ use Illuminate\Support\Str;
  * @property int $production_unit_id
  * @property int $initial_quantity
  * @property int $current_quantity
+ * @property bool $is_grouped
  * @property CarbonImmutable $entry_date
  * @property CarbonImmutable $established_at
  * @property FlockStatus $status
@@ -36,6 +37,9 @@ class Flock extends Model
 {
     /** Conserva el instante aunque PostgreSQL use una zona horaria distinta de UTC. */
     protected $dateFormat = 'Y-m-d H:i:sP';
+
+    /** @var array<string, mixed> */
+    protected $attributes = ['is_grouped' => false];
 
     /** @use HasFactory<FlockFactory> */
     use HasFactory;
@@ -61,6 +65,7 @@ class Flock extends Model
             'finalized_at' => 'immutable_datetime',
             'initial_quantity' => 'integer',
             'current_quantity' => 'integer',
+            'is_grouped' => 'boolean',
             'version' => 'integer',
             'status' => FlockStatus::class,
         ];

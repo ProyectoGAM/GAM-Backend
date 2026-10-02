@@ -28,8 +28,8 @@ final class FlockMovementResource extends JsonResource
             'created_at' => $data['created_at'] ?? null,
             'reason' => $data['reason'] ?? null,
             'created_by' => $data['created_by'] ?? null,
-            'before' => (object) array_map(fn (array $flock): array => (new FlockResource($flock))->resolve($request), $data['before']),
-            'after' => (object) array_map(fn (array $flock): array => (new FlockResource($flock))->resolve($request), $data['after']),
+            'before' => (object) array_map(fn (array $flock): array => (new FlockSnapshotResource($flock))->resolve($request), $data['before']),
+            'after' => (object) array_map(fn (array $flock): array => (new FlockSnapshotResource($flock))->resolve($request), $data['after']),
         ];
     }
 }
