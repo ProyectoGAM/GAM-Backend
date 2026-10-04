@@ -20,6 +20,7 @@ final class ListDeliveriesRequest extends DeliveryRequest
         return [
             'status' => ['sometimes', Rule::enum(DeliveryStatus::class)],
             'driver_id' => ['sometimes', 'integer', 'exists:users,id'],
+            'production_unit_id' => ['sometimes', 'integer', 'exists:production_units,id'],
             'date_from' => ['sometimes', 'date'],
             'date_to' => ['sometimes', 'date', 'after_or_equal:date_from'],
             'per_page' => ['sometimes', 'integer', 'between:1,100'],
@@ -30,7 +31,7 @@ final class ListDeliveriesRequest extends DeliveryRequest
     public function filters(): array
     {
         $filters = $this->validated();
-        foreach (['driver_id', 'per_page'] as $key) {
+        foreach (['driver_id', 'production_unit_id', 'per_page'] as $key) {
             if (isset($filters[$key])) {
                 $filters[$key] = (int) $filters[$key];
             }

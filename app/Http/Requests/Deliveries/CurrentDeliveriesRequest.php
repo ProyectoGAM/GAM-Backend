@@ -15,13 +15,20 @@ final class CurrentDeliveriesRequest extends DeliveryRequest
     /** @return array<string, list<string>> */
     public function rules(): array
     {
-        return ['per_page' => ['sometimes', 'integer', 'between:1,100']];
+        return [
+            'production_unit_id' => ['sometimes', 'integer', 'exists:production_units,id'],
+            'per_page' => ['sometimes', 'integer', 'between:1,100'],
+        ];
     }
 
     /** @return array<string, mixed> */
     public function filters(): array
     {
         $filters = $this->validated();
+        if (isset($filters['production_unit_id'])) {
+            $filters['production_unit_id'] = (int) $filters['production_unit_id'];
+        }
+
         $actor = $this->user();
 
         if ($actor !== null && ! $actor->can('delivery.monitor')) {

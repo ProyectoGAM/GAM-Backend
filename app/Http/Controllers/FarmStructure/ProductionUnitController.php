@@ -4,9 +4,11 @@ namespace App\Http\Controllers\FarmStructure;
 
 use App\Actions\FarmStructure\CreateProductionUnitAction;
 use App\Actions\FarmStructure\UpdateProductionUnitAction;
+use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Http\Requests\FarmStructure\ListProductionUnitsRequest;
 use App\Http\Requests\FarmStructure\StoreProductionUnitRequest;
 use App\Http\Requests\FarmStructure\UpdateProductionUnitRequest;
+use App\Http\Requests\FarmStructure\ValidateProductionUnitLocationRequest;
 use App\Http\Requests\FarmStructure\ViewProductionUnitRequest;
 use App\Http\Resources\FarmStructure\ProductionUnitResource;
 use App\Models\FarmStructure\ProductionUnit;
@@ -32,8 +34,8 @@ final readonly class ProductionUnitController
     ): JsonResponse {
         /** @var User $actor */
         $actor = $request->user();
-        $data = $request->safe()->only(['locality_id', 'name', 'latitude', 'longitude', 'status']);
-        $data['locality_id'] = (int) $data['locality_id'];
+        $data = $request->safe()->only(['locality_id', 'name', 'address', 'latitude', 'longitude', 'status']);
+        $data['locality_id'] = isset($data['locality_id']) ? (int) $data['locality_id'] : null;
         $data['latitude'] = (string) $data['latitude'];
         $data['longitude'] = (string) $data['longitude'];
         $productionUnit = $action->execute($data, $actor);
@@ -51,6 +53,11 @@ final readonly class ProductionUnitController
         return new ProductionUnitResource($query->execute((int) $productionUnit->getKey()));
     }
 
+    public function validateLocation(ValidateProductionUnitLocationRequest $request): Response
+    {
+        return response()->noContent();
+    }
+
     public function update(
         UpdateProductionUnitRequest $request,
         ProductionUnit $productionUnit,
@@ -58,9 +65,13 @@ final readonly class ProductionUnitController
     ): ProductionUnitResource {
         /** @var User $actor */
         $actor = $request->user();
-        $data = $request->safe()->only(['locality_id', 'name', 'latitude', 'longitude']);
+        $data = $request->safe()->only(['locality_id', 'name', 'address', 'latitude', 'longitude', 'status']);
+        $status = array_key_exists('status', $data)
+            ? ProductionUnitStatus::from($data['status'])
+            : null;
+        unset($data['status']);
 
-        if (array_key_exists('locality_id', $data)) {
+        if (isset($data['locality_id'])) {
             $data['locality_id'] = (int) $data['locality_id'];
         }
 
@@ -72,6 +83,6 @@ final readonly class ProductionUnitController
             $data['longitude'] = (string) $data['longitude'];
         }
 
-        return new ProductionUnitResource($action->execute($productionUnit, $data, $actor));
+        return new ProductionUnitResource($action->execute($productionUnit, $data, $actor, $status));
     }
 }

@@ -54,7 +54,7 @@ jobs:
             -e TELESCOPE_ENABLED=false \
             -e NIGHTWATCH_ENABLED=false \
             -e IDENTITY_PIN_PEPPER=test-only-temporary-value \
-            api php artisan test --compact --do-not-cache-result
+            api php -d memory_limit=1G vendor/bin/phpunit --do-not-cache-result
 
       - name: Run PHPStan
         run: docker compose -f compose.dev.yaml exec -T api vendor/bin/phpstan analyse app --memory-limit=1G

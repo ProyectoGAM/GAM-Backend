@@ -97,7 +97,7 @@ final readonly class CloseDeliveryAction
     {
         return $delivery->load([
             'driver:id,name',
-            'productionUnit:id,name',
+            'productionUnit:id,name,latitude,longitude',
             'loads',
             'stops',
             'latestLocation',
