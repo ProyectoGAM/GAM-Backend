@@ -16,18 +16,19 @@ use Illuminate\Support\Str;
 
 /**
  * @property int $id
- * @property int $locality_id
+ * @property int|null $locality_id
  * @property string $name
  * @property string $normalized_name
+ * @property string|null $address
  * @property string $latitude
  * @property string $longitude
  * @property ProductionUnitStatus $status
  * @property int|null $poultry_houses_count
- * @property-read Locality $locality
+ * @property-read Locality|null $locality
  * @property-read Carbon $created_at
  * @property-read Carbon $updated_at
  */
-#[Fillable(['locality_id', 'name', 'latitude', 'longitude', 'status'])]
+#[Fillable(['locality_id', 'name', 'address', 'latitude', 'longitude', 'status'])]
 class ProductionUnit extends Model
 {
     /** @use HasFactory<ProductionUnitFactory> */

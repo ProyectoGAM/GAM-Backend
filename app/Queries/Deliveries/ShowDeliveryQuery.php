@@ -11,7 +11,7 @@ final readonly class ShowDeliveryQuery
         return Delivery::query()
             ->with([
                 'driver:id,name',
-                'productionUnit:id,name',
+                'productionUnit:id,name,latitude,longitude',
                 'loads',
                 'stops',
                 'latestLocation',

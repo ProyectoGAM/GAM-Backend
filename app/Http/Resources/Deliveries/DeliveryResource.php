@@ -26,6 +26,8 @@ final class DeliveryResource extends JsonResource
             'production_unit' => $this->when($this->relationLoaded('productionUnit'), fn (): array => [
                 'id' => $this->productionUnit->id,
                 'name' => $this->productionUnit->name,
+                'latitude' => $this->productionUnit->latitude,
+                'longitude' => $this->productionUnit->longitude,
             ]),
             'vehicle_reference' => $this->vehicle_reference,
             'loaded_quantity' => (int) $this->loaded_quantity,

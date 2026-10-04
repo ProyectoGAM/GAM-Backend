@@ -9,13 +9,13 @@ use Illuminate\Database\Eloquent\Builder;
 
 final readonly class ListDeliveriesQuery
 {
-    /** @param array{status?:string,driver_id?:int,date_from?:string,date_to?:string,per_page?:int} $filters */
+    /** @param array{status?:string,driver_id?:int,production_unit_id?:int,date_from?:string,date_to?:string,per_page?:int} $filters */
     public function execute(array $filters, ?DeliveryStatus $forcedStatus = null): LengthAwarePaginator
     {
         return Delivery::query()
             ->with([
                 'driver:id,name',
-                'productionUnit:id,name',
+                'productionUnit:id,name,latitude,longitude',
                 'latestLocation',
             ])
             ->withCount([
@@ -27,6 +27,7 @@ final readonly class ListDeliveriesQuery
             ->when($forcedStatus, fn (Builder $query, DeliveryStatus $status): Builder => $query->where('status', $status))
             ->when($filters['status'] ?? null, fn (Builder $query, string $status): Builder => $query->where('status', $status))
             ->when($filters['driver_id'] ?? null, fn (Builder $query, int $driverId): Builder => $query->where('driver_id', $driverId))
+            ->when($filters['production_unit_id'] ?? null, fn (Builder $query, int $productionUnitId): Builder => $query->where('production_unit_id', $productionUnitId))
             ->when($filters['date_from'] ?? null, fn (Builder $query, string $date): Builder => $query->whereDate('started_at', '>=', $date))
             ->when($filters['date_to'] ?? null, fn (Builder $query, string $date): Builder => $query->whereDate('started_at', '<=', $date))
             ->orderByDesc('started_at')
