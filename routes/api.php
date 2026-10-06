@@ -246,6 +246,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             ->name('production-units.index');
         Route::post('/production-units', [ProductionUnitController::class, 'store'])
             ->name('production-units.store');
+        Route::post('/production-units/validate-location', [ProductionUnitController::class, 'validateLocation'])
+            ->name('production-units.validate-location');
         Route::get('/production-units/{productionUnit}', [ProductionUnitController::class, 'show'])
             ->name('production-units.show');
         Route::patch('/production-units/{productionUnit}', [ProductionUnitController::class, 'update'])

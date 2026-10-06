@@ -446,10 +446,18 @@ final class DeliveryEndpointTest extends TestCase
 
     public function test_driver_can_query_only_their_active_delivery(): void
     {
+        // Preparación: registra repartos activos de dos usuarios en unidades diferentes.
         $firstDriver = $this->signIn(['delivery.start', 'delivery.view-own']);
-        $unit = ProductionUnit::factory()->create();
+        $firstUnit = ProductionUnit::factory()->create([
+            'latitude' => '-34.901100',
+            'longitude' => '-56.164500',
+        ]);
+        $secondUnit = ProductionUnit::factory()->create([
+            'latitude' => '-33.413100',
+            'longitude' => '-56.500000',
+        ]);
         $firstDelivery = $this->command('POST', '/repartos', [
-            'production_unit_id' => $unit->id,
+            'production_unit_id' => $firstUnit->id,
             'quantity' => 10,
         ])->assertCreated();
 
@@ -465,20 +473,67 @@ final class DeliveryEndpointTest extends TestCase
         ]);
         Sanctum::actingAs($secondDriver, ['api:access']);
         $secondDelivery = $this->command('POST', '/repartos', [
-            'production_unit_id' => $unit->id,
+            'production_unit_id' => $secondUnit->id,
             'quantity' => 10,
         ])->assertCreated();
 
-        $secondResponse = $this->getJson('/api/v1/repartos/actuales')
+        // Acción: filtra el reparto activo del segundo operador y consulta sus coordenadas de unidad.
+        $secondResponse = $this->getJson("/api/v1/repartos/actuales?production_unit_id={$secondUnit->id}")
             ->assertOk()
-            ->assertJsonCount(1, 'data');
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.production_unit.latitude', '-33.413100')
+            ->assertJsonPath('data.0.production_unit.longitude', '-56.500000');
         $this->assertSame($secondDelivery->json('data.id'), $secondResponse->json('data.0.id'));
 
+        // Acción: filtra la unidad propia y confirma que otro repartidor no amplía el resultado.
         Sanctum::actingAs($firstDriver, ['api:access']);
-        $firstResponse = $this->getJson('/api/v1/repartos/actuales')
+        $firstResponse = $this->getJson("/api/v1/repartos/actuales?production_unit_id={$firstUnit->id}")
             ->assertOk()
             ->assertJsonCount(1, 'data');
         $this->assertSame($firstDelivery->json('data.id'), $firstResponse->json('data.0.id'));
+        $this->getJson("/api/v1/repartos/actuales?production_unit_id={$secondUnit->id}")
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
+    // Flujo: filtra históricos y actuales por unidad y expone sus coordenadas persistidas.
+    public function test_monitor_can_filter_current_and_history_by_unit_and_read_unit_coordinates(): void
+    {
+        // Preparación: crea repartos reales asociados a dos unidades con puntos conocidos.
+        $firstUnit = ProductionUnit::factory()->create([
+            'latitude' => '-34.901100',
+            'longitude' => '-56.164500',
+        ]);
+        $secondUnit = ProductionUnit::factory()->create([
+            'latitude' => '-33.413100',
+            'longitude' => '-56.500000',
+        ]);
+        $firstDelivery = Delivery::factory()->create(['production_unit_id' => $firstUnit->id]);
+        Delivery::factory()->create(['production_unit_id' => $secondUnit->id]);
+        $this->signIn(['delivery.monitor', 'delivery.history']);
+
+        // Acción: obtiene repartos históricos filtrados y comprueba la ubicación de su unidad.
+        $this->getJson("/api/v1/repartos?production_unit_id={$firstUnit->id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $firstDelivery->public_id)
+            ->assertJsonPath('data.0.production_unit.latitude', '-34.901100')
+            ->assertJsonPath('data.0.production_unit.longitude', '-56.164500');
+
+        // Acción: filtra repartos actuales y consulta el detalle con el mismo contrato de ubicación.
+        $current = $this->getJson("/api/v1/repartos/actuales?production_unit_id={$secondUnit->id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.production_unit.id', $secondUnit->id)
+            ->assertJsonPath('data.0.production_unit.latitude', '-33.413100');
+        $this->getJson('/api/v1/repartos/'.$current->json('data.0.id'))
+            ->assertOk()
+            ->assertJsonPath('data.production_unit.longitude', '-56.500000');
+
+        // Verificación: rechaza identificadores de unidad que no existen.
+        $this->getJson('/api/v1/repartos?production_unit_id=999999')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['production_unit_id']);
     }
 
     public function test_user_without_delivery_permission_is_forbidden_from_starting_a_delivery(): void

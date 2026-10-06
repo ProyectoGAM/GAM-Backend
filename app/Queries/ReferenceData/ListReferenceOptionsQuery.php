@@ -175,7 +175,7 @@ final readonly class ListReferenceOptionsQuery
             ->get(['id', 'locality_id', 'name'])
             ->map(fn (ProductionUnit $unit): array => $this->option(
                 $unit->getKey(),
-                $unit->name.' — '.$unit->locality->name,
+                $unit->locality === null ? $unit->name : $unit->name.' — '.$unit->locality->name,
             ))
             ->values()
             ->all();

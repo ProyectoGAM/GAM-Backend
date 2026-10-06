@@ -14,7 +14,7 @@ final class WeighingDemoSeeder extends Seeder
 {
     public function run(SaveWeighingReferenceSettingsAction $settings, RecordWeighingAction $weighings): void
     {
-        if (! app()->environment('local')) {
+        if (! app()->environment('local') && ! (app()->environment('production') && config('app.demo_db_reset_enabled'))) {
             return;
         }
         $actor = User::query()->where('email', config('auth.admin.email'))->firstOrFail();

@@ -25,7 +25,7 @@ final class EggProductionDemoSeeder extends Seeder
 {
     public function run(CreateFlockAction $flocks, RecordEggCollectionAction $collections, CorrectEggCollectionAction $corrections, RecordManualEggStockAction $manual, EnsureEggStockAccountAction $accounts, CreatePoultryHouseAction $createHouse): void
     {
-        if (! app()->environment('local')) {
+        if (! app()->environment('local') && ! (app()->environment('production') && config('app.demo_db_reset_enabled'))) {
             return;
         }
         $actor = User::query()->where('email', config('auth.admin.email'))->firstOrFail();

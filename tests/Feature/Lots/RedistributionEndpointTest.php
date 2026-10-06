@@ -107,6 +107,11 @@ final class RedistributionEndpointTest extends LotsTestCase
             'version' => 1, 'quantity' => 30, 'destination_flock_id' => $destination->public_id, 'destination_version' => 1,
         ])->assertCreated()->assertJsonPath('data.flock.current_quantity', 70)
             ->assertJsonPath('data.destination_flock.current_quantity', 50)->assertJsonPath('data.movement.type', 'partial_existing');
+        $this->assertDatabaseHas('flocks', ['id' => $destination->id, 'is_grouped' => true]);
+        $this->assertDatabaseHas('flocks', ['id' => $source->id, 'is_grouped' => false]);
+        $this->getJson("/api/v1/flocks/{$destination->public_id}")->assertOk()->assertJsonPath('data.is_grouped', true);
+        $this->getJson('/api/v1/flocks?production_unit_id='.$destination->production_unit_id.'&search='.$destination->code.'&per_page=1')
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.is_grouped', true);
         $this->assertEquals($original, $destination->fresh()->only(array_keys($original)));
         $this->assertDatabaseCount('flocks', 2);
         $this->assertSame(120, (int) Flock::query()->sum('current_quantity'));
@@ -128,6 +133,29 @@ final class RedistributionEndpointTest extends LotsTestCase
         ])->assertCreated();
         $this->assertSame(70, $this->app->make(PoultryHouseOccupancyProvider::class)->occupancyFor($house->id));
         $this->assertSame(30, $this->app->make(PoultryHouseOccupancyProvider::class)->occupancyFor($destination->poultry_house_id));
+    }
+
+    // Flujo: una incorporación parcial revertida deja al receptor marcado como agrupado.
+    public function test_partial_existing_reversal_keeps_recipient_grouped(): void
+    {
+        // Preparación: crea dos lotes compatibles en galpones distintos.
+        $this->signIn();
+        $breed = Breed::factory()->create();
+        $source = $this->flock(100, $breed);
+        $destination = $this->flock(20, $breed);
+
+        // Request: incorpora parte del origen y luego revierte el movimiento.
+        $operation = $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
+            'version' => 1, 'quantity' => 10, 'destination_flock_id' => $destination->public_id, 'destination_version' => 1,
+        ])->assertCreated();
+        $this->command('POST', '/redistributions/'.$operation->json('data.movement.id').'/reversals', [
+            'version' => 2, 'destination_version' => 2, 'reason' => 'Incorporación anulada',
+        ])->assertOk();
+
+        // Consulta: la cantidad vuelve al valor anterior y la clasificación permanece.
+        $this->assertSame(20, $destination->fresh()->current_quantity);
+        $this->assertTrue($destination->fresh()->is_grouped);
+        $this->getJson("/api/v1/flocks/{$destination->public_id}")->assertOk()->assertJsonPath('data.is_grouped', true);
     }
 
     // Flujo: exige un galpón vacío para una división que crea un lote nuevo.
@@ -192,6 +220,7 @@ final class RedistributionEndpointTest extends LotsTestCase
             ->assertJsonPath('data.flock.status', 'finished')
             ->assertJsonPath('data.destination_flock.current_quantity', 120);
         $this->assertDatabaseCount('flock_movements', 1);
+        $this->assertDatabaseHas('flocks', ['id' => $destination->id, 'is_grouped' => true]);
         $this->assertDatabaseMissing('flock_movements', ['type' => 'departure']);
         $this->assertSame(120, (int) Flock::query()->sum('current_quantity'));
         $this->getJson("/api/v1/flocks/{$source->public_id}/history?type=total_existing")
@@ -364,6 +393,8 @@ final class RedistributionEndpointTest extends LotsTestCase
             ->assertJsonPath('data.destination_flock.current_quantity', 20);
         $this->assertSame(FlockStatus::Active, $source->fresh()->status);
         $this->assertSame(20, $destination->fresh()->current_quantity);
+        $this->assertTrue($destination->fresh()->is_grouped);
+        $this->getJson("/api/v1/flocks/{$destination->public_id}")->assertOk()->assertJsonPath('data.is_grouped', true);
         $this->assertDatabaseHas('flock_movements', ['type' => 'redistribution_reversal', 'reverses_movement_id' => $movement->id]);
     }
 

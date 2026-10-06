@@ -27,9 +27,8 @@ final class FeedStockDemoSeeder extends Seeder
         CreatePoultryHouseAction $createPoultryHouse,
         RecordInventoryMovementAction $recordMovement,
         SetMinimumStockAction $setMinimumStock,
-    ): void
-    {
-        if (! app()->environment('local')) {
+    ): void {
+        if (! app()->environment('local') && ! (app()->environment('production') && config('app.demo_db_reset_enabled'))) {
             return;
         }
 
@@ -105,8 +104,7 @@ final class FeedStockDemoSeeder extends Seeder
         array $products,
         array $locations,
         Supplier $supplier,
-    ): void
-    {
+    ): void {
         $this->recordMovement(
             $recordMovement,
             '00000000-0000-4000-8000-000000000001',

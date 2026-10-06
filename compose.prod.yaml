@@ -17,6 +17,10 @@ x-app: &app
     APP_KEY: ${APP_KEY:?Set APP_KEY in .env.production}
     APP_LOCALE: es
     TZ: America/Montevideo
+    ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    DEMO_DB_RESET_ENABLED: "${DEMO_DB_RESET_ENABLED:-false}"
+    DEMO_VPS_HOST: ${DEMO_VPS_HOST:-}
+    DEMO_DB_DATABASE: ${DEMO_DB_DATABASE:-}
     LOG_CHANNEL: stderr
     LOG_LEVEL: warning
     DB_CONNECTION: pgsql

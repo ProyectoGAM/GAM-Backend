@@ -24,6 +24,7 @@ final readonly class LotsSnapshots
             'origin' => $flock->origin, 'supplier_name' => $flock->supplier_name,
             'poultry_house_id' => $flock->poultry_house_id, 'production_unit_id' => $flock->production_unit_id,
             'initial_quantity' => $flock->initial_quantity, 'current_quantity' => $flock->current_quantity,
+            'is_grouped' => $flock->is_grouped,
             'entry_date' => $flock->entry_date->format('Y-m-d'), 'established_at' => $flock->established_at->toIso8601String(),
             'age_days' => $age->days, 'current_week' => $age->week,
             'status' => $flock->status->value, 'version' => $flock->version, 'notes' => $flock->notes,

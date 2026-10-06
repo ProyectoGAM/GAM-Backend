@@ -3,6 +3,7 @@
 namespace Tests\Feature\IdentityAndAccess;
 
 use App\Models\User;
+use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -85,5 +86,38 @@ final class AdminSeederTest extends TestCase
         // Verificación: confirma que el administrador quedó activo nuevamente.
         $this->assertFalse($restoredAdmin->trashed());
         $this->assertNull($restoredAdmin->deleted_at);
+    }
+
+    // Flujo: producción conserva la base sin datos demo cuando el reset está apagado.
+    public function test_production_seed_keeps_demo_data_disabled_without_the_reset_flag(): void
+    {
+        // Preparación: fuerza producción con el reset apagado en la base aislada de pruebas.
+        $this->app->instance('env', 'production');
+        config(['app.demo_db_reset_enabled' => false]);
+
+        // Acción: ejecuta el seeder normal y consulta que no haya datos ficticios.
+        $this->artisan('db:seed', ['--class' => DatabaseSeeder::class, '--force' => true])->assertExitCode(0);
+
+        $this->assertDatabaseCount('production_units', 0);
+        $this->assertDatabaseCount('flocks', 0);
+    }
+
+    // Flujo: el reset explícito siembra datos útiles y conserva el administrador activo.
+    public function test_explicit_production_reset_flag_seeds_demo_and_usable_admin(): void
+    {
+        // Preparación: activa sólo la opción de seed demo dentro de la base aislada de pruebas.
+        $this->app->instance('env', 'production');
+        config(['app.demo_db_reset_enabled' => true]);
+
+        // Acción: ejecuta la carga completa equivalente al reset explícito de producción.
+        $this->artisan('db:seed', ['--class' => DatabaseSeeder::class, '--force' => true])->assertExitCode(0);
+
+        // Verificación: comprueba el admin activo, sus permisos y registros útiles del demo.
+        $admin = User::query()->where('email', config('auth.admin.email'))->firstOrFail();
+        $this->assertFalse($admin->trashed());
+        $this->assertTrue($admin->hasRole('admin'));
+        $this->assertTrue($admin->can('admin.dashboard.view'));
+        $this->assertDatabaseHas('production_units', ['name' => 'Granja El Ombú']);
+        $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-A']);
     }
 }

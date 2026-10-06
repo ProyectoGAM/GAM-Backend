@@ -46,6 +46,7 @@ final readonly class ChangeProductionUnitStatusAction
                 properties: [
                     'subject_snapshot' => [
                         'name' => $lockedProductionUnit->name,
+                        'address' => $lockedProductionUnit->address,
                         'status' => $lockedProductionUnit->status->value,
                     ],
                 ],

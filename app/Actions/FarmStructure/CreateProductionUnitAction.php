@@ -14,7 +14,7 @@ final readonly class CreateProductionUnitAction
     public function __construct(private AuditRecorder $auditRecorder) {}
 
     /**
-     * @param  array{locality_id: int, name: string, latitude: numeric-string, longitude: numeric-string, status?: string}  $attributes
+     * @param  array{locality_id: int|null, name: string, address: string, latitude: numeric-string, longitude: numeric-string, status?: string}  $attributes
      */
     public function execute(array $attributes, User $actor): ProductionUnit
     {
@@ -42,12 +42,13 @@ final readonly class CreateProductionUnitAction
         });
     }
 
-    /** @return array{locality_id: int, name: string, latitude: string, longitude: string, status: string} */
+    /** @return array{locality_id: int|null, name: string, address: string|null, latitude: string, longitude: string, status: string} */
     private function snapshot(ProductionUnit $productionUnit): array
     {
         return [
             'locality_id' => $productionUnit->locality_id,
             'name' => $productionUnit->name,
+            'address' => $productionUnit->address,
             'latitude' => $productionUnit->latitude,
             'longitude' => $productionUnit->longitude,
             'status' => $productionUnit->status->value,

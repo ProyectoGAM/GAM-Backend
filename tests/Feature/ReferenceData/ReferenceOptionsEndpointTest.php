@@ -26,6 +26,7 @@ final class ReferenceOptionsEndpointTest extends TestCase
         $department = Department::factory()->create(['name' => 'Rocha']);
         $locality = Locality::factory()->create(['department_id' => $department->getKey(), 'name' => 'Chuy']);
         $unit = ProductionUnit::factory()->create(['locality_id' => $locality->getKey(), 'name' => 'Granja Norte']);
+        $ruralUnit = ProductionUnit::factory()->create(['locality_id' => null, 'name' => 'Granja Rural']);
         $supplier = Supplier::factory()->create(['locality_id' => $locality->getKey(), 'name' => 'Proveedor Sur']);
         $product = Product::factory()->create(['sku' => 'ALIMENTO-001', 'name' => 'Ración inicial']);
         $location = StockLocation::factory()->create(['production_unit_id' => $unit->getKey(), 'name' => 'Depósito principal']);
@@ -46,6 +47,7 @@ final class ReferenceOptionsEndpointTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('data.localities.0.value', $locality->getKey())
             ->assertJsonPath('data.localities.0.label', 'Chuy — Rocha')
+            ->assertJsonFragment(['value' => $ruralUnit->getKey(), 'label' => 'Granja Rural'])
             ->assertJsonPath('data.products.0.value', $product->getKey())
             ->assertJsonPath('data.products.0.label', 'ALIMENTO-001 — Ración inicial')
             ->assertJsonPath('data.stock_locations.0.value', $location->getKey())
