@@ -28,6 +28,8 @@ return [
 
     'env' => env('APP_ENV', 'production'),
 
+    'demo_db_reset_enabled' => (bool) env('DEMO_DB_RESET_ENABLED', false),
+
     /*
     |--------------------------------------------------------------------------
     | Application Debug Mode

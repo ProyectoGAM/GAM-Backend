@@ -24,7 +24,7 @@ final class LotsDemoSeeder extends Seeder
 {
     public function run(CreateFlockAction $create, RedistributeFlockAction $redistribute, RecordMortalityAction $mortality, FinalizeFlockAction $finalize, ChangeFlockStatusAction $status, SaveBreedAction $breeds, SaveMortalityCategoryAction $categories, CreatePoultryHouseAction $createHouse): void
     {
-        if (! app()->environment('local')) {
+        if (! app()->environment('local') && ! (app()->environment('production') && config('app.demo_db_reset_enabled'))) {
             return;
         }
         $planTemplate = PlanTemplate::query()->where('name', 'Plan inicial de manejo (demo)')->firstOrFail();
