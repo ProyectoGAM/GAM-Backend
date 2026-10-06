@@ -60,6 +60,11 @@ jobs:
     environment: production
 
     steps:
+      - name: Checkout deployed commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
       - name: Deploy exact backend tag
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
