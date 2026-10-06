@@ -13,6 +13,7 @@ use App\Http\Controllers\IdentityAndAccess\AdminController;
 use App\Http\Controllers\IdentityAndAccess\AuthController;
 use App\Http\Controllers\IdentityAndAccess\SharedDeviceController;
 use App\Http\Controllers\IdentityAndAccess\UserManagementController;
+use App\Http\Controllers\Inventory\EggPresentationController;
 use App\Http\Controllers\Inventory\EggStockController;
 use App\Http\Controllers\Inventory\FeedStockController;
 use App\Http\Controllers\Inventory\InventoryMovementController;
@@ -147,6 +148,11 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             ->name('deliveries.current');
         Route::get('/repartos/clientes', [DeliveryController::class, 'clients'])
             ->name('deliveries.clients');
+        Route::get('/repartos/unidades-productivas', [DeliveryController::class, 'productionUnits'])->name('deliveries.production-units');
+        Route::get('/inventario/presentaciones-huevos', [EggPresentationController::class, 'index'])->name('egg-presentations.index');
+        Route::post('/inventario/presentaciones-huevos', [EggPresentationController::class, 'store'])->name('egg-presentations.store');
+        Route::patch('/inventario/presentaciones-huevos/{presentation}', [EggPresentationController::class, 'update'])->name('egg-presentations.update');
+
         Route::get('/repartos/unidades', [DeliveryController::class, 'units'])
             ->name('deliveries.units');
         Route::get('/repartos', [DeliveryController::class, 'index'])

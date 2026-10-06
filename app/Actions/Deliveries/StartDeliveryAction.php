@@ -14,6 +14,7 @@ use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
 use App\Services\Deliveries\DeliveryLoadUnits;
 use App\Services\Deliveries\LocalDeliveryClientCatalog;
+use App\Services\Inventory\EggPresentationCatalog;
 use Illuminate\Support\Facades\DB;
 
 final readonly class StartDeliveryAction
@@ -23,6 +24,7 @@ final readonly class StartDeliveryAction
         private AuditRecorder $audit,
         private LocalDeliveryClientCatalog $clientCatalog,
         private DeliveryLoadUnits $units,
+        private EggPresentationCatalog $catalog,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -34,7 +36,12 @@ final readonly class StartDeliveryAction
             User::query()->whereKey($actor->getKey())->lockForUpdate()->firstOrFail();
             $existing = Delivery::query()->where('start_idempotency_key', $idempotencyKey)->first();
             if ($existing !== null) {
-                if ($existing->start_request_hash !== $requestHash) {
+                $legacyData = $data;
+                unset($legacyData['production_unit_id']);
+                $legacyHash = hash('sha256', json_encode($legacyData, JSON_THROW_ON_ERROR));
+                if ($existing->driver_id !== $actor->getKey()
+                    || ($existing->start_request_hash !== $requestHash
+                        && ! ($existing->start_request_hash === $legacyHash && $existing->production_unit_id === $data['production_unit_id']))) {
                     throw new DeliveryConflict('La clave de idempotencia ya fue utilizada con otros datos.');
                 }
 
@@ -50,8 +57,9 @@ final readonly class StartDeliveryAction
                 throw new DeliveryConflict('Ya tienes un reparto activo. Debes cerrarlo antes de iniciar otro.');
             }
 
+            $this->catalog->lock();
             $load = $this->units->calculate($data);
-            $unit = $this->productionUnit($data['production_unit_id'] ?? null);
+            $unit = $this->productionUnit($data['production_unit_id']);
             $vehicleReference = $data['vehicle_reference'] ?? $this->clientCatalog->vehicleReference();
             $delivery = Delivery::query()->create([
                 'driver_id' => $actor->getKey(),
@@ -80,6 +88,7 @@ final readonly class StartDeliveryAction
 
             DeliveryLoad::query()->create([
                 'delivery_id' => $delivery->getKey(),
+                'production_unit_id' => $unit->getKey(),
                 'idempotency_key' => $idempotencyKey,
                 'quantity' => $load['quantity'],
                 'items' => $load['items'],
@@ -108,16 +117,9 @@ final readonly class StartDeliveryAction
         }, 3);
     }
 
-    private function productionUnit(?int $productionUnitId): ProductionUnit
+    private function productionUnit(int $productionUnitId): ProductionUnit
     {
-        $query = ProductionUnit::query()->where('status', ProductionUnitStatus::Active)->lockForUpdate();
-        if ($productionUnitId !== null) {
-            $query->whereKey($productionUnitId);
-        } elseif (! app()->environment(['local', 'testing'])) {
-            throw new DeliveryConflict('La unidad productiva es obligatoria fuera del entorno local.');
-        }
-
-        $unit = $query->first();
+        $unit = ProductionUnit::query()->where('status', ProductionUnitStatus::Active)->whereKey($productionUnitId)->lockForUpdate()->first();
         if ($unit === null) {
             throw new DeliveryConflict('La unidad productiva indicada no está operativa.');
         }
@@ -130,7 +132,8 @@ final readonly class StartDeliveryAction
         return $delivery->load([
             'driver:id,name',
             'productionUnit:id,name,latitude,longitude',
-            'loads',
+            'loads.productionUnit:id,name',
+            'returnProductionUnit:id,name',
             'stops',
             'latestLocation',
         ]);

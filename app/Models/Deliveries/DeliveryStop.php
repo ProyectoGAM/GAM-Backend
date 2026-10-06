@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'delivery_id', 'client_reference', 'client_name', 'address', 'latitude', 'longitude',
     'sequence', 'status', 'delivered_quantity', 'items', 'visit_reason', 'notes', 'idempotency_key',
-    'request_hash', 'visited_at',
+    'request_hash', 'visited_at', 'total_amount',
 ])]
 class DeliveryStop extends Model
 {
@@ -23,6 +23,7 @@ class DeliveryStop extends Model
             'status' => DeliveryStopStatus::class,
             'delivered_quantity' => 'integer',
             'items' => 'array',
+            'total_amount' => 'decimal:3',
             'sequence' => 'integer',
             'visited_at' => 'immutable_datetime',
         ];
