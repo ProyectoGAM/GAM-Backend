@@ -118,6 +118,24 @@ Las decisiones para corregir, regenerar o reconstruir datos de prueba del entorn
 
 Cada módulo nuevo debe incluir su seeder de datos demo y registrarlo en `LocalDemoDataSeeder` (o en un seeder del módulo invocado por este), para que sus datos estén disponibles automáticamente cuando el ambiente sea local.
 
+## Reset temporal de la demo en VPS
+
+El workflow de release conserva la creación de tags y despliega el SHA exacto de cada push a `main`. Sólo solicita el reset cuando GitHub encuentra un PR asociado a ese SHA que está mergeado, apunta a `main` y tiene ese mismo `merge_commit_sha`. Los pushes directos, PRs hacia otras ramas y `workflow_dispatch` despliegan con migraciones normales y no resetean la base.
+
+El reset queda apagado hasta configurarlo explícitamente en el environment `production` de GitHub Actions. Antes de habilitarlo, definí allí estas variables (sin guardar contraseñas):
+
+- `DEMO_DB_RESET_ENABLED=true`
+- `DEMO_VPS_HOST`: el mismo host exacto que `VPS_HOST`, para fijar el destino de demo.
+- `DEMO_DB_DATABASE`: el nombre real de la base de demo; no puede ser `gam_testing` ni terminar en `_testing`, sin importar mayúsculas.
+
+En el archivo `.env.production` de esa VPS configurá los mismos valores `DEMO_DB_RESET_ENABLED=true`, `DEMO_VPS_HOST` y `DEMO_DB_DATABASE`, además de `ADMIN_PASSWORD` con la contraseña administrativa de la demo. `ADMIN_PASSWORD` se queda en esa VPS: no lo agregues a GitHub Actions, al repositorio ni a sus logs. Compose lo entrega al contenedor API junto con la opción del reset. Los valores esperados de host y base no están incluidos en el repositorio; el flujo falla cerrado si todavía no se configuraron.
+
+Los workflows de backend y frontend se encolan por separado en GitHub, pero ambos toman en la VPS el mismo lock exclusivo `$HOME/.gam-vps-production.lock` con `flock` durante cada despliegue; así se serializan aunque estén en repositorios distintos. El backend usa el script remoto ya configurado en `VPS_BACKEND_DEPLOY_SCRIPT`; sólo continúa si terminó correctamente y los servicios `gam-prod` reportan la imagen API `gam-backend:<SHA>` correspondiente y salud correcta.
+
+El orden de cada reset habilitado es: **merge a `main` → despliegue correcto del commit mergeado → respaldo previo → reset y seed → comprobación de salud**. Antes del comando destructivo se comparan el host SSH con `DEMO_VPS_HOST`, `APP_NAME=GAM`, `APP_ENV=production`, el servicio PostgreSQL `postgres`, la base efectiva de Laravel y `POSTGRES_DB` con `DEMO_DB_DATABASE`, y la opción de reset exacta `true` en el contenedor. Se rechazan bases de testing. El respaldo se escribe con permisos privados en `$HOME/gam-demo-db-backups`, en formato PostgreSQL custom, y se verifica con `pg_restore --list` y una lectura completa de validación con `pg_restore --file=/dev/null`; ni las credenciales, el SQL generado ni el contenido del respaldo se imprimen. Después corre en el contenedor API de esa imagen `php artisan migrate:fresh --seed --force --no-interaction`; se comprueba la cuenta admin activa con rol y permiso, un lote de demo y el endpoint de salud.
+
+Para volver a migraciones normales sin borrar datos, cambiá `DEMO_DB_RESET_ENABLED` a `false` en el environment `production` de GitHub y en `.env.production` de la VPS. **Hacelo antes de trasladar GAM a la VPS del cliente**. Los seeders de demo en producción sólo se habilitan con la opción activa; en `local` siguen disponibles como antes.
+
 ## Autenticación multi-login
 
 Define ADMIN_PASSWORD e IDENTITY_PIN_PEPPER en el entorno antes de sembrar datos. La web usa cookies stateful y CSRF; nativo usa PAT Bearer. El acceso compartido se vincula con un código de 10 caracteres y conserva una credencial de dispositivo independiente.

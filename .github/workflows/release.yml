@@ -8,10 +8,12 @@ on:
 
 permissions:
   contents: write
+  pull-requests: read
 
 concurrency:
-  group: backend-production
+  group: gam-vps-production
   cancel-in-progress: false
+  queue: max
 
 jobs:
   release:
@@ -68,6 +70,10 @@ jobs:
           DEPLOY_SCRIPT: ${{ vars.VPS_BACKEND_DEPLOY_SCRIPT }}
           RELEASE_TAG: ${{ needs.release.outputs.tag }}
           RELEASE_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          DEMO_DB_RESET_ENABLED: ${{ vars.DEMO_DB_RESET_ENABLED }}
+          DEMO_VPS_HOST: ${{ vars.DEMO_VPS_HOST }}
+          DEMO_DB_DATABASE: ${{ vars.DEMO_DB_DATABASE }}
         shell: bash
         run: |
           set -euo pipefail
@@ -78,6 +84,26 @@ jobs:
           test -n "${VPS_KNOWN_HOSTS}"
           test -n "${DEPLOY_SCRIPT}"
 
+          RESET_REQUESTED="$(bash ops/request-demo-db-reset.sh)"
+
+          if [[ "${RESET_REQUESTED}" == "true" && ( -z "${DEMO_VPS_HOST}" || -z "${DEMO_DB_DATABASE}" ) ]]; then
+            echo "DEMO_VPS_HOST and DEMO_DB_DATABASE must be configured in the production environment before a demo reset."
+            exit 1
+          fi
+          if [[ "${RESET_REQUESTED}" == "true" && "${VPS_HOST}" != "${DEMO_VPS_HOST}" ]]; then
+            echo "The deployment target does not match DEMO_VPS_HOST."
+            exit 1
+          fi
+          if [[ "${RESET_REQUESTED}" == "true" ]]; then
+            DEMO_DB_DATABASE_LOWER="${DEMO_DB_DATABASE,,}"
+            if [[ ! "${DEMO_DB_DATABASE}" =~ ^[A-Za-z0-9_]+$ \
+                || "${DEMO_DB_DATABASE_LOWER}" == "gam_testing" \
+                || "${DEMO_DB_DATABASE_LOWER}" == *_testing ]]; then
+              echo "DEMO_DB_DATABASE must name the demo database and cannot name a testing database."
+              exit 1
+            fi
+          fi
+
           install -d -m 700 "${HOME}/.ssh"
 
           printf '%s\n' "${VPS_SSH_KEY}" > "${HOME}/.ssh/gam_deploy"
@@ -87,14 +113,19 @@ jobs:
           chmod 644 "${HOME}/.ssh/known_hosts"
 
           printf -v REMOTE_COMMAND \
-            'bash %q %q %q' \
+            'flock -x "$HOME/.gam-vps-production.lock" bash -s -- %q %q %q %q %q %q %q' \
             "${DEPLOY_SCRIPT}" \
             "${RELEASE_TAG}" \
-            "${RELEASE_SHA}"
+            "${RELEASE_SHA}" \
+            "${RESET_REQUESTED}" \
+            "${VPS_HOST}" \
+            "${DEMO_VPS_HOST}" \
+            "${DEMO_DB_DATABASE}"
 
           ssh \
             -i "${HOME}/.ssh/gam_deploy" \
             -p "${VPS_PORT}" \
             -o BatchMode=yes \
             "${VPS_USER}@${VPS_HOST}" \
-            "${REMOTE_COMMAND}"
+            "${REMOTE_COMMAND}" \
+            < ops/deploy-backend-with-demo-reset.sh

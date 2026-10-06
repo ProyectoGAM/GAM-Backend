@@ -16,7 +16,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([IdentityPermissionSeeder::class, AdminUserSeeder::class, GeographySeeder::class]);
 
-        if (app()->environment('local')) {
+        if (app()->environment('local') || (app()->environment('production') && config('app.demo_db_reset_enabled'))) {
             $this->call(LocalDemoDataSeeder::class);
         }
     }

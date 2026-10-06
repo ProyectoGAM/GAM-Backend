@@ -14,7 +14,7 @@ final class MaintenanceDemoSeeder extends Seeder
 {
     public function run(CreateMaintenanceAction $create): void
     {
-        if (! app()->environment('local')) {
+        if (! app()->environment('local') && ! (app()->environment('production') && config('app.demo_db_reset_enabled'))) {
             return;
         }
 
