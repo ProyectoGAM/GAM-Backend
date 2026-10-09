@@ -12,7 +12,8 @@ final readonly class ShowDeliveryQuery
             ->with([
                 'driver:id,name',
                 'productionUnit:id,name,latitude,longitude',
-                'loads',
+                'loads.productionUnit:id,name',
+                'returnProductionUnit:id,name',
                 'stops',
                 'latestLocation',
                 'locations' => fn ($query) => $query->orderBy('captured_at')->limit(500),

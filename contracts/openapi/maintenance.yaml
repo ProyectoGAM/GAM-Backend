@@ -237,8 +237,8 @@ components:
           description: No negativo. La moneda puede admitir menos decimales; no se redondea.
         cost_currency:
           type: string
-          pattern: '^[A-Z]{3}$'
-          description: Código de moneda reconocido por Brick Money; no se asume una moneda implícita.
+          enum: [UYU]
+          description: "Moneda única de las nuevas operaciones: pesos uruguayos (UYU)."
         responsible_user_id:
           type: integer
           description: Usuario activo; el nombre se conserva como snapshot histórico.

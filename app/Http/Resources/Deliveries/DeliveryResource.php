@@ -3,7 +3,9 @@
 namespace App\Http\Resources\Deliveries;
 
 use App\Enums\Deliveries\DeliveryStopStatus;
+use App\Services\Deliveries\DeliveryPricing;
 use App\Services\Deliveries\DeliveryUnitBalance;
+use App\ValueObjects\Money;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -33,6 +35,13 @@ final class DeliveryResource extends JsonResource
             'loaded_quantity' => (int) $this->loaded_quantity,
             'delivered_quantity' => $deliveredQuantity,
             'returned_quantity' => (int) $this->returned_quantity,
+            'returned_items' => $this->returned_items,
+            'return_production_unit' => $this->when($this->relationLoaded('returnProductionUnit'), fn () => $this->returnProductionUnit === null ? null : [
+                'id' => $this->returnProductionUnit->id, 'name' => $this->returnProductionUnit->name,
+            ]),
+            'delivered_amount' => $this->relationLoaded('stops') ? app(DeliveryPricing::class)->total($this->stops)
+                : (($this->unpriced_stops_count ?? 0) > 0 ? null : ($this->delivered_amount ?? '0.000')),
+            'currency' => Money::CURRENCY,
             'remaining_quantity' => $deliveredQuantity === null
                 ? null
                 : (int) $this->loaded_quantity - $deliveredQuantity - (int) $this->returned_quantity,
