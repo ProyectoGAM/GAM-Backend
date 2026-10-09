@@ -94,6 +94,10 @@ final readonly class CorrectWeighingAction
                     'reference_adult_max_weight_g' => $reference['adult_max_weight_g'] ?? null,
                     'reference_unit' => $reference['unit'] ?? null,
                     'reference_version' => $reference['version'] ?? null,
+                    'reference_chick_source' => $reference['chick_source'] ?? null,
+                    'reference_adult_source' => $reference['adult_source'] ?? null,
+                    'reference_breed_id' => $reference['breed_id'] ?? null,
+                    'reference_breed_version' => $reference['breed_version'] ?? null,
                     'represented_bird_count' => $built['represented_bird_count'],
                     'total_weight_g' => $built['total_weight_g'],
                     'average_weight_g' => $built['average_weight_g'],
@@ -172,6 +176,10 @@ final readonly class CorrectWeighingAction
             'chick_max_weight_g' => $current->reference_chick_max_weight_g,
             'adult_min_weight_g' => $current->reference_adult_min_weight_g,
             'adult_max_weight_g' => $current->reference_adult_max_weight_g,
+            'chick_source' => $current->reference_chick_source ?? 'global',
+            'adult_source' => $current->reference_adult_source ?? 'global',
+            'breed_id' => $current->reference_breed_id,
+            'breed_version' => $current->reference_breed_version,
         ];
     }
 

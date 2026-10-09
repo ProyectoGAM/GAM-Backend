@@ -8,7 +8,7 @@ La unidad atómica es siempre un huevo genérico (`Huevo`), expresado como enter
 
 Es una ampliación coordinada de `Lots` e `Inventory`. Sus dependencias son Lotes y cría, Inventario y stock, unidades productivas, identidad y acceso, y auditoría y trazabilidad. No se agregan paquetes.
 
-La estructura sigue la arquitectura Laravel convencional descrita en `architecture.md` y el nivel de detalle operativo de [lots-implementation.md](lots-implementation.md). El contrato público se encuentra en [contracts/openapi/lots.yaml](contracts/openapi/lots.yaml).
+La estructura sigue la arquitectura Laravel convencional descrita en [arquitectura](../architecture.md) y el nivel de detalle operativo de [lots-implementation.md](lots-implementation.md). El contrato público se encuentra en [contracts/openapi/lots.yaml](../../contracts/openapi/lots.yaml).
 
 ### Límites de la entrega
 
@@ -129,7 +129,7 @@ La suite específica y `migrate:fresh --seed` fueron ejecutadas durante la imple
 
 ## Do Test — validación manual pendiente
 
-1. Levantar Compose, cargar la demo desde [README.md](README.md) y autenticar un usuario con permisos funcionales.
+1. Levantar Compose, cargar la demo desde [README.md](../../README.md) y autenticar un usuario con permisos funcionales.
 2. Registrar una recolección en un lote activo. Verificar que el histórico del lote aumenta, que la cuenta de la UP recibe un `receipt` y que la cantidad viva y la versión del lote permanecen iguales.
 3. Repetir la misma clave y confirmar que no se duplica el ingreso. Consultar métricas y comprobar que sólo cuentan recolecciones vigentes.
 4. Registrar una entrada manual, una salida `distribution_preparation` y una salida `loss`; comprobar saldo, referencias físicas y que ninguna cambia las métricas de producción. Confirmar que una salida puede dejar saldo negativo sólo en huevos.

@@ -1,8 +1,8 @@
 # Pesajes de lotes — implementación
 
-La sección de Pesajes pertenece funcionalmente a **06 — Manejo productivo y sanidad** y técnicamente a `Lots`, porque reconstruye población, galpón, unidad productiva, edad y ciclo de vida desde el historial del lote.
+La sección de Pesajes pertenece funcionalmente a **06 — Manejo productivo y sanidad** y técnicamente a `Lots`, porque reconstruye población, galpón, unidad productiva, edad y ciclo de vida desde el historial del lote. Esta guía describe los pesajes independientes de `/pesajes`; las jornadas que mezclan ingresos y admiten eliminación de una fila se documentan en [Pesajes diarios por lote](daily-weighing-implementation.md).
 
-**Estado funcional: Pesajes implementado; Módulo 06 aún incompleto.** Esta entrega cubre configuración global de referencia, captura individual y grupal, confirmación de valores fuera de rango, corrección histórica, consultas, distribución, evolución, auditoría y datos demo. Plan de Manejo, aplicaciones sanitarias y los demás manejos continúan pendientes. El seguimiento en [notion.md](notion.md) conserva la tarjeta del módulo en implementación.
+**Estado funcional: Pesajes implementado; Módulo 06 aún incompleto.** Esta entrega cubre configuración global de referencia, captura individual y grupal, confirmación de valores fuera de rango, corrección histórica, consultas, distribución, evolución, auditoría y datos demo. Plan de Manejo, aplicaciones sanitarias y los demás manejos continúan pendientes. El seguimiento en [notion.md](../notion.md) conserva la tarjeta del módulo en implementación.
 
 ## Alcance y decisiones confirmadas
 
@@ -14,11 +14,11 @@ La sección de Pesajes pertenece funcionalmente a **06 — Manejo productivo y s
 - En modo grupal cada fila contiene `total_weight` y `bird_count`; la normalidad se evalúa sobre el promedio de esa tanda.
 - La cantidad de aves representadas no puede superar la población viva del lote en la fecha indicada.
 - Se puede crear sobre lotes activos o en cuarentena. Un lote finalizado conserva sus pesajes históricos, pero no admite capturas nuevas.
-- No existen borrado, cancelación, campañas, curvas teóricas, percentiles, predicciones ni frontend dentro de este alcance.
+- Los recursos independientes de `/pesajes` no tienen borrado ni cancelación. Tampoco incluyen campañas, curvas teóricas, percentiles, predicciones ni frontend dentro de este alcance.
 
 ## Persistencia y referencia histórica
 
-La migración [create_weighing_tables](database/migrations/2026_09_08_231408_create_weighing_tables.php) agrega tres tablas con FKs `RESTRICT`, checks e índices:
+La migración [create_weighing_tables](../../database/migrations/2026_09_08_231408_create_weighing_tables.php) agrega tres tablas con FKs `RESTRICT`, checks e índices:
 
 - `weighing_reference_settings`: singleton de configuración, unidad administrativa y versión optimista.
 - `weighings`: cabecera con ULID público, lote, ubicación histórica, modo, fecha, unidad capturada, agregados, referencia aplicada, creador y versión.
@@ -26,7 +26,9 @@ La migración [create_weighing_tables](database/migrations/2026_09_08_231408_cre
 
 Los índices principales cubren lote/fecha, modo/fecha y posición única dentro del pesaje. La configuración usa `singleton_key=true` como restricción única. La creación inicial se serializa en PostgreSQL con un advisory transaction lock antes de consultar o insertar el singleton; las actualizaciones bloquean la fila y exigen su versión vigente.
 
-Cada pesaje fotografía la configuración aplicada: semana inicial de adultez, rangos de ambas etapas, unidad administrativa y versión. Cambiar la configuración global no reetiqueta registros anteriores. Una corrección conserva esa referencia; sólo un pesaje creado cuando no existía configuración puede adoptar la vigente al corregirse.
+Cada recurso independiente de `/pesajes` fotografía la configuración aplicada: semana inicial de adultez, rangos de ambas etapas, unidad administrativa y versión. Cambiar la configuración global no reetiqueta esos recursos anteriores. Las jornadas abiertas de pesajes diarios sí adoptan el nuevo rango, como explica su [guía](daily-weighing-implementation.md). Una corrección del recurso independiente conserva su referencia; sólo uno creado cuando no existía configuración puede adoptar la vigente al corregirse.
+
+La migración [add_breed_weighing_ranges_and_reference_origin](../../database/migrations/2026_10_09_064128_add_breed_weighing_ranges_and_reference_origin.php) agrega rangos opcionales en `breeds` y la procedencia de la referencia en `weighings` y `daily_weighings`. Las razas preexistentes tienen los cuatro límites en `null` y siguen heredando los valores globales. Los pesajes anteriores conservan su snapshot; cuando su procedencia no estaba almacenada, la API la presenta como `global`.
 
 ## Unidades, precisión y fórmulas
 
@@ -65,13 +67,17 @@ La configuración contiene:
 - `unit`, usada para capturar administrativamente los cuatro rangos;
 - `version`, obligatoria al actualizar y omitible sólo en la creación inicial.
 
-Antes de `adult_from_week` se aplica la etapa `chick`; desde esa semana se aplica `adult`. Los límites mínimo y máximo son inclusivos, y cada mínimo debe ser positivo y menor que su máximo. La configuración es global para toda la empresa y no varía por raza, sexo, línea genética o unidad productiva.
+Antes de `adult_from_week` se aplica la etapa `chick`; desde esa semana se aplica `adult`. Los límites mínimo y máximo son inclusivos, y cada mínimo debe ser positivo y menor que su máximo. La configuración global define la semana de cambio y los límites **por defecto**. Cada raza puede reemplazar el par mínimo/máximo de pollitos, de adultas o de ambas etapas; la etapa sin personalización hereda los valores globales.
 
 El sistema puede operar sin configuración. En ese estado el pesaje se guarda sin etapa ni rango y devuelve la advertencia `WEIGHING_REFERENCE_UNAVAILABLE`. `GET /configuracion-pesajes` devuelve `data: null` hasta que un usuario autorizado cree el singleton.
 
+En `POST /breeds` y `PATCH /breeds/{breed}`, `chick_min_weight_g`/`chick_max_weight_g` y `adult_min_weight_g`/`adult_max_weight_g` son parejas opcionales en gramos. Cada pareja debe llegar completa, con un mínimo positivo menor al máximo; ambos `null` en un PATCH restauran la herencia. La lectura de razas muestra `range_overrides` (valores propios o `null`) y `expected_ranges` (valores efectivos, procedencia `global`/`breed`, semana y versión global). Sin configuración global, `expected_ranges` es `null` aunque la raza ya tenga límites propios guardados, porque aún falta la semana de cambio.
+
+Los pesajes nuevos eligen la raza del lote y capturan los cuatro límites efectivos. `expected_range.source` indica el origen de la etapa evaluada; `reference` conserva el origen de ambas etapas, la raza y su versión. Una corrección posterior conserva ese snapshot aunque se edite la raza o la configuración global.
+
 ## Proyección histórica y ciclo de vida
 
-[WeighingFlockProjection](app/Services/Lots/WeighingFlockProjection.php) busca el último `FlockMovement` hasta `occurred_at`, usando fecha e ID como orden estable, y lee el snapshot `after` del lote. De allí obtiene:
+[WeighingFlockProjection](../../app/Services/Lots/WeighingFlockProjection.php) busca el último `FlockMovement` hasta `occurred_at`, usando fecha e ID como orden estable, y lee el snapshot `after` del lote. De allí obtiene:
 
 - población viva;
 - galpón;
@@ -82,7 +88,7 @@ La fecha no puede ser futura ni anterior al alta del lote. La falta de snapshot 
 
 ## Contrato HTTP
 
-La fuente ejecutable es [weighings.yaml](contracts/openapi/weighings.yaml). Las rutas son relativas a `/api/v1`, usan `auth:sanctum`, FormRequests dedicados y Policies.
+La fuente ejecutable es [weighings.yaml](../../contracts/openapi/weighings.yaml). Las rutas son relativas a `/api/v1`, usan `auth:sanctum`, FormRequests dedicados y Policies.
 
 | Método y ruta | Permiso | Comportamiento |
 | --- | --- | --- |
@@ -212,7 +218,7 @@ El administrador inicial recibe los tres permisos. Las Policies se vuelven a com
 
 ## Datos demo locales
 
-[WeighingDemoSeeder](database/seeders/Lots/WeighingDemoSeeder.php) se ejecuta sólo en `APP_ENV=local`, después de los lotes demo. Cuando no existe configuración:
+[WeighingDemoSeeder](../../database/seeders/Lots/WeighingDemoSeeder.php) se ejecuta sólo en `APP_ENV=local`, después de los lotes demo. Cuando no existe configuración:
 
 - crea rangos explícitamente demo;
 - registra una serie individual para evolución;
@@ -257,7 +263,7 @@ Resultados verificados el 2026-09-09 dentro del servicio `api`, PostgreSQL y la 
 - Ocho rutas confirmadas, YAML válido y `git diff --check` sin errores.
 - Revisiones finales funcional y de seguridad sin bloqueadores.
 
-La receta oficial de ejecución y las variables completas están en [README.md](README.md). Para la suite focalizada, usar esa misma receta agregando los cinco archivos anteriores y `tests/Feature/Lots/LotsDemoSeederTest.php` al comando `php artisan test --compact`.
+La receta oficial de ejecución y las variables completas están en [README.md](../../README.md). Para la suite focalizada, usar esa misma receta agregando los cinco archivos anteriores y `tests/Feature/Lots/LotsDemoSeederTest.php` al comando `php artisan test --compact`.
 
 ## Do Test — aceptación manual pendiente
 
@@ -276,4 +282,4 @@ Registrar ambiente, commit, actor, requests anonimizados, claves idempotentes de
 
 ## Fuera de alcance
 
-Frontend y biblioteca de gráficos, Plan de Manejo, aplicaciones sanitarias, historial de vacunaciones o medicaciones, consumo automático de stock, rangos por raza o sexo, curvas teóricas, mediana, percentiles, coeficiente de variación, intervalos de confianza, predicciones, sublotes, identificación individual permanente, exportaciones, campañas, cancelaciones, borrado y sincronización directa con Notion.
+Frontend y biblioteca de gráficos, Plan de Manejo, aplicaciones sanitarias, historial de vacunaciones o medicaciones, consumo automático de stock, rangos por sexo, curvas teóricas, mediana, percentiles, coeficiente de variación, intervalos de confianza, predicciones, sublotes, identificación individual permanente, exportaciones, campañas, cancelación o borrado de recursos independientes de `/pesajes` y sincronización directa con Notion.

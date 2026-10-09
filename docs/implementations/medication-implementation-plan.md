@@ -2,7 +2,7 @@
 
 La definición confirmada reemplaza el plan inicial de intervenciones por lote. Un medicamento es una ficha de catálogo con **nombre, descripción y proveedor**. La relación con un plan de manejo y las fechas de aplicación —pasadas o futuras— quedan diferidas hasta definir ese dominio. Las dosis son una posible ampliación futura, todavía no confirmada.
 
-**Estado funcional: catálogo de Medicamentos implementado; módulo 06 — Manejo productivo y sanidad aún incompleto.** Faltan las demás secciones del módulo. El seguimiento en [notion.md](notion.md) registra este avance parcial y no propone mover la tarjeta del módulo completo a `Do Test`. La propiedad técnica del catálogo corresponde a `SuppliersAndCatalogs`.
+**Estado funcional: catálogo de Medicamentos implementado; módulo 06 — Manejo productivo y sanidad aún incompleto.** Faltan las demás secciones del módulo. El seguimiento en [notion.md](../notion.md) registra este avance parcial y no propone mover la tarjeta del módulo completo a `Do Test`. La propiedad técnica del catálogo corresponde a `SuppliersAndCatalogs`.
 
 ## Alcance
 
@@ -16,7 +16,7 @@ La definición confirmada reemplaza el plan inicial de intervenciones por lote. 
 
 ## Contrato HTTP
 
-Fuente: [medication.yaml](contracts/openapi/medication.yaml).
+Fuente: [medication.yaml](../../contracts/openapi/medication.yaml).
 
 | Método y ruta | Comportamiento |
 | --- | --- |
@@ -76,7 +76,7 @@ La cobertura está en las clases MedicineEndpointTest, MedicineContractTest, Med
 
 Incluye alta, límites, errores localizados, autorización HTTP y de Action, nombres repetidos, normalización, claves por actor, replay después de modificar/desactivar referencias, rollback de auditoría, paginación, búsqueda literal, snapshots, ausencia de efectos ajenos, contrato HTTP real y seeder oficial.
 
-Para pruebas normales, usar la receta del [README](README.md), que ejecuta PHPUnit dentro de `api` y deriva `<DB_DATABASE>_testing` desde la base normal configurada. Seleccionar las pruebas de endpoint, contrato y seeder.
+Para pruebas normales, usar la receta del [README](../../README.md), que ejecuta PHPUnit dentro de `api` y deriva `<DB_DATABASE>_testing` desde la base normal configurada. Seleccionar las pruebas de endpoint, contrato y seeder.
 
 Para concurrencia, usar la misma base `<DB_DATABASE>_testing`; el archivo de configuración separado conserva el grupo de concurrencia sin crear una segunda base:
 

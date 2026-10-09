@@ -9,6 +9,7 @@ use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\Lots\FlockOperation;
 use App\Models\Lots\WeighingReferenceSettings;
 use App\Models\User;
+use App\Services\Lots\ReclassifyOpenDailyWeighings;
 use App\Services\Lots\RunLotsCommand;
 use App\Services\Lots\WeighingMath;
 use App\Services\Lots\WeighingPresenter;
@@ -21,6 +22,7 @@ final readonly class SaveWeighingReferenceSettingsAction
         private AuditRecorder $auditRecorder,
         private WeighingMath $math,
         private WeighingPresenter $presenter,
+        private ReclassifyOpenDailyWeighings $reclassifyOpenDailyWeighings,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -61,6 +63,7 @@ final readonly class SaveWeighingReferenceSettingsAction
                 $settings ??= new WeighingReferenceSettings;
                 $settings->forceFill($attributes)->save();
                 $after = $this->presenter->settings($settings);
+                $this->reclassifyOpenDailyWeighings->execute($settings, $actor, $operationId, $source);
                 $this->auditRecorder->record(AuditEntryData::forSubject(
                     subject: $settings,
                     actor: $actor,

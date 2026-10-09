@@ -20,6 +20,7 @@ use App\Http\Controllers\Inventory\InventoryReadController;
 use App\Http\Controllers\Inventory\StockLocationController;
 use App\Http\Controllers\Inventory\StockLocationStatusController;
 use App\Http\Controllers\Lots\BreedController;
+use App\Http\Controllers\Lots\DailyWeighingController;
 use App\Http\Controllers\Lots\EggCollectionController;
 use App\Http\Controllers\Lots\FlockController;
 use App\Http\Controllers\Lots\FlockRedistributionController;
@@ -91,6 +92,12 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/medicines/{medicine}/stock', [ManagementExecutionController::class, 'showMedicineStock'])->name('medicines.stock.show');
         });
         Route::middleware(['shared.device:any', 'shared.session.conditional'])->name('weighings.')->group(function (): void {
+            Route::get('/pesajes-diarios', [DailyWeighingController::class, 'index'])->name('daily.index');
+            Route::get('/lotes/{lote}/pesajes-diarios/{fecha}', [DailyWeighingController::class, 'showByDate'])->where('fecha', '\\d{4}-\\d{2}-\\d{2}')->name('daily.by-date');
+            Route::post('/lotes/{lote}/pesajes-diarios/ingresos', [DailyWeighingController::class, 'storeEntry'])->name('daily.entries.store');
+            Route::get('/pesajes-diarios/{jornada}/distribucion', [DailyWeighingController::class, 'distribution'])->name('daily.distribution');
+            Route::delete('/pesajes-diarios/{jornada}/ingresos/{ingreso}', [DailyWeighingController::class, 'deleteEntry'])->name('daily.entries.delete');
+            Route::get('/pesajes-diarios/{jornada}', [DailyWeighingController::class, 'show'])->name('daily.show');
             Route::get('/configuracion-pesajes', [WeighingController::class, 'settings'])->name('settings.show');
             Route::put('/configuracion-pesajes', [WeighingController::class, 'updateSettings'])->name('settings.update');
             Route::get('/pesajes/evolucion', [WeighingController::class, 'evolution'])->name('evolution');

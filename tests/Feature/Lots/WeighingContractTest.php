@@ -40,7 +40,7 @@ final class WeighingContractTest extends TestCase
         }
 
         // Verificación: no hay rutas públicas sin documentar ni operaciones sobrantes.
-        $this->assertCount(8, $actual);
+        $this->assertCount(14, $actual);
         $this->assertEqualsCanonicalizing($expected, $actual);
     }
 

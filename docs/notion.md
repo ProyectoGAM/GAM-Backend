@@ -16,16 +16,16 @@ No se consultó ni modificó Notion durante esta entrega. Al sincronizar, mover 
 
 | Módulo / tarjeta Notion | Estado en código | Documentación fuente | Contrato | Pendiente |
 |---|---|---|---|---|
-| **07 — Mantenimiento de instalaciones** | Implementado en `develop` | [maintenance-implementation.md](maintenance-implementation.md) | [maintenance.yaml](contracts/openapi/maintenance.yaml) | Sincronizar la tarjeta y ejecutar Do Test |
-| **05 — Lotes y cría** | Implementado; las altas nuevas exigen un plan publicado | [lots-implementation.md](lots-implementation.md) | [lots.yaml](contracts/openapi/lots.yaml) y [management-plans.yaml](contracts/openapi/management-plans.yaml) | Sincronizar la tarjeta y ejecutar Do Test manual con selección de plan |
-| **09 — Producción y stock de huevos** | Implementado en `ProduccionStockHuevos` | [egg-production-implementation.md](egg-production-implementation.md) | [lots.yaml](contracts/openapi/lots.yaml) | Pendiente: actualizar la tarjeta y ejecutar Do Test manual |
+| **07 — Mantenimiento de instalaciones** | Implementado en `develop` | [maintenance-implementation.md](implementations/maintenance-implementation.md) | [maintenance.yaml](../contracts/openapi/maintenance.yaml) | Sincronizar la tarjeta y ejecutar Do Test |
+| **05 — Lotes y cría** | Implementado; las altas nuevas exigen un plan publicado | [lots-implementation.md](implementations/lots-implementation.md) | [lots.yaml](../contracts/openapi/lots.yaml) y [management-plans.yaml](../contracts/openapi/management-plans.yaml) | Sincronizar la tarjeta y ejecutar Do Test manual con selección de plan |
+| **09 — Producción y stock de huevos** | Implementado en `ProduccionStockHuevos` | [egg-production-implementation.md](implementations/egg-production-implementation.md) | [lots.yaml](../contracts/openapi/lots.yaml) | Pendiente: actualizar la tarjeta y ejecutar Do Test manual |
 
 ## Módulos parcialmente implementados
 
 | Módulo / tarjeta Notion | Estado en código | Documentación fuente | Contrato | Trabajo restante |
 |---|---|---|---|---|
-| **06 — Manejo productivo y sanidad** | **Catálogos de Medicamentos y Vacunas, Pesajes y backend de Plan de Manejo y aplicaciones implementados; módulo aún incompleto** | [medication-implementation-plan.md](medication-implementation-plan.md), [vaccination-implementation.md](vaccination-implementation.md) y [weighing-implementation.md](weighing-implementation.md) | [medication.yaml](contracts/openapi/medication.yaml), [vaccination.yaml](contracts/openapi/vaccination.yaml), [weighings.yaml](contracts/openapi/weighings.yaml) y [management-plans.yaml](contracts/openapi/management-plans.yaml) | Validar manualmente los nuevos flujos; definir y completar las secciones pendientes, incluidas próximas aplicaciones y notificaciones si se incorporan al alcance. Mantener la tarjeta en implementación |
-| **Alimentación — plantas de ración** | **Avance parcial: plantas feed y stock de ingredientes implementados; recetas y notificaciones pendientes** | [feed-stock-implementation.md](feed-stock-implementation.md) | [feed-stock.yaml](contracts/openapi/feed-stock.yaml) | Ejecutar aceptación manual, definir recetas y conectar notificaciones cuando esos módulos estén disponibles |
+| **06 — Manejo productivo y sanidad** | **Catálogos de Medicamentos y Vacunas, Pesajes y backend de Plan de Manejo y aplicaciones implementados; módulo aún incompleto** | [medication-implementation-plan.md](implementations/medication-implementation-plan.md), [vaccination-implementation.md](implementations/vaccination-implementation.md) y [weighing-implementation.md](implementations/weighing-implementation.md) | [medication.yaml](../contracts/openapi/medication.yaml), [vaccination.yaml](../contracts/openapi/vaccination.yaml), [weighings.yaml](../contracts/openapi/weighings.yaml) y [management-plans.yaml](../contracts/openapi/management-plans.yaml) | Validar manualmente los nuevos flujos; definir y completar las secciones pendientes, incluidas próximas aplicaciones y notificaciones si se incorporan al alcance. Mantener la tarjeta en implementación |
+| **Alimentación — plantas de ración** | **Avance parcial: plantas feed y stock de ingredientes implementados; recetas y notificaciones pendientes** | [feed-stock-implementation.md](implementations/feed-stock-implementation.md) | [feed-stock.yaml](../contracts/openapi/feed-stock.yaml) | Ejecutar aceptación manual, definir recetas y conectar notificaciones cuando esos módulos estén disponibles |
 
 ## Módulo 06 — Manejo productivo y sanidad
 
@@ -41,6 +41,7 @@ Disponible en código:
 - Relación 1:1 con el Product de Inventario, unidad `dose` predeterminada, saldos y movimientos compartidos, idempotencia, auditoría atómica y locks de concurrencia.
 - Configuración global versionada de rangos de peso para etapas `chick` y `adult`, administrable mediante `/api/v1/configuracion-pesajes`.
 - Registro individual y grupal de pesajes mediante `/api/v1/pesajes`, con gramos normalizados, confirmación explícita de valores fuera de rango, proyección histórica del lote y correcciones auditadas.
+- Jornadas diarias por lote y fecha local mediante `/api/v1/pesajes-diarios`, con ingresos individuales y grupales, eliminación auditada de una fila, distribución individual y rangos versionados. La guía de [pesajes diarios](implementations/daily-weighing-implementation.md) documenta el contrato y las decisiones confirmadas.
 - Listado, detalle, evolución por lote y distribución individual consumible por el frontend externo, con salida en gramos o kilogramos y límite de 1000 puntos de evolución.
 - Permisos `weighings.view`, `weighings.manage` y `weighing-settings.manage`, idempotencia, control optimista, locks transaccionales y soporte para autenticación personal o compartida.
 - Plantillas de manejo versionadas: alta en borrador, revisión, publicación, retiro y reactivación auditados. Los gestores pueden filtrar borradores antes de paginar; quienes solo consultan ven versiones publicadas.
@@ -55,9 +56,11 @@ No hay calendario de próximas aplicaciones, recordatorios ni notificaciones. Ta
 
 Validación automatizada registrada el 2026-09-05: 52 pruebas aprobadas con 826 aserciones, incluyendo regresiones seleccionadas, y una prueba de concurrencia separada con 4 aserciones. La aceptación manual del catálogo sigue pendiente y puede documentarse por separado, sin cambiar el estado incompleto del módulo.
 
-Validación de Vacunas registrada el 2026-09-08: 16 pruebas específicas aprobadas con 107 aserciones; suite completa aprobada con variables de testing válidas, 271 pruebas y 1803 aserciones; Larastan, Pint y `git diff --check` correctos. La guía [vaccination-implementation.md](vaccination-implementation.md) contiene el procedimiento de Do Test y las observaciones técnicas pendientes de autenticación compartida, validación interna y cobertura. La tarjeta debe permanecer en implementación hasta resolverlas y completar la aceptación manual.
+Validación de Vacunas registrada el 2026-09-08: 16 pruebas específicas aprobadas con 107 aserciones; suite completa aprobada con variables de testing válidas, 271 pruebas y 1803 aserciones; Larastan, Pint y `git diff --check` correctos. La guía [vaccination-implementation.md](implementations/vaccination-implementation.md) contiene el procedimiento de Do Test y las observaciones técnicas pendientes de autenticación compartida, validación interna y cobertura. La tarjeta debe permanecer en implementación hasta resolverlas y completar la aceptación manual.
 
-Validación de Pesajes registrada el 2026-09-09: 37 pruebas focalizadas aprobadas con 441 aserciones; suite completa aprobada con `APP_KEY` y pepper temporales válidos, 305 pruebas y 2226 aserciones; contrato final aprobado con 5 pruebas y 197 aserciones; Larastan, Pint, rutas y `git diff --check` correctos. Las revisiones funcional y de seguridad cerraron sin bloqueadores. La guía [weighing-implementation.md](weighing-implementation.md) contiene fórmulas, contrato, datos demo y procedimiento de Do Test. Esta sección está lista para aceptación manual, pero la tarjeta del Módulo 06 debe permanecer en implementación.
+Validación de Pesajes registrada el 2026-09-09: 37 pruebas focalizadas aprobadas con 441 aserciones; suite completa aprobada con `APP_KEY` y pepper temporales válidos, 305 pruebas y 2226 aserciones; contrato final aprobado con 5 pruebas y 197 aserciones; Larastan, Pint, rutas y `git diff --check` correctos. Las revisiones funcional y de seguridad cerraron sin bloqueadores. La guía [weighing-implementation.md](implementations/weighing-implementation.md) contiene fórmulas, contrato, datos demo y procedimiento de Do Test. Esta sección está lista para aceptación manual, pero la tarjeta del Módulo 06 debe permanecer en implementación.
+
+Validación de jornadas diarias registrada el 2026-10-07: 38 pruebas focalizadas y 551 aserciones aprobadas antes del ajuste final del prefijo público; después volvieron a pasar las pruebas afectadas y la concurrencia multiproceso. La guía de [pesajes diarios](implementations/daily-weighing-implementation.md) describe la política de rangos y eliminación. El estado parcial del Módulo 06 no cambia.
 
 Validación de Plan de Manejo registrada el 2026-09-29: 19 pruebas del módulo aprobadas con 340 aserciones, incluidos contrato OpenAPI, plantillas, aplicaciones e historial. Este resultado automatizado no sustituye la aceptación manual de los nuevos flujos ni cambia el estado parcial del módulo.
 
@@ -76,13 +79,13 @@ Decisiones relevantes:
 - El soporte offline implementado cubre idempotencia, ULID público y conflictos por versión; el almacenamiento y la sincronización del dispositivo quedan fuera de este backend.
 - Las revisiones del plan de cada lote conservan sus actividades y vínculos históricos sin modificar las copias anteriores.
 
-Validación automatizada registrada: 151 pruebas aprobadas y 981 aserciones antes de integrar cambios posteriores de `develop`. La guía [lots-implementation.md](lots-implementation.md) contiene el procedimiento completo de Do Test, incluyendo evidencia requerida, escenarios de redistribución, mortalidad, huevos, permisos, auditoría y concurrencia.
+Validación automatizada registrada: 151 pruebas aprobadas y 981 aserciones antes de integrar cambios posteriores de `develop`. La guía [lots-implementation.md](implementations/lots-implementation.md) contiene el procedimiento completo de Do Test, incluyendo evidencia requerida, escenarios de redistribución, mortalidad, huevos, permisos, auditoría y concurrencia.
 
 ## Módulo 09 — Producción y stock de huevos
 
-Implementado en `ProduccionStockHuevos`. La documentación [egg-production-implementation.md](egg-production-implementation.md) describe el registro por lote de huevo genérico, la cuenta corriente por UP, ingresos manuales, preparaciones de reparto, pérdidas, correcciones append-only, integración atómica con Inventario, métricas y seeder demo.
+Implementado en `ProduccionStockHuevos`. La documentación [egg-production-implementation.md](implementations/egg-production-implementation.md) describe el registro por lote de huevo genérico, la cuenta corriente por UP, ingresos manuales, preparaciones de reparto, pérdidas, correcciones append-only, integración atómica con Inventario, métricas y seeder demo.
 
-La tarjeta de Notion con el título exacto **`09 — Producción y stock de huevos`** queda pendiente de actualización. La aceptación manual **Do Test** también queda pendiente; la validación automatizada no sustituye esa revisión. Al sincronizar la tarjeta, adjuntar el contrato [lots.yaml](contracts/openapi/lots.yaml), la evidencia de saldos y auditoría, y el resultado de cada escenario manual.
+La tarjeta de Notion con el título exacto **`09 — Producción y stock de huevos`** queda pendiente de actualización. La aceptación manual **Do Test** también queda pendiente; la validación automatizada no sustituye esa revisión. Al sincronizar la tarjeta, adjuntar el contrato [lots.yaml](../contracts/openapi/lots.yaml), la evidencia de saldos y auditoría, y el resultado de cada escenario manual.
 
 ## Instrucciones para sincronizar en Notion
 

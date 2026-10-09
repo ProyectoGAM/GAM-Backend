@@ -25,7 +25,7 @@ Es funcionalidad nueva incorporada a `FarmStructure`. En esta entrega, la instal
 
 No depende de Lotes, Alertas ni Notificaciones para esta etapa.
 
-[Contrato OpenAPI — Mantenimientos](contracts/openapi/maintenance.yaml)
+[Contrato OpenAPI — Mantenimientos](../../contracts/openapi/maintenance.yaml)
 
 ## Implementación realizada — 30/08/2026
 
