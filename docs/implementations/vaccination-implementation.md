@@ -2,7 +2,7 @@
 
 La sección de Vacunas pertenece funcionalmente a **06 — Manejo productivo y sanidad** y técnicamente a `SuppliersAndCatalogs`, con integración sobre el inventario compartido. Una vacuna representa en esta etapa una ficha de catálogo con **SKU, nombre, descripción, detalles opcionales y proveedor**, vinculada uno a uno con un `Product` existente o creado durante el alta.
 
-**Estado funcional: catálogo e inventario de Vacunas implementados; módulo 06 aún incompleto.** La relación con Plan Maestro o Plan de Manejo, aplicaciones a lotes, historial sanitario, programación, próximas aplicaciones, notificaciones y consumo de stock por vacunación permanecen fuera de alcance. El seguimiento local se registra en [notion.md](notion.md) sin mover la tarjeta completa del módulo a `Do Test`.
+**Estado funcional: catálogo e inventario de Vacunas implementados; módulo 06 aún incompleto.** La relación con Plan Maestro o Plan de Manejo, aplicaciones a lotes, historial sanitario, programación, próximas aplicaciones, notificaciones y consumo de stock por vacunación permanecen fuera de alcance. El seguimiento local se registra en [notion.md](../notion.md) sin mover la tarjeta completa del módulo a `Do Test`.
 
 ## Alcance y decisiones confirmadas
 
@@ -19,7 +19,7 @@ La sección de Vacunas pertenece funcionalmente a **06 — Manejo productivo y s
 
 ## Persistencia e identidad
 
-La migración [create_vaccines_table](database/migrations/2026_09_07_223657_create_vaccines_table.php) agrega una tabla independiente sin alterar las tablas históricas de inventario. Cada ficha conserva:
+La migración [create_vaccines_table](../../database/migrations/2026_09_07_223657_create_vaccines_table.php) agrega una tabla independiente sin alterar las tablas históricas de inventario. Cada ficha conserva:
 
 - ID interno y ULID público estable;
 - relación única con `products` mediante `product_id`;
@@ -57,7 +57,7 @@ No se copian dirección, contacto ni otros datos del proveedor. El snapshot de n
 
 ## Contrato HTTP
 
-Fuente: [vaccination.yaml](contracts/openapi/vaccination.yaml). Todas las rutas son relativas a `/api/v1`, usan `auth:sanctum`, FormRequests dedicados y autorización mediante `VaccinePolicy`.
+Fuente: [vaccination.yaml](../../contracts/openapi/vaccination.yaml). Todas las rutas son relativas a `/api/v1`, usan `auth:sanctum`, FormRequests dedicados y autorización mediante `VaccinePolicy`.
 
 | Método y ruta | Comportamiento |
 | --- | --- |
@@ -99,7 +99,7 @@ El alta bloquea al actor para serializar reintentos del mismo usuario. Los uniqu
 
 ## Datos demo
 
-[VaccineDemoSeeder](database/seeders/SuppliersAndCatalogs/VaccineDemoSeeder.php) se ejecuta sólo en `local`, después de crear los Productos demo. Adopta `VAC-001`, lo relaciona con «Agroinsumos del Sur» y registra la ficha a través de `CreateVaccineAction`.
+[VaccineDemoSeeder](../../database/seeders/SuppliersAndCatalogs/VaccineDemoSeeder.php) se ejecuta sólo en `local`, después de crear los Productos demo. Adopta `VAC-001`, lo relaciona con «Agroinsumos del Sur» y registra la ficha a través de `CreateVaccineAction`.
 
 El seeder de Vacunas no crea saldos ni movimientos. El Product `VAC-001`, el saldo `120` y las líneas demo `+150/-30` pertenecían previamente a `LocalDemoDataSeeder`; la nueva carga conserva esos registros. Repetir `VaccineDemoSeeder` no duplica ficha, auditoría, saldo ni movimientos, y una ficha preexistente con otra clave se conserva sin reescritura.
 

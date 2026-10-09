@@ -475,7 +475,7 @@ Este archivo fue creado posteriormente por una solicitud explícita del usuario 
 
 - AGENTS.md: C:/Users/Zar/Documents/Programacion/UTEC/ProyectoFinal/GAM-Backend/AGENTS.md
 - CLAUDE.md: C:/Users/Zar/Documents/Programacion/UTEC/ProyectoFinal/GAM-Backend/CLAUDE.md
-- architecture.md: C:/Users/Zar/Documents/Programacion/UTEC/ProyectoFinal/GAM-Backend/architecture.md
+- architecture.md: C:/Users/Zar/Documents/Programacion/UTEC/ProyectoFinal/GAM-Backend/docs/architecture.md
 - README.md: C:/Users/Zar/Documents/Programacion/UTEC/ProyectoFinal/GAM-Backend/README.md
 - Skills Codex: C:/Users/Zar/Documents/Programacion/UTEC/ProyectoFinal/GAM-Backend/.agents/skills
 - Skills Claude: C:/Users/Zar/Documents/Programacion/UTEC/ProyectoFinal/GAM-Backend/.claude/skills

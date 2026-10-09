@@ -10,7 +10,7 @@ Una planta puede estar operativa, en mantenimiento, fuera de servicio o inactiva
 
 ## API
 
-El contrato completo está en [contracts/openapi/feed-stock.yaml](contracts/openapi/feed-stock.yaml). Las operaciones requieren autenticación y permisos de Inventario; el alta conjunta requiere permisos de catálogo y movimientos.
+El contrato completo está en [contracts/openapi/feed-stock.yaml](../../contracts/openapi/feed-stock.yaml). Las operaciones requieren autenticación y permisos de Inventario; el alta conjunta requiere permisos de catálogo y movimientos.
 
 - `POST /api/v1/plantas-racion/{poultryHouse}/ingredientes`: crea la ficha de una materia prima y su primera carga en una única operación idempotente. Con `proveedor_id` registra una recepción; sin proveedor registra un saldo inicial.
 - `GET /api/v1/plantas-racion/{poultryHouse}/stock`: consulta el stock por planta, incluidos los saldos negativos y las plantas inactivas.
@@ -25,7 +25,7 @@ Las consultas responden con `scope`, `scope_id` e `items`. Cada ítem contiene e
 
 ## Datos demo locales
 
-`DatabaseSeeder` registra [FeedStockDemoSeeder](database/seeders/Inventory/FeedStockDemoSeeder.php) a través de `LocalDemoDataSeeder`. Sólo se ejecuta con `APP_ENV=local` y usa claves fijas para que las recargas sean idempotentes.
+`DatabaseSeeder` registra [FeedStockDemoSeeder](../../database/seeders/Inventory/FeedStockDemoSeeder.php) a través de `LocalDemoDataSeeder`. Sólo se ejecuta con `APP_ENV=local` y usa claves fijas para que las recargas sean idempotentes.
 
 La demo conserva los tres galpones avícolas existentes y crea una planta feed para cada depósito de alimentos demo, con una ubicación técnica 1:1. Maíz y soja conservan las cantidades anteriores expresadas en gramos: 1.240.000 g y 680.000 g en El Ombú; 760.000 g y 420.000 g en Santa Clara. Las líneas históricas de apertura, recepción y consumo también están expresadas en gramos.
 

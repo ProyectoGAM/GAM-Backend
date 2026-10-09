@@ -8,7 +8,7 @@ Es una implementación nueva del backend. No se trasladan las entidades `Divisio
 
 Dependencias: M03 Instalaciones, M04 Proveedores y productos, Identidad y acceso, Auditoría y trazabilidad, e Inventario para los huevos. No se agregan paquetes.
 
-[Contrato OpenAPI](contracts/openapi/lots.yaml) · [Procedimiento de Do Test](#do-test--validación-manual)
+[Contrato OpenAPI](../../contracts/openapi/lots.yaml) · [Procedimiento de Do Test](#do-test--validación-manual)
 
 ## Implementación realizada
 
@@ -22,6 +22,14 @@ Dependencias: M03 Instalaciones, M04 Proveedores y productos, Identidad y acceso
 - `RecordEggStockTransactionAction` es la frontera pública de Inventario. La producción no escribe directamente en sus modelos ni en sus saldos.
 - `Clock`, `SystemClock` y `FlockAge` centralizan los cálculos temporales. `config/lots.php` define `LOTS_TIMEZONE`, por defecto `America/Montevideo`.
 - `LotsDemoSeeder` se integra a `LocalDemoDataSeeder`, sólo en ambiente local. Sus operaciones se ejecutan por las mismas Actions y su auditoría indica `source=seeder`.
+
+### Rangos de pesaje por raza
+
+`POST /breeds` y `PATCH /breeds/{breed}` permiten definir por separado mínimos y máximos esperados de pollitos y adultas en gramos. Al omitir una pareja, la raza hereda el rango global de esa etapa. En un PATCH, enviar ambos límites como `null` restablece la herencia. Las razas existentes siguen heredando sin migración de datos; la nueva migración agrega columnas anulables y restricciones para exigir parejas completas y `0 < mínimo < máximo`. La semana de paso a adultas permanece en `/configuracion-pesajes`.
+
+La lista y las respuestas de alta/edición exponen `range_overrides` y `expected_ranges` para distinguir lo guardado de lo efectivo. `breeds.view` permite consultar; `breeds.manage` permite crear y modificar con versión e idempotencia. `SaveBreedAction` audita el cambio y reclasifica dentro de la misma transacción las jornadas abiertas de lotes de esa raza; las cerradas conservan el rango capturado. El contrato se encuentra en [lots.yaml](../../contracts/openapi/lots.yaml), y las pruebas en [BreedWeighingRangeEndpointTest](../../tests/Feature/Lots/BreedWeighingRangeEndpointTest.php).
+
+La implementación quedó verificada con seis pruebas nuevas (77 aserciones) de herencia, personalización por etapa, confirmación de anomalías, reclasificación, restauración de herencia, snapshot histórico y validación; también pasaron las pruebas de catálogos, contratos, concurrencia y seeders afectadas. El 2026-10-09 se aplicó sólo la nueva migración a la base local `gam`; las dos razas demo conservaron sus límites propios en `null` y el lote `LOT-PESAJE-TEST` continuó disponible. Pint y `git diff --check` no señalaron problemas. Larastan mantuvo únicamente dos avisos previos de `RecordInventoryMovementAction`.
 
 ### Decisiones sobre redistribución y cantidades
 

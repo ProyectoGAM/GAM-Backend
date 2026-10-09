@@ -393,7 +393,7 @@ paths:
       tags: ["Catálogos"]
       operationId: "listBreeds"
       summary: "Lista y busca razas"
-      description: "Permiso requerido: breeds.view. El acceso es global dentro de la empresa."
+      description: "Permiso requerido: breeds.view. Cada raza incluye sus límites propios (null significa herencia) y los rangos efectivos calculados con la configuración global."
       x-permission: "breeds.view"
       parameters:
         -
@@ -410,7 +410,7 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "#/components/schemas/PaginatedCatalogs"
+                "$ref": "#/components/schemas/PaginatedBreeds"
         "401":
           "$ref": "#/components/responses/Unauthenticated"
         "403":
@@ -423,7 +423,7 @@ paths:
       tags: ["Catálogos"]
       operationId: "createBreed"
       summary: "Crea una raza"
-      description: "Permiso requerido: breeds.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: breeds.manage. Si se omite una pareja de límites, la etapa hereda el rango global. Los límites personalizados se expresan en gramos. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "breeds.manage"
       parameters:
         -
@@ -433,7 +433,7 @@ paths:
         content:
           "application/json":
             schema:
-              "$ref": "#/components/schemas/CreateCatalog"
+              "$ref": "#/components/schemas/CreateBreed"
       responses:
         "201":
           description: "Operación registrada o resultado original recuperado por idempotencia."
@@ -455,8 +455,8 @@ paths:
     patch:
       tags: ["Catálogos"]
       operationId: "updateBreed"
-      summary: "Renombra o cambia la vigencia de una raza"
-      description: "Permiso requerido: breeds.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      summary: "Actualiza una raza y sus rangos esperados"
+      description: "Permiso requerido: breeds.manage. Cada pareja mínimo/máximo puede actualizarse por etapa; ambos null restauran la herencia global. Los cambios reclasifican las jornadas abiertas de esa raza y conservan las cerradas. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "breeds.manage"
       parameters:
         -
@@ -468,7 +468,7 @@ paths:
         content:
           "application/json":
             schema:
-              "$ref": "#/components/schemas/UpdateCatalog"
+              "$ref": "#/components/schemas/UpdateBreed"
       responses:
         "200":
           description: "Consulta u operación completada."
@@ -1758,6 +1758,44 @@ components:
           minimum: 1
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
+    BreedCatalog:
+      type: "object"
+      additionalProperties: false
+      required: ["id", "name", "status", "version", "range_overrides", "expected_ranges"]
+      properties:
+        id: { type: integer, minimum: 1 }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        status: { type: string, enum: [active, inactive] }
+        version: { type: integer, minimum: 1, maximum: 2147483647 }
+        range_overrides: { "$ref": "#/components/schemas/BreedRangeOverrides" }
+        expected_ranges: { "$ref": "#/components/schemas/BreedExpectedRanges" }
+    BreedRangeOverrides:
+      type: "object"
+      additionalProperties: false
+      description: "Sólo en razas; null en ambos límites de una etapa significa herencia global."
+      required: ["chick_min_weight_g", "chick_max_weight_g", "adult_min_weight_g", "adult_max_weight_g"]
+      properties:
+        chick_min_weight_g: { type: ["string", "null"] }
+        chick_max_weight_g: { type: ["string", "null"] }
+        adult_min_weight_g: { type: ["string", "null"] }
+        adult_max_weight_g: { type: ["string", "null"] }
+    BreedExpectedRanges:
+      type: ["object", "null"]
+      description: "Sólo en razas. Es null hasta que exista configuración global, que también define la semana de paso a adultas."
+      required: ["adult_from_week", "reference_version", "chick", "adult"]
+      properties:
+        adult_from_week: { type: integer }
+        reference_version: { type: integer }
+        chick: { "$ref": "#/components/schemas/BreedStageRange" }
+        adult: { "$ref": "#/components/schemas/BreedStageRange" }
+    BreedStageRange:
+      type: "object"
+      additionalProperties: false
+      required: ["min_weight_g", "max_weight_g", "source"]
+      properties:
+        min_weight_g: { type: string }
+        max_weight_g: { type: string }
+        source: { type: string, enum: [global, breed] }
     Operation:
       type: "object"
       additionalProperties: false
@@ -1777,7 +1815,9 @@ components:
         collection:
           "$ref": "#/components/schemas/EggCollection"
         catalog:
-          "$ref": "#/components/schemas/Catalog"
+          oneOf:
+            - "$ref": "#/components/schemas/Catalog"
+            - "$ref": "#/components/schemas/BreedCatalog"
     CreateFlock:
       type: "object"
       additionalProperties: false
@@ -2298,6 +2338,31 @@ components:
           type: "string"
           minLength: 1
           maxLength: 500
+    CreateBreed:
+      type: "object"
+      additionalProperties: false
+      required: ["name"]
+      description: "Cada etapa recibe ambos límites en gramos o ninguno. Los límites omitidos heredan la configuración global."
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        status: { type: string, enum: [active, inactive] }
+        chick_min_weight_g: { type: ["string", "null"], pattern: "^[0-9]{1,13}(\\.[0-9])?$" }
+        chick_max_weight_g: { type: ["string", "null"], pattern: "^[0-9]{1,13}(\\.[0-9])?$" }
+        adult_min_weight_g: { type: ["string", "null"], pattern: "^[0-9]{1,13}(\\.[0-9])?$" }
+        adult_max_weight_g: { type: ["string", "null"], pattern: "^[0-9]{1,13}(\\.[0-9])?$" }
+    UpdateBreed:
+      type: "object"
+      additionalProperties: false
+      required: ["version"]
+      description: "Las parejas omitidas permanecen iguales; ambos límites null restauran la herencia global. En cada pareja no nula, 0 < mínimo < máximo."
+      properties:
+        version: { type: integer, minimum: 1, maximum: 2147483647 }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        status: { type: string, enum: [active, inactive] }
+        chick_min_weight_g: { type: ["string", "null"], pattern: "^[0-9]{1,13}(\\.[0-9])?$" }
+        chick_max_weight_g: { type: ["string", "null"], pattern: "^[0-9]{1,13}(\\.[0-9])?$" }
+        adult_min_weight_g: { type: ["string", "null"], pattern: "^[0-9]{1,13}(\\.[0-9])?$" }
+        adult_max_weight_g: { type: ["string", "null"], pattern: "^[0-9]{1,13}(\\.[0-9])?$" }
     CreateCatalog:
       type: "object"
       additionalProperties: false
@@ -2523,6 +2588,19 @@ components:
             type: ["string", "null"]
         meta:
           "$ref": "#/components/schemas/PageMeta"
+    PaginatedBreeds:
+      type: "object"
+      additionalProperties: false
+      required: ["data", "links", "meta"]
+      properties:
+        data:
+          type: "array"
+          items: { "$ref": "#/components/schemas/BreedCatalog" }
+        links:
+          type: "object"
+          additionalProperties:
+            type: ["string", "null"]
+        meta: { "$ref": "#/components/schemas/PageMeta" }
     FlockResponse:
       type: "object"
       additionalProperties: false

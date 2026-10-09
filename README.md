@@ -9,37 +9,17 @@ Horizon: http://localhost:8080/horizon
 Pulse: http://localhost:8080/pulse
 
 
-[notion.md](notion.md) => seguimiento de módulos completos y parcialmente implementados en el Kanban de Notion
+## Documentación
 
-architecture.md => arquitectura
+La documentación del proyecto está reunida en el [índice de `docs`](docs/README.md). Allí se encuentran la arquitectura, las bibliotecas, el seguimiento de módulos y los contratos de API. Las guías de los cambios funcionales del backend están en [implementaciones](docs/implementations/README.md), incluida la API de pesajes diarios por lote.
 
-libraries.md => paquetes/librerias usadas
+Los contratos OpenAPI permanecen en `contracts/openapi` porque Swagger UI y las pruebas los consumen desde esa ubicación; el índice de `docs` indica cómo encontrarlos. `README.md`, `AGENTS.md` y `CLAUDE.md` permanecen en la raíz por su función de entrada e instrucciones.
 
-module-structure-example.md => ejemplo de estructura y alguna que otra aplicacion minima
+### Documentación obligatoria antes de un commit o PR
 
-[maintenance-implementation.md](maintenance-implementation.md) => implementación e histórico de mantenimientos de galpones
+Todo commit o PR que agregue, corrija o cambie código del backend debe incluir en el mismo cambio una guía nueva o una actualización de la guía correspondiente en `docs/implementations`. Esto también aplica a modificaciones de una funcionalidad existente: se actualiza su documentación en vez de dejar una descripción anterior desfasada. La documentación debe estar lista **antes** de crear el commit o abrir la PR.
 
-[lots-implementation.md](lots-implementation.md) => implementación e histórico de lotes y crías
-
-[egg-production-implementation.md](egg-production-implementation.md) => implementación e histórico de producción y stock de huevos
-
-[weighing-implementation.md](weighing-implementation.md) => implementación de pesajes individuales y grupales, configuración de referencia, correcciones, distribución y evolución; avance parcial del módulo 06
-
-[medication-implementation-plan.md](medication-implementation-plan.md) => catálogo de medicamentos implementado: alta y consulta sólo para administradores; avance parcial del módulo 06
-
-[contracts/openapi/medication.yaml](contracts/openapi/medication.yaml) => contrato API del catálogo de medicamentos
-
-[contracts/openapi/weighings.yaml](contracts/openapi/weighings.yaml) => contrato API de pesajes y configuración global de referencia
-
-[contracts/openapi/management-plans.yaml](contracts/openapi/management-plans.yaml) => contrato API de plantillas, planes de lote, ejecuciones e historial de manejos
-
-[contracts/openapi/authentication.yaml](contracts/openapi/authentication.yaml) => contrato API de identidad y acceso
-
-[contracts/openapi/reference-data.yaml](contracts/openapi/reference-data.yaml) => catálogos dinámicos para formularios y filtros
-
-[feed-stock-implementation.md](feed-stock-implementation.md) => plantas de ración y stock de ingredientes en gramos
-
-[contracts/openapi/feed-stock.yaml](contracts/openapi/feed-stock.yaml) => contrato API de plantas de ración y stock de ingredientes
+La guía debe explicar qué cambió y por qué, el comportamiento observable y las decisiones de negocio, las rutas y contratos cuando correspondan, los cambios de datos o migraciones, permisos, auditoría e idempotencia, y la verificación ejecutada con sus límites. Si cambia una API, se actualiza además su contrato OpenAPI. El índice de implementaciones debe enlazar cualquier guía nueva. Un cambio del backend no está listo para commit o PR mientras falten estas actualizaciones.
 
 Swagger UI (desarrollo): [http://localhost:8080/docs/](http://localhost:8080/docs/)
 
@@ -118,6 +98,8 @@ Las decisiones para corregir, regenerar o reconstruir datos de prueba del entorn
 
 Cada módulo nuevo debe incluir su seeder de datos demo y registrarlo en `LocalDemoDataSeeder` (o en un seeder del módulo invocado por este), para que sus datos estén disponibles automáticamente cuando el ambiente sea local.
 
+Para probar la pantalla de pesajes con un lote de 60 semanas y jornadas con anomalías, ejecutá el fixture local optativo `LOT-PESAJE-TEST`. El comando y los datos que crea se encuentran desde el [índice de implementaciones](docs/implementations/README.md). Es repetible sin duplicar ingresos.
+
 ## Reset temporal de la demo en VPS
 
 El workflow de release conserva la creación de tags y despliega el SHA exacto de cada push a `main`. Sólo solicita el reset cuando GitHub encuentra un PR asociado a ese SHA que está mergeado, apunta a `main` y tiene ese mismo `merge_commit_sha`. Los pushes directos, PRs hacia otras ramas y `workflow_dispatch` despliegan con migraciones normales y no resetean la base.
@@ -140,7 +122,7 @@ Para volver a migraciones normales sin borrar datos, cambiá `DEMO_DB_RESET_ENAB
 
 Define ADMIN_PASSWORD e IDENTITY_PIN_PEPPER en el entorno antes de sembrar datos. La web usa cookies stateful y CSRF; nativo usa PAT Bearer. El acceso compartido se vincula con un código de 10 caracteres y conserva una credencial de dispositivo independiente.
 
-La guía operativa y las rutas están en identity-access-implementation.md. El contrato OpenAPI está en contracts/openapi/authentication.yaml.
+La guía operativa y el contrato de identidad y acceso se encuentran desde el [índice de documentación](docs/README.md).
 
 Pruebas backend con Docker Compose:
 

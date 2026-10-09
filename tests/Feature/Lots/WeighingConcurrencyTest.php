@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Lots;
 
+use App\Actions\Lots\AddDailyWeighingEntryAction;
 use App\Actions\Lots\RecordWeighingAction;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockMovement;
@@ -130,5 +131,67 @@ final class WeighingConcurrencyTest extends TestCase
         $this->assertDatabaseCount('flock_operations', 1);
         $this->assertDatabaseCount('activity_log', 1);
         $this->assertDatabaseHas('activity_log', ['event' => 'weighing_recorded']);
+    }
+
+    // Flujo: dos operadores simultáneos agregan ingresos distintos a una única jornada local.
+    public function test_concurrent_actors_share_one_daily_weighing_without_losing_entries(): void
+    {
+        // Preparación: crea dos operadores autorizados y la admisión histórica del lote.
+        $firstActor = User::factory()->create();
+        $secondActor = User::factory()->create();
+        foreach ([$firstActor, $secondActor] as $actor) {
+            $actor->givePermissionTo(Permission::findOrCreate('weighings.manage', 'web'));
+        }
+        $flock = Flock::factory()->create(['initial_quantity' => 20, 'current_quantity' => 20]);
+        FlockMovement::factory()->create([
+            'destination_flock_id' => $flock->id,
+            'quantity' => 20,
+            'occurred_at' => $flock->established_at,
+            'created_by' => $firstActor->id,
+            'after' => [$flock->public_id => [
+                'public_id' => $flock->public_id,
+                'poultry_house_id' => $flock->poultry_house_id,
+                'production_unit_id' => $flock->production_unit_id,
+                'current_quantity' => 20,
+                'entry_date' => $flock->entry_date->format('Y-m-d'),
+            ]],
+        ]);
+        $flockId = $flock->id;
+        $firstActorId = $firstActor->id;
+        $secondActorId = $secondActor->id;
+        $firstKey = (string) Str::uuid();
+        $secondKey = (string) Str::uuid();
+
+        // Mutación: cada proceso intenta crear o reutilizar la jornada de hoy.
+        $firstTask = static function () use ($flockId, $firstActorId, $firstKey): string {
+            if (! app()->environment('testing') || config('database.default') !== 'pgsql' || ! str_ends_with(DB::connection()->getDatabaseName(), '_testing')) {
+                throw new \RuntimeException('El proceso secundario debe usar la base de pruebas exclusiva.');
+            }
+
+            return app(AddDailyWeighingEntryAction::class)->execute(
+                Flock::query()->findOrFail($flockId),
+                ['mode' => 'individual', 'weight' => '20.0', 'idempotency_key' => $firstKey],
+                User::query()->findOrFail($firstActorId),
+            )->result['daily_weighing']['id'];
+        };
+        $secondTask = static function () use ($flockId, $secondActorId, $secondKey): string {
+            if (! app()->environment('testing') || config('database.default') !== 'pgsql' || ! str_ends_with(DB::connection()->getDatabaseName(), '_testing')) {
+                throw new \RuntimeException('El proceso secundario debe usar la base de pruebas exclusiva.');
+            }
+
+            return app(AddDailyWeighingEntryAction::class)->execute(
+                Flock::query()->findOrFail($flockId),
+                ['mode' => 'individual', 'weight' => '21.0', 'idempotency_key' => $secondKey],
+                User::query()->findOrFail($secondActorId),
+            )->result['daily_weighing']['id'];
+        };
+        $dailyIds = Concurrency::driver('process')->run([$firstTask, $secondTask], timeout: 30);
+
+        // Verificación: ambos procesos comparten ID y suman dos ingresos auditados.
+        $this->assertSame($dailyIds[0], $dailyIds[1]);
+        $this->assertDatabaseCount('daily_weighings', 1);
+        $this->assertDatabaseCount('daily_weighing_entries', 2);
+        $this->assertSame(2, DB::table('daily_weighing_entries')->distinct()->count('created_by'));
+        $this->assertSame(2, DB::table('activity_log')->where('event', 'daily_weighing_entry_added')->count());
     }
 }
