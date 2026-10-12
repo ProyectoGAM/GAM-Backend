@@ -15,7 +15,7 @@ Dependencias: M03 Instalaciones, M04 Proveedores y productos, Identidad y acceso
 - Actions, Queries, Requests y Resources de Lotes se agrupan bajo `app/Actions/Lots`, `app/Queries/Lots`, `app/Http/Requests/Lots` y `app/Http/Resources/Lots`; los modelos permanecen en `app/Models/Lots` y las Policies en `app/Policies/Lots`.
 - Ocho tablas nuevas o ampliadas: las tablas originales de Lotes y `flock_activities`, con FKs restrictivas, índices, journal de actividad y restricciones de cantidades, estados y unicidad.
 - 28 operaciones HTTP bajo `/api/v1`, con contrato público en español, FormRequests, Actions, Queries y Resources.
-- ULID público para lotes, movimientos, mortalidades y recolecciones; IDs numéricos internos para relaciones. Razas, categorías y referencias de otros módulos conservan IDs numéricos.
+- ULID público para lotes, movimientos, mortalidades y recolecciones; IDs numéricos internos para relaciones. Razas y referencias de otros módulos conservan IDs numéricos.
 - Cantidades enteras, bloqueo transaccional de lotes y galpones, control de versión, idempotencia por actor y auditoría síncrona.
 - Cada galpón puede tener como máximo un lote `active` o `quarantined`; los lotes `finished` no ocupan. La exclusividad se comprueba después de bloquear el galpón y también la impone PostgreSQL.
 - `PoultryHouseOccupancyProvider` obtiene la ocupación real desde Lotes. Las Actions existentes de Instalaciones impiden reducir la capacidad por debajo de la ocupación o desactivar un galpón ocupado.
@@ -40,7 +40,7 @@ La implementación quedó verificada con seis pruebas nuevas (77 aserciones) de 
 | Parcial hacia un lote existente | Descuenta del origen y aumenta el destinatario; movimiento `partial_existing`. Requiere la misma raza, ambos activos y sus dos versiones. |
 | Total | Traslada el mismo lote completo a otro galpón; movimiento `total`. Conserva ULID, código, raza, procedencia y cantidad inicial. |
 | Unión total hacia un lote existente | Suma todas las aves al receptor compatible, conserva sus metadatos, lleva el origen a cero y lo finaliza; movimiento `total_existing`. No registra un egreso ficticio. |
-| Finalización | Registra el egreso de todas las aves remanentes, deja cantidad viva cero y estado `finished`; movimiento `departure`. No crea mortalidad. |
+| Finalización | Registra el egreso de las aves remanentes positivas, deja saldo cero y estado `finished`; movimiento `departure`. Si el saldo era cero o negativo, registra egreso cero y conserva el saldo previo en auditoría. No crea mortalidad. |
 
 La redistribución conserva el total de aves de los lotes involucrados. La cantidad física máxima de un galpón nunca se incrementa ni decrementa: `disponible = capacidad física - suma de aves vivas`, incluyendo cuarentena.
 
@@ -54,7 +54,7 @@ Las cantidades iniciales son fotografías por lote, no un contador global de ave
 
 ### Estados, edad e histórico
 
-Estados estables: `active`, `quarantined` y `finished`. Un lote abierto puede alternar entre activo y cuarentena. Ambos pueden finalizar; cualquier operación que deje cero aves finaliza el lote automáticamente. Una reversión válida puede reactivar el origen desde su fotografía histórica; una corrección o cancelación de mortalidad que devuelva aves a un lote finalizado exige confirmación explícita, y sólo aplica si la terminalidad provino de mortalidad y el galpón está libre. La cuarentena impide redistribuir, pero admite mortalidad y recolección mientras haya aves para esta última.
+Estados estables: `active`, `quarantined` y `finished`. Un lote abierto puede alternar entre activo y cuarentena. La mortalidad y sus correcciones conservan el estado incluso cuando el saldo llega a cero o es negativo; la finalización requiere una operación explícita. La unión total mantiene su transición propia. La ocupación física se calcula como máximo entre cero y el saldo; el lote abierto sigue reservando el galpón hasta finalizar. Una reversión válida puede reactivar el origen desde su fotografía histórica. Para lotes históricos finalizados automáticamente por mortalidad se conserva la restitución con `confirm_reactivation=true`, sólo con terminalidad verificable y galpón libre. La cuarentena impide redistribuir, pero admite mortalidad; la recolección exige saldo mayor que cero.
 
 `age_days` son días calendario desde `entry_date` en `LOTS_TIMEZONE`; `current_week = floor(age_days / 7) + 1`. El día del ingreso es semana 1 y el séptimo día transcurrido es semana 2. No representa una edad biológica anterior al ingreso: no se modela fecha de nacimiento ni edad inicial adicional.
 
@@ -64,14 +64,15 @@ Los instantes usan PostgreSQL `timestamp with time zone` y se escriben con despl
 
 Los movimientos contienen actor, operación, origen/destino, cantidad, fecha, motivo y fotografías `before`/`after`, indexadas por ULID. Se consultan por fecha de ocurrencia descendente y luego ID descendente; un lote finalizado sigue siendo consultable. Las fotografías guardan el estado de aquel momento, no recalculan la edad histórica.
 
-No hay DELETE, `SoftDeletes` ni `isDeleted` para Lotes, mortalidad, recolección, razas o categorías. Una categoría o raza se desactiva sin romper referencias anteriores.
+No hay DELETE, `SoftDeletes` ni `isDeleted` para Lotes, mortalidad, recolección o razas. Una raza se desactiva sin romper referencias anteriores. El catálogo de categorías de mortalidad fue retirado: no tenía usos independientes en otros módulos.
 
 ### Correcciones y compensaciones
 
 - Una redistribución puede revertirse únicamente si ninguno de los lotes involucrados tiene actividad posterior de negocio. El journal ordenado incluye pesajes, recolecciones, mortalidad, distribuciones, correcciones y cambios del lote; las versiones son una protección adicional. Se verifican estado, operación histórica verificable y la capacidad necesaria del galpón de retorno. El movimiento original queda intacto y se agrega `redistribution_reversal`, que expone `reversed_movement_id`.
 - Al revertir una redistribución a un lote nuevo, éste permanece consultable, vacío y finalizado. La reversión a uno existente restaura ambas cantidades sin cambiar sus metadatos. La reversión total restituye el galpón original.
-- Mortalidad admite corregir cantidad, categoría y observaciones. Cancelar no borra el registro; su estado pasa a `cancelled`. La cantidad viva se ajusta por la diferencia y la restitución vuelve a validar capacidad en el galpón actual del lote.
-- La mortalidad conserva el galpón y la fecha originales del hecho, aunque el lote se traslade después. Las rectificaciones se aplican ahora, mediante `mortality_correction` y auditoría; no se edita el movimiento original.
+- El alta de mortalidad exige `occurred_at`, `quantity` y `notes`: fecha ISO 8601 con segundos y zona horaria, cantidad entera de 1 a 2147483647 y motivo textual no vacío de hasta 5000 caracteres. Categorías ya no forman parte del contrato. Se conserva `version` y el encabezado `Idempotency-Key`.
+- Mortalidad admite corregir cantidad, fecha y motivo. Las bajas pueden superar las aves del lote: 2000 aves y 2001 bajas dejan saldo -1 sin finalizar. Cancelar no borra el registro; pasa a `cancelled` y restituye las bajas vigentes. El saldo se ajusta por la diferencia y la restitución valida el aumento real de ocupación física, sin contar el déficit como aves restituidas.
+- La mortalidad conserva el galpón del hecho aunque el lote se traslade después. La fecha se puede corregir dentro del mismo período de ubicación, sin aceptar futuro ni fechas anteriores a la existencia del lote. Las rectificaciones se aplican ahora mediante `mortality_correction` y auditoría; no se edita el movimiento original ni se reconstruyen retroactivamente sus fotografías de población.
 - Recolección admite corregir cantidad, fecha efectiva y observaciones. No permite cambiar lote, galpón ni UP. La diferencia genera una compensación de inventario; una corrección sólo textual no genera movimientos de stock de cantidad cero.
 - Cancelar una recolección mantiene el hecho histórico y compensa su ingreso en la cuenta de huevos de la UP. La recolección no modifica aves ni la versión del lote.
 - Los registros cancelados no se corrigen otra vez. Una corrección o cancelación que devuelva aves a un lote finalizado debe enviar `confirm_reactivation=true` y sólo puede reactivar una terminalidad por mortalidad; no reabre el origen de una unión o egreso posterior. Todas las correcciones y cancelaciones requieren `reason`.
@@ -94,7 +95,6 @@ Un cliente offline debe guardar ULID, payload, clave y versiones; enviar sus ope
 | `flocks.redistribute` | Redistribuciones y sus reversiones. |
 | `flocks.finalize` | Finalización con egreso. |
 | `breeds.view` / `breeds.manage` | Lectura / administración de razas. |
-| `mortality-categories.view` / `mortality-categories.manage` | Lectura / administración de categorías. |
 | `mortality.view` / `mortality.manage` | Consultas / registro, corrección y cancelación de mortalidad. |
 | `egg-collections.view` / `egg-collections.manage` | Consultas y métricas / comandos de recolección. |
 | `egg-stock.view` / `egg-stock.move` / `egg-stock.adjust` | Saldos, movimientos, ingresos, salidas y correcciones de la cuenta de huevos por UP. |
@@ -124,8 +124,6 @@ Todas las rutas siguientes son relativas a `/api/v1`. Las altas, redistribucione
 | GET | `/poultry-houses/{poultry_house}/flocks` | Lotes actualmente ubicados en el galpón. |
 | GET / POST | `/breeds` | Listar / crear razas. |
 | PATCH | `/breeds/{raza}` | Nombre o vigencia de raza. |
-| GET / POST | `/mortality-categories` | Listar / crear categorías. |
-| PATCH | `/mortality-categories/{categoria}` | Nombre o vigencia de categoría. |
 | GET | `/mortalities` | Consulta consolidada. |
 | GET / PATCH | `/mortalities/{mortality}` | Detalle / corrección. |
 | GET / POST | `/flocks/{flock}/mortalities` | Histórico / registro. |
@@ -143,7 +141,11 @@ Errores: `401` sin sesión, `403` sin permiso, `404` recurso inexistente, `422` 
 
 ## Datos demo y despliegue
 
-Migración aditiva: `database/migrations/2026_09_21_194750_add_flock_occupancy_and_activity_constraints.php`. Antes de crear las restricciones detecta lotes abiertos sin aves, lotes finalizados incompatibles y galpones con más de un lote abierto; aborta con diagnóstico y no corrige datos. Reconstruye marcas históricas desde operaciones, movimientos y auditoría en orden; sólo marca `reversal_verified=true` cuando una redistribución heredada tiene ambos lotes, fotografías y auditoría completa, incluida toda operación posterior que pudiera tocar lotes. Los movimientos sin operación o con cobertura incierta conservan `false` y su reversión responde `409`. El rollback de esta migración elimina sus restricciones y journal, pero conserva el tipo `total_existing` en el CHECK de movimientos para no invalidar el historial ya escrito.
+Migración histórica: `database/migrations/2026_09_21_194750_add_flock_occupancy_and_activity_constraints.php`. Antes de crear las restricciones detecta lotes abiertos sin aves, lotes finalizados incompatibles y galpones con más de un lote abierto; aborta con diagnóstico y no corrige datos. Reconstruye marcas históricas desde operaciones, movimientos y auditoría en orden; sólo marca `reversal_verified=true` cuando una redistribución heredada tiene ambos lotes, fotografías y auditoría completa, incluida toda operación posterior que pudiera tocar lotes. Los movimientos sin operación o con cobertura incierta conservan `false` y su reversión responde `409`. El rollback de esta migración elimina sus restricciones y journal, pero conserva el tipo `total_existing` en el CHECK de movimientos para no invalidar el historial ya escrito.
+
+La migración `2026_10_12_083612_allow_negative_mortality_balances_and_remove_categories.php` amplía `flocks.current_quantity` a `bigint`, retira la restricción de saldo no negativo y permite lotes abiertos con saldo cero. Los finalizados siguen requiriendo saldo cero y fecha de finalización; se mantiene el índice único de lote abierto por galpón. Elimina `mortality_category_id`, `mortality_categories` y los permisos exclusivos del catálogo, incluidas sus asignaciones por cascada. No modifica movimientos, operaciones ni auditorías anteriores; sus fotografías siguen disponibles. No inventa motivos para registros históricos con `notes=null`; las altas nuevas requieren texto y las ediciones no pueden vaciarlo.
+
+La eliminación de datos del catálogo no admite rollback automático: `down()` aborta antes de modificar el esquema. Para recuperar esas categorías o asignaciones se requiere un respaldo previo o una migración correctiva. Las pruebas de concurrencia recrean y vacían sólo la conexión PostgreSQL con ambiente `testing` y nombre terminado en `_testing`, verificando ambas condiciones antes y durante la limpieza; no ejecutan rollback de migraciones irreversibles.
 
 ```bash
 docker compose -f compose.dev.yaml exec -T api php artisan migrate --no-interaction
@@ -166,6 +168,12 @@ El seeder de producción usa el producto técnico protegido `Huevo` y una cuenta
 ## Verificación automatizada
 
 La cobertura del módulo está en `tests/Feature/Lots` y `tests/Unit/Lots`. Incluye validación HTTP, permisos, capacidad, metadatos del destinatario, traslados totales, compensaciones, idempotencia, versiones, fechas locales, stock, rollback por falla de auditoría y carga demo repetida.
+
+Verificación del cambio de mortalidad del 12 de octubre de 2026: **71 pruebas aprobadas y 942 aserciones**. Se ejecutaron conjuntamente `MortalityEndpointTest`, `MortalityMigrationTest`, `EggCollectionEndpointTest`, `CatalogEndpointTest`, `LotsContractTest`, `LotsConcurrencyTest`, `LotsDemoSeederTest`, `WeighingConcurrencyTest`, `ManagementHistoryEndpointTest`, `PoultryHouseEndpointTest`, `MedicineConcurrencyTest` y `VaccineConcurrencyTest`. Incluye actualización de un esquema con datos y permisos previos, conservación literal de movimientos/operaciones/auditorías, saldos negativos acumulados, edición de fecha y motivo, cancelación, versiones, permisos y falla transaccional de auditoría.
+
+Pint aprobó todos los PHP modificados. En el contenedor, `--dirty` no está disponible porque Pint no detecta Git; se pasó la lista de archivos modificados y nuevos obtenida desde Git en el host. `git diff --check` aprobó. PHPStan aprobó los archivos de aplicación y base de datos modificados; el análisis completo con `.phpstan-lots.neon` conserva dos errores en `app/Actions/Inventory/RecordInventoryMovementAction.php:301` y `:424` por `withResourceMetadata()`, fuera de este cambio. La prueba concurrente de Medicamentos recibió la configuración explícita de clave y conexión de pruebas para sus procesos secundarios, restaurándola al cerrar. No se ejecutó la suite completa del proyecto.
+
+Con autorización expresa del usuario, se aplicó únicamente esta migración a la base local `gam`, después de generar un respaldo completo en formato personalizado de PostgreSQL y verificar su lectura con `pg_restore --list`. El respaldo quedó en `storage/app/private/backups/gam-before-mortality-20261012T091412Z.dump`, fuera de Git. Después se limpió la caché de permisos. Los conteos antes y después se conservaron: una mortalidad, 17 movimientos, 225 operaciones y 247 auditorías de Lotes. Se confirmó la ausencia de tabla, columna y permisos de categorías, el saldo de tipo `bigint` y la migración registrada como ejecutada.
 
 `LotsConcurrencyTest` usa procesos PHP independientes con PostgreSQL real: admisiones que compiten por un galpón, mortalidades con la misma versión y reintentos simultáneos. Se ejecuta únicamente si la conexión usa una base cuyo nombre termina en `_testing`; fuera de ella se omite para impedir una limpieza accidental de desarrollo.
 
@@ -237,9 +245,9 @@ Por cada caso guardar: método/ruta, cuerpo sin credenciales, clave, estado HTTP
 
 ### 2. Catálogos, alta, lectura y reintento
 
-Crear una raza con `POST /breeds` y `{"name":"QA Ponedoras <sufijo>"}`. Crear otra raza para incompatibilidad. Crear una categoría con `POST /mortality-categories` y `{"name":"QA Observación <sufijo>"}`. Todas las rutas de aquí en adelante son bajo `/api/v1`.
+Crear una raza con `POST /breeds` y `{"name":"QA Ponedoras <sufijo>"}`. Crear otra raza para incompatibilidad. Todas las rutas de aquí en adelante son bajo `/api/v1`.
 
-Esperado: `201`, `data.catalog.id`, estado `active`, versión 1. Repetir mismo nombre variando espacios/mayúsculas con otra clave: `409`. Probar listar y filtrar por nombre/status; luego renombrar una categoría con PATCH y su versión, y comprobar nueva versión y auditoría. Reservar la raza principal activa para el resto del recorrido.
+Esperado: `201`, `data.catalog.id`, estado `active`, versión 1. Repetir mismo nombre variando espacios/mayúsculas con otra clave: `409`. Probar listar y filtrar por nombre/status; luego renombrar una raza con PATCH y su versión, y comprobar nueva versión y auditoría. Reservar la raza principal activa para el resto del recorrido.
 
 Crear A en G1:
 
@@ -326,7 +334,7 @@ POST /flocks/{B}/mortalities
 ```
 
 ```json
-{"version":2,"quantity":2,"mortality_category_id":1,"notes":"Recuento QA"}
+{"version":2,"quantity":2,"occurred_at":"2026-10-12T09:00:00-03:00","notes":"Recuento QA"}
 ```
 
 Esperado: `201`, B=48/version 3, mortalidad M versión 1 y movimiento `mortality`. La cantidad inicial de B sigue siendo 40. Guardar M=`data.mortality.id`.
@@ -341,7 +349,7 @@ Esperado: `200`, B=49/version 4, M cantidad 1/version 2. El primer movimiento de
 
 Consultar `/mortalities?flock_id={B}&poultry_house_id={G2}&status=cancelled&date_from=<hoy>&date_to=<hoy>` y el histórico de B. Si B se traslada después, M debe continuar asociado al galpón original G2.
 
-En otro lote/galpón pequeño: registrar bajas, ocupar las plazas liberadas con otro lote e intentar cancelar las bajas. Debe dar `409` y conservar mortalidad, cantidad viva y versiones. También probar categoría inactiva, cantidad mayor que aves vivas, doble cancelación y versiones viejas: nunca deben producir cantidades negativas ni auditorías de éxito adicionales.
+En otro lote de 2000 aves y galpón de capacidad 2000, registrar 2001 bajas: debe dar `201`, saldo -1 y conservar el estado; ocupación física cero con galpón reservado. Corregir a 2002 y luego a 1999 debe dar saldos -2 y 1 sin cambiar el estado. Cancelar restaura las 2000 aves sin exigir capacidad para 2001. La finalización explícita desde negativo deja saldo cero, egreso cero y saldo anterior en auditoría; una cancelación posterior no la reabre. Fecha o motivo ausentes, motivo nulo/vacío y cantidades cero, negativas o fraccionarias responden `422` sin escrituras. Doble cancelación y versiones viejas responden `409`. El campo retirado `mortality_category_id` se rechaza como no permitido. Las rutas del catálogo retirado responden `404`.
 
 ### 8. Recolección y métricas
 

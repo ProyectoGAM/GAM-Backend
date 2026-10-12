@@ -21,7 +21,7 @@ tags:
     description: "Traslados parciales, totales e histórico compensatorio."
   -
     name: "Catálogos"
-    description: "Razas y categorías de mortalidad con vigencia."
+    description: "Razas con vigencia."
   -
     name: "Mortalidad"
     description: "Bajas y correcciones auditadas."
@@ -210,7 +210,7 @@ paths:
       tags: ["Lotes"]
       operationId: "finalizeFlock"
       summary: "Finaliza con egreso de las aves remanentes y sin borrado"
-      description: "Permiso requerido: flocks.finalize. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: flocks.finalize. Pone el saldo en cero y registra sólo el egreso de aves positivas. Si el saldo previo era negativo, registra egreso cero y conserva ese valor en las fotografías y la auditoría. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "flocks.finalize"
       parameters:
         -
@@ -486,104 +486,6 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/mortality-categories":
-    get:
-      tags: ["Catálogos"]
-      operationId: "listMortalityCategories"
-      summary: "Lista categorías de mortalidad"
-      description: "Permiso requerido: mortality-categories.view. El acceso es global dentro de la empresa."
-      x-permission: "mortality-categories.view"
-      parameters:
-        -
-          "$ref": "#/components/parameters/Page"
-        -
-          "$ref": "#/components/parameters/PerPage"
-        -
-          "$ref": "#/components/parameters/Search"
-        -
-          "$ref": "#/components/parameters/CatalogStatus"
-      responses:
-        "200":
-          description: "Consulta u operación completada."
-          content:
-            "application/json":
-              schema:
-                "$ref": "#/components/schemas/PaginatedCatalogs"
-        "401":
-          "$ref": "#/components/responses/Unauthenticated"
-        "403":
-          "$ref": "#/components/responses/Forbidden"
-        "404":
-          "$ref": "#/components/responses/NotFound"
-        "422":
-          "$ref": "#/components/responses/InvalidInput"
-    post:
-      tags: ["Catálogos"]
-      operationId: "createMortalityCategory"
-      summary: "Crea una categoría de mortalidad"
-      description: "Permiso requerido: mortality-categories.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
-      x-permission: "mortality-categories.manage"
-      parameters:
-        -
-          "$ref": "#/components/parameters/IdempotencyKey"
-      requestBody:
-        required: true
-        content:
-          "application/json":
-            schema:
-              "$ref": "#/components/schemas/CreateCatalog"
-      responses:
-        "201":
-          description: "Operación registrada o resultado original recuperado por idempotencia."
-          content:
-            "application/json":
-              schema:
-                "$ref": "#/components/schemas/OperationResponse"
-        "401":
-          "$ref": "#/components/responses/Unauthenticated"
-        "403":
-          "$ref": "#/components/responses/Forbidden"
-        "404":
-          "$ref": "#/components/responses/NotFound"
-        "409":
-          "$ref": "#/components/responses/Conflict"
-        "422":
-          "$ref": "#/components/responses/InvalidInput"
-  "/mortality-categories/{mortalityCategory}":
-    patch:
-      tags: ["Catálogos"]
-      operationId: "updateMortalityCategory"
-      summary: "Renombra o cambia la vigencia de una categoría"
-      description: "Permiso requerido: mortality-categories.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
-      x-permission: "mortality-categories.manage"
-      parameters:
-        -
-          "$ref": "#/components/parameters/MortalityCategory"
-        -
-          "$ref": "#/components/parameters/IdempotencyKey"
-      requestBody:
-        required: true
-        content:
-          "application/json":
-            schema:
-              "$ref": "#/components/schemas/UpdateCatalog"
-      responses:
-        "200":
-          description: "Consulta u operación completada."
-          content:
-            "application/json":
-              schema:
-                "$ref": "#/components/schemas/OperationResponse"
-        "401":
-          "$ref": "#/components/responses/Unauthenticated"
-        "403":
-          "$ref": "#/components/responses/Forbidden"
-        "404":
-          "$ref": "#/components/responses/NotFound"
-        "409":
-          "$ref": "#/components/responses/Conflict"
-        "422":
-          "$ref": "#/components/responses/InvalidInput"
   "/mortalities":
     get:
       tags: ["Mortalidad"]
@@ -723,7 +625,7 @@ paths:
       tags: ["Mortalidad"]
       operationId: "recordMortality"
       summary: "Registra bajas y descuenta aves vivas"
-      description: "Permiso requerido: mortality.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: mortality.manage. Exige fecha, cantidad entera positiva y motivo textual en notes. Puede dejar saldo negativo y conserva el estado del lote. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "mortality.manage"
       parameters:
         -
@@ -831,7 +733,7 @@ paths:
       tags: ["Recolección"]
       operationId: "recordEggCollection"
       summary: "Registra huevos y aumenta el inventario en una transacción"
-      description: "Permiso requerido: egg-collections.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: egg-collections.manage. Requiere un lote abierto con saldo mayor que cero; saldo cero o negativo responde 409 sin recolección ni cambios de stock. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "egg-collections.manage"
       parameters:
         -
@@ -1281,13 +1183,6 @@ components:
       schema:
         type: "integer"
         minimum: 1
-    MortalityCategory:
-      name: "mortalityCategory"
-      in: "path"
-      required: true
-      schema:
-        type: "integer"
-        minimum: 1
     IdempotencyKey:
       name: "Idempotency-Key"
       in: "header"
@@ -1461,7 +1356,8 @@ components:
           maximum: 2147483647
         current_quantity:
           type: "integer"
-          minimum: 0
+          format: "int64"
+          description: "Saldo del lote; admite valores negativos por mortalidad sin modificar su estado."
         entry_date:
           type: "string"
           format: "date"
@@ -1537,7 +1433,8 @@ components:
           maximum: 2147483647
         current_quantity:
           type: "integer"
-          minimum: 0
+          format: "int64"
+          description: "Saldo del lote; admite valores negativos por mortalidad sin modificar su estado."
         entry_date:
           type: "string"
           format: "date"
@@ -1641,7 +1538,7 @@ components:
     Mortality:
       type: "object"
       additionalProperties: false
-      required: ["id", "flock_id", "poultry_house_id", "production_unit_id", "quantity", "occurred_at", "notes", "status", "version", "created_by", "mortality_category_id", "plan_activity_id", "origin_operation_id"]
+      required: ["id", "flock_id", "poultry_house_id", "production_unit_id", "quantity", "occurred_at", "notes", "status", "version", "created_by", "plan_activity_id", "origin_operation_id"]
       properties:
         id:
           type: "string"
@@ -1678,9 +1575,6 @@ components:
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
         created_by:
-          type: "integer"
-          minimum: 1
-        mortality_category_id:
           type: "integer"
           minimum: 1
         plan_activity_id:
@@ -2016,7 +1910,8 @@ components:
     RecordMortality:
       type: "object"
       additionalProperties: false
-      required: ["version", "quantity", "mortality_category_id"]
+      required: ["version", "quantity", "occurred_at", "notes"]
+      description: "Registra fecha, cantidad entera positiva y motivo obligatorio. Las bajas pueden superar el saldo del lote; conserva su estado incluso con saldo cero o negativo."
       properties:
         id:
           type: "string"
@@ -2035,21 +1930,21 @@ components:
           type: ["string", "null"]
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
           description: "Actividad mortality vigente del mismo lote, cuando se asocia explícitamente."
-        mortality_category_id:
-          type: "integer"
-          minimum: 1
         occurred_at:
           type: "string"
           format: "date-time"
           pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
           description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
         notes:
-          type: ["string", "null"]
+          type: "string"
+          minLength: 1
+          description: "Motivo obligatorio de la mortalidad; no admite texto vacío ni sólo espacios."
           maxLength: 5000
     CorrectMortality:
       type: "object"
       additionalProperties: false
       required: ["version", "flock_version", "reason"]
+      description: "Corrige cantidad, fecha o motivo mediante compensación auditada. La cantidad debe seguir siendo positiva y puede dejar saldo negativo. reason justifica la corrección; notes conserva el motivo del hecho."
       properties:
         version:
           type: "integer"
@@ -2073,11 +1968,15 @@ components:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        mortality_category_id:
-          type: "integer"
-          minimum: 1
+        occurred_at:
+          type: "string"
+          format: "date-time"
+          description: "Fecha corregida dentro del período del mismo galpón histórico; el movimiento original se conserva."
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
         notes:
-          type: ["string", "null"]
+          type: "string"
+          minLength: 1
+          description: "Motivo de la mortalidad; si se envía debe ser texto no vacío."
           maxLength: 5000
     CancelRecord:
       type: "object"

@@ -26,7 +26,6 @@ use App\Http\Controllers\Lots\EggCollectionController;
 use App\Http\Controllers\Lots\FlockController;
 use App\Http\Controllers\Lots\FlockRedistributionController;
 use App\Http\Controllers\Lots\FlockStatusController;
-use App\Http\Controllers\Lots\MortalityCategoryController;
 use App\Http\Controllers\Lots\MortalityController;
 use App\Http\Controllers\Lots\WeighingController;
 use App\Http\Controllers\ManagementPlans\FlockManagementHistoryController;
@@ -123,9 +122,6 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/breeds', [BreedController::class, 'index'])->name('breeds.index');
             Route::post('/breeds', [BreedController::class, 'store'])->name('breeds.store');
             Route::patch('/breeds/{breed}', [BreedController::class, 'update'])->name('breeds.update');
-            Route::get('/mortality-categories', [MortalityCategoryController::class, 'index'])->name('mortality-categories.index');
-            Route::post('/mortality-categories', [MortalityCategoryController::class, 'store'])->name('mortality-categories.store');
-            Route::patch('/mortality-categories/{mortalityCategory}', [MortalityCategoryController::class, 'update'])->name('mortality-categories.update');
             Route::get('/mortalities', [MortalityController::class, 'index'])->name('mortality.index');
             Route::get('/mortalities/{mortality}', [MortalityController::class, 'show'])->name('mortality.show');
             Route::get('/flocks/{flock}/mortalities', [MortalityController::class, 'byFlock'])->name('mortality.by-flock');

@@ -22,7 +22,7 @@ abstract class LotsTestCase extends TestCase
     use LazilyRefreshDatabase;
 
     /** @param list<string> $permissions */
-    protected function signIn(array $permissions = ['flocks.view', 'flocks.manage', 'flocks.redistribute', 'flocks.finalize', 'mortality.view', 'mortality.manage', 'egg-collections.view', 'egg-collections.manage', 'breeds.view', 'breeds.manage', 'mortality-categories.view', 'mortality-categories.manage']): User
+    protected function signIn(array $permissions = ['flocks.view', 'flocks.manage', 'flocks.redistribute', 'flocks.finalize', 'mortality.view', 'mortality.manage', 'egg-collections.view', 'egg-collections.manage', 'breeds.view', 'breeds.manage']): User
     {
         $user = User::factory()->create();
         foreach ($permissions as $permission) {

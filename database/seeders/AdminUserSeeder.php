@@ -49,8 +49,6 @@ final class AdminUserSeeder extends Seeder
             Permission::findOrCreate('breeds.manage', 'web'),
             Permission::findOrCreate('mortality.view', 'web'),
             Permission::findOrCreate('mortality.manage', 'web'),
-            Permission::findOrCreate('mortality-categories.view', 'web'),
-            Permission::findOrCreate('mortality-categories.manage', 'web'),
             Permission::findOrCreate('egg-collections.view', 'web'),
             Permission::findOrCreate('egg-collections.manage', 'web'),
             Permission::findOrCreate('egg-stock.view', 'web'),

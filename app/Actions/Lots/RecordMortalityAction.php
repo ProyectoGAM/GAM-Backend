@@ -2,12 +2,10 @@
 
 namespace App\Actions\Lots;
 
-use App\Enums\Lots\FlockStatus;
 use App\Events\Lots\MortalityRecorded;
 use App\Exceptions\Lots\LotsConflict;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
-use App\Models\Lots\MortalityCategory;
 use App\Models\Lots\MortalityRecord;
 use App\Models\User;
 use App\Queries\FarmStructure\LockPoultryHousesQuery;
@@ -32,14 +30,13 @@ final readonly class RecordMortalityAction
             $this->state->open($locked);
             $quantity = (int) $data['quantity'];
             $this->state->positive($quantity);
-            if ($quantity > $locked->current_quantity) {
-                throw new LotsConflict('La mortalidad supera las aves vivas del lote.');
+            if (! is_string($data['notes'] ?? null) || trim($data['notes']) === '') {
+                throw new LotsConflict('Debes indicar el motivo de la mortalidad.');
             }
-            $category = MortalityCategory::query()->sharedLock()->findOrFail($data['mortality_category_id']);
-            if ($category->status !== 'active') {
-                throw new LotsConflict('La categoría de mortalidad debe estar activa.');
+            if (! is_string($data['occurred_at'] ?? null)) {
+                throw new LotsConflict('Debes indicar la fecha de la mortalidad.');
             }
-            $time = $this->state->time($locked, $data['occurred_at'] ?? null);
+            $time = $this->state->time($locked, $data['occurred_at']);
             $planActivity = $this->planActivities->resolve($locked, $data['plan_activity_id'] ?? null, 'mortality');
             $this->houses->execute([$locked->poultry_house_id]);
             $before = $this->snapshots->flock($locked);
@@ -48,15 +45,10 @@ final readonly class RecordMortalityAction
                 'public_id' => $data['public_id'] ?? (string) Str::ulid(), 'flock_id' => $locked->id,
                 'flock_plan_activity_id' => $planActivity?->id, 'operation_id' => $operationId,
                 'poultry_house_id' => $locked->poultry_house_id, 'production_unit_id' => $locked->production_unit_id,
-                'mortality_category_id' => $category->id, 'quantity' => $quantity, 'occurred_at' => $time,
-                'notes' => $data['notes'] ?? null, 'status' => 'recorded', 'version' => 1, 'created_by' => $actor->id,
+                'quantity' => $quantity, 'occurred_at' => $time,
+                'notes' => $data['notes'], 'status' => 'recorded', 'version' => 1, 'created_by' => $actor->id,
             ])->save();
             $locked->current_quantity -= $quantity;
-            if ($locked->current_quantity === 0) {
-                $locked->status = FlockStatus::Finished;
-                $locked->finalized_at = $time;
-                $locked->finalization_reason = 'Lote agotado por mortalidad.';
-            }
             $locked->version++;
             $locked->save();
             $after = $this->snapshots->flock($locked);
