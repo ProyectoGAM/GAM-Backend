@@ -135,7 +135,6 @@ final readonly class ListFlockManagementHistoryQuery
     private function mortalityStream(Flock $flock, array $scopes): Builder
     {
         $query = DB::table('mortality_records as records')
-            ->leftJoin('mortality_categories as category', 'category.id', '=', 'records.mortality_category_id')
             ->leftJoin('flock_plan_activities as plan_activity', 'plan_activity.id', '=', 'records.flock_plan_activity_id')
             ->leftJoin('users as responsible_user', 'responsible_user.id', '=', 'records.created_by')
             ->selectRaw('records.id as source_id')
@@ -148,7 +147,7 @@ final readonly class ListFlockManagementHistoryQuery
             ->selectRaw('plan_activity.title as plan_activity_title')
             ->selectRaw('records.created_by as responsible_user_id')
             ->selectRaw('responsible_user.name as responsible_name')
-            ->selectRaw("jsonb_build_object('quantity', records.quantity, 'mortality_category_id', records.mortality_category_id, 'mortality_category_name', category.name, 'poultry_house_id', records.poultry_house_id, 'production_unit_id', records.production_unit_id, 'notes', records.notes, 'status', records.status, 'version', records.version) as module_data");
+            ->selectRaw("jsonb_build_object('quantity', records.quantity, 'poultry_house_id', records.poultry_house_id, 'production_unit_id', records.production_unit_id, 'notes', records.notes, 'status', records.status, 'version', records.version) as module_data");
 
         return $this->applyScopes($query, $scopes)
             ->selectRaw($this->scopeCaseSql($scopes, false, 'provenance'), $this->scopeCaseBindings($scopes, false, includeProvenance: true))

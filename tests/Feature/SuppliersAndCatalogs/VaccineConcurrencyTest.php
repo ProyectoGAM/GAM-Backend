@@ -32,9 +32,7 @@ use Tests\TestCase;
 #[Group('vaccine-concurrency')]
 final class VaccineConcurrencyTest extends TestCase
 {
-    use DatabaseMigrations {
-        runDatabaseMigrations as private migrateIsolatedDatabase;
-    }
+    use DatabaseMigrations;
 
     private ?string $originalAppKey = null;
 

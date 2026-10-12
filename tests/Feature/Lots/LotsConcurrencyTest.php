@@ -8,7 +8,6 @@ use App\Exceptions\Lots\LotsConflict;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\Lots\Breed;
 use App\Models\Lots\Flock;
-use App\Models\Lots\MortalityCategory;
 use App\Models\ManagementPlans\PlanTemplate;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
@@ -20,9 +19,7 @@ use Tests\TestCase;
 
 final class LotsConcurrencyTest extends TestCase
 {
-    use DatabaseMigrations {
-        runDatabaseMigrations as private migrateIsolatedDatabase;
-    }
+    use DatabaseMigrations;
 
     private ?string $originalAppKey = null;
 
@@ -144,11 +141,10 @@ final class LotsConcurrencyTest extends TestCase
     {
         // Preparación: confirma un lote de diez aves y dos operadores independientes.
         $flock = Flock::factory()->create(['initial_quantity' => 10, 'current_quantity' => 10]);
-        $category = MortalityCategory::factory()->create();
         $commands = [];
         foreach ([1, 2] as $number) {
             $commands[] = ['flock_id' => $flock->id, 'actor_id' => $this->actor('mortality.manage')->id,
-                'data' => ['version' => 1, 'quantity' => 7, 'mortality_category_id' => $category->id, 'idempotency_key' => (string) Str::uuid()]];
+                'data' => ['version' => 1, 'quantity' => 7, 'notes' => 'Bajas observadas', 'occurred_at' => now()->startOfSecond()->toIso8601String(), 'idempotency_key' => (string) Str::uuid()]];
         }
 
         // Mutación: ambos procesos intentan descontar siete aves con la misma versión.

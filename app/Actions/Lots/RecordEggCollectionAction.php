@@ -43,7 +43,7 @@ final readonly class RecordEggCollectionAction
             if ($unit->status !== ProductionUnitStatus::Active) {
                 throw new LotsConflict('La unidad productiva debe estar operativa para registrar nuevas recolecciones.');
             }
-            if ($locked->current_quantity === 0) {
+            if ($locked->current_quantity <= 0) {
                 throw new LotsConflict('No se puede registrar producción de un lote sin aves.');
             }
             $quantity = (int) ($data['quantity'] ?? 0);

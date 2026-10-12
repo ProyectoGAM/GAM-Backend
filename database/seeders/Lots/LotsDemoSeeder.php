@@ -9,7 +9,6 @@ use App\Actions\Lots\FinalizeFlockAction;
 use App\Actions\Lots\RecordMortalityAction;
 use App\Actions\Lots\RedistributeFlockAction;
 use App\Actions\Lots\SaveBreedAction;
-use App\Actions\Lots\SaveMortalityCategoryAction;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Lots\Flock;
@@ -22,7 +21,7 @@ use Illuminate\Database\Seeder;
 
 final class LotsDemoSeeder extends Seeder
 {
-    public function run(CreateFlockAction $create, RedistributeFlockAction $redistribute, RecordMortalityAction $mortality, FinalizeFlockAction $finalize, ChangeFlockStatusAction $status, SaveBreedAction $breeds, SaveMortalityCategoryAction $categories, CreatePoultryHouseAction $createHouse): void
+    public function run(CreateFlockAction $create, RedistributeFlockAction $redistribute, RecordMortalityAction $mortality, FinalizeFlockAction $finalize, ChangeFlockStatusAction $status, SaveBreedAction $breeds, CreatePoultryHouseAction $createHouse): void
     {
         if (! app()->environment('local') && ! (app()->environment('production') && config('app.demo_db_reset_enabled'))) {
             return;
@@ -54,7 +53,6 @@ final class LotsDemoSeeder extends Seeder
         }
         $breedResult = $this->once($actor, 501, fn (string $key): FlockOperation => $breeds->execute(null, ['name' => 'Ponedoras demo', 'idempotency_key' => $key], $actor, 'seeder'));
         $otherBreed = $this->once($actor, 502, fn (string $key): FlockOperation => $breeds->execute(null, ['name' => 'Camperas demo', 'idempotency_key' => $key], $actor, 'seeder'));
-        $category = $this->once($actor, 503, fn (string $key): FlockOperation => $categories->execute(null, ['name' => 'Causa en observación', 'idempotency_key' => $key], $actor, 'seeder'));
         $suppliers = Supplier::query()->orderBy('id')->limit(2)->get();
         $entryDate = now(config('lots.timezone'))->subDays(40)->toDateString();
         $a = $this->once($actor, 504, fn (string $key): FlockOperation => $create->execute([
@@ -87,10 +85,10 @@ final class LotsDemoSeeder extends Seeder
 
             return $redistribute->execute($flock, ['quantity' => $flock->current_quantity, 'destination_poultry_house_id' => $destination->id, 'version' => $flock->version, 'idempotency_key' => $key], $actor, 'seeder');
         });
-        $this->once($actor, 509, function (string $key) use ($bId, $category, $mortality, $actor): FlockOperation {
+        $this->once($actor, 509, function (string $key) use ($bId, $mortality, $actor): FlockOperation {
             $flock = Flock::query()->where('public_id', $bId)->firstOrFail();
 
-            return $mortality->execute($flock, ['quantity' => 2, 'mortality_category_id' => $category->result['catalog']['id'], 'version' => $flock->version, 'idempotency_key' => $key], $actor, 'seeder');
+            return $mortality->execute($flock, ['quantity' => 2, 'notes' => 'Bajas observadas en el recuento diario.', 'occurred_at' => now()->startOfSecond()->toIso8601String(), 'version' => $flock->version, 'idempotency_key' => $key], $actor, 'seeder');
         });
         $this->once($actor, 511, function (string $key) use ($split, $finalize, $actor): FlockOperation {
             $flock = Flock::query()->where('public_id', $split->result['destination']['public_id'])->firstOrFail();

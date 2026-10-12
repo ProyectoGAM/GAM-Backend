@@ -28,7 +28,7 @@ final readonly class FinalizeFlockAction
             $time = $this->state->time($locked);
             $this->houses->execute([$locked->poultry_house_id]);
             $before = $this->snapshots->flock($locked);
-            $quantity = $locked->current_quantity;
+            $quantity = max(0, $locked->current_quantity);
             $locked->forceFill(['current_quantity' => 0, 'status' => FlockStatus::Finished, 'finalized_at' => $time, 'finalization_reason' => $data['reason'], 'version' => $locked->version + 1])->save();
             $after = $this->snapshots->flock($locked);
             $movement = $this->history->movement($operationId, 'departure', $locked, null, $quantity, [$locked->public_id => $before], [$locked->public_id => $after], $time, $actor, $data['reason']);

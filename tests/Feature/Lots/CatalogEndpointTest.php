@@ -11,7 +11,7 @@ final class CatalogEndpointTest extends LotsTestCase
     /** @return array<string, array{string, string}> */
     public static function catalogs(): array
     {
-        return ['razas' => ['/breeds', 'breeds'], 'categorías' => ['/mortality-categories', 'mortality_categories']];
+        return ['razas' => ['/breeds', 'breeds']];
     }
 
     // Flujo: crea, consulta, renombra y desactiva catálogos sin eliminar referencias.
@@ -72,12 +72,10 @@ final class CatalogEndpointTest extends LotsTestCase
     public function test_catalog_mutations_require_their_own_permissions(): void
     {
         // Preparación: autentica un usuario con acceso sólo de consulta.
-        $this->signIn(['breeds.view', 'mortality-categories.view']);
+        $this->signIn(['breeds.view']);
 
         // Requests: permite listar y prohíbe crear con los mismos permisos.
         $this->getJson('/api/v1/breeds')->assertOk();
-        $this->getJson('/api/v1/mortality-categories')->assertOk();
         $this->command('POST', '/breeds', ['name' => 'Prohibido'])->assertForbidden();
-        $this->command('POST', '/mortality-categories', ['name' => 'Prohibido'])->assertForbidden();
     }
 }
