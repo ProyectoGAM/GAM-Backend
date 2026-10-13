@@ -34,7 +34,8 @@ final readonly class DownloadReportExportAction
             if ($export->status !== ReportExportStatus::Expired) {
                 DB::transaction(function () use ($export): void {
                     $locked = ReportExport::query()->lockForUpdate()->find($export->getKey());
-                    if ($locked === null || $locked->status === ReportExportStatus::Expired) {
+                    if ($locked === null || $locked->status === ReportExportStatus::Expired
+                        || $locked->expires_at === null || $locked->expires_at->isFuture()) {
                         return;
                     }
 
@@ -55,7 +56,11 @@ final readonly class DownloadReportExportAction
                 });
             }
 
-            throw new ReportConflict('La exportación ya expiró.');
+            $export->refresh();
+            if ($export->status === ReportExportStatus::Expired
+                || ($export->expires_at !== null && $export->expires_at->lessThanOrEqualTo(now()))) {
+                throw new ReportConflict('La exportación ya expiró.');
+            }
         }
         if ($export->status !== ReportExportStatus::Completed || $export->path === null) {
             throw new ReportConflict('La exportación todavía no está disponible.');

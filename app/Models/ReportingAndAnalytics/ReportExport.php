@@ -39,6 +39,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class ReportExport extends Model
 {
+    /** Conserva el huso horario al persistir vencimientos en PostgreSQL. */
+    protected $dateFormat = 'Y-m-d H:i:sP';
+
     /** @use HasFactory<ReportExportFactory> */
     use HasFactory;
 

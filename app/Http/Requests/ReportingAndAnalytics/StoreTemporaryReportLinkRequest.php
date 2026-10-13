@@ -19,6 +19,6 @@ final class StoreTemporaryReportLinkRequest extends FormRequest
     /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
-        return ['expires_in' => ['required', 'integer', 'min:1', 'max:'.(int) config('reporting.shared_link_max_minutes', 60)]];
+        return ['expires_in' => ['required', 'integer', 'min:1', 'max:'.(int) config('reporting.shared_link_max_minutes', 43200)]];
     }
 }

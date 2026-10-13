@@ -260,6 +260,7 @@ paths:
     post:
       tags: [Exportaciones]
       summary: Crea un enlace temporal firmado
+      description: 'La duración se expresa en minutos, hasta 30 días. Conserva el archivo y su instantánea al menos hasta el vencimiento del nuevo enlace. No recupera exportaciones ya expiradas ni acorta enlaces anteriores.'
       operationId: crearEnlaceTemporalDeReporte
       parameters:
         - $ref: '#/components/parameters/ReportExport'
@@ -270,7 +271,7 @@ paths:
             schema:
               type: object
               properties:
-                expires_in: { type: integer, minimum: 1, maximum: 60, default: 30 }
+                expires_in: { type: integer, minimum: 1, maximum: 43200, default: 30, description: 'Duración en minutos. Opciones habituales: 30, 60, 360, 720, 1440, 10080 y 43200. El máximo puede restringirse por configuración de despliegue.' }
       responses:
         '201':
           description: Enlace temporal creado.
@@ -282,6 +283,7 @@ paths:
                 properties:
                   url: { type: string, format: uri }
                   expires_at: { type: string, format: date-time }
+                  file_expires_at: { type: [string, 'null'], format: date-time, description: Vencimiento actualizado del archivo exportado. }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
