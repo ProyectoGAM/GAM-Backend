@@ -15,3 +15,5 @@ match (config('reporting.cleanup_schedule', 'hourly')) {
     default => $cleanupSchedule->hourly(),
 };
 $cleanupSchedule->withoutOverlapping()->onOneServer();
+
+Schedule::command('alimentacion:consumir')->dailyAt('00:00')->timezone('America/Montevideo')->withoutOverlapping()->onOneServer();

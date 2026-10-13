@@ -21,6 +21,8 @@ Todo commit o PR que agregue, corrija o cambie código del backend debe incluir 
 
 La guía debe explicar qué cambió y por qué, el comportamiento observable y las decisiones de negocio, las rutas y contratos cuando correspondan, los cambios de datos o migraciones, permisos, auditoría e idempotencia, y la verificación ejecutada con sus límites. Si cambia una API, se actualiza además su contrato OpenAPI. El índice de implementaciones debe enlazar cualquier guía nueva. Un cambio del backend no está listo para commit o PR mientras falten estas actualizaciones.
 
+Checklist de cada entrega: guía actualizada y enlazada, contratos OpenAPI coherentes con las rutas y respuestas, migraciones/datos explicados, autorización y auditoría documentadas, idempotencia y concurrencia verificadas, pruebas y límites de verificación registrados. La [alimentación de lotes](docs/implementations/flock-feeding-implementation.md) documenta el modo automático, la configuración manual, el regreso explícito, las jornadas pendientes y sus rectificaciones compensatorias.
+
 Swagger UI (desarrollo): [http://localhost:8080/docs/](http://localhost:8080/docs/)
 
 La documentación se sirve desde el servicio `swagger-ui` de Compose y permite
@@ -98,7 +100,7 @@ Las decisiones para corregir, regenerar o reconstruir datos de prueba del entorn
 
 Cada módulo nuevo debe incluir su seeder de datos demo y registrarlo en `LocalDemoDataSeeder` (o en un seeder del módulo invocado por este), para que sus datos estén disponibles automáticamente cuando el ambiente sea local.
 
-El catálogo global de recetas incluye una combinación demo de maíz y soja. Su alta y cálculo no modifican stock. El segundo bloque agrega elaboración inmediata, cancelación compensatoria, ajustes independientes y alimento acumulado por receta y UP. La demo incluye una elaboración cancelada y un recuento independiente de alimento. El contrato y los pasos de uso están en la [guía de recetas](docs/implementations/feed-recipes-implementation.md).
+El catálogo global de recetas incluye una combinación demo de maíz y soja. Su alta y cálculo no modifican stock. El segundo bloque agrega elaboración inmediata, cancelación compensatoria, ajustes independientes y alimento acumulado por receta y UP. La demo incluye una elaboración cancelada y un recuento independiente de alimento. El contrato y los pasos de uso están en la [guía de recetas](docs/implementations/feed-recipes-implementation.md). El tercer bloque agrega [alimentación de lotes](docs/implementations/flock-feeding-implementation.md), con etapas copiadas, modo manual fijo, consumo a medianoche de Montevideo, recuperación y rectificaciones. La demo oficial incluye tres jornadas y una rectificación auditada.
 
 Para probar la pantalla de pesajes con un lote de 60 semanas y jornadas con anomalías, ejecutá el fixture local optativo `LOT-PESAJE-TEST`. El comando y los datos que crea se encuentran desde el [índice de implementaciones](docs/implementations/README.md). Es repetible sin duplicar ingresos.
 

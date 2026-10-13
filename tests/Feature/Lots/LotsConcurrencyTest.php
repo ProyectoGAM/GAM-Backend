@@ -107,7 +107,7 @@ final class LotsConcurrencyTest extends TestCase
                 'actor_id' => $this->actor('flocks.manage')->id,
                 'data' => ['code' => 'CONCURRENT-'.$number, 'breed_id' => $breed->id, 'origin' => 'Propio',
                     'poultry_house_id' => $house->id, 'initial_quantity' => 30,
-                    'entry_date' => now(config('lots.timezone'))->subDay()->toDateString(), 'idempotency_key' => (string) Str::uuid(),
+                    'entry_date' => now(config('lots.timezone'))->toDateString(), 'idempotency_key' => (string) Str::uuid(),
                     ...$planSelection],
             ];
         }
@@ -133,7 +133,7 @@ final class LotsConcurrencyTest extends TestCase
         $this->assertDatabaseCount('flock_operations', 1);
         $this->assertDatabaseCount('flock_plans', 1);
         $this->assertDatabaseCount('flock_plan_revisions', 1);
-        $this->assertDatabaseCount('activity_log', 2);
+        $this->assertDatabaseCount('activity_log', 3);
     }
 
     // Flujo: escrituras simultáneas con la misma versión no descuentan dos veces las aves.
@@ -177,7 +177,7 @@ final class LotsConcurrencyTest extends TestCase
         $planSelection = $this->publishedPlanSelection($actor);
         $data = ['code' => 'SAME-KEY', 'breed_id' => Breed::factory()->create()->id, 'origin' => 'Propio',
             'poultry_house_id' => PoultryHouse::factory()->create(['bird_capacity' => 10])->id, 'initial_quantity' => 10,
-            'entry_date' => now(config('lots.timezone'))->subDay()->toDateString(), 'idempotency_key' => (string) Str::uuid(),
+            'entry_date' => now(config('lots.timezone'))->toDateString(), 'idempotency_key' => (string) Str::uuid(),
             ...$planSelection];
         $task = static function () use ($actorId, $data): string {
             return app(CreateFlockAction::class)->execute($data, User::query()->findOrFail($actorId))->operation_id;
@@ -191,8 +191,8 @@ final class LotsConcurrencyTest extends TestCase
         $this->assertDatabaseCount('flock_movements', 1);
         $this->assertDatabaseCount('flock_plans', 1);
         $this->assertDatabaseCount('flock_plan_revisions', 1);
-        $this->assertDatabaseCount('flock_plan_activities', 1);
-        $this->assertDatabaseCount('activity_log', 2);
+        $this->assertDatabaseCount('flock_plan_activities', 2);
+        $this->assertDatabaseCount('activity_log', 3);
         $this->assertSame(1, DB::table('activity_log')->where('event', 'flock_plan_assigned')->count());
         $this->assertSame(1, DB::table('activity_log')->where('event', 'flock_created')->count());
     }

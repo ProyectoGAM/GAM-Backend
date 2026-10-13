@@ -61,17 +61,23 @@ final class WeighingDesignDemoSeeder extends Seeder
                 $plan = PlanTemplate::query()->whereNotNull('published_version')->orderBy('id')->firstOrFail();
             }
             $entryDate = CarbonImmutable::now(config('lots.timezone'))->startOfDay()->subWeeks(59)->toDateString();
-            $operation = $createFlock->execute([
-                'code' => self::FLOCK_CODE,
-                'breed_id' => $breed->id,
-                'origin' => 'Datos de demostración para diseño de pesajes',
-                'poultry_house_id' => $house->id,
-                'initial_quantity' => 120,
-                'entry_date' => $entryDate,
-                'plan_template_id' => $plan->public_id,
-                'plan_template_version' => $plan->published_version,
-                'idempotency_key' => 'e6500000-0000-4000-8000-000000100001',
-            ], $actor, 'seeder');
+            $originalAdmissionClock = Carbon::getTestNow();
+            try {
+                Carbon::setTestNow(CarbonImmutable::parse($entryDate, config('lots.timezone'))->setTime(12, 0));
+                $operation = $createFlock->execute([
+                    'code' => self::FLOCK_CODE,
+                    'breed_id' => $breed->id,
+                    'origin' => 'Datos de demostración para diseño de pesajes',
+                    'poultry_house_id' => $house->id,
+                    'initial_quantity' => 120,
+                    'entry_date' => $entryDate,
+                    'plan_template_id' => $plan->public_id,
+                    'plan_template_version' => $plan->published_version,
+                    'idempotency_key' => 'e6500000-0000-4000-8000-000000100001',
+                ], $actor, 'seeder');
+            } finally {
+                Carbon::setTestNow($originalAdmissionClock);
+            }
             $flock = Flock::query()->where('public_id', $operation->result['flock']['public_id'])->firstOrFail();
         }
 

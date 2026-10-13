@@ -27,6 +27,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $catalog_id
  * @property array<string, mixed>|null $catalog_snapshot
  * @property int|null $source_template_activity_id
+ * @property int|null $feed_recipe_id
+ * @property int|null $grams_per_bird
  */
 class FlockPlanActivity extends Model
 {
@@ -50,7 +52,7 @@ class FlockPlanActivity extends Model
         return [
             'sort_order' => 'integer', 'start_day' => 'integer', 'end_day' => 'integer',
             'start_week' => 'integer', 'end_week' => 'integer', 'interval_days' => 'integer',
-            'conditional' => 'boolean', 'catalog_snapshot' => 'array',
+            'conditional' => 'boolean', 'catalog_snapshot' => 'array', 'grams_per_bird' => 'integer',
         ];
     }
 }

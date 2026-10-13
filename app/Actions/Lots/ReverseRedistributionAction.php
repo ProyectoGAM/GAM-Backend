@@ -59,6 +59,9 @@ final readonly class ReverseRedistributionAction
                 $houseIds[] = $flock->poultry_house_id;
                 $net[$flock->poultry_house_id] = ($net[$flock->poultry_house_id] ?? 0) - $flock->current_quantity;
                 if ($previous !== null) {
+                    if ((int) $previous['production_unit_id'] !== $flock->production_unit_id) {
+                        throw new LotsConflict('No se permiten movimientos de lotes entre unidades productivas.');
+                    }
                     $houseIds[] = (int) $previous['poultry_house_id'];
                     $net[$previous['poultry_house_id']] = ($net[$previous['poultry_house_id']] ?? 0) + (int) $previous['current_quantity'];
                 }

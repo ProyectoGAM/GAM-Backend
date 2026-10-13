@@ -17,9 +17,11 @@ use App\Http\Controllers\Inventory\EggPresentationController;
 use App\Http\Controllers\Inventory\EggStockController;
 use App\Http\Controllers\Inventory\FeedAdjustmentController;
 use App\Http\Controllers\Inventory\FeedBalanceController;
+use App\Http\Controllers\Inventory\FeedConsumptionController;
 use App\Http\Controllers\Inventory\FeedManufactureController;
 use App\Http\Controllers\Inventory\FeedRecipeController;
 use App\Http\Controllers\Inventory\FeedStockController;
+use App\Http\Controllers\Inventory\FlockFeedingController;
 use App\Http\Controllers\Inventory\InventoryMovementController;
 use App\Http\Controllers\Inventory\InventoryReadController;
 use App\Http\Controllers\Inventory\StockLocationController;
@@ -288,6 +290,15 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('/stock-alimentacion', [FeedStockController::class, 'global'])
             ->name('feed-stock.global');
 
+        Route::middleware(['shared.device:any', 'shared.session.conditional'])->name('flock-feeding.')->group(function (): void {
+            Route::get('/lotes/{flock}/alimentacion', [FlockFeedingController::class, 'show'])->name('feeding.show');
+            Route::get('/lotes/{flock}/alimentacion/historial', [FlockFeedingController::class, 'history'])->name('feeding.history');
+            Route::post('/lotes/{flock}/alimentacion/manual', [FlockFeedingController::class, 'manual'])->name('feeding.manual');
+            Route::post('/lotes/{flock}/alimentacion/automatico', [FlockFeedingController::class, 'automatic'])->name('feeding.automatic');
+            Route::get('/lotes/{flock}/consumos-alimento', [FeedConsumptionController::class, 'index'])->name('consumptions.index');
+            Route::get('/lotes/{flock}/consumos-alimento/{consumption}', [FeedConsumptionController::class, 'show'])->whereNumber('consumption')->name('consumptions.show');
+            Route::post('/lotes/{flock}/consumos-alimento/{consumption}/rectificaciones', [FeedConsumptionController::class, 'correct'])->whereNumber('consumption')->name('consumptions.correct');
+        });
         Route::middleware(['shared.device:any', 'shared.session.conditional'])->name('feed-recipes.')->group(function (): void {
             Route::get('/elaboraciones', [FeedManufactureController::class, 'index'])->name('manufactures.index');
             Route::post('/elaboraciones', [FeedManufactureController::class, 'store'])->name('manufactures.store');

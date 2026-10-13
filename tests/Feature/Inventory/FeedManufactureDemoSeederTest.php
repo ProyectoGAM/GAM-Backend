@@ -29,7 +29,7 @@ final class FeedManufactureDemoSeederTest extends TestCase
         $original = FeedStockOperation::query()->where('kind', 'manufacture')->with('cancellation')->sole();
         $this->assertNotNull($original->cancellation);
         $this->assertSame(13000, $original->quantity_grams);
-        $this->assertDatabaseHas('feed_balances', ['quantity_grams' => 26000]);
+        $this->assertDatabaseHas('feed_stock_operations', ['kind' => 'feed_adjustment', 'balance_after' => '26000.000000']);
         $this->assertDatabaseCount('feed_stock_operations', 3);
         $this->assertSame(3, AuditEntry::query()->whereIn('event', ['feed_manufacture_recorded', 'feed_cancellation_recorded', 'feed_feed_adjustment_recorded'])->count());
         $operations = FeedStockOperation::query()->orderBy('id')->get()->toArray();

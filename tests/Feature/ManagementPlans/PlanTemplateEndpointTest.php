@@ -3,6 +3,7 @@
 namespace Tests\Feature\ManagementPlans;
 
 use App\Actions\ManagementPlans\AssignFlockPlanAction;
+use App\Models\Inventory\FeedRecipe;
 use App\Models\ManagementPlans\FlockPlan;
 use App\Models\ManagementPlans\FlockPlanActivity;
 use App\Models\ManagementPlans\PlanTemplate;
@@ -21,6 +22,9 @@ final class PlanTemplateEndpointTest extends LotsTestCase
             'activities' => [[
                 'type' => 'weighing', 'title' => $title,
                 'timing_kind' => 'day', 'start_day' => 1,
+            ], [
+                'type' => 'ration_change', 'title' => 'Alimentación inicial', 'timing_kind' => 'day', 'start_day' => 1,
+                'catalog_ref' => FeedRecipe::factory()->create()->id, 'grams_per_bird' => 40,
             ]],
         ];
     }
@@ -234,7 +238,7 @@ final class PlanTemplateEndpointTest extends LotsTestCase
         // Consulta: persiste la misma versión y la auditoría se escribe una sola vez.
         $this->assertDatabaseHas('plan_templates', ['public_id' => $templateId, 'status' => 'active', 'current_version' => 1, 'published_version' => null]);
         $this->assertSame(1, PlanTemplateVersion::query()->count());
-        $this->assertDatabaseCount('plan_template_activities', 1);
+        $this->assertDatabaseCount('plan_template_activities', 2);
         $this->assertDatabaseCount('flock_plans', 0);
         $this->assertDatabaseHas('activity_log', ['event' => 'plan_template_activated', 'operation_id' => $activated->json('data.operation_id')]);
         $this->assertSame(1, Activity::query()->where('event', 'plan_template_activated')->count());
@@ -270,7 +274,7 @@ final class PlanTemplateEndpointTest extends LotsTestCase
         $this->assertDatabaseHas('plan_template_versions', ['plan_template_id' => PlanTemplate::query()->where('public_id', $templateId)->value('id'), 'number' => 2, 'status' => 'draft']);
         $this->assertDatabaseCount('plan_template_versions', 2);
         $this->assertDatabaseHas('flock_plan_activities', ['id' => $copy->id, 'title' => $copy->title]);
-        $this->assertDatabaseCount('flock_plan_activities', 1);
+        $this->assertDatabaseCount('flock_plan_activities', 2);
     }
 
     // Flujo: admite tramos paralelos, fin abierto y comienzo quincenal configurable.
@@ -285,6 +289,15 @@ final class PlanTemplateEndpointTest extends LotsTestCase
             ['type' => 'weighing', 'title' => 'Pesaje quincenal', 'timing_kind' => 'day_recurrence', 'start_day' => 25, 'interval_days' => 15, 'end_week' => 16],
             ['type' => 'manual_practice', 'title' => 'Despique semana 12', 'timing_kind' => 'week', 'start_week' => 12, 'conditional' => true, 'condition' => 'Si amerita.'],
         ];
+        $recipe = FeedRecipe::factory()->create();
+        foreach ($activities as &$activity) {
+            if ($activity['type'] === 'ration_change') {
+                $activity['catalog_ref'] = $recipe->id;
+                $activity['grams_per_bird'] = 40;
+            }
+        }
+        unset($activity);
+        $activities[] = ['type' => 'ration_change', 'title' => 'Inicio', 'timing_kind' => 'day', 'start_day' => 1, 'catalog_ref' => $recipe->id, 'grams_per_bird' => 40];
 
         // Request: crea la plantilla y comprueba que la semana 9 no se ajusta.
         $response = $this->command('POST', '/plantillas-manejo', [

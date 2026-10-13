@@ -36,7 +36,7 @@ final class WeighingDemoSeeder extends Seeder
             'mode' => 'individual',
             'unit' => 'g',
             'measurements' => [['weight' => '20.0'], ['weight' => '22.0'], ['weight' => '19.5']],
-            'occurred_at' => now()->subDays(2)->toIso8601String(),
+            'occurred_at' => now()->toIso8601String(),
             'idempotency_key' => $key,
         ], $actor, 'seeder'));
         $this->onceOperation($actor, '00000000-0000-4000-8800-000000000003', fn (string $key): FlockOperation => $weighings->execute($individualFlock, [
@@ -44,7 +44,7 @@ final class WeighingDemoSeeder extends Seeder
             'unit' => 'g',
             'measurements' => [['weight' => '20.0'], ['weight' => '22.0'], ['weight' => '19.5'], ['weight' => '221.0']],
             'confirm_out_of_range' => true,
-            'occurred_at' => now()->subDay()->toIso8601String(),
+            'occurred_at' => now()->toIso8601String(),
             'idempotency_key' => $key,
         ], $actor, 'seeder'));
 
@@ -53,7 +53,7 @@ final class WeighingDemoSeeder extends Seeder
             'mode' => 'group',
             'unit' => 'g',
             'measurements' => [['total_weight' => '200.0', 'bird_count' => 10], ['total_weight' => '315.0', 'bird_count' => 15]],
-            'occurred_at' => now()->subHours(12)->toIso8601String(),
+            'occurred_at' => now()->toIso8601String(),
             'idempotency_key' => $key,
         ], $actor, 'seeder'));
     }

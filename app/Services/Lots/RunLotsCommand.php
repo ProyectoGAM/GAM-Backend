@@ -19,7 +19,7 @@ final readonly class RunLotsCommand
      * @param  array<string, mixed>  $payload
      * @param  Closure(string): array<string, mixed>  $operation
      */
-    public function execute(User $actor, string $permission, string $command, string $key, array $payload, Closure $operation): FlockOperation
+    public function execute(User $actor, ?string $permission, string $command, string $key, array $payload, Closure $operation): FlockOperation
     {
         if (! Str::isUuid($key)) {
             throw new LotsConflict('La clave de idempotencia debe ser un UUID válido.');
@@ -31,7 +31,9 @@ final readonly class RunLotsCommand
                 if ($currentActor === null) {
                     throw new AuthorizationException;
                 }
-                LotsAuthorization::ensure($currentActor, $permission);
+                if ($permission !== null) {
+                    LotsAuthorization::ensure($currentActor, $permission);
+                }
                 $existing = FlockOperation::query()->where('created_by', $actor->id)->where('idempotency_key', $key)->first();
                 if ($existing !== null) {
                     if ($existing->request_hash !== $hash) {

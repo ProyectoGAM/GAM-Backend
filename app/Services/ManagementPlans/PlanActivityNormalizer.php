@@ -2,12 +2,13 @@
 
 namespace App\Services\ManagementPlans;
 
-use App\Enums\SuppliersAndCatalogs\ProductKind;
+use App\Enums\Inventory\FeedRecipeStatus;
 use App\Enums\SuppliersAndCatalogs\ProductStatus;
 use App\Exceptions\Lots\LotsConflict;
+use App\Models\Inventory\FeedRecipe;
 use App\Models\SuppliersAndCatalogs\Medicine;
-use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\SuppliersAndCatalogs\Vaccine;
+use App\ValueObjects\Inventory\FeedStockGrams;
 
 final readonly class PlanActivityNormalizer
 {
@@ -30,14 +31,27 @@ final readonly class PlanActivityNormalizer
             throw new LotsConflict('El momento previsto de la actividad no es consistente.');
         }
 
-        if ($type === 'ration_change' && $timing !== 'week_range' && $timing !== 'week') {
-            throw new LotsConflict('El cambio de ración requiere una semana o tramo de semanas.');
+        if ($type === 'ration_change' && ! in_array($timing, ['day', 'week_range', 'week'], true)) {
+            throw new LotsConflict('La alimentación requiere un día, una semana o un tramo de semanas.');
         }
         if (($activity['conditional'] ?? false) && empty($activity['condition'])) {
             throw new LotsConflict('Indica la condición de la actividad condicional.');
         }
 
         [$catalogType, $catalogId, $catalogSnapshot] = $this->catalog($type, $activity['catalog_ref'] ?? null);
+        $grams = null;
+        if ($type === 'ration_change') {
+            if ($catalogId === null || ($activity['conditional'] ?? false)) {
+                throw new LotsConflict('Cada etapa de alimentación requiere una receta y no puede ser condicional.');
+            }
+            try {
+                $grams = FeedStockGrams::parse($activity['grams_per_bird'] ?? null, positive: true);
+            } catch (\InvalidArgumentException $exception) {
+                throw new LotsConflict($exception->getMessage(), previous: $exception);
+            }
+        } elseif (isset($activity['grams_per_bird'])) {
+            throw new LotsConflict('La estimación de gramos por ave sólo corresponde a la alimentación.');
+        }
 
         return [
             'sort_order' => $sortOrder, 'type' => $type, 'title' => trim($activity['title']),
@@ -47,6 +61,8 @@ final readonly class PlanActivityNormalizer
             'condition' => $activity['condition'] ?? null, 'notes' => $activity['notes'] ?? null,
             'catalog_type' => $catalogType, 'catalog_id' => $catalogId,
             'catalog_snapshot' => $catalogSnapshot,
+            'feed_recipe_id' => $type === 'ration_change' ? $catalogId : null,
+            'grams_per_bird' => $grams,
         ];
     }
 
@@ -73,14 +89,37 @@ final readonly class PlanActivityNormalizer
             return ['medicine', $medicine->id, ['id' => $medicine->public_id, 'name' => $medicine->name, 'description' => $medicine->description]];
         }
         if ($type === 'ration_change' && ctype_digit((string) $reference)) {
-            $product = Product::query()->find((int) $reference);
-            if ($product === null || $product->kind !== ProductKind::FinishedFeed || $product->status !== ProductStatus::Active) {
-                throw new LotsConflict('El alimento terminado referido no está disponible.');
+            $recipe = FeedRecipe::query()->whereKey((int) $reference)->sharedLock()->first();
+            if ($recipe === null || $recipe->status !== FeedRecipeStatus::Active) {
+                throw new LotsConflict('La receta referida no está disponible.');
             }
 
-            return ['product', $product->id, ['id' => $product->id, 'name' => $product->name]];
+            return ['feed_recipe', $recipe->id, ['id' => $recipe->id, 'name' => $recipe->name, 'status' => $recipe->status->value]];
         }
 
         throw new LotsConflict('La referencia de catálogo no corresponde al tipo de actividad.');
+    }
+
+    /** @param list<array<string, mixed>> $activities */
+    public function validateInitialFeeding(array $activities): void
+    {
+        $initial = 0;
+        $days = [];
+        foreach ($activities as $activity) {
+            if ($activity['type'] !== 'ration_change') {
+                continue;
+            }
+            $day = isset($activity['start_day']) ? (int) $activity['start_day'] : (((int) ($activity['start_week'] ?? 0) - 1) * 7 + 1);
+            if ($day < 1 || isset($days[$day])) {
+                throw new LotsConflict('Sólo puede haber una etapa de alimentación por día de inicio.');
+            }
+            $days[$day] = true;
+            if ($day === 1) {
+                $initial++;
+            }
+        }
+        if ($initial !== 1) {
+            throw new LotsConflict('El plan debe tener exactamente una alimentación inicial en día 1 o semana 1.');
+        }
     }
 }

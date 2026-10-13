@@ -3,6 +3,7 @@
 namespace Database\Seeders\ManagementPlans;
 
 use App\Actions\ManagementPlans\SavePlanTemplateAction;
+use App\Models\Inventory\FeedRecipe;
 use App\Models\ManagementPlans\PlanTemplate;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -67,9 +68,13 @@ final class ManagementPlanDemoSeeder extends Seeder
             [1, 5, 'BB'], [6, 9, 'Recría'], [9, 18, 'Desarrollo'],
             [19, 21, 'Pre postura'], [22, 40, 'Fase 1'], [41, null, 'Fase 2'],
         ] as [$start, $end, $name]) {
+            $recipe = FeedRecipe::query()->where('status', 'active')->orderBy('id')->firstOrFail();
             $activities[] = [
                 'type' => 'ration_change', 'title' => $name, 'timing_kind' => 'week_range',
                 'start_week' => $start, 'end_week' => $end,
+                'catalog_ref' => $recipe->id, 'grams_per_bird' => match ($name) {
+                    'BB' => 40, 'Recría' => 60, 'Desarrollo' => 80, default => 110,
+                },
             ];
         }
         $activities[] = ['type' => 'flock_movement', 'title' => 'Cambio de galpón', 'timing_kind' => 'unscheduled', 'conditional' => true, 'condition' => 'Según corresponda.'];

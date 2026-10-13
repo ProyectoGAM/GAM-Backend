@@ -2,16 +2,17 @@
 
 namespace App\Actions\ManagementPlans;
 
+use App\Actions\Inventory\ChangeFlockFeedingAction;
 use App\DTO\AuditAndTraceability\AuditEntryData;
-use App\Enums\SuppliersAndCatalogs\ProductKind;
-use App\Enums\SuppliersAndCatalogs\ProductStatus;
+use App\Enums\Inventory\FeedRecipeStatus;
 use App\Exceptions\Lots\LotsConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
+use App\Models\Inventory\FeedRecipe;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
 use App\Models\ManagementPlans\RationChange;
-use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\User;
+use App\Services\Inventory\FlockFeedingResolver;
 use App\Services\Lots\FlockActivityJournal;
 use App\Services\Lots\RunLotsCommand;
 use Illuminate\Support\Str;
@@ -23,6 +24,7 @@ final readonly class RecordRationChangeAction
         private ResolveManagementExecutionContext $contextResolver,
         private FlockActivityJournal $activities,
         private AuditRecorder $auditRecorder,
+        private ChangeFlockFeedingAction $feeding,
     ) {}
 
     /** @param array<string, mixed> $attributes */
@@ -36,20 +38,34 @@ final readonly class RecordRationChangeAction
             ['flock' => $flock->public_id, ...$attributes],
             function (string $operationId) use ($flock, $attributes, $actor, $source): array {
                 $context = $this->contextResolver->execute($flock, $actor, $attributes, 'ration_change');
-                $productSnapshot = null;
-                $productId = $attributes['finished_feed_product_id'] ?? null;
-                if ($productId !== null) {
-                    $product = Product::query()->whereKey($productId)->lockForUpdate()->firstOrFail();
-                    if ($product->kind !== ProductKind::FinishedFeed || $product->status !== ProductStatus::Active) {
-                        throw new LotsConflict('El producto seleccionado debe ser un alimento terminado activo.');
+                $recipeSnapshot = null;
+                if ($context->occurredAt->setTimezone(FlockFeedingResolver::TIMEZONE)->toDateString() !== now(FlockFeedingResolver::TIMEZONE)->toDateString()) {
+                    throw new LotsConflict('El cambio de alimentación debe pertenecer al día del registro.');
+                }
+                $recipeId = $attributes['feed_recipe_id'] ?? null;
+                if ($recipeId !== null) {
+                    $recipe = FeedRecipe::query()->whereKey($recipeId)->sharedLock()->firstOrFail();
+                    if ($recipe->status !== FeedRecipeStatus::Active) {
+                        throw new LotsConflict('La receta seleccionada debe estar activa.');
                     }
-                    $productSnapshot = [
-                        'id' => (int) $product->getKey(),
-                        'sku' => $product->sku,
-                        'name' => $product->name,
-                        'kind' => $product->kind->value,
-                        'base_unit' => $product->base_unit->value,
+                    $recipeSnapshot = [
+                        'id' => (int) $recipe->getKey(),
+                        'name' => $recipe->name,
+                        'status' => $recipe->status->value,
                     ];
+                }
+
+                $feedingData = [];
+                if ($recipeId !== null) {
+                    $feedingData['receta_id'] = $recipeId;
+                }
+                if (array_key_exists('daily_quantity_grams', $attributes)) {
+                    $feedingData['cantidad_diaria_g'] = $attributes['daily_quantity_grams'];
+                }
+                $feedingSnapshot = $this->feeding->apply($context->flock, $feedingData, $actor, $operationId, $source);
+                if ($recipeSnapshot === null) {
+                    $recipe = FeedRecipe::query()->whereKey($feedingSnapshot['feed_recipe_id'])->sharedLock()->firstOrFail();
+                    $recipeSnapshot = ['id' => $recipe->id, 'name' => $recipe->name, 'status' => $recipe->status->value];
                 }
 
                 $change = new RationChange;
@@ -59,8 +75,9 @@ final readonly class RecordRationChangeAction
                     'plan_activity_id' => $context->planActivityPublicId,
                     'plan_activity_title_snapshot' => $context->planActivityTitleSnapshot,
                     'ration_description' => trim($attributes['ration_description']),
-                    'finished_feed_product_id' => $productId,
-                    'finished_feed_product_snapshot' => $productSnapshot,
+                    'feed_recipe_id' => $feedingSnapshot['feed_recipe_id'],
+                    'feed_recipe_snapshot' => $recipeSnapshot,
+                    'daily_quantity_grams' => $feedingSnapshot['daily_quantity_grams'],
                     'occurred_at' => $context->occurredAt,
                     'responsible_user_id' => $context->responsibleUserId,
                     'responsible_name_snapshot' => $context->responsibleNameSnapshot,
@@ -74,7 +91,8 @@ final readonly class RecordRationChangeAction
                     'plan_activity_id' => $context->planActivityPublicId,
                     'plan_activity_title_at_application' => $context->planActivityTitleSnapshot,
                     'ration_description' => $change->ration_description,
-                    'finished_feed_product' => $productSnapshot,
+                    'feed_recipe' => $recipeSnapshot,
+                    'daily_quantity_grams' => (string) $feedingSnapshot['daily_quantity_grams'],
                     'occurred_at' => $context->occurredAt->toIso8601String(),
                     'responsible' => [
                         'id' => $context->responsibleUserId,

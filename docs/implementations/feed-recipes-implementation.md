@@ -1,10 +1,12 @@
 # Recetas, elaboración inmediata y stock de alimento
 
+El [tercer bloque de alimentación de lotes](flock-feeding-implementation.md) ya consume este mismo FeedBalance por receta/UP mediante registros diarios y compensaciones anexadas. Permite saldo negativo y recetas vigentes desactivadas, y conserva las restricciones propias de elaboración/cancelación. No descuenta ingredientes. Sus rutas se documentan en [flock-feeding.yaml](../../contracts/openapi/flock-feeding.yaml).
+
 ## Alcance
 
 El catálogo global conserva su contrato: ID estable, nombres repetidos, ingredientes existentes de Inventario, edición exclusiva de sus cantidades y estados activo/inactivo. Rendimiento e ingredientes usan gramos enteros positivos; el rendimiento es independiente de su suma. Sólo se elaboran múltiplos enteros positivos de la combinación base.
 
-El segundo bloque incorpora elaboración inmediata, distribución de ingredientes entre plantas de la misma UP, saldo acumulado de alimento por receta y UP, cancelación compensatoria, ajustes independientes y consultas paginadas. No incorpora alimentación heredada del plan, consumo de lotes, transferencias entre UP, compras de alimento, vencimientos, partidas, alertas, notificaciones ni frontend.
+El segundo bloque incorpora elaboración inmediata, distribución de ingredientes entre plantas de la misma UP, saldo acumulado de alimento por receta y UP, cancelación compensatoria, ajustes independientes y consultas paginadas. La alimentación heredada y el consumo de lotes se entregan ahora en su guía propia del tercer bloque. Se mantienen fuera de alcance transferencias entre UP, compras de alimento, vencimientos, partidas, alertas, notificaciones y frontend.
 
 ## Catálogo y cálculo existentes
 

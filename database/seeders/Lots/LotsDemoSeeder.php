@@ -30,7 +30,10 @@ final class LotsDemoSeeder extends Seeder
         $actor = User::query()->where('email', config('auth.admin.email'))->firstOrFail();
         $unit = ProductionUnit::query()->where('normalized_name', 'granja el ombú')->firstOrFail();
         $north = PoultryHouse::query()->where('production_unit_id', $unit->id)->where('normalized_name', 'galpón norte')->firstOrFail();
-        $layers = PoultryHouse::query()->where('normalized_name', 'galpón ponedoras')->firstOrFail();
+        $layers = PoultryHouse::query()->where('production_unit_id', $unit->id)->where('normalized_name', 'galpón receptor lotes demo')->first();
+        if ($layers === null) {
+            $layers = $createHouse->execute($unit, ['name' => 'Galpón Receptor Lotes Demo', 'bird_capacity' => 300], $actor);
+        }
         $destination = PoultryHouse::query()->where('production_unit_id', $unit->id)->where('normalized_name', 'galpón lotes demo')->first();
         if ($destination === null) {
             $destination = $createHouse->execute($unit, ['name' => 'Galpón Lotes Demo', 'bird_capacity' => 300], $actor);
@@ -54,7 +57,7 @@ final class LotsDemoSeeder extends Seeder
         $breedResult = $this->once($actor, 501, fn (string $key): FlockOperation => $breeds->execute(null, ['name' => 'Ponedoras demo', 'idempotency_key' => $key], $actor, 'seeder'));
         $otherBreed = $this->once($actor, 502, fn (string $key): FlockOperation => $breeds->execute(null, ['name' => 'Camperas demo', 'idempotency_key' => $key], $actor, 'seeder'));
         $suppliers = Supplier::query()->orderBy('id')->limit(2)->get();
-        $entryDate = now(config('lots.timezone'))->subDays(40)->toDateString();
+        $entryDate = now(config('lots.timezone'))->toDateString();
         $a = $this->once($actor, 504, fn (string $key): FlockOperation => $create->execute([
             'code' => 'DEMO-LOT-A', 'breed_id' => $breedResult->result['catalog']['id'],
             'supplier_id' => $suppliers[0]->id, 'poultry_house_id' => $north->id, 'initial_quantity' => 100,
