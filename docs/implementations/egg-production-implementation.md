@@ -121,6 +121,31 @@ docker compose -f compose.dev.yaml exec api php artisan migrate:fresh --seed --f
 
 No ejecutar `docker compose down -v`, porque elimina volúmenes y datos del entorno. En un ambiente con datos que deban conservarse se debe coordinar una migración específica; esta entrega no agrega compatibilidad ni migración del modelo anterior.
 
+### Fixture local `LOT-EGG-TEST`
+
+`EggHistoryDemoSeeder` agrega un lote optativo para probar producción abundante y su relación con mortalidades y pesajes. Requiere la demo local ya cargada: administrador con permisos, una UP activa, una raza activa y un plan publicado. Se ejecuta con:
+
+```bash
+docker compose -f compose.dev.yaml exec -T api php artisan db:seed --class='Database\Seeders\Lots\EggHistoryDemoSeeder' --no-interaction
+```
+
+- Crea `LOT-EGG-TEST` en un `Galpón Huevos Test` propio con capacidad física de 240 aves. Ingresa 240 aves y queda con 229 después de 11 bajas repartidas en ocho registros semanales.
+- En la primera carga el lote tiene 30 semanas según el cálculo de edad del módulo. Sus ocho semanas de historial terminan el día anterior a la ejecución; las fechas quedan ancladas al ingreso para que repetir otro día conserve el mismo historial.
+- Crea 168 recolecciones: tres por día durante 56 días, a las 08:00, 13:00 y 17:00 de `LOTS_TIMEZONE`. Las cantidades diarias varían y aumentan progresivamente, sumando 9.291 huevos; cada recolección ingresa automáticamente al stock de su UP.
+- Crea ocho jornadas semanales de pesaje diario, cada una con diez ingresos individuales y dos grupos de cinco aves: 96 ingresos y muestras de veinte aves por jornada. Los pesos se expresan en gramos; se confirma expresamente cualquier valor fuera del rango configurado.
+- Usa las Actions existentes para permisos, versiones, población histórica, movimientos físicos y auditoría sincrónica. La carga completa es transaccional y restaura el reloj al finalizar, incluso si falla.
+- Sus claves de idempotencia conservan las operaciones, el stock y la auditoría al repetir. No modifica capacidad física ni borra registros. Sólo corre en `APP_ENV=local` y no se incorpora al seeder general.
+
+No cambia endpoints, permisos, contratos OpenAPI ni esquema. La cobertura está en `tests/Feature/Lots/EggHistoryDemoSeederTest.php`: historial, fechas, cantidad viva, capacidad física, pesajes mixtos, correspondencia con ingresos a stock y auditoría, repetición otro día y salida fuera del entorno local.
+
+La prueba de exclusión en producción invoca `run` mediante el contenedor de Laravel. Así comprueba directamente la restricción de ambiente del seeder, sin pasar por la confirmación interactiva de `db:seed` que interrumpía la suite de CI al simular producción.
+
+Verificación de esa corrección: las dos pruebas del fixture aprobaron con 28 aserciones y la suite completa, ejecutada localmente con las variables del workflow de CI sobre `gam_testing`, aprobó con 454 pruebas y 3.804 aserciones. Pint sobre el archivo de prueba y `git diff --check` también aprobaron. Los mensajes de error de auditoría corresponden a fallos provocados deliberadamente por las pruebas de rollback, que aprobaron.
+
+Verificación del fixture: dos pruebas aprobadas con 28 aserciones en PostgreSQL aislado, Pint aprobado sobre los dos archivos PHP modificados y `git diff --check` sin errores. Se intentó `pint --dirty --format agent`, pero el contenedor no permite detectar Git; por eso se formatearon las rutas explícitas. El análisis completo con `.phpstan-lots.neon` queda limitado por dos errores preexistentes de `withResourceMetadata()` en `RecordInventoryMovementAction.php` (líneas 301 y 424), fuera del alcance del fixture.
+
+El 13 de octubre de 2026 se ejecutó dos veces en la base local `gam`: ingreso del lote el 24 de marzo de 2026, recolecciones desde el 18 de agosto hasta el 12 de octubre, 229 aves vivas, ocho mortalidades con once bajas, ocho jornadas con 96 ingresos de pesaje y 168 recolecciones e ingresos de stock por 9.291 huevos. La consulta posterior confirmó que la segunda ejecución conservó esos totales.
+
 ## Verificación automatizada
 
 La cobertura específica está en `tests/Feature/Lots/EggCollectionEndpointTest.php`, `tests/Feature/Inventory/EggStockEndpointTest.php`, `tests/Feature/Lots/LotsContractTest.php` y `tests/Feature/Lots/LotsDemoSeederTest.php`. Incluye ingreso atómico, separación entre producción y saldo, cuenta negativa sólo para huevos, entradas y salidas manuales, corrección `4000 → 400`, correcciones de fecha, cancelación, idempotencia, versiones, permisos, concurrencia, auditoría, rollback, protección de endpoints genéricos, filtros por UP y repetibilidad del seeder.
