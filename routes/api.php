@@ -15,6 +15,7 @@ use App\Http\Controllers\IdentityAndAccess\SharedDeviceController;
 use App\Http\Controllers\IdentityAndAccess\UserManagementController;
 use App\Http\Controllers\Inventory\EggPresentationController;
 use App\Http\Controllers\Inventory\EggStockController;
+use App\Http\Controllers\Inventory\FeedRecipeController;
 use App\Http\Controllers\Inventory\FeedStockController;
 use App\Http\Controllers\Inventory\InventoryMovementController;
 use App\Http\Controllers\Inventory\InventoryReadController;
@@ -283,6 +284,13 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
 
         Route::get('/stock-alimentacion', [FeedStockController::class, 'global'])
             ->name('feed-stock.global');
+
+        Route::get('/recetas', [FeedRecipeController::class, 'index'])->name('feed-recipes.index');
+        Route::post('/recetas', [FeedRecipeController::class, 'store'])->name('feed-recipes.store');
+        Route::get('/recetas/{recipe}', [FeedRecipeController::class, 'show'])->whereNumber('recipe')->name('feed-recipes.show');
+        Route::patch('/recetas/{recipe}/cantidades', [FeedRecipeController::class, 'update'])->whereNumber('recipe')->name('feed-recipes.quantities.update');
+        Route::patch('/recetas/{recipe}/estado', [FeedRecipeController::class, 'status'])->whereNumber('recipe')->name('feed-recipes.status.update');
+        Route::post('/recetas/{recipe}/calculo', [FeedRecipeController::class, 'calculate'])->whereNumber('recipe')->name('feed-recipes.calculate');
         Route::get('/unidades-productivas/{productionUnit}/stock-alimentacion', [FeedStockController::class, 'byProductionUnit'])
             ->name('feed-stock.production-units.show');
         Route::get('/plantas-racion/{poultryHouse}/stock', [FeedStockController::class, 'byHouse'])

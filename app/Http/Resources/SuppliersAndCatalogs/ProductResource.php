@@ -54,7 +54,7 @@ final class ProductResource extends JsonResource
         if ($product->has_movement_lines) {
             $editableFields = array_values(array_diff($editableFields, ['base_unit']));
         }
-        if ($product->kind === ProductKind::RawMaterial && ($product->has_movement_lines || $product->has_stock_balances)) {
+        if ($product->kind === ProductKind::RawMaterial && ($product->has_movement_lines || $product->has_stock_balances || $product->has_recipe_ingredients)) {
             $editableFields = array_values(array_diff($editableFields, ['kind', 'base_unit', 'stock_tracked']));
         }
 

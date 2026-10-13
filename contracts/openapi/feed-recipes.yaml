@@ -1,0 +1,361 @@
+openapi: 3.1.0
+info:
+  title: Catálogo global de recetas
+  version: 1.0.0
+  description: >-
+    Alta, consulta, edición exclusiva de cantidades, estados y cálculo exacto
+    para la futura elaboración. No elabora alimento ni modifica stock.
+    Los nombres pueden repetirse. El rendimiento es independiente de la suma
+    de ingredientes. Todas las cantidades usan gramos enteros positivos.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+  - sessionCookie: []
+tags:
+  - name: Recetas
+    description: Catálogo global sin asignaciones por unidad productiva.
+paths:
+  /recetas:
+    get:
+      tags: [Recetas]
+      operationId: listFeedRecipes
+      summary: Lista recetas globales con paginación
+      description: Requiere feed-recipes.view. Incluye activas e inactivas por defecto; ordena por ID descendente.
+      parameters:
+        - name: buscar
+          in: query
+          description: Texto contenido en el nombre, sin distinguir mayúsculas.
+          schema: {type: string, maxLength: 120}
+        - name: estado
+          in: query
+          description: Estado de las recetas.
+          schema: {$ref: '#/components/schemas/RecipeStatus'}
+        - name: por_pagina
+          in: query
+          description: Cantidad de recetas por página.
+          schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+        - name: page
+          in: query
+          description: Número de página.
+          schema: {type: integer, minimum: 1, maximum: 1000000}
+      responses:
+        '200':
+          description: Recetas y metadatos de paginación.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, links, meta]
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/Recipe'}
+                  links: {type: object, description: Enlaces de paginación de Laravel.}
+                  meta: {type: object, description: 'Página actual, total y tamaño de página.'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+    post:
+      tags: [Recetas]
+      operationId: createFeedRecipe
+      summary: Crea una receta con materias primas existentes
+      description: >-
+        Requiere feed-recipes.manage. Idempotencia por actor y encabezado UUID.
+        La misma clave y contenido normalizado devuelve la receta existente en
+        su estado actual, sin reescribir cantidades posteriores; otros datos
+        con la misma clave devuelven 409. El orden de ingredientes no cambia
+        la identidad del contenido. No crea materias primas ni movimientos.
+        La receta nace activa. No exige existencias ni estado activo del producto.
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateRecipe'}
+            example:
+              nombre: Ración BB
+              nota: Combinación base
+              rendimiento_g: '13000'
+              ingredientes:
+                - {producto_id: 1, cantidad_g: '2000'}
+                - {producto_id: 2, cantidad_g: '5000'}
+                - {producto_id: 3, cantidad_g: '6000'}
+      responses:
+        '201': {$ref: '#/components/responses/RecipeResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /recetas/{recipe}:
+    parameters:
+      - {$ref: '#/components/parameters/RecipeId'}
+    get:
+      tags: [Recetas]
+      operationId: getFeedRecipe
+      summary: Consulta una receta y su composición actual
+      description: Requiere feed-recipes.view. Permite consultar recetas inactivas.
+      responses:
+        '200': {$ref: '#/components/responses/RecipeResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /recetas/{recipe}/cantidades:
+    parameters:
+      - {$ref: '#/components/parameters/RecipeId'}
+    patch:
+      tags: [Recetas]
+      operationId: updateFeedRecipeQuantities
+      summary: Actualiza únicamente las cantidades de ingredientes existentes
+      description: >-
+        Requiere feed-recipes.manage. Debe enviar la lista completa con los mismos
+        producto_id sin agregar, quitar, duplicar ni sustituir ingredientes.
+        No admite nombre, nota, rendimiento, estado ni otros campos.
+        Permite editar recetas activas e inactivas. Las ediciones se serializan
+        mediante lock de la receta. Repetir los valores actuales no genera
+        otra auditoría. No exige Idempotency-Key. No recalcula el historial ni stock.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [ingredientes]
+              properties:
+                ingredientes: {$ref: '#/components/schemas/IngredientList'}
+      responses:
+        '200': {$ref: '#/components/responses/RecipeResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /recetas/{recipe}/estado:
+    parameters:
+      - {$ref: '#/components/parameters/RecipeId'}
+    patch:
+      tags: [Recetas]
+      operationId: changeFeedRecipeStatus
+      summary: Desactiva o reactiva una receta conservando su historial
+      description: >-
+        Requiere feed-recipes.manage. Serializa con el mismo lock de edición.
+        Repetir el estado actual no genera otra auditoría. No exige Idempotency-Key.
+        No modifica la composición ni detiene consumos futuros de lotes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [estado]
+              properties:
+                estado: {$ref: '#/components/schemas/RecipeStatus'}
+      responses:
+        '200': {$ref: '#/components/responses/RecipeResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /recetas/{recipe}/calculo:
+    parameters:
+      - {$ref: '#/components/parameters/RecipeId'}
+    post:
+      tags: [Recetas]
+      operationId: calculateFeedRecipe
+      summary: Calcula cantidades para un múltiplo entero de la combinación base
+      description: >-
+        Requiere feed-recipes.view. Sólo admite cantidad_g, sin ajustes manuales.
+        La receta debe estar activa. Si Q no es múltiplo exacto de R devuelve 422.
+        Si un ingrediente multiplicado supera 9223372036854775807 g devuelve 422.
+        Usa la composición actual bajo un lock compartido. No consulta disponibilidad
+        ni modifica saldos, movimientos o auditoría. No necesita Idempotency-Key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [cantidad_g]
+              properties:
+                cantidad_g: {$ref: '#/components/schemas/GramsInput'}
+            example: {cantidad_g: '26000'}
+      responses:
+        '200':
+          description: Cantidades exactas; no constituye una elaboración ni una reserva.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: {$ref: '#/components/schemas/Calculation'}
+              example:
+                data:
+                  receta_id: 1
+                  rendimiento_g: '13000'
+                  cantidad_g: '26000'
+                  factor: '2'
+                  ingredientes:
+                    - {producto_id: 1, nombre: Maíz, cantidad_base_g: '2000', cantidad_requerida_g: '4000'}
+                    - {producto_id: 2, nombre: Soja, cantidad_base_g: '5000', cantidad_requerida_g: '10000'}
+                    - {producto_id: 3, nombre: Arroz, cantidad_base_g: '6000', cantidad_requerida_g: '12000'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer}
+    sessionCookie: {type: apiKey, in: cookie, name: laravel_session}
+  parameters:
+    RecipeId:
+      name: recipe
+      in: path
+      required: true
+      description: ID interno estable de la receta; los nombres no son únicos.
+      schema: {type: integer, format: int64, minimum: 1}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: UUID de alta por actor; no se admite en el cuerpo.
+      schema: {type: string, format: uuid}
+  schemas:
+    GramsInput:
+      description: >-
+        Gramos enteros positivos entre 1 y 9223372036854775807.
+        Usar cadenas de dígitos para evitar pérdida de precisión en JavaScript.
+        No se aceptan floats, fracciones, separadores ni notación científica;
+        un número JSON escrito con punto decimal también se rechaza.
+      oneOf:
+        - {type: string, pattern: '^(?=[0-9]*[1-9])[0-9]+$', minLength: 1}
+        - {type: integer, format: int64, minimum: 1, maximum: 9223372036854775807}
+    GramsOutput:
+      type: string
+      pattern: '^[1-9][0-9]*$'
+      maxLength: 19
+      description: Gramos exactos expresados como cadena canónica de dígitos hasta 9223372036854775807.
+    RecipeStatus:
+      type: string
+      enum: [active, inactive]
+      description: Estado activo o inactivo; se conserva el registro.
+    IngredientInput:
+      type: object
+      additionalProperties: false
+      required: [producto_id, cantidad_g]
+      properties:
+        producto_id:
+          type: integer
+          format: int64
+          minimum: 1
+          description: ID de un producto existente de tipo raw_material, en gramos y con control de stock.
+        cantidad_g: {$ref: '#/components/schemas/GramsInput'}
+    IngredientList:
+      type: array
+      minItems: 1
+      maxItems: 1000
+      description: Cada producto aparece una sola vez.
+      items: {$ref: '#/components/schemas/IngredientInput'}
+    CreateRecipe:
+      type: object
+      additionalProperties: false
+      required: [nombre, rendimiento_g, ingredientes]
+      properties:
+        nombre: {type: string, minLength: 1, maxLength: 160, description: Nombre visible; puede repetirse.}
+        nota: {type: [string, 'null'], maxLength: 5000, description: Nota opcional.}
+        rendimiento_g: {$ref: '#/components/schemas/GramsInput'}
+        ingredientes: {$ref: '#/components/schemas/IngredientList'}
+    Recipe:
+      type: object
+      required: [id, nombre, nota, rendimiento_g, estado, ingredientes, creado_en, actualizado_en]
+      properties:
+        id: {type: integer, format: int64, description: ID estable de receta.}
+        nombre: {type: string}
+        nota: {type: [string, 'null']}
+        rendimiento_g: {$ref: '#/components/schemas/GramsOutput'}
+        estado: {$ref: '#/components/schemas/RecipeStatus'}
+        ingredientes:
+          type: array
+          items:
+            type: object
+            required: [producto_id, nombre, sku, cantidad_g]
+            properties:
+              producto_id: {type: integer, format: int64}
+              nombre: {type: string}
+              sku: {type: string}
+              cantidad_g: {$ref: '#/components/schemas/GramsOutput'}
+        creado_en: {type: string, format: date-time}
+        actualizado_en: {type: string, format: date-time}
+    Calculation:
+      type: object
+      required: [receta_id, rendimiento_g, cantidad_g, factor, ingredientes]
+      properties:
+        receta_id: {type: integer, format: int64}
+        rendimiento_g: {$ref: '#/components/schemas/GramsOutput'}
+        cantidad_g: {$ref: '#/components/schemas/GramsOutput'}
+        factor:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+          description: Número entero positivo de combinaciones base, expresado sin pérdida de precisión.
+        ingredientes:
+          type: array
+          items:
+            type: object
+            required: [producto_id, nombre, cantidad_base_g, cantidad_requerida_g]
+            properties:
+              producto_id: {type: integer, format: int64}
+              nombre: {type: string}
+              cantidad_base_g: {$ref: '#/components/schemas/GramsOutput'}
+              cantidad_requerida_g: {$ref: '#/components/schemas/GramsOutput'}
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message: {type: string, description: Mensaje en español.}
+        errors:
+          type: object
+          description: Errores de validación por campo.
+          additionalProperties:
+            type: array
+            items: {type: string}
+  responses:
+    RecipeResponse:
+      description: Receta global y composición actual.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data: {$ref: '#/components/schemas/Recipe'}
+    Unauthorized:
+      description: Sesión personal o compartida inválida o ausente.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Forbidden:
+      description: El usuario no tiene el permiso funcional requerido.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Error'}
+    NotFound:
+      description: La receta no existe.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Conflict:
+      description: Conflicto de estado, composición o clave de idempotencia.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    ValidationError:
+      description: Campos, gramos, factor o resultado calculado inválidos.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Error'}

@@ -11,6 +11,8 @@ final class IdentityPermissionSeeder extends Seeder
     public function run(): void
     {
         $permissions = [
+            'feed-recipes.view',
+            'feed-recipes.manage',
             'identity.personal.login',
             'identity.web.login',
             'identity.shared.login',

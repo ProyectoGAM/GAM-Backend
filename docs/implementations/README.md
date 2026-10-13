@@ -13,6 +13,7 @@ Cada guía describe el alcance entregado, las decisiones de negocio, el contrato
 - [Medicamentos](medication-implementation-plan.md)
 - [Vacunas](vaccination-implementation.md)
 - [Plantas de ración y stock de ingredientes](feed-stock-implementation.md)
+- [Catálogo global de recetas y cálculo exacto](feed-recipes-implementation.md)
 
 ## Qué registrar en cada cambio
 

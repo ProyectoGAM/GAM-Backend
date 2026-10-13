@@ -33,4 +33,4 @@ Si la base local conserva el demo anterior, ejecuta `docker compose -f compose.d
 
 ## Límites actuales
 
-Esta entrega no implementa recetas, elaboración de alimento ni notificaciones visibles. No se define capacidad física máxima para las plantas. La aceptación manual de los flujos queda pendiente y debe ejecutarse en un ambiente local o QA.
+La entrega original de stock no implementó recetas, elaboración de alimento ni notificaciones visibles. El catálogo global y el cálculo exacto de recetas se incorporan ahora en la [guía de recetas](feed-recipes-implementation.md); la elaboración y las notificaciones continúan pendientes. No se define capacidad física máxima para las plantas. La aceptación manual de los flujos queda pendiente y debe ejecutarse en un ambiente local o QA.

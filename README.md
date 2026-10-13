@@ -26,7 +26,7 @@ Swagger UI (desarrollo): [http://localhost:8080/docs/](http://localhost:8080/doc
 La documentación se sirve desde el servicio `swagger-ui` de Compose y permite
 seleccionar los contratos de autenticación, Lotes/producción de huevos,
 mantenimientos, medicamentos, vacunas, pesajes, planes de manejo, plantas de
-ración y reporting. El
+ración, recetas y cálculo, y reporting. El
 botón **Authorize** usa el token Bearer emitido por el login.
 
 docker compose -f compose.dev.yaml up -d --build
@@ -97,6 +97,8 @@ representación canónica en gramos.
 Las decisiones para corregir, regenerar o reconstruir datos de prueba del entorno local no requieren confirmación adicional: son datos ficticios, no pertenecen a producción y su reemplazo no afecta negativamente el desarrollo. Esta autorización se limita a `APP_ENV=local` y no aplica a datos reales ni a otros entornos.
 
 Cada módulo nuevo debe incluir su seeder de datos demo y registrarlo en `LocalDemoDataSeeder` (o en un seeder del módulo invocado por este), para que sus datos estén disponibles automáticamente cuando el ambiente sea local.
+
+El catálogo global de recetas incluye una combinación demo de maíz y soja. Su alta no crea materias primas ni modifica stock, y su cálculo admite sólo múltiplos enteros del rendimiento base. El contrato y los pasos de uso están en la [guía de recetas](docs/implementations/feed-recipes-implementation.md).
 
 Para probar la pantalla de pesajes con un lote de 60 semanas y jornadas con anomalías, ejecutá el fixture local optativo `LOT-PESAJE-TEST`. El comando y los datos que crea se encuentran desde el [índice de implementaciones](docs/implementations/README.md). Es repetible sin duplicar ingresos.
 
