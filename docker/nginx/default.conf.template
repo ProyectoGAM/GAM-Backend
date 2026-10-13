@@ -1,3 +1,8 @@
+map "${APP_ENV}" $gam_forwarded_host {
+    default $host;
+    local   $http_host;
+}
+
 map $http_x_forwarded_proto $gam_forwarded_proto {
     default $http_x_forwarded_proto;
     ""      $scheme;
@@ -30,7 +35,7 @@ server {
 
         fastcgi_param HTTP_AUTHORIZATION $http_authorization;
         fastcgi_param HTTP_X_FORWARDED_FOR $proxy_add_x_forwarded_for;
-        fastcgi_param HTTP_X_FORWARDED_HOST $host;
+        fastcgi_param HTTP_X_FORWARDED_HOST $gam_forwarded_host;
         fastcgi_param HTTP_X_FORWARDED_PROTO $gam_forwarded_proto;
 
         fastcgi_connect_timeout 10s;

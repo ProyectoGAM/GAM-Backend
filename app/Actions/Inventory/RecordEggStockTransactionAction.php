@@ -107,7 +107,7 @@ final readonly class RecordEggStockTransactionAction
     {
         if ($sign < 0) {
             return match ($logicalType) {
-                'distribution_preparation' => InventoryMovementType::Issue,
+                'distribution_preparation', 'donation' => InventoryMovementType::Issue,
                 'loss' => InventoryMovementType::Loss,
                 default => InventoryMovementType::Adjustment,
             };

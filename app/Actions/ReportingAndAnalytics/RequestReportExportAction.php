@@ -36,7 +36,7 @@ final readonly class RequestReportExportAction
         if (! in_array($format->value, $source->definition()->formats, true)) {
             throw new ReportConflict('El formato solicitado no está disponible para esta fuente.');
         }
-        $query = $this->normalizer->normalize($sourceKey, $input);
+        $query = $this->normalizer->normalize($sourceKey, [...$input, 'page' => 1, 'per_page' => min(50, $source->definition()->limits['max_page_size'])]);
         $payloadHash = $this->hash($query);
         $idempotencyHash = hash('sha256', $actor->getKey().'|'.$idempotencyKey);
 
@@ -100,7 +100,7 @@ final readonly class RequestReportExportAction
         if (! $result['replay']) {
             GenerateReportExport::dispatch($result['export']->getKey())
                 ->onConnection('redis')
-                ->onQueue('reporting');
+                ->onQueue('reporting')->afterCommit();
         }
 
         return $result;

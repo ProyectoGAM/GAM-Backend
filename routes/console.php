@@ -15,3 +15,4 @@ match (config('reporting.cleanup_schedule', 'hourly')) {
     default => $cleanupSchedule->hourly(),
 };
 $cleanupSchedule->withoutOverlapping()->onOneServer();
+Schedule::command('app:recover-pending-report-exports')->everyFiveMinutes()->withoutOverlapping()->onOneServer();

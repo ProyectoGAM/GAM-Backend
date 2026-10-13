@@ -31,6 +31,20 @@ botón **Authorize** usa el token Bearer emitido por el login.
 
 docker compose -f compose.dev.yaml up -d --build
 
+## URLs según el entorno
+
+`APP_ENV` define el entorno. `compose.dev.yaml` usa `local` por defecto y entrega el mismo valor al API y al gateway; `compose.prod.yaml` fija `production`.
+
+En `local`, el gateway conserva el puerto del encabezado `Host`: un enlace temporal de reportes solicitado desde `http://localhost:4200` vuelve a ese origen, y uno solicitado directamente desde `http://localhost:8080` vuelve al API. Los puertos locales no representan la configuración del sitio final.
+
+En `production` y los demás entornos, conserva el comportamiento del dominio sin puerto explícito. El proxy público debe enviar el dominio en `Host` y el protocolo externo en `X-Forwarded-Proto`; por ejemplo, `https://granja.example`. `APP_URL` debe contener la URL pública real para enlaces generados sin una petición HTTP. No usar los puertos internos de Docker como URL pública.
+
+El gateway genera su configuración desde `docker/nginx/default.conf.template` al arrancar. Sólo sustituye `APP_ENV`, conservando las variables propias de Nginx, mediante el [entrypoint de la imagen](https://github.com/nginx/docker-nginx/blob/master/mainline/alpine-slim/20-envsubst-on-templates.sh). Si cambia el entorno o la plantilla, recrear el gateway con el Compose correspondiente; no editar ni reescribir enlaces firmados después de generarlos, porque su dominio, protocolo y parámetros forman parte de la firma.
+
+```bash
+docker compose -f compose.dev.yaml up -d --no-deps --force-recreate gateway
+```
+
 ## Tests y Artisan
 
 La estrategia oficial de testing ejecuta PHPUnit dentro del contenedor `api`. PHPUnit usa PostgreSQL en `DB_HOST=postgres` y deriva la base aislada agregando `_testing` al `DB_DATABASE` normal del entorno. Con la configuración local actual, la base normal es `gam` y la de testing es `gam_testing`; las credenciales se heredan del servicio PostgreSQL definido en Compose.

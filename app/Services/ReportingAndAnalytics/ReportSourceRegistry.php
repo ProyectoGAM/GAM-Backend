@@ -28,7 +28,7 @@ final readonly class ReportSourceRegistry
         return array_values(array_filter(
             $this->sources,
             fn (ReportSource $source): bool => $this->allows($user, $permission)
-                && $this->allows($user, $source->definition()->permission),
+                && $this->allowsSource($user, $source),
         ));
     }
 
@@ -52,7 +52,7 @@ final readonly class ReportSourceRegistry
 
     public function canRead(User $user, ReportSource $source): bool
     {
-        return $this->allows($user, 'reports.view') && $this->allows($user, $source->definition()->permission);
+        return $this->allows($user, 'reports.view') && $this->allowsSource($user, $source);
     }
 
     public function assertCanExport(User $user, ReportSource $source): void
@@ -64,7 +64,23 @@ final readonly class ReportSourceRegistry
 
     public function canExport(User $user, ReportSource $source): bool
     {
-        return $this->allows($user, 'reports.export') && $this->allows($user, $source->definition()->permission);
+        return $this->allows($user, 'reports.export') && $this->allowsSource($user, $source);
+    }
+
+    public function canShare(User $user, ReportSource $source): bool
+    {
+        return $this->canRead($user, $source) && $this->allows($user, 'reports.share');
+    }
+
+    private function allowsSource(User $user, ReportSource $source): bool
+    {
+        foreach ([$source->definition()->permission, ...$source->definition()->additionalPermissions] as $permission) {
+            if (! $this->allows($user, $permission)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function allows(User $user, string $permission): bool

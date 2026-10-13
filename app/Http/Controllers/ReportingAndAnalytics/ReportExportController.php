@@ -54,7 +54,8 @@ final readonly class ReportExportController
 
     public function download(DownloadReportExportRequest $request, ReportExport $reportExport, DownloadReportExportAction $action): Response
     {
-        return $action->execute($reportExport, $request->query('view') === 'html');
+        return $action->execute($reportExport, $request->query('view') === 'html', (int) $request->input('page', 1),
+            $request->boolean('share') && $request->hasValidSignature() ? (int) $request->input('expires') : null);
     }
 
     public function share(StoreTemporaryReportLinkRequest $request, ReportExport $reportExport, CreateTemporaryReportLinkAction $action): JsonResponse

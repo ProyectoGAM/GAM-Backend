@@ -28,6 +28,10 @@ final readonly class ReportSourceDefinition
         public array $limits,
         public string $defaultSort,
         public bool $quantityMetricsRequireUnit = true,
+        public array $defaultColumns = [],
+        public array $standardQueries = [],
+        public bool $supportsDateRange = true,
+        public array $additionalPermissions = [],
     ) {}
 
     /**
@@ -50,6 +54,10 @@ final readonly class ReportSourceDefinition
             'default_sort' => $this->defaultSort,
             'formats' => $this->formats,
             'limits' => $this->limits,
+            'format_limits' => ['xlsx' => $this->limits['max_export_rows'], 'pdf' => min($this->limits['max_export_rows'], (int) config('reporting.pdf_max_rows', 2000))],
+            'default_columns' => $this->defaultColumns ?: array_keys($this->columns),
+            'standard_queries' => $this->standardQueries,
+            'supports_date_range' => $this->supportsDateRange,
         ];
     }
 }

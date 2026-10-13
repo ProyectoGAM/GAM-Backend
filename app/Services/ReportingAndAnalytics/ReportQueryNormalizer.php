@@ -22,7 +22,10 @@ final readonly class ReportQueryNormalizer
         $definition = $source->definition();
         $this->assertAllowedKeys($input);
 
-        $columns = $this->listOfStrings($input['columns'] ?? array_keys($definition->columns), 'columns');
+        $columns = $this->listOfStrings($input['columns'] ?? ($definition->defaultColumns ?: array_keys($definition->columns)), 'columns');
+        if ($columns === [] || count($columns) !== count(array_unique($columns))) {
+            $this->invalid('columns', 'Selecciona al menos una columna y evita columnas repetidas.');
+        }
         foreach ($columns as $column) {
             if (! array_key_exists($column, $definition->columns)) {
                 $this->invalid('columns', "La columna {$column} no está permitida.");
@@ -30,9 +33,19 @@ final readonly class ReportQueryNormalizer
         }
 
         $filters = $this->normalizeFilters($input['filters'] ?? [], $definition);
+        foreach ($columns as $column) {
+            if (($definition->columns[$column]['unit'] ?? null) === 'base_unit' && array_key_exists('base_unit', $definition->columns)
+                && ! in_array('base_unit', $columns, true)) {
+                $columns[] = 'base_unit';
+                break;
+            }
+        }
         $from = $this->normalizeDate($input['from'] ?? null, 'from');
         $to = $this->normalizeDate($input['to'] ?? null, 'to');
         $this->assertDateRange($from, $to, $definition);
+        if (! $definition->supportsDateRange && ($from !== null || $to !== null)) {
+            $this->invalid('from', 'Este reporte representa el estado actual y no admite fechas históricas.');
+        }
 
         $sortInput = $input['sorts'] ?? $input['sort'] ?? [];
         $sorts = $this->normalizeSorts($sortInput, $definition);
@@ -51,6 +64,11 @@ final readonly class ReportQueryNormalizer
 
         if ($sorts === []) {
             $sorts = [$this->defaultSort($definition, [...$groupings, ...$metrics])];
+        }
+        foreach ($sorts as $sort) {
+            if (($groupings !== [] || $metrics !== []) && ! in_array($sort['field'], [...$groupings, ...$metrics], true)) {
+                $this->invalid('sorts', 'Ordena únicamente por una agrupación o medida seleccionada.');
+            }
         }
 
         $page = $this->positiveInteger($input['page'] ?? 1, 'page');
@@ -230,8 +248,12 @@ final readonly class ReportQueryNormalizer
             $this->invalid($key, 'La fecha debe tener formato YYYY-MM-DD.');
         }
 
-        $date = Carbon::createFromFormat('!Y-m-d', $value);
-        if ($date === false || $date->format('Y-m-d') !== $value) {
+        try {
+            $date = Carbon::createFromFormat('!Y-m-d', $value);
+        } catch (\Throwable) {
+            $this->invalid($key, 'La fecha debe tener formato YYYY-MM-DD.');
+        }
+        if ($date === null || $date->format('Y-m-d') !== $value) {
             $this->invalid($key, 'La fecha debe tener formato YYYY-MM-DD.');
         }
 
@@ -249,7 +271,7 @@ final readonly class ReportQueryNormalizer
         if ($fromDate->greaterThan($toDate)) {
             $this->invalid('to', 'La fecha final debe ser igual o posterior a la inicial.');
         }
-        if ($fromDate->diffInDays($toDate) > $definition->limits['max_range_days']) {
+        if ($definition->limits['max_range_days'] > 0 && $fromDate->diffInDays($toDate) > $definition->limits['max_range_days']) {
             $this->invalid('to', 'El rango de fechas supera el límite permitido.');
         }
     }
