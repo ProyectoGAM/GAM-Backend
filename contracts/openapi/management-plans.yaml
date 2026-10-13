@@ -380,6 +380,66 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/StockBalanceEnvelope' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /alimentacion/productos:
+    get:
+      summary: Busca alimentos terminados activos para registrar suministros
+      parameters:
+        - { name: search, in: query, schema: { type: string, maxLength: 160 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: data con id y name y meta de paginación. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /flocks/{flock}/alimentacion:
+    parameters: [{ $ref: '#/components/parameters/Flock' }]
+    get:
+      summary: Lista suministros registrados y anulados del lote
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: per_page, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200': { description: 'Colección paginada de suministros con id, producto, cantidad, unidad, fecha y estado.' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      summary: Registra alimento efectivamente suministrado al lote
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [product_id, quantity, unit, occurred_at]
+              properties:
+                product_id: { type: integer, minimum: 1 }
+                quantity: { type: string, pattern: '^(?=.*[1-9])\d{1,12}(?:\.\d{1,6})?$' }
+                unit: { type: string, enum: [kg, g] }
+                occurred_at: { type: string, format: date-time }
+                notes: { type: [string, 'null'], maxLength: 5000 }
+      responses:
+        '201': { description: data con operation_id y feed_supply. Requiere management-plans.execute. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /flocks/{flock}/alimentacion/{feedSupply}/anulacion:
+    parameters:
+      - $ref: '#/components/parameters/Flock'
+      - { name: feedSupply, in: path, required: true, schema: { type: string, format: ulid } }
+    post:
+      summary: Anula el suministro con auditoría compensatoria
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '200': { description: data con operation_id y suministro anulado. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
 components:
   securitySchemes:
     bearerAuth:
@@ -622,6 +682,7 @@ components:
           required: [vaccine_id, occurred_at]
           properties:
             vaccine_id: { $ref: '#/components/schemas/Ulid' }
+            vaccine_batch: { type: [string, 'null'], maxLength: 160, description: Partida del producto de vacuna aplicado; independiente del lote de gallinas. }
             notes: { type: [string, 'null'], maxLength: 5000 }
             stock_consumption:
               type: object

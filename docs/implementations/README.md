@@ -21,3 +21,4 @@ Cada guía describe el alcance entregado, las decisiones de negocio, el contrato
 La guía afectada debe indicar qué cambió y por qué, las rutas y ejemplos de entrada/salida cuando corresponda, reglas de negocio y compatibilidad, migraciones o datos, autorización, idempotencia y auditoría, y las pruebas ejecutadas con sus límites. Los contratos OpenAPI se actualizan junto a los cambios de API.
 
 Volver al [índice de documentación](../README.md).
+- [Reportes y exportación](reporting-implementation.md)
