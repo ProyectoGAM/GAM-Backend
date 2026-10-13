@@ -16,6 +16,7 @@ final class StoreVaccinationApplicationRequest extends ManagementExecutionReques
             'idempotency_key' => ['required', 'uuid'],
             ...$this->activityLinkRules(),
             'vaccine_id' => ['required', 'ulid'],
+            'vaccine_batch' => ['sometimes', 'nullable', 'string', 'max:160'],
             'notes' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'stock_consumption' => ['sometimes', 'array'],
             'stock_consumption.quantity' => ['required_with:stock_consumption', 'string', 'regex:/^(?=.*[1-9])\\d{1,12}(?:\\.\\d{1,6})?$/'],

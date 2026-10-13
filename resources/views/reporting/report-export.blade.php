@@ -73,6 +73,11 @@
             </table>
         </div>
     @endif
+    <nav aria-label="Paginación del reporte">
+        @if(isset($links['previous']))<a href="{{ $links['previous'] }}">Anterior</a>@endif
+        <span>Página {{ $result->currentPage }} de {{ $result->lastPage }} · {{ $result->total }} filas</span>
+        @if(isset($links['next']))<a href="{{ $links['next'] }}">Siguiente</a>@endif
+    </nav>
 </main>
 </body>
 </html>

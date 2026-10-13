@@ -11,6 +11,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property ReportExportFormat $format
+ * @property ReportExportStatus $status
+ * @property array<string, mixed> $query
+ */
 #[Fillable([
     'user_id',
     'operation_id',

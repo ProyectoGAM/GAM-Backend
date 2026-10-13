@@ -23,7 +23,8 @@ final class CleanupExpiredReportExports extends Command
     {
         $expired = 0;
         ReportExport::query()
-            ->whereNotIn('status', [ReportExportStatus::Expired->value, ReportExportStatus::Failed->value])
+            ->whereNotIn('status', [ReportExportStatus::Failed->value])
+            ->where(fn ($query) => $query->where('status', '<>', ReportExportStatus::Expired->value)->orWhereNotNull('path'))
             ->whereNotNull('expires_at')
             ->where('expires_at', '<=', now())
             ->lazyById(100)
@@ -33,30 +34,33 @@ final class CleanupExpiredReportExports extends Command
                 $wasExpired = DB::transaction(function () use ($export, $auditRecorder): bool {
                     $locked = ReportExport::query()->lockForUpdate()->find($export->getKey());
                     if ($locked === null
-                        || in_array($locked->status, [ReportExportStatus::Expired, ReportExportStatus::Failed], true)
+                        || $locked->status === ReportExportStatus::Failed
                         || $locked->expires_at === null
                         || $locked->expires_at->isFuture()) {
                         return false;
                     }
 
+                    $alreadyExpired = $locked->status === ReportExportStatus::Expired;
                     $locked->update([
                         'status' => ReportExportStatus::Expired,
                         'path' => null,
                         'file_size' => null,
                     ]);
-                    $auditRecorder->record(AuditEntryData::forSubject(
-                        subject: $locked,
-                        actor: $locked->user,
-                        logName: 'reporting',
-                        event: 'report_export_expired',
-                        description: 'Exportación de reporte expirada',
-                        properties: [
-                            'result' => 'expired',
-                            'source_key' => $locked->source_key,
-                            'format' => $locked->format->value,
-                        ],
-                        operationId: $locked->operation_id,
-                    ));
+                    if (! $alreadyExpired) {
+                        $auditRecorder->record(AuditEntryData::forSubject(
+                            subject: $locked,
+                            actor: $locked->user,
+                            logName: 'reporting',
+                            event: 'report_export_expired',
+                            description: 'Exportación de reporte expirada',
+                            properties: [
+                                'result' => 'expired',
+                                'source_key' => $locked->source_key,
+                                'format' => $locked->format->value,
+                            ],
+                            operationId: $locked->operation_id,
+                        ));
+                    }
 
                     return true;
                 });
@@ -65,7 +69,7 @@ final class CleanupExpiredReportExports extends Command
                     return;
                 }
                 if ($path !== null) {
-                    Storage::disk($disk)->delete($path);
+                    Storage::disk($disk)->deleteDirectory(dirname($path));
                 }
                 $expired++;
             });

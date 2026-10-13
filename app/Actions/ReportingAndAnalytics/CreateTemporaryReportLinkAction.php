@@ -30,7 +30,7 @@ final readonly class CreateTemporaryReportLinkAction
             $expiresAt = $export->expires_at->copy();
         }
         $url = URL::temporarySignedRoute(
-            'api.v1.report-exports.download',
+            'api.v1.report-exports.download.es',
             $expiresAt,
             ['reportExport' => $export->getKey(), 'share' => 1, 'view' => 'html'],
         );

@@ -8,9 +8,12 @@ use App\Exceptions\ReportingAndAnalytics\ReportConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\ReportingAndAnalytics\ReportExport;
 use App\Services\ReportingAndAnalytics\ReportQueryNormalizer;
+use App\Services\ReportingAndAnalytics\ReportSnapshotStore;
 use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Symfony\Component\HttpFoundation\Response;
 
 final readonly class DownloadReportExportAction
@@ -19,9 +22,10 @@ final readonly class DownloadReportExportAction
         private AuditRecorder $auditRecorder,
         private ReportQueryNormalizer $normalizer,
         private ReportSourceRegistry $registry,
+        private ReportSnapshotStore $snapshots,
     ) {}
 
-    public function execute(ReportExport $export, bool $asHtml = false): Response
+    public function execute(ReportExport $export, bool $asHtml = false, int $page = 1, ?int $signedExpires = null): Response
     {
         if ($export->status === ReportExportStatus::Expired
             || ($export->status !== ReportExportStatus::Failed
@@ -63,21 +67,32 @@ final readonly class DownloadReportExportAction
         }
 
         if ($asHtml) {
-            $source = $this->registry->get($export->source_key);
-            $storedQuery = is_array($export->query) ? $export->query : [];
-            unset($storedQuery['source_key'], $storedQuery['definition_version']);
-            $result = $source->preview($this->normalizer->normalize($export->source_key, $storedQuery));
+            $snapshot = $this->snapshots->page($export, $page);
+            $result = $snapshot['result'];
+            $source = (object) ['label' => $snapshot['header']['label'], 'columns' => $snapshot['header']['metadata'], 'metrics' => []];
+            $links = [];
+            foreach (['previous' => $page - 1, 'next' => $page + 1] as $direction => $target) {
+                if ($target < 1 || $target > $result->lastPage) {
+                    continue;
+                }
+                $parameters = ['reportExport' => $export->getKey(), 'view' => 'html', 'page' => $target];
+                $links[$direction] = $signedExpires === null
+                    ? route('api.v1.report-exports.download', $parameters)
+                    : URL::temporarySignedRoute('api.v1.report-exports.download', Carbon::createFromTimestamp($signedExpires), [...$parameters, 'share' => 1]);
+            }
 
             return response()->view('reporting.report-export', [
                 'export' => $export,
-                'source' => $source->definition(),
+                'source' => $source,
                 'result' => $result,
-            ]);
+                'links' => $links,
+            ])->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');
         }
 
         return $disk->download($export->path, $export->file_name, [
             'Content-Type' => $export->mime_type ?? 'application/octet-stream',
             'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store',
         ]);
     }
 }

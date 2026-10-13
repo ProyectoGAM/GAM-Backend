@@ -65,11 +65,14 @@ final readonly class RecordVaccinationApplicationAction
                 $application->forceFill([
                     'public_id' => (string) Str::ulid(),
                     'flock_id' => $context->flock->getKey(),
+                    'poultry_house_id' => $context->flock->poultry_house_id,
+                    'production_unit_id' => $context->flock->production_unit_id,
                     'plan_activity_id' => $context->planActivityPublicId,
                     'plan_activity_title_snapshot' => $context->planActivityTitleSnapshot,
                     'vaccine_id' => $vaccine->getKey(),
                     'product_id' => $product->getKey(),
                     'vaccine_snapshot' => $vaccineSnapshot,
+                    'vaccine_batch' => $attributes['vaccine_batch'] ?? null,
                     'product_snapshot' => $productSnapshot,
                     'occurred_at' => $context->occurredAt,
                     'responsible_user_id' => $context->responsibleUserId,
@@ -124,6 +127,7 @@ final readonly class RecordVaccinationApplicationAction
                     'plan_activity_id' => $context->planActivityPublicId,
                     'plan_activity_title_at_application' => $context->planActivityTitleSnapshot,
                     'vaccine' => $vaccineSnapshot,
+                    'vaccine_batch' => $application->vaccine_batch,
                     'product' => $productSnapshot,
                     'occurred_at' => $context->occurredAt->toIso8601String(),
                     'responsible' => [

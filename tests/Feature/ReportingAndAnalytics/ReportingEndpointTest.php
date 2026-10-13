@@ -11,6 +11,8 @@ use App\Models\ReportingAndAnalytics\ReportExport;
 use App\Models\ReportingAndAnalytics\ReportPreset;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\User;
+use App\Services\ReportingAndAnalytics\ReportQueryNormalizer;
+use App\Services\ReportingAndAnalytics\ReportSnapshotStore;
 use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Queue;
@@ -178,7 +180,7 @@ final class ReportingEndpointTest extends TestCase
     {
         // Preparación: registra un archivo completado en el disco privado.
         Storage::fake('local');
-        $owner = $this->userWithPermissions(['reports.view']);
+        $owner = $this->userWithPermissions(['reports.view', 'inventory.view']);
         $export = $this->completedExport($owner);
         $token = $owner->createToken('download-test')->plainTextToken;
 
@@ -211,7 +213,7 @@ final class ReportingEndpointTest extends TestCase
     {
         // Preparación: registra una exportación disponible y autentica al propietario con permiso para compartir.
         Storage::fake('local');
-        $owner = $this->userWithPermissions(['reports.share']);
+        $owner = $this->userWithPermissions(['reports.share', 'reports.view', 'inventory.view']);
         $export = $this->completedExport($owner);
         Sanctum::actingAs($owner, ['*']);
 
@@ -273,6 +275,12 @@ final class ReportingEndpointTest extends TestCase
             'completed_at' => now(),
         ]);
         Storage::disk('local')->put('report-exports/test.xlsx', 'content');
+        // Congela el dataset de prueba para que el HTML no consulte datos posteriores.
+        $source = app(ReportSourceRegistry::class)->get($export->source_key);
+        $input = $export->query;
+        unset($input['source_key'], $input['definition_version']);
+        $query = app(ReportQueryNormalizer::class)->normalize($export->source_key, $input);
+        app(ReportSnapshotStore::class)->create('report-exports', $source, $query, 100);
 
         return $export;
     }
