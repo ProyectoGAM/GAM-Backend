@@ -90,7 +90,7 @@ final class EggHistoryDemoSeederTest extends TestCase
         $this->app->instance('env', 'production');
 
         // Mutación: la carga sale antes de crear el lote o sus operaciones.
-        $this->seed(EggHistoryDemoSeeder::class);
+        $this->app->call([new EggHistoryDemoSeeder, 'run']);
         $this->assertDatabaseMissing('flocks', ['code' => 'LOT-EGG-TEST']);
     }
 }

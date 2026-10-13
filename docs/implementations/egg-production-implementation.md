@@ -138,6 +138,10 @@ docker compose -f compose.dev.yaml exec -T api php artisan db:seed --class='Data
 
 No cambia endpoints, permisos, contratos OpenAPI ni esquema. La cobertura está en `tests/Feature/Lots/EggHistoryDemoSeederTest.php`: historial, fechas, cantidad viva, capacidad física, pesajes mixtos, correspondencia con ingresos a stock y auditoría, repetición otro día y salida fuera del entorno local.
 
+La prueba de exclusión en producción invoca `run` mediante el contenedor de Laravel. Así comprueba directamente la restricción de ambiente del seeder, sin pasar por la confirmación interactiva de `db:seed` que interrumpía la suite de CI al simular producción.
+
+Verificación de esa corrección: las dos pruebas del fixture aprobaron con 28 aserciones y la suite completa, ejecutada localmente con las variables del workflow de CI sobre `gam_testing`, aprobó con 454 pruebas y 3.804 aserciones. Pint sobre el archivo de prueba y `git diff --check` también aprobaron. Los mensajes de error de auditoría corresponden a fallos provocados deliberadamente por las pruebas de rollback, que aprobaron.
+
 Verificación del fixture: dos pruebas aprobadas con 28 aserciones en PostgreSQL aislado, Pint aprobado sobre los dos archivos PHP modificados y `git diff --check` sin errores. Se intentó `pint --dirty --format agent`, pero el contenedor no permite detectar Git; por eso se formatearon las rutas explícitas. El análisis completo con `.phpstan-lots.neon` queda limitado por dos errores preexistentes de `withResourceMetadata()` en `RecordInventoryMovementAction.php` (líneas 301 y 424), fuera del alcance del fixture.
 
 El 13 de octubre de 2026 se ejecutó dos veces en la base local `gam`: ingreso del lote el 24 de marzo de 2026, recolecciones desde el 18 de agosto hasta el 12 de octubre, 229 aves vivas, ocho mortalidades con once bajas, ocho jornadas con 96 ingresos de pesaje y 168 recolecciones e ingresos de stock por 9.291 huevos. La consulta posterior confirmó que la segunda ejecución conservó esos totales.
