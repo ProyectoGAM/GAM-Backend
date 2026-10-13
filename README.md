@@ -98,7 +98,7 @@ Las decisiones para corregir, regenerar o reconstruir datos de prueba del entorn
 
 Cada módulo nuevo debe incluir su seeder de datos demo y registrarlo en `LocalDemoDataSeeder` (o en un seeder del módulo invocado por este), para que sus datos estén disponibles automáticamente cuando el ambiente sea local.
 
-El catálogo global de recetas incluye una combinación demo de maíz y soja. Su alta no crea materias primas ni modifica stock, y su cálculo admite sólo múltiplos enteros del rendimiento base. El contrato y los pasos de uso están en la [guía de recetas](docs/implementations/feed-recipes-implementation.md).
+El catálogo global de recetas incluye una combinación demo de maíz y soja. Su alta y cálculo no modifican stock. El segundo bloque agrega elaboración inmediata, cancelación compensatoria, ajustes independientes y alimento acumulado por receta y UP. La demo incluye una elaboración cancelada y un recuento independiente de alimento. El contrato y los pasos de uso están en la [guía de recetas](docs/implementations/feed-recipes-implementation.md).
 
 Para probar la pantalla de pesajes con un lote de 60 semanas y jornadas con anomalías, ejecutá el fixture local optativo `LOT-PESAJE-TEST`. El comando y los datos que crea se encuentran desde el [índice de implementaciones](docs/implementations/README.md). Es repetible sin duplicar ingresos.
 

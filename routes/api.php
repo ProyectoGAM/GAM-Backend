@@ -15,6 +15,9 @@ use App\Http\Controllers\IdentityAndAccess\SharedDeviceController;
 use App\Http\Controllers\IdentityAndAccess\UserManagementController;
 use App\Http\Controllers\Inventory\EggPresentationController;
 use App\Http\Controllers\Inventory\EggStockController;
+use App\Http\Controllers\Inventory\FeedAdjustmentController;
+use App\Http\Controllers\Inventory\FeedBalanceController;
+use App\Http\Controllers\Inventory\FeedManufactureController;
 use App\Http\Controllers\Inventory\FeedRecipeController;
 use App\Http\Controllers\Inventory\FeedStockController;
 use App\Http\Controllers\Inventory\InventoryMovementController;
@@ -285,6 +288,17 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('/stock-alimentacion', [FeedStockController::class, 'global'])
             ->name('feed-stock.global');
 
+        Route::middleware(['shared.device:any', 'shared.session.conditional'])->name('feed-recipes.')->group(function (): void {
+            Route::get('/elaboraciones', [FeedManufactureController::class, 'index'])->name('manufactures.index');
+            Route::post('/elaboraciones', [FeedManufactureController::class, 'store'])->name('manufactures.store');
+            Route::get('/elaboraciones/{operation}', [FeedManufactureController::class, 'show'])->whereNumber('operation')->name('manufactures.show');
+            Route::post('/elaboraciones/{operation}/cancelacion', [FeedManufactureController::class, 'cancel'])->whereNumber('operation')->name('manufactures.cancel');
+            Route::get('/saldos-alimento', [FeedBalanceController::class, 'index'])->name('balances.index');
+            Route::get('/unidades-productivas/{productionUnit}/recetas/{recipe}/saldo', [FeedBalanceController::class, 'show'])->name('balances.show');
+            Route::get('/ajustes-alimentacion', [FeedAdjustmentController::class, 'index'])->name('adjustments.index');
+            Route::post('/unidades-productivas/{productionUnit}/recetas/{recipe}/ajustes', [FeedAdjustmentController::class, 'feed'])->name('adjustments.feed');
+            Route::post('/plantas-racion/{poultryHouse}/ingredientes/{product}/ajustes', [FeedAdjustmentController::class, 'ingredient'])->name('adjustments.ingredient');
+        });
         Route::get('/recetas', [FeedRecipeController::class, 'index'])->name('feed-recipes.index');
         Route::post('/recetas', [FeedRecipeController::class, 'store'])->name('feed-recipes.store');
         Route::get('/recetas/{recipe}', [FeedRecipeController::class, 'show'])->whereNumber('recipe')->name('feed-recipes.show');

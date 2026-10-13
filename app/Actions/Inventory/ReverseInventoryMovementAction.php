@@ -23,6 +23,9 @@ final readonly class ReverseInventoryMovementAction
                 ->lockForUpdate()
                 ->firstOrFail()
                 ->load('lines');
+            if (in_array($locked->reference_type, ['feed_manufacture', 'feed_manufacture_cancellation', 'feed_ingredient_adjustment'], true)) {
+                throw new InventoryConflict('Los movimientos de alimento deben corregirse desde su operación de elaboración o ajuste.');
+            }
             if (InventoryMovement::query()->where('reverses_movement_id', $locked->getKey())->exists()) {
                 throw new InventoryConflict('El movimiento ya fue revertido.');
             }

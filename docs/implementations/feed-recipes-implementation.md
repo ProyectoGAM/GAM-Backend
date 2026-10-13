@@ -1,168 +1,184 @@
-# Catálogo global de recetas y cálculo de cantidades
+# Recetas, elaboración inmediata y stock de alimento
 
-## Alcance y decisiones de negocio
+## Alcance
 
-Esta entrega incorpora el catálogo global de recetas y un cálculo exacto reutilizable para la futura elaboración. Las recetas tienen ID interno estable y admiten nombres repetidos. No pertenecen a una UP ni requieren asignaciones de usuarios.
+El catálogo global conserva su contrato: ID estable, nombres repetidos, ingredientes existentes de Inventario, edición exclusiva de sus cantidades y estados activo/inactivo. Rendimiento e ingredientes usan gramos enteros positivos; el rendimiento es independiente de su suma. Sólo se elaboran múltiplos enteros positivos de la combinación base.
 
-El alta usa productos existentes de tipo `raw_material` del catálogo de Inventario, con unidad base `g` y control de stock. No crea productos, ubicaciones, saldos ni movimientos. No exige existencias o estado activo del ingrediente: el catálogo y el cálculo no ejecutan una elaboración.
+El segundo bloque incorpora elaboración inmediata, distribución de ingredientes entre plantas de la misma UP, saldo acumulado de alimento por receta y UP, cancelación compensatoria, ajustes independientes y consultas paginadas. No incorpora alimentación heredada del plan, consumo de lotes, transferencias entre UP, compras de alimento, vencimientos, partidas, alertas, notificaciones ni frontend.
 
-El nombre, la nota, el rendimiento y los productos que integran la composición quedan establecidos al crear. Después sólo cambian las cantidades de esos productos y el estado de la receta. Cada ingrediente debe aparecer una sola vez y tener cantidad positiva; la composición nunca queda vacía.
+## Catálogo y cálculo existentes
 
-Todas las cantidades del dominio son **gramos enteros positivos**, sin redondeo. Se aceptan enteros JSON o cadenas de dígitos; se rechazan floats, cadenas decimales y notación científica. El rango es 1–9223372036854775807, compatible con PHP de 64 bits y PostgreSQL `bigint`. Las respuestas usan cadenas canónicas para preservar números superiores al rango seguro de JavaScript. El frontend convierte otras unidades antes de enviar datos.
+Crear receta exige nombre, rendimiento y composición no vacía con cada producto una sola vez. Los ingredientes deben ser materias primas existentes, con unidad base `g` y control de stock; el alta y el cálculo no exigen producto activo ni existencias. Nombre, nota, rendimiento y productos quedan fijados al crear. La edición recibe todos los productos originales y cambia únicamente sus cantidades; agregar, quitar o sustituir devuelve 409. Desactivar conserva receta e historia.
 
-El rendimiento de salida es independiente de las cantidades de entrada. No se suman ingredientes para validar el rendimiento ni se impone igualdad entre entrada y salida.
+El catálogo mantiene su rango de 1 a 9223372036854775807 gramos y respuestas como cadenas para evitar pérdida de precisión en JavaScript. Acepta enteros JSON y cadenas de dígitos; rechaza floats, decimales y notación científica. El segundo bloque no reduce ese rango del catálogo ni cambia `RecipeGrams` o `FeedRecipeCalculator`.
 
-La edición recibe la lista completa de ingredientes originales con sus cantidades. Enviar un conjunto distinto devuelve 409; los campos ajenos a la edición devuelven 422. Esto impide agregar, quitar o sustituir ingredientes. Se permite editar recetas activas e inactivas. Las nuevas cantidades afectan únicamente los cálculos y elaboraciones posteriores; ningún movimiento histórico se recalcula.
+El cálculo lee la receta activa y su composición bajo lock compartido. Exige `Q % R === 0`, obtiene el factor con `intdiv(Q, R)` y comprueba cada multiplicación antes de ejecutarla. No reserva existencias, no congela la composición, no elabora y no modifica saldos o auditoría. Las ediciones y cambios de estado toman el lock exclusivo de la misma receta.
 
-Desactivar conserva receta, composición e historial. La receta inactiva permanece consultable, pero su cálculo para una nueva elaboración devuelve 409. Reactivar habilita nuevamente el cálculo. No se publica eliminación física.
+Los permisos del catálogo siguen siendo `feed-recipes.view` para listar, consultar y calcular, y `feed-recipes.manage` para crear, editar cantidades y cambiar estado. Alta idempotente por actor y encabezado UUID. El reintento conserva el estado actual y no restaura cantidades antiguas. Edición y estado no requieren clave; repetir valores actuales no genera nueva auditoría.
 
-Para preservar los ingredientes existentes, una materia prima vinculada a cualquier receta no puede cambiar de tipo, unidad base ni control de stock desde el catálogo de productos, aunque todavía no tenga movimientos. Puede conservar las operaciones existentes de nombre, SKU y estado; cada auditoría de receta preserva su propia instantánea histórica.
+## Elaboración inmediata
+
+La entrada contiene receta activa, planta operativa y cantidad resultante entera positiva. La UP se deriva exclusivamente de la planta. Se usa la fecha y hora del registro; no se admiten fechas aportadas por el cliente ni estados pendientes o en proceso.
+
+Dentro de una única transacción, `ManufactureFeedAction`:
+
+1. Protege el reintento por actor y clave.
+2. Lee y bloquea la composición vigente y comprueba receta activa.
+3. Reutiliza el cálculo exacto y valida el límite de persistencia de cada cantidad.
+4. Bloquea y valida ingredientes activos.
+5. Resuelve plantas operativas de la misma UP, ubicaciones técnicas y saldos.
+6. Calcula la distribución íntegra antes de descontar.
+7. Registra el descuento mediante el motor de movimientos existente.
+8. Acredita el saldo de alimento, guarda instantánea y distribución, y audita síncronamente.
+
+Para cada ingrediente se consume primero el saldo positivo de la planta seleccionada. El faltante usa otras plantas operativas de la misma UP, ordenadas por saldo de ese ingrediente de menor a mayor y, en empate, por ID de planta ascendente. La prioridad se resuelve por ingrediente: no hay una lista única de plantas para toda la receta.
+
+Mantenimiento, fuera de servicio e inactivo no son operativos. Saldos cero o negativos no aportan disponibilidad. Si cualquier ingrediente no alcanza, se devuelve 409 sin descuentos, crédito de alimento, operación ni auditoría parcial. Las elaboraciones no generan negativos de ingredientes, aunque el motor genérico conserva sus reglas previas para otros movimientos.
+
+Ejemplo: se requieren 10000 g; A seleccionada tiene 2000, B 3000 y C 8000. Se descuentan 2000 de A, 3000 de B y 5000 de C.
+
+### Exactitud y límites
+
+El inventario existente conserva `decimal(18,6)`. Las entradas del segundo bloque y el saldo entero de alimento tienen máximo absoluto **999999999999 g**. El rendimiento y la composición del catálogo pueden ser mayores, pero su elaboración se rechaza si la cantidad resultante o un ingrediente calculado excede ese límite. También se comprueba el saldo acumulado antes de persistir.
+
+Las necesidades calculadas son enteras. Los saldos históricos de ingredientes pueden contener fracciones: se distribuyen y compensan exactamente con sus seis decimales, sin redondearlos ni descartarlos. Por ejemplo, consumir 2000.123456 g de una planta reduce exactamente el faltante de la siguiente. La distribución y sus movimientos muestran cadenas con seis decimales.
+
+Un ajuste de ingredientes comprueba tanto el saldo como el delta contra el rango real de Inventario. Para alimento, establecer el extremo opuesto puede producir un delta de hasta 1999999999998 g; el historial usa `decimal(19,6)` para conservar esa diferencia. El saldo sigue siendo entero y limitado, sin cambios a la precisión del inventario genérico.
+
+## Cuenta de alimento e historia
+
+`feed_balances` guarda una única cuenta por receta y UP, con restricción única y cantidad entera firmada. Las elaboraciones se acumulan desde cualquier planta de esa UP. No hay cuentas por planta, versión o partida; no hay vencimiento. El saldo puede ser cero o negativo, incluidos los ajustes y el futuro consumo.
+
+Una consulta puntual devuelve cero cuando todavía no existe la cuenta, sin insertar filas. El listado paginado muestra las cuentas materializadas. Recetas inactivas conservan cuentas e historia consultables.
+
+`feed_stock_operations` conserva elaboración, cancelación, ajuste de ingrediente y ajuste de alimento. Incluye actor, instante con zona horaria, UUID de operación, clave/hash de idempotencia, receta/UP/planta/producto cuando corresponden, cantidad, factor, motivo, acción, saldo anterior/resultante, delta y referencia al movimiento genérico.
+
+La elaboración conserva nombre y rendimiento de la receta, cantidades base/requeridas y nombres/SKU de ingredientes, además de cada planta y ubicación originalmente usadas, cantidad descontada, saldos anterior/resultante y línea de movimiento. Editar nombres, cantidades o estados no recalcula esa instantánea.
+
+La cancelación se vincula mediante una referencia única a la operación original. El estado de la elaboración se deriva de esa relación: **no se actualiza ni borra la fila original**. Su detalle incluye la operación compensatoria y sus referencias.
+
+## Cancelación
+
+Cancelar y revertir son la misma operación. No existe edición de elaboración: se cancela y registra otra.
+
+`CancelFeedManufactureAction` bloquea la operación original, conserva receta y composición históricas y devuelve exactamente la inversa de sus líneas. La fórmula actual no interviene. Resta exactamente la cantidad elaborada de la cuenta actual de alimento. Rechaza si ese resultado sería negativo o si cualquier planta original receptora no está operativa. Comprueba también los límites de persistencia de las devoluciones.
+
+Permite receta e ingredientes desactivados, y los mantiene desactivados. La excepción del motor para ingredientes inactivos se limita a una cancelación materializada que referencia la elaboración original y su inversa completa. No hay flag público ni habilitación general de productos inactivos.
+
+La transacción conserva movimientos originales y agrega movimiento compensatorio, operación y auditoría. La reversión genérica rechaza movimientos vinculados a elaboración, cancelación y ajuste de ingredientes del segundo bloque, para impedir correcciones que eludan sus invariantes.
+
+Cada línea de distribución de la cancelación se vincula, por producto y ubicación, con su propia línea del movimiento compensatorio antes de guardar la instantánea y auditar. En API y auditoría, el identificador de línea siempre pertenece al movimiento de esa operación. La elaboración conserva sus referencias al descuento original; la devolución conserva las cantidades y plantas históricas con referencias a las líneas de devolución.
+
+La misma clave y motivo reintentan sin duplicar devoluciones. Una nueva clave para una elaboración ya cancelada devuelve 409. Si cualquier devolución o auditoría falla, no hay efecto parcial.
+
+## Ajustes independientes
+
+Las decisiones confirmadas son:
+
+- **Sumar/restar**: magnitud entera estrictamente positiva.
+- **Establecer ingrediente**: cero o entero positivo.
+- **Establecer alimento**: cualquier entero dentro del rango, incluidos cero y negativos.
+- **Motivo**: obligatorio, texto no vacío de hasta 2000 caracteres.
+
+Ingredientes requieren planta operativa y materia prima activa. Ningún ajuste puede dejar el ingrediente negativo. Se preservan las fracciones existentes al sumar/restar; establecer asigna el entero indicado y registra la diferencia exacta.
+
+Alimento requiere receta activa y se ajusta por UP, sin cuenta por planta. No exige seleccionar una planta. Restar alimento no devuelve ingredientes; sumar alimento no consume ingredientes. Ajustar ingredientes no cambia alimento ni recalcula elaboraciones. El historial previo no se modifica.
+
+Establecer el saldo que ya existe registra recuento y motivo con delta cero. No se crea una línea nula en el motor genérico; la operación y su auditoría sí quedan guardadas. Reintentar con la misma clave no las duplica.
 
 ## API pública
 
-Contrato: [feed-recipes.yaml](../../contracts/openapi/feed-recipes.yaml). Disponible en el selector de Swagger UI de desarrollo después de actualizar el servicio con la configuración de Compose.
+Contrato: [OpenAPI de recetas y alimento](../../contracts/openapi/feed-recipes.yaml). Prefijo `/api/v1`.
 
-| Método | Ruta | Permiso |
+| Método | Ruta | Acceso y comportamiento |
 | --- | --- | --- |
-| GET | `/api/v1/recetas` | `feed-recipes.view` |
-| POST | `/api/v1/recetas` | `feed-recipes.manage` |
-| GET | `/api/v1/recetas/{recipe}` | `feed-recipes.view` |
-| PATCH | `/api/v1/recetas/{recipe}/cantidades` | `feed-recipes.manage` |
-| PATCH | `/api/v1/recetas/{recipe}/estado` | `feed-recipes.manage` |
-| POST | `/api/v1/recetas/{recipe}/calculo` | `feed-recipes.view` |
+| GET/POST | `/recetas` | Catálogo con sus permisos existentes |
+| GET | `/recetas/{recipe}` | Composición actual, incluidas inactivas |
+| PATCH | `/recetas/{recipe}/cantidades` | Sólo cantidades originales |
+| PATCH | `/recetas/{recipe}/estado` | Activa o desactiva preservando historia |
+| POST | `/recetas/{recipe}/calculo` | Cálculo vigente, sin reserva |
+| POST | `/elaboraciones` | Elaboración inmediata |
+| GET | `/elaboraciones` | Historia paginada por ID descendente |
+| GET | `/elaboraciones/{operation}` | Fórmula histórica, distribución y cancelación |
+| POST | `/elaboraciones/{operation}/cancelacion` | Devuelve el detalle de la elaboración cancelada |
+| GET | `/saldos-alimento` | Cuentas materializadas paginadas |
+| GET | `/unidades-productivas/{productionUnit}/recetas/{recipe}/saldo` | Cuenta puntual o cero |
+| POST | `/unidades-productivas/{productionUnit}/recetas/{recipe}/ajustes` | Ajuste de alimento por UP |
+| POST | `/plantas-racion/{poultryHouse}/ingredientes/{product}/ajustes` | Ajuste de ingrediente |
+| GET | `/ajustes-alimentacion` | Historia paginada con motivo y saldos |
 
-El permiso de gestión no implica el de consulta: asignar ambos cuando el usuario deba administrar y leer. El rol `admin` sigue la excepción administrativa existente en los catálogos; usuarios eliminados no están autorizados. `IdentityPermissionSeeder` registra los dos permisos y los incluye en el rol administrativo. Consultar el catálogo de materias primas mediante `/api/v1/products?kind=raw_material` mantiene su permiso existente `products.view`.
-
-Las rutas conservan el middleware autenticado y de sesión compartida del resto de la API. Las consultas de recetas son globales. No se aceptan filtros, atributos ni asignaciones por UP.
-
-El listado incluye ambos estados por defecto y ordena por ID descendente. Admite `buscar` (hasta 120 caracteres), `estado` (`active` o `inactive`), `por_pagina` (1–100; por defecto 25) y `page` (1–1000000). Devuelve `data`, `links` y `meta`. El límite técnico de composición es 1000 ingredientes; nombre hasta 160 caracteres y nota hasta 5000.
-
-Ejemplo de alta, con un UUID en el encabezado `Idempotency-Key`:
-
-```json
-{
-  "nombre": "Ración BB",
-  "rendimiento_g": "13000",
-  "nota": "Combinación base",
-  "ingredientes": [
-    {"producto_id": 1, "cantidad_g": "2000"},
-    {"producto_id": 2, "cantidad_g": "5000"},
-    {"producto_id": 3, "cantidad_g": "6000"}
-  ]
-}
-```
-
-Los IDs del ejemplo deben sustituirse por materias primas reales del catálogo. El alta devuelve 201 con la receta en `data`; el detalle incluye `id`, `nombre`, `nota`, `rendimiento_g`, `estado`, `ingredientes`, `creado_en` y `actualizado_en`. Cada ingrediente expone ID de producto, nombre, SKU y cantidad actual en gramos.
-
-Ejemplo de edición exclusiva de cantidades:
+Todas las nuevas mutaciones requieren `Idempotency-Key` UUID exclusivamente en el encabezado. Ejemplo de elaboración:
 
 ```json
-{
-  "ingredientes": [
-    {"producto_id": 1, "cantidad_g": "2500"},
-    {"producto_id": 2, "cantidad_g": "5000"},
-    {"producto_id": 3, "cantidad_g": "6000"}
-  ]
-}
+{"receta_id": 1, "planta_id": 2, "cantidad_g": "26000"}
 ```
 
-Para desactivar, enviar `{"estado":"inactive"}` al endpoint de estado; para reactivar, `{"estado":"active"}`. Los valores del enum son identificadores estables; las rutas, descripciones y errores son españoles.
-
-## Regla de cálculo reutilizable
-
-`FeedRecipeCalculator` concentra la aritmética y no depende de Eloquent, inventario ni HTTP. `RecipeGrams` valida el rango antes de convertir a entero y comprueba el desbordamiento antes de multiplicar. La futura elaboración puede reutilizar ambas clases.
-
-`CalculateFeedRecipeAction` autoriza al actor, lee la receta activa y una composición consistente bajo un lock compartido, ejecuta la regla y devuelve el resultado con `FeedRecipeCalculationResource`. No escribe stock ni auditoría y no comprueba disponibilidad. Un cálculo no es una reserva ni una garantía de que la receta siga igual cuando se elabore.
-
-Para rendimiento R y solicitud Q:
-
-1. R y Q son enteros positivos representables.
-2. Se exige `Q % R === 0`.
-3. El factor se obtiene con `intdiv(Q, R)`.
-4. Antes de cada producto, se exige `cantidad_base <= intdiv(PHP_INT_MAX, factor)`.
-5. Se multiplica cada cantidad base por el factor sin floats.
-
-Con la composición 2000 g de maíz, 5000 g de soja y 6000 g de arroz, y rendimiento 13000 g:
-
-| Solicitud | Factor | Cantidades requeridas |
-| --- | --- | --- |
-| 13000 g | ×1 | 2000, 5000 y 6000 g |
-| 26000 g | ×2 | 4000, 10000 y 12000 g |
-| 39000 g | ×3 | 6000, 15000 y 18000 g |
-| 19500 g | Rechazado | Factor fraccionario ×1,5 |
-
-Enviar `{"cantidad_g":"26000"}` al endpoint de cálculo. La respuesta es:
+Ejemplo de ajuste de alimento:
 
 ```json
-{
-  "data": {
-    "receta_id": 1,
-    "rendimiento_g": "13000",
-    "cantidad_g": "26000",
-    "factor": "2",
-    "ingredientes": [
-      {"producto_id": 1, "nombre": "Maíz", "cantidad_base_g": "2000", "cantidad_requerida_g": "4000"},
-      {"producto_id": 2, "nombre": "Soja", "cantidad_base_g": "5000", "cantidad_requerida_g": "10000"},
-      {"producto_id": 3, "nombre": "Arroz", "cantidad_base_g": "6000", "cantidad_requerida_g": "12000"}
-    ]
-  }
-}
+{"accion": "establecer", "valor_g": "-1000", "motivo": "Recuento físico"}
 ```
 
-Sólo se admite `cantidad_g`. Los ajustes manuales de ingredientes, unidades alternativas y campos adicionales devuelven 422. El factor fraccionario y el desbordamiento se devuelven como errores de `cantidad_g`. Los conflictos de estado o composición usan 409, falta de sesión 401, falta de permiso 403 y receta inexistente 404.
+Cancelación: `{"motivo":"Corrección de elaboración"}`.
 
-## Persistencia, auditoría e idempotencia
+Filtros de elaboraciones: `receta_id`, `up_id`, `planta_id`, `estado=elaborada|cancelada`, `por_pagina` y `page`. Ajustes reutilizan los identificadores, admiten `producto_id` y `tipo=ingrediente|alimento`. Saldos aceptan receta y UP. Paginación de 1 a 100, predeterminada 25; página entre 1 y 1000000. No se aceptan campos ajenos al contrato.
 
-La migración `2026_10_13_061455_create_feed_recipes_tables.php` crea:
+Las cantidades de alimento se exponen como cadenas enteras; ingredientes y distribución usan cadenas decimales exactas. El detalle incluye `operacion_id`, `actor_id`, `registrado_en`, `ingredientes`, `distribucion`, `movimiento_id`, `estado` y `cancelacion`.
 
-- `feed_recipes`: ID, nombre sin unicidad, nota, rendimiento `bigint`, estado, creador, operación y datos de idempotencia del alta.
-- `feed_recipe_ingredients`: referencia a receta y producto, cantidad `bigint`, timestamps y unicidad por receta/producto.
+Errores: 401 sin sesión/contexto válido, 404 entidad inexistente o detalle que no es una elaboración, 422 entrada inválida y 409 conflicto de stock, estado, múltiplo calculado, límites calculados o idempotencia. El cálculo previo del catálogo mantiene su 422 para un múltiplo inválido.
 
-Las cantidades tienen CHECK positivo y el estado tiene CHECK de enum. Las referencias a productos, recetas y creador usan restricción de borrado. No se altera la precisión decimal de Inventario. No se crea entidad de alimento elaborado ni tabla de stock por versión.
+## Autorización, idempotencia, auditoría y bloqueos
 
-Los Actions registran `feed_recipe_created`, `feed_recipe_quantities_updated` y `feed_recipe_status_changed` mediante `AuditRecorder` y `AuditEntryData`, síncronamente en la misma transacción. La auditoría contiene actor, sujeto, `operation_id`, `trace_id`, origen, resultado y valores anteriores/nuevos. El log es `inventory` y la UP es nula. La instantánea permitida incluye identificación, nombre, nota, rendimiento, estado y cada ingrediente con producto, SKU, nombre, unidad y gramos. No incluye secretos.
+Por decisión expresa del usuario, **los nuevos endpoints permiten cualquier usuario autenticado con sesión válida** hasta definir el permiso funcional específico. El catálogo conserva sus permisos. No se inventan roles ni asignaciones por UP.
 
-Editar o reactivar añade historia; nunca sobrescribe ni elimina las entradas anteriores. Si falla la auditoría, se revierte toda la mutación. La API transversal de auditoría conserva su permiso `audit.view`, filtros y paginación existentes.
+Las rutas nuevas reutilizan `auth:sanctum`, `shared.device:any` y `shared.session.conditional`. El acceso compartido nativo exige Bearer, `X-Shared-Device-Token`, `X-GAM-Session` y generación vigente. Web conserva sesión stateful, CSRF, cookie HttpOnly `gam_shared_device` y contexto de sesión compartida. Los secretos nunca se copian al historial o auditoría.
 
-El alta requiere UUID en el encabezado; el cuerpo no acepta `idempotency_key`. Se normalizan nombre, cantidades y orden de ingredientes antes de calcular el hash. La clave se acota por actor y tiene restricción única en base. La fila del actor se bloquea antes de buscar el reintento; los productos se leen con lock compartido y orden estable durante la creación.
+La fila del actor serializa reintentos antes de buscar la clave. Unicidad por actor/clave abarca las cuatro operaciones del bloque: usar una clave en otro tipo o con contenido distinto devuelve 409. Cantidades y motivo se normalizan antes del hash. Reintentar tras editar o desactivar la receta devuelve la operación original y su cancelación actual.
 
-El reintento de un alta devuelve la receta existente en su estado actual, incluso si sus cantidades cambiaron después. No genera otra receta, auditoría ni restablece valores originales. La misma clave con datos distintos devuelve 409.
+El orden técnico de adquisición es receta compartida, productos compartidos por ID, plantas compartidas por ID, ubicaciones exclusivas por ID y saldos por ubicación/producto. La prioridad de consumo se calcula después. Las cancelaciones bloquean primero la operación/movimiento original; mantienen el mismo orden técnico para ingredientes. La cuenta receta/UP se materializa con unicidad y se bloquea antes de leer y actualizar. Las transacciones pueden reintentarse ante deadlock hasta tres veces sin conservar efectos de intentos fallidos.
 
-Las ediciones y transiciones de estado bloquean la misma fila de receta antes de consultar y mutar. Son asignaciones del estado actual: repetir inmediatamente valores iguales no escribe otra auditoría. Siguen el patrón de los catálogos existentes, sin encabezado de idempotencia ni control optimista por versión. Actualizaciones distintas concurrentes se serializan y prevalece la última ejecutada; la API no pretende detectar ediciones sobre una vista antigua. El cálculo mantiene un lock compartido de receta para evitar una composición parcial durante la edición.
+Los Actions propietarios escriben auditoría con `AuditRecorder` y `AuditEntryData` dentro de la misma transacción. Eventos: `feed_manufacture_recorded`, `feed_cancellation_recorded`, `feed_ingredient_adjustment_recorded` y `feed_feed_adjustment_recorded`, además del movimiento de Inventario. Conservan operación, traza, actor, sujeto, UP, origen, resultado, instantánea permitida y cambios explícitos de saldo y distribución. La auditoría es append-only. Consultarla desde la API transversal sigue requiriendo `audit.view`; las consultas de operaciones de alimento no exponen entradas crudas de auditoría.
 
-## Datos demo y aplicación
+## Migración y demo
 
-`FeedRecipeDemoSeeder` está registrado en `LocalDemoDataSeeder` después de la carga de materias primas. Crea idempotentemente “Ración demo inicial” usando maíz y soja ya existentes: 5000 g + 7000 g con rendimiento declarado de 13000 g. Este ejemplo ejercita la independencia entre entrada y salida. No cambia stock ni sobrescribe una receta demo ya editada.
+La migración `2026_10_13_075223_create_feed_stock_operations_tables.php` crea `feed_balances` y `feed_stock_operations`, con restricciones únicas de cuenta, actor/clave y cancelación, referencias restrictivas y CHECK de cantidades/operaciones. No modifica la precisión de Inventario ni las tablas del catálogo. Aplicar con migraciones normales; no requiere borrar datos. El rollback elimina las tablas nuevas y su contenido: no usarlo para corregir operaciones.
 
-Se ejecuta sólo en local o en la demo de producción habilitada explícitamente por la configuración existente. No se ejecuta en testing ni en una producción normal.
+`FeedRecipeDemoSeeder` conserva la receta global “Ración demo inicial”: 5000 g de maíz y 7000 g de soja, rendimiento 13000 g. `FeedManufactureDemoSeeder` se registra inmediatamente después en `LocalDemoDataSeeder`: elabora una combinación, la cancela para conservar los saldos demo de ingredientes y registra un ajuste independiente de 26000 g de alimento. Cada paso usa las Actions reales y claves estables. Repetirlo no sobrescribe saldos posteriores ni duplica operaciones.
 
-Para aplicar el cambio en otro entorno existente, ejecutar migraciones normales y registrar los permisos mediante el flujo de seeding del proyecto. No hace falta reconstruir la base ni borrar inventario. La verificación automatizada aplica la migración en la base PostgreSQL aislada `gam_testing`. En esta entrega se confirmó además `APP_ENV=local`, se aplicó únicamente la nueva migración y se ejecutaron `IdentityPermissionSeeder` y `FeedRecipeDemoSeeder` para dejar disponible la API local con su receta demo. No se ejecutó una reconstrucción de base ni una elaboración. No se modificó producción ni se realizó ningún push o despliegue.
+Sólo se ejecuta en local o en la demo de producción explícitamente habilitada por la configuración existente. La implementación se verificó con PostgreSQL aislado de testing; no se aplicó esta segunda migración a la base local ni a producción.
 
 ## Verificación
 
-Pruebas focalizadas nuevas:
+Cobertura nueva:
 
-- `tests/Feature/Inventory/FeedRecipeEndpointTest.php`: operaciones, nombres repetidos, gramos, rendimiento independiente, composición fija, estados, cálculo, permisos, filtros, idempotencia, auditoría atómica y protección de materias primas vinculadas.
-- `tests/Unit/Inventory/FeedRecipeCalculatorTest.php`: regla aislada, rendimiento independiente, límite máximo, floats, composición vacía y rendimiento cero.
-- `tests/Feature/Inventory/FeedRecipeContractTest.php`: rutas documentadas y referencias OpenAPI.
-- `tests/Feature/Inventory/FeedRecipeDemoSeederTest.php`: demo oficial, reintentos y protección por ambiente.
+- `FeedManufactureEndpointTest`: distribución por ingrediente, prioridad y empate, misma UP, estados, insuficiencia sin efectos parciales, acumulación, historia, devoluciones exactas de inactivos, cancelación inválida, reintentos, límites, precisión, autenticación y sesión compartida, rollback de auditoría.
+- `FeedAdjustmentEndpointTest`: independencia, motivos, acciones y valores válidos/ inválidos, saldo cero/negativo, rango, fracciones, idempotencia, filtros y auditoría transaccional.
+- `FeedManufactureConcurrencyTest`: procesos reales contra PostgreSQL, reintentos, doble consumo entre recetas/actores con plantas iniciales opuestas, cancelación única y acumulación concurrente.
+- `FeedManufactureDemoSeederTest`: registro en la entrada oficial, instantáneas, auditoría, reintentos y protección por ambiente.
+- `FeedRecipeContractTest`: rutas reales y referencias del contrato ampliado.
 
-También se ejecutan las regresiones de `ProductIngredientRulesTest`, `ProductResourceCapabilitiesTest`, `FeedStockEndpointTest` y `FeedStockDemoSeederTest`.
-
-Comando focalizado, dentro del contenedor API con la configuración aislada del README:
+Se ejecutaron además las regresiones del catálogo, cálculo, stock de ingredientes, motor de inventario, huevos, reglas de productos y reporte de saldos. La ejecución integrada del 13/10/2026 pasó con **126 pruebas y 1549 aserciones**, incluidos los cuatro casos de concurrencia real:
 
 ```powershell
-docker compose -f compose.dev.yaml exec -T -e APP_ENV=testing api php artisan test --compact tests/Feature/Inventory/FeedRecipeEndpointTest.php tests/Unit/Inventory/FeedRecipeCalculatorTest.php tests/Feature/Inventory/FeedRecipeContractTest.php tests/Feature/Inventory/FeedRecipeDemoSeederTest.php tests/Feature/SuppliersAndCatalogs/ProductIngredientRulesTest.php tests/Feature/SuppliersAndCatalogs/ProductResourceCapabilitiesTest.php tests/Feature/Inventory/FeedStockEndpointTest.php tests/Feature/Inventory/FeedStockDemoSeederTest.php
+docker compose -f compose.dev.yaml exec -T -e LOG_CHANNEL=null api php artisan test --compact tests/Feature/Inventory tests/Unit/Inventory tests/Feature/SuppliersAndCatalogs/ProductIngredientRulesTest.php tests/Feature/SuppliersAndCatalogs/ProductResourceCapabilitiesTest.php tests/Feature/ReportingAndAnalytics/InventoryStockBalancesReportTest.php
 ```
 
-Resultado de la ejecución integrada del 13/10/2026: **58 pruebas aprobadas, 805 aserciones**. Pint pasó sobre los archivos PHP modificados; el contenedor no detecta Git para `--dirty`, por lo que se utilizó la lista explícita del host. PHPStan/Larastan nivel 5 pasó sin errores usando la configuración existente con los paths del cambio; no se agregaron dependencias ni se relajaron comprobaciones. `git diff --check` también pasó.
+Se confirmó PHP 8.5.10, Laravel 13.29.0, PHPUnit 12.5.34 y Brick Math 0.18.0. Pint pasó sobre todos los PHP del cambio. Se intentó el comando obligatorio `vendor/bin/pint --dirty --format agent`; el contenedor no expone Git, por lo que se usó la lista explícita del host con `--format agent`. PHPStan/Larastan nivel 5 pasó sin errores con la configuración existente `.phpstan-vaccines.neon` y los paths fuente del cambio, sin baselines nuevos ni exclusiones de errores. `git diff --check` y la comprobación de espacios finales de archivos nuevos pasaron.
 
-Los tests prueban exactitud, reversión transaccional y ausencia de efectos de stock. No sustituyen la aceptación manual ni una prueba multiproceso de carreras concurrentes. No se ejecuta la suite completa del repositorio.
+La inyección de fallas de auditoría verifica rollback de fabricación, compensación y ajuste de ingredientes. Las pruebas de acceso usan tanto Sanctum simulado para las reglas de negocio como credenciales Bearer y sesión compartida reales para exigir dispositivo y generación vigentes. La documentación de APIs y locks se contrastó con Laravel Boost y documentación oficial de Laravel 13; el esquema existente fue confirmado mediante `database-schema` y las decisiones confirmadas se registraron con `record-rule`.
 
-## Integraciones pendientes que no forman parte de esta entrega
+No hay verificación de UI ni de producción. Las pruebas de concurrencia cubren carreras reales de dos procesos; no constituyen una prueba de carga. No se ejecuta la suite completa del repositorio.
 
-Continúan pendientes la elaboración que descuenta ingredientes y acredita alimento, el stock de alimento por receta y UP, la alimentación inicial heredada del plan, el consumo automático o manual en lotes, alertas, notificaciones y pantallas frontend.
+### Corrección de referencias de devolución
 
-Las futuras elaboraciones descontarán ingredientes de una planta de ración y guardarán alimento por receta y UP, sin separar saldos por versiones. Los stocks de ingredientes y alimento podrán ser negativos. Desactivar una receta no detendrá el consumo de los lotes: el lote seguirá con su receta y cantidad configuradas aunque el saldo sea cero o negativo, hasta cambiar su alimentación o desactivar el lote. Estas condiciones se preservan como contexto; no se implementan operaciones, restricciones o alertas para resolverlas ahora.
+La regresión `test_cancellation_distribution_references_compensating_movement_lines` reprodujo que la cancelación heredaba IDs de líneas del descuento. La corrección reemplaza esas referencias por las líneas compensatorias correspondientes antes de guardar y auditar. La prueba comprueba pertenencia, producto, ubicación y cantidad de las seis devoluciones; verifica coincidencia entre API, persistencia y auditoría, reintento estable y conservación de la elaboración y auditoría originales.
+
+La verificación focalizada posterior pasó con **36 pruebas y 849 aserciones**, cubriendo `FeedManufactureEndpointTest`, `FeedManufactureConcurrencyTest`, `FeedManufactureDemoSeederTest` y `FeedRecipeContractTest`. Pint pasó con paths explícitos por la limitación de Git en el contenedor; PHPStan nivel 5 pasó sobre la acción corregida y `git diff --check` también pasó. Esta corrección no reescribe operaciones o auditorías históricas ya registradas, ni modifica datos locales o de producción.
+
+## Decisiones pendientes
+
+Desempate y valores de ajustes quedaron confirmados. El permiso funcional específico permanece pendiente; se implementa la política provisional autenticada expresamente acordada.
+
+El consumo futuro de lotes debe continuar con recetas desactivadas o saldo cero/negativo hasta cambiar alimentación o desactivar el lote. Es contexto para una entrega posterior; no se implementa ahora.
 
 Volver al [índice de implementaciones](README.md).

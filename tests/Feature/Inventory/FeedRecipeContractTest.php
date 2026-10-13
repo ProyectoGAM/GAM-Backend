@@ -8,7 +8,7 @@ use Tests\TestCase;
 
 final class FeedRecipeContractTest extends TestCase
 {
-    // Flujo: mantiene todas las rutas reales documentadas sin publicar elaboración ni eliminación.
+    // Flujo: mantiene todas las rutas reales documentadas, incluida elaboración, sin publicar eliminación.
     public function test_openapi_matches_recipe_routes_and_creation_idempotency(): void
     {
         // Preparación: carga el contrato y las rutas reales del catálogo.
