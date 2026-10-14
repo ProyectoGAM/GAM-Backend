@@ -417,7 +417,7 @@ paths:
                 occurred_at: { type: string, format: date-time }
                 notes: { type: [string, 'null'], maxLength: 5000 }
       responses:
-        '201': { description: data con operation_id y feed_supply. Requiere management-plans.execute. }
+        '201': { description: 'data con operation_id y feed_supply, incluido public_id para su anulación, quantity y unit. Requiere management-plans.execute.' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
   /flocks/{flock}/alimentacion/{feedSupply}/anulacion:
@@ -437,7 +437,7 @@ paths:
               properties:
                 reason: { type: string, maxLength: 500 }
       responses:
-        '200': { description: data con operation_id y suministro anulado. }
+        '200': { description: 'data con operation_id y feed_supply con public_id y status cancelled.' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
 components:

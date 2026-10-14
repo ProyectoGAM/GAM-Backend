@@ -36,7 +36,7 @@ final class LotsOperationResource extends JsonResource
                 $result[$public] = (new $resource($operation->result[$key]))->resolve($request);
             }
         }
-        foreach (['vaccination_application', 'medicine_application', 'ration_change', 'manual_practice', 'management_execution_correction', 'stock_balance', 'feeding', 'correction'] as $key) {
+        foreach (['vaccination_application', 'medicine_application', 'ration_change', 'manual_practice', 'management_execution_correction', 'stock_balance', 'feed_supply', 'feeding', 'correction'] as $key) {
             if (array_key_exists($key, $operation->result)) {
                 $result[$key] = $operation->result[$key];
             }

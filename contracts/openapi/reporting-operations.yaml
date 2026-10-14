@@ -63,7 +63,7 @@ paths:
                 occurred_at: { type: string, format: date-time, description: Instante ISO con segundos y offset explícito. }
                 notes: { type: [string, 'null'], maxLength: 5000 }
       responses:
-        '201': { description: data incluye operation_id y feed_supply. Repetir la misma clave conserva ambos. }
+        '201': { description: 'data incluye operation_id y feed_supply con public_id, quantity y unit. Repetir la misma clave conserva ambos; public_id identifica el suministro para anularlo.' }
         '403': { description: Requiere management-plans.execute. }
         '409': { description: Conflicto de lote o clave utilizada con otro contenido. }
         '422': { description: Entrada inválida. }
@@ -87,7 +87,7 @@ paths:
               properties:
                 reason: { type: string, maxLength: 500 }
       responses:
-        '200': { description: data incluye operation_id y feed_supply anulado. }
+        '200': { description: 'data incluye operation_id y feed_supply con public_id y status cancelled.' }
         '403': { description: Requiere management-plans.execute. }
         '404': { description: Suministro inexistente o de otro lote. }
         '409': { description: Suministro ya anulado o clave reutilizada. }
