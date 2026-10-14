@@ -93,9 +93,17 @@ ApiClient incorpora descarga Blob con manejo de errores JSON. En nativo se usan 
 
 El seeder de reporting añade alimento, suministro/donación demo y configuración de Postura de forma idempotente, después de los seeders de lotes. En despliegue: ejecutar migraciones, mantener almacenamiento privado común entre API/worker, scheduler y Redis, y reiniciar workers para cargar cambios. No ejecutar resets de datos reales.
 
-La carga general de demo incluye 24 operaciones en `flock_operations`: las 23 del ciclo de lotes y el registro de alimentación usado por Reportes. Su prueba de integración verifica también un único suministro de 25,5 kg y que repetir la carga conserve las mismas operaciones y no duplique suministros. Esta expectativa corrige el fallo de PHPUnit del [CI del PR 43](https://github.com/ProyectoGAM/GAM-Backend/actions/runs/38347268423/job/115131458551?pr=43), que todavía esperaba 23 operaciones tras incorporar ese suministro.
+La carga general de demo incluye actualmente 31 operaciones en `flock_operations`: las 30 del ciclo de lotes y su alimentación diaria, y el registro de suministro usado por Reportes. Su prueba de integración verifica también un único suministro de 25,5 kg y que repetir la carga conserve las mismas operaciones y no duplique suministros. La donación demo deja −12 huevos en su cuenta de stock y conserva los 477 huevos de la cuenta de producción. Antes de integrar alimentación diaria se esperaban 24 operaciones; esa expectativa había corregido el fallo de PHPUnit del [CI del PR 43](https://github.com/ProyectoGAM/GAM-Backend/actions/runs/38347268423/job/115131458551?pr=43).
 
 Validación de la corrección: las 477 pruebas completas del backend pasaron con 3937 aserciones usando la configuración de pruebas del workflow, PHP 8.5 y PostgreSQL aislado en `gam_card21_testing`. También pasaron las tres pruebas de la demo por separado, PHPStan sobre todo `app` con el nivel predeterminado del CI, Pint y la validación de Compose.
+
+### Integración con alimentación diaria de lotes
+
+La integración de `develop` en `alimentacionLotes` omitió `feed_supply` al combinar las claves de `LotsOperationResource`. El alta guardaba el suministro, pero la respuesta no incluía su `public_id`; los clientes no podían construir correctamente la URL de anulación. El recurso vuelve a incluir el snapshot del suministro en el alta, su repetición idempotente y la anulación, junto con las claves de configuración diaria. Los dos contratos OpenAPI explicitan ese identificador y el estado de la respuesta de anulación.
+
+La corrección conserva rutas, permisos, auditoría transaccional e idempotencia existentes. No introduce migraciones ni modifica datos fuera de las pruebas. Las 15 pruebas focalizadas de demo, fuentes de negocio y contrato de planes pasaron con 261 aserciones en PostgreSQL aislado `gam_testing`, incluyendo cantidades/unidades e identificador del suministro en la respuesta y estado `cancelled` al anularlo.
+
+La suite completa de CI pasó localmente con **603 pruebas y 5576 aserciones**, PHP 8.5.10 y la base aislada `gam_testing`. PHPStan aprobó todo `app` con el nivel predeterminado 0 del workflow. Pint aprobó los tres archivos PHP modificados: el contenedor no tiene Git para `--dirty`, por lo que se pasaron las rutas obtenidas del diff en el host. `git diff --check` pasó. Esta verificación no incluye frontend ni despliegue.
 
 ## Límites funcionales y verificación
 

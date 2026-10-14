@@ -88,12 +88,17 @@ final class BusinessReportSourcesTest extends TestCase
         $body = ['idempotency_key' => (string) Str::uuid(), 'product_id' => $product->id, 'quantity' => '10.500000', 'unit' => 'kg', 'occurred_at' => now()->startOfSecond()->toIso8601String()];
         // Acción: repite la misma petición y verifica que no duplica suministros.
         $url = '/api/v1/flocks/'.$flock->public_id.'/alimentacion';
-        $first = $this->withHeader('Idempotency-Key', $body['idempotency_key'])->postJson($url, $body)->assertCreated();
+        $first = $this->withHeader('Idempotency-Key', $body['idempotency_key'])->postJson($url, $body)->assertCreated()
+            ->assertJsonPath('data.feed_supply.quantity', '10.500000')
+            ->assertJsonPath('data.feed_supply.unit', 'kg');
+        $supply = FeedSupply::query()->sole();
+        $first->assertJsonPath('data.feed_supply.public_id', $supply->public_id);
         $this->postJson($url, $body)->assertCreated()->assertJsonPath('data.operation_id', $first->json('data.operation_id'));
         $this->assertDatabaseCount('feed_supplies', 1);
         // Acción: anula el registro con una nueva operación auditada.
         $id = $first->json('data.feed_supply.public_id');
-        $this->withHeader('Idempotency-Key', (string) Str::uuid())->postJson($url.'/'.$id.'/anulacion', ['reason' => 'Cantidad incorrecta'])->assertOk();
+        $this->withHeader('Idempotency-Key', (string) Str::uuid())->postJson($url.'/'.$id.'/anulacion', ['reason' => 'Cantidad incorrecta'])
+            ->assertOk()->assertJsonPath('data.feed_supply.public_id', $id)->assertJsonPath('data.feed_supply.status', 'cancelled');
         $this->assertDatabaseHas('feed_supplies', ['public_id' => $id, 'status' => 'cancelled']);
         $this->assertDatabaseHas('activity_log', ['event' => 'feed_supply_recorded']);
         $this->assertDatabaseHas('activity_log', ['event' => 'feed_supply_cancelled']);

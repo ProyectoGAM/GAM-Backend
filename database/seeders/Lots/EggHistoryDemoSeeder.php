@@ -47,13 +47,15 @@ final class EggHistoryDemoSeeder extends Seeder
                     $house ??= $createHouse->execute($unit, ['name' => 'Galpón Huevos Test', 'bird_capacity' => 240], $actor);
                     $breed = Breed::query()->where('status', 'active')->orderBy('id')->firstOrFail();
                     $plan = PlanTemplate::query()->whereNotNull('published_version')->orderBy('id')->firstOrFail();
+                    $admissionDate = CarbonImmutable::now(config('lots.timezone'))->startOfDay()->subWeeks(29);
+                    Carbon::setTestNow($admissionDate->setTime(12, 0));
                     $operation = $createFlock->execute([
                         'code' => self::FLOCK_CODE,
                         'breed_id' => $breed->id,
                         'origin' => 'Datos de demostración de producción de huevos',
                         'poultry_house_id' => $house->id,
                         'initial_quantity' => 240,
-                        'entry_date' => CarbonImmutable::now(config('lots.timezone'))->startOfDay()->subWeeks(29)->toDateString(),
+                        'entry_date' => $admissionDate->toDateString(),
                         'plan_template_id' => $plan->public_id,
                         'plan_template_version' => $plan->published_version,
                         'idempotency_key' => $this->key(1),

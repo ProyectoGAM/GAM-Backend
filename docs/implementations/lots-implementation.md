@@ -12,6 +12,8 @@ Dependencias: M03 Instalaciones, M04 Proveedores y productos, Identidad y acceso
 
 ## Implementación realizada
 
+La entrega de [alimentación de lotes](flock-feeding-implementation.md) exige ingreso del día de registro en America/Montevideo y un plan publicado con una única alimentación inicial, receta y gramos positivos. Inicializa automático; fraccionar conserva edad y todas las etapas de alimentación o copia exactamente el manual. Agrupar conserva el plan y modo del receptor. Se bloquean todos los movimientos entre UP. La finalización conserva el censo anterior al cero administrativo para alimentar toda la última jornada y permitir su recuperación posterior. El journal incluye los cambios y consumos de alimento al evaluar reversiones.
+
 - Actions, Queries, Requests y Resources de Lotes se agrupan bajo `app/Actions/Lots`, `app/Queries/Lots`, `app/Http/Requests/Lots` y `app/Http/Resources/Lots`; los modelos permanecen en `app/Models/Lots` y las Policies en `app/Policies/Lots`.
 - Ocho tablas nuevas o ampliadas: las tablas originales de Lotes y `flock_activities`, con FKs restrictivas, índices, journal de actividad y restricciones de cantidades, estados y unicidad.
 - 28 operaciones HTTP bajo `/api/v1`, con contrato público en español, FormRequests, Actions, Queries y Resources.

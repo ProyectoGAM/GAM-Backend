@@ -62,9 +62,16 @@ abstract class LotsTestCase extends TestCase
             'name' => 'Plan de prueba', 'description' => 'Plantilla publicada para pruebas.', 'created_by' => $actor->id,
         ]);
         $version = $template->versions()->where('number', 1)->firstOrFail();
+        $initial = $version->activities()->where('type', 'ration_change')->firstOrFail()->only([
+            'type', 'title', 'timing_kind', 'start_day', 'start_week', 'feed_recipe_id', 'grams_per_bird', 'catalog_type', 'catalog_id', 'catalog_snapshot',
+        ]);
+        $version->activities()->delete();
         $activities = $activities === [] ? [[
             'type' => 'weighing', 'title' => 'Pesaje de prueba', 'timing_kind' => 'week', 'start_week' => 1,
         ]] : $activities;
+        if (! collect($activities)->contains(fn (array $activity): bool => $activity['type'] === 'ration_change' && (($activity['start_day'] ?? null) === 1 || ($activity['start_week'] ?? null) === 1))) {
+            $activities[] = $initial;
+        }
         foreach ($activities as $index => $activity) {
             $attributes = [
                 'sort_order' => $index + 1, 'type' => 'weighing', 'title' => 'Actividad de prueba '.($index + 1),
@@ -72,11 +79,6 @@ abstract class LotsTestCase extends TestCase
                 'notes' => null, 'catalog_type' => null, 'catalog_id' => null, 'catalog_snapshot' => null,
                 ...$activity,
             ];
-            if ($index === 0) {
-                $version->activities()->firstOrFail()->forceFill($attributes)->save();
-
-                continue;
-            }
             PlanTemplateActivity::factory()->for($version, 'version')->create($attributes);
         }
 

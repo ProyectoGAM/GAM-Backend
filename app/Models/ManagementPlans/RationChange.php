@@ -2,6 +2,7 @@
 
 namespace App\Models\ManagementPlans;
 
+use App\Models\Inventory\FeedRecipe;
 use App\Models\Lots\Flock;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\User;
@@ -35,7 +36,7 @@ class RationChange extends Model
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['occurred_at' => 'immutable_datetime', 'finished_feed_product_snapshot' => 'array'];
+        return ['occurred_at' => 'immutable_datetime', 'finished_feed_product_snapshot' => 'array', 'feed_recipe_snapshot' => 'array', 'daily_quantity_grams' => 'integer'];
     }
 
     /** @return BelongsTo<Flock, $this> */
@@ -48,6 +49,12 @@ class RationChange extends Model
     public function finishedFeedProduct(): BelongsTo
     {
         return $this->belongsTo(Product::class, 'finished_feed_product_id');
+    }
+
+    /** @return BelongsTo<FeedRecipe, $this> */
+    public function feedRecipe(): BelongsTo
+    {
+        return $this->belongsTo(FeedRecipe::class);
     }
 
     /** @return BelongsTo<User, $this> */

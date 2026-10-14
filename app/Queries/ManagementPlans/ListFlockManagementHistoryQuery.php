@@ -211,7 +211,7 @@ final readonly class ListFlockManagementHistoryQuery
             ->selectRaw('records.plan_activity_title_snapshot as plan_activity_title')
             ->selectRaw('records.responsible_user_id as responsible_user_id')
             ->selectRaw('records.responsible_name_snapshot as responsible_name')
-            ->selectRaw("jsonb_build_object('ration_description', records.ration_description, 'finished_feed_product', records.finished_feed_product_snapshot, 'notes', records.notes) as module_data");
+            ->selectRaw("jsonb_build_object('ration_description', records.ration_description, 'finished_feed_product', records.finished_feed_product_snapshot, 'feed_recipe', records.feed_recipe_snapshot, 'daily_quantity_grams', records.daily_quantity_grams::text, 'notes', records.notes) as module_data");
 
         return $this->applyScopes($query, $scopes)
             ->selectRaw($this->scopeCaseSql($scopes, false, 'provenance'), $this->scopeCaseBindings($scopes, false, includeProvenance: true))

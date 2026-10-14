@@ -2,6 +2,7 @@
 
 namespace App\Actions\ManagementPlans;
 
+use App\Actions\Inventory\InitializeFlockFeedingAction;
 use App\Exceptions\Lots\LotsConflict;
 use App\Models\Lots\Flock;
 use App\Models\ManagementPlans\FlockPlan;
@@ -22,10 +23,10 @@ final readonly class AssignFlockPlanAction
     private const ACTIVITY_FIELDS = [
         'sort_order', 'type', 'title', 'timing_kind', 'start_day', 'end_day',
         'start_week', 'end_week', 'interval_days', 'conditional', 'condition',
-        'notes', 'catalog_type', 'catalog_id', 'catalog_snapshot',
+        'notes', 'catalog_type', 'catalog_id', 'catalog_snapshot', 'feed_recipe_id', 'grams_per_bird',
     ];
 
-    public function __construct(private LotsHistory $history) {}
+    public function __construct(private LotsHistory $history, private InitializeFlockFeedingAction $feeding) {}
 
     public function assignPublished(Flock $flock, string $templatePublicId, int $version, User $actor, string $operationId, string $source = 'api'): void
     {
@@ -47,6 +48,7 @@ final readonly class AssignFlockPlanAction
         foreach ($templateVersion->activities as $activity) {
             $this->copyActivity($revision, $activity, ['source_template_activity_id' => $activity->id]);
         }
+        $this->feeding->execute($flock, $revision, $actor, $operationId, $source);
         $this->audit($plan, $flock, $actor, $operationId, 'flock_plan_assigned', $source);
     }
 
@@ -69,8 +71,8 @@ final readonly class AssignFlockPlanAction
         $revision = $this->createRevision($plan, $actor, $operationId, 'Copia de actividades futuras al fraccionar el lote.');
         $sortOrder = 0;
         foreach ($current->activities as $activity) {
-            if (! $this->isFuture($activity, $currentDay, $currentWeek)
-                || ($activity->timing_kind !== 'day_recurrence' && isset($executedActivities[$activity->id]))) {
+            if ($activity->type !== 'ration_change' && (! $this->isFuture($activity, $currentDay, $currentWeek)
+                || ($activity->timing_kind !== 'day_recurrence' && isset($executedActivities[$activity->id])))) {
                 continue;
             }
             $overrides = [
@@ -83,6 +85,7 @@ final readonly class AssignFlockPlanAction
             }
             $this->copyActivity($revision, $activity, $overrides);
         }
+        $this->feeding->execute($destinationFlock, $revision, $actor, $operationId, $source, $sourceFlock, $occurredAt);
         $this->audit($plan, $destinationFlock, $actor, $operationId, 'flock_plan_inherited', $source);
     }
 

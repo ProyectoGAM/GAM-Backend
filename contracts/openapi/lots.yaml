@@ -245,7 +245,7 @@ paths:
       tags: ["Redistribuciones"]
       operationId: "redistributeFlock"
       summary: "Redistribuye, une o traslada un lote"
-      description: "Permiso requerido: flocks.redistribute. plan_activity_id es opcional y sólo puede identificar una actividad flock_movement vigente del plan del lote origen; nunca se asocia por fecha o tipo. Una redistribución parcial que crea un lote nuevo copia al plan de destino las actividades futuras del plan origen y conserva su fecha de referencia; los manejos ya realizados aparecen como antecedentes con su operación original. Incorporar aves a un lote receptor existente no modifica el plan de ese receptor. Un traslado total conserva la identidad y el plan del lote. Si la cantidad coincide con todas las aves y se indica un receptor, finaliza el origen y conserva los datos del receptor; sin receptor, traslada el mismo lote a otro galpón. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: flocks.redistribute. plan_activity_id es opcional y sólo puede identificar una actividad flock_movement vigente del plan del lote origen; nunca se asocia por fecha o tipo. Una redistribución parcial que crea un lote nuevo copia al plan de destino las actividades futuras del plan origen y conserva su fecha de referencia; los manejos ya realizados aparecen como antecedentes con su operación original. Incorporar aves a un lote receptor existente no modifica el plan de ese receptor. Un traslado total conserva la identidad y el plan del lote. Si la cantidad coincide con todas las aves y se indica un receptor, finaliza el origen y conserva los datos del receptor; sin receptor, traslada el mismo lote a otro galpón. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original. No se permiten movimientos entre UP; fraccionar conserva edad y alimentación, agrupar conserva el modo y plan del receptor."
       x-permission: "flocks.redistribute"
       parameters:
         -
@@ -280,7 +280,7 @@ paths:
       tags: ["Redistribuciones"]
       operationId: "reverseRedistribution"
       summary: "Compensa una redistribución sin actividad posterior"
-      description: "Permiso requerido: flocks.redistribute. Sólo se permite cuando ningún lote involucrado tiene actividad de negocio posterior, la operación histórica es verificable y el galpón requerido para devolver las aves está libre, operativo y tiene capacidad. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: flocks.redistribute. Sólo se permite cuando ningún lote involucrado tiene actividad de negocio posterior, la operación histórica es verificable y el galpón requerido para devolver las aves está libre, operativo y tiene capacidad. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original. No se permiten movimientos entre UP; fraccionar conserva edad y alimentación, agrupar conserva el modo y plan del receptor."
       x-permission: "flocks.redistribute"
       parameters:
         -
@@ -1715,6 +1715,7 @@ components:
     CreateFlock:
       type: "object"
       additionalProperties: false
+      description: "La fecha de ingreso debe coincidir con el día del registro en America/Montevideo; no se admiten fechas anteriores ni futuras."
       required: ["code", "breed_id", "poultry_house_id", "initial_quantity", "entry_date", "plan_template_id", "plan_template_version"]
       properties:
         id:
@@ -1749,7 +1750,7 @@ components:
         plan_template_id:
           type: "string"
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
-          description: "Plantilla publicada elegida para crear la copia propia del lote."
+          description: "Plantilla publicada con exactamente una alimentación inicial (día 1 o semana 1), receta y gramos positivos; su copia inicializa alimentación automática."
         plan_template_version:
           type: "integer"
           minimum: 1

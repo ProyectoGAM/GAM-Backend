@@ -141,8 +141,8 @@ final readonly class UpdateProductAction
                     ? (bool) $attributes[$attribute] !== $current
                     : (string) $attributes[$attribute] !== (string) $current;
             });
-        if ($hasHistory && $changedIngredientAttribute) {
-            throw new SuppliersAndCatalogsConflict('Una materia prima con historial no puede cambiar de tipo, unidad base ni control de stock.');
+        if ($changedIngredientAttribute && ($hasHistory || $product->recipeIngredients()->exists())) {
+            throw new SuppliersAndCatalogsConflict('Una materia prima con historial o vinculada a una receta no puede cambiar de tipo, unidad base ni control de stock.');
         }
     }
 

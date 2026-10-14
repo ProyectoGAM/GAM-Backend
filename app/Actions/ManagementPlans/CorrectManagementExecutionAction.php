@@ -136,7 +136,7 @@ final readonly class CorrectManagementExecutionAction
         $keys = match ($executionType) {
             'vaccination' => ['public_id', 'operation_id', 'flock_id', 'plan_activity_id', 'plan_activity_title_snapshot', 'vaccine_snapshot', 'product_snapshot', 'occurred_at', 'responsible_name_snapshot', 'notes', 'inventory_quantity', 'stock_location_name_snapshot', 'inventory_movement_id'],
             'medication' => ['public_id', 'operation_id', 'flock_id', 'plan_activity_id', 'plan_activity_title_snapshot', 'medicine_public_id_snapshot', 'medicine_name_snapshot', 'medicine_description_snapshot', 'supplier_name_snapshot', 'occurred_at', 'responsible_name_snapshot', 'quantity', 'reason', 'notes', 'stock_movement_id'],
-            'ration_change' => ['public_id', 'operation_id', 'flock_id', 'plan_activity_id', 'plan_activity_title_snapshot', 'ration_description', 'finished_feed_product_snapshot', 'occurred_at', 'responsible_name_snapshot', 'notes'],
+            'ration_change' => ['public_id', 'operation_id', 'flock_id', 'plan_activity_id', 'plan_activity_title_snapshot', 'ration_description', 'finished_feed_product_snapshot', 'feed_recipe_snapshot', 'daily_quantity_grams', 'occurred_at', 'responsible_name_snapshot', 'notes'],
             'manual_practice' => ['public_id', 'operation_id', 'flock_id', 'plan_activity_id', 'plan_activity_title_snapshot', 'practice_type', 'practice_title_snapshot', 'occurred_at', 'responsible_name_snapshot', 'notes'],
             default => [],
         };

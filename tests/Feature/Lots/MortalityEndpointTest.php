@@ -510,7 +510,7 @@ final class MortalityEndpointTest extends LotsTestCase
         $created = $this->command('POST', "/flocks/{$flock->public_id}/mortalities", [
             'version' => 1, 'quantity' => 1, 'notes' => 'Motivo registrado', 'occurred_at' => '2026-08-25T01:00:00+00:00',
         ])->assertCreated();
-        $newHouse = PoultryHouse::factory()->create();
+        $newHouse = PoultryHouse::factory()->create(['production_unit_id' => $flock->production_unit_id]);
         $this->command('POST', "/flocks/{$flock->public_id}/redistributions", [
             'version' => 2, 'quantity' => 9, 'destination_poultry_house_id' => $newHouse->id,
         ])->assertCreated();
@@ -634,7 +634,7 @@ final class MortalityEndpointTest extends LotsTestCase
             'version' => 1, 'quantity' => 1, 'notes' => 'Causa inicial', 'occurred_at' => '2026-10-10T12:00:00Z',
         ])->assertCreated();
         $originalMovement = FlockMovement::query()->firstOrFail()->getAttributes();
-        $destination = PoultryHouse::factory()->create();
+        $destination = PoultryHouse::factory()->create(['production_unit_id' => $flock->production_unit_id]);
         $this->command('POST', "/flocks/{$flock->public_id}/redistributions", [
             'version' => 2, 'quantity' => 9, 'destination_poultry_house_id' => $destination->id,
         ])->assertCreated();
