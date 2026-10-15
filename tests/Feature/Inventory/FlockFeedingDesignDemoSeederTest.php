@@ -87,8 +87,8 @@ final class FlockFeedingDesignDemoSeederTest extends TestCase
         $this->app->instance('env', 'production');
         config(['app.demo_db_reset_enabled' => true]);
 
-        // Mutación: la ejecución debe salir antes de consultar catálogos o crear registros.
-        $this->seed(FlockFeedingDesignDemoSeeder::class);
+        // Mutación: invoca el seeder con sus dependencias sin la confirmación de Artisan en producción.
+        $this->app->call([new FlockFeedingDesignDemoSeeder, 'run']);
         $this->assertDatabaseMissing('flocks', ['code' => 'LOT-FEED-TEST']);
         $this->assertDatabaseCount('flock_feeding_changes', 0);
     }
