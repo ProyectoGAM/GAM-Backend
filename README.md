@@ -118,6 +118,8 @@ El catálogo global de recetas incluye una combinación demo de maíz y soja. Su
 
 Para probar la pantalla de pesajes con un lote de 60 semanas y jornadas con anomalías, ejecutá el fixture local optativo `LOT-PESAJE-TEST`. El comando y los datos que crea se encuentran desde el [índice de implementaciones](docs/implementations/README.md). Es repetible sin duplicar ingresos.
 
+Para probar planes de manejo y alimentación con registros, el fixture local optativo `LOT-FEED-TEST` crea 120 aves, un plan publicado, prácticas, vacunación, siete consumos y una rectificación. El comando y su efecto en el stock están en la [guía de alimentación](docs/implementations/flock-feeding-implementation.md#fixture-local-lot-feed-test). Repetirlo conserva los datos existentes.
+
 ## Reset temporal de la demo en VPS
 
 El workflow de release conserva la creación de tags y despliega el SHA exacto de cada push a `main`. Sólo solicita el reset cuando GitHub encuentra un PR asociado a ese SHA que está mergeado, apunta a `main` y tiene ese mismo `merge_commit_sha`. Los pushes directos, PRs hacia otras ramas y `workflow_dispatch` despliegan con migraciones normales y no resetean la base.

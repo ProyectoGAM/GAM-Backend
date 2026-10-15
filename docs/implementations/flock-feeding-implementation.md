@@ -110,6 +110,24 @@ Las Actions escriben con `AuditRecorder` y `AuditEntryData` dentro de la misma t
 
 Los seeders ordinarios de lotes usan ingreso del día y movimientos sólo dentro de la UP. Los fixtures optativos de historial de huevos y diseño de pesajes, y el lote histórico de alimentación, simulan cronológicamente el reloj del alta en su día y lo restablecen; no introducen una excepción al ingreso ni aceptan altas retroactivas en la API. Se preservan los datos existentes al repetir seeders.
 
+## Fixture local `LOT-FEED-TEST`
+
+`FlockFeedingDesignDemoSeeder` es optativo y exclusivo de `local`, incluso cuando producción tiene habilitados los datos demo. Requiere el administrador configurado con permisos de lotes y planes, una UP activa, una raza activa, una receta activa y una vacuna activa. Reutiliza esos catálogos; crea un galpón de capacidad física 120, un lote de 120 aves y una plantilla publicada independiente, copiada al plan del lote.
+
+```powershell
+docker compose -f compose.dev.yaml exec -T api php artisan db:seed --class='Database\Seeders\Inventory\FlockFeedingDesignDemoSeeder' --no-interaction
+```
+
+El ingreso se simula siete días antes de la ejecución en America/Montevideo. El plan tiene seis actividades: alimentación desde los días 1, 4 y 8 a 40, 60 y 80 g/ave, dos prácticas de control y una vacunación. Las prácticas y la vacunación quedan registradas y vinculadas a sus actividades copiadas. Un cambio de ración vinculado al plan aplica 8500 g/día en modo manual desde el día 5; el día 7 vuelve a automático. Desde el día 8 la estimación vigente es 9600 g/día.
+
+Se crean siete consumos originales de 4800, 4800, 4800, 7200, 8500, 8500 y 7200 g. La sexta jornada tiene una rectificación a 8200 g, con devolución compensatoria de 300 g. El consumo neto inicial es **45500 g** sobre el saldo de alimento de la receta y UP; puede dejarlo negativo según la regla vigente. No se simula elaboración ni se descuenta inventario de vacuna.
+
+Todas las escrituras usan las Actions existentes con auditoría síncrona y quedan dentro de una transacción global. Una falla revierte el fixture completo y el reloj siempre se restablece. El bloqueo del administrador serializa reintentos; las operaciones tienen claves UUID estables. Si ya existe `LOT-FEED-TEST`, la carga sale sin modificar sus registros, configuración, saldos ni cambios posteriores del usuario. No se agrega a la carga automática ni modifica endpoints, permisos, esquema o dependencias.
+
+La prueba `tests/Feature/Inventory/FlockFeedingDesignDemoSeederTest.php` verifica el plan copiado, manejos vinculados, siete jornadas, compensación, saldo, auditoría, restauración del reloj, repetición otro día y exclusión de producción. Se ejecuta en PostgreSQL aislado con nombre terminado en `_testing`.
+
+Verificación del fixture: **2 pruebas y 21 aserciones** aprobadas en `gam_feed_fixture_testing`; Pint y PHPStan nivel 5 del seeder aprobados. Pint se ejecutó con rutas explícitas porque el contenedor no tiene Git y con `sys_temp_dir=/dev/shm` por falta de espacio en `/tmp`. Para la carga local se aplicó la migración existente pendiente `2026_10_12_223401_add_reporting_business_context`, necesaria para las Actions de manejo; el primer intento se revirtió completamente al detectar las columnas faltantes. La carga posterior se ejecutó correctamente. No se reinicializó la base local.
+
 ## Verificación
 
 Versiones verificadas: PHP 8.5.10, Laravel 13.29.0, PHPUnit 12.5.34, Brick Math 0.18.0 y Symfony YAML 8.1.5; documentación de transacciones, locks, validación y scheduler consultada mediante Laravel Boost. El esquema existente se consultó con `database-schema`. Referencia técnica: [documentación oficial de Laravel 13 sobre transacciones](https://laravel.com/framework/docs/13.x/database#database-transactions).
