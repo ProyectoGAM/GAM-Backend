@@ -98,7 +98,7 @@ Para la comprobación adicional con un pepper temporal no persistido, reemplazá
 No ejecutes `docker compose down -v`: elimina los volúmenes y los datos existentes.
 ## Datos de prueba locales
 
-Cuando `APP_ENV=local`, `DatabaseSeeder` ejecuta también `LocalDemoDataSeeder` y carga datos ficticios pero coherentes de granjas, galpones avícolas y plantas de ración, proveedores, productos, medicamentos, inventario, reservas, reportes, una plantilla publicada de plan de manejo y lotes con redistribuciones, mortalidad, recolección y pesajes. La carga es idempotente y no se ejecuta en otros ambientes.
+Cuando `APP_ENV=local`, `DatabaseSeeder` ejecuta también `LocalDemoDataSeeder` y carga datos ficticios pero coherentes de granjas, galpones avícolas y plantas de ración, proveedores, productos, medicamentos, inventario, reservas, reportes, una plantilla publicada de plan de manejo y lotes con redistribuciones, mortalidad, recolección y pesajes. La carga es idempotente y también se habilita en `production` únicamente con `DEMO_DB_RESET_ENABLED=true`, según el procedimiento de demo descrito más abajo.
 
 Para reconstruir la base local desde cero:
 
@@ -116,9 +116,9 @@ Cada módulo nuevo debe incluir su seeder de datos demo y registrarlo en `LocalD
 
 El catálogo global de recetas incluye una combinación demo de maíz y soja. Su alta y cálculo no modifican stock. El segundo bloque agrega elaboración inmediata, cancelación compensatoria, ajustes independientes y alimento acumulado por receta y UP. La demo incluye una elaboración cancelada y un recuento independiente de alimento. El contrato y los pasos de uso están en la [guía de recetas](docs/implementations/feed-recipes-implementation.md). El tercer bloque agrega [alimentación de lotes](docs/implementations/flock-feeding-implementation.md), con etapas copiadas, modo manual fijo, consumo a medianoche de Montevideo, recuperación y rectificaciones. La demo oficial incluye tres jornadas y una rectificación auditada.
 
-Para probar la pantalla de pesajes con un lote de 60 semanas y jornadas con anomalías, ejecutá el fixture local optativo `LOT-PESAJE-TEST`. El comando y los datos que crea se encuentran desde el [índice de implementaciones](docs/implementations/README.md). Es repetible sin duplicar ingresos.
+La carga general incluye `LOT-EGG-TEST` con ocho semanas de postura y pesajes, y `LOT-PESAJE-TEST` con un lote de 60 semanas y jornadas con anomalías. Los datos y comandos para repetir cada seeder están en las guías de [postura](docs/implementations/egg-production-implementation.md#fixture-demo-lot-egg-test) y [pesajes diarios](docs/implementations/daily-weighing-implementation.md#fixture-demo-para-diseño-del-frontend).
 
-Para probar planes de manejo y alimentación con registros, el fixture local optativo `LOT-FEED-TEST` crea 120 aves, un plan publicado, prácticas, vacunación, siete consumos y una rectificación. El comando y su efecto en el stock están en la [guía de alimentación](docs/implementations/flock-feeding-implementation.md#fixture-local-lot-feed-test). Repetirlo conserva los datos existentes.
+La carga general también incluye `LOT-FEED-TEST` con 120 aves, un plan publicado, prácticas, vacunación, siete consumos y una rectificación. El comando y su efecto en el stock están en la [guía de alimentación](docs/implementations/flock-feeding-implementation.md#fixture-demo-lot-feed-test). Repetirlo conserva los datos existentes. Los tres fixtures recientes se ejecutan después de los demos básicos y de reportes, tanto en local como en producción con la opción demo habilitada.
 
 ## Reset temporal de la demo en VPS
 

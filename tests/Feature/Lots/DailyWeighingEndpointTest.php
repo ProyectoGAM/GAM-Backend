@@ -33,6 +33,29 @@ final class DailyWeighingEndpointTest extends LotsTestCase
         $this->assertDatabaseHas('activity_log', ['event' => 'daily_weighing_entry_added']);
     }
 
+    /** Conserva identificadores consultables al registrar con eventos silenciados como en el seeder general. */
+    public function test_daily_weighing_is_created_and_can_be_read_without_model_events(): void
+    {
+        // Preparación: crea usuario y lote antes de silenciar los eventos del registro.
+        $this->travelTo(CarbonImmutable::parse('2026-10-20 12:00:00', 'America/Montevideo'));
+        $this->signIn(['weighings.view', 'weighings.manage']);
+        $flock = $this->flockWithHistory(20);
+
+        // Request: reproduce la supresión de eventos que heredan los seeders del DatabaseSeeder.
+        $created = DailyWeighing::withoutEvents(fn () => $this->command('POST', '/lotes/'.$flock->public_id.'/pesajes-diarios/ingresos', [
+            'mode' => 'individual', 'weight' => '20.0',
+        ]))->assertCreated();
+
+        // Consulta: comprueba persistencia, lectura por identificador público y auditoría síncrona.
+        $id = $created->json('data.daily_weighing.id');
+        $this->assertDatabaseHas('daily_weighings', ['public_id' => $id, 'flock_id' => $flock->id, 'represented_bird_count' => 1]);
+        $this->assertDatabaseCount('daily_weighing_entries', 1);
+        $this->assertDatabaseHas('activity_log', ['event' => 'daily_weighing_entry_added']);
+        $this->getJson('/api/v1/pesajes-diarios/'.$id)->assertOk()
+            ->assertJsonPath('data.average_weight_g', '20.000000')
+            ->assertJsonCount(1, 'data.entries');
+    }
+
     /** Exige confirmación de un promedio grupal fuera del rango y no guarda el intento cancelado. */
     public function test_out_of_range_conflict_has_no_effect_until_confirmed(): void
     {
