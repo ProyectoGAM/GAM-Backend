@@ -46,7 +46,7 @@ final class FlockFeedingDesignDemoSeeder extends Seeder
         RecordDailyFeedConsumptionAction $daily,
         CorrectFeedConsumptionAction $correct,
     ): void {
-        if (! app()->environment('local')) {
+        if (! app()->environment('local') && ! (app()->environment('production') && config('app.demo_db_reset_enabled'))) {
             return;
         }
 

@@ -75,18 +75,20 @@ La cobertura está en [DailyWeighingEndpointTest](../../tests/Feature/Lots/Daily
 
 La ejecución focalizada del 2026-10-07 aprobó 38 pruebas y 551 aserciones en PostgreSQL aislado. Tras ajustar las rutas públicas a `/lotes`, las pruebas afectadas y la prueba multiproceso volvieron a pasar. Pint y `git diff --check` finalizaron sin errores. Larastan no señaló problemas en este cambio; conserva dos avisos previos en `RecordInventoryMovementAction`.
 
-## Fixture local para diseño del frontend
+## Fixture demo para diseño del frontend
 
 `WeighingDesignDemoSeeder` crea el lote `LOT-PESAJE-TEST` en **semana 60** al momento de la primera carga. Busca un galpón avícola operativo y desocupado en una UP activa; si no existe, crea el galpón y, si hace falta, la UP mediante sus Actions auditadas. Usa un plan publicado y una raza activa. Nunca reemplaza un lote existente con ese código.
 
 El fixture carga seis jornadas durante los últimos 28 días, incluida la fecha local de la primera carga: **72 ingresos** (60 individuales y 12 grupales), con **7 ingresos anómalos confirmados**. La jornada más reciente contiene dos anomalías. Cada jornada representa 22 aves, conserva el rango capturado y ofrece suficientes pesos individuales distintos para el histograma y la curva. Los pesos se generan dentro o fuera del rango vigente según corresponda. Los ingresos pasan por `AddDailyWeighingEntryAction`, por lo que los agregados, la idempotencia y la auditoría son los mismos que en la API. La auditoría identifica el origen `seeder`.
 
-Es un fixture **optativo y sólo local**; no forma parte del seeding general ni del reset demo de producción. Tras migrar y cargar los datos base locales, se ejecuta con:
+Desde el 20 de octubre de 2026 forma parte de `LocalDemoDataSeeder`, después de los demos básicos y reportes. Se carga automáticamente en `local` y en `production` únicamente con `DEMO_DB_RESET_ENABLED=true`. Conserva las Actions, permisos, auditoría e idempotencia existentes; no cambia endpoints, contratos OpenAPI, esquema ni dependencias. También puede repetirse individualmente en local con:
 
 ```bash
 docker compose -f compose.dev.yaml exec -T api php artisan db:seed --class='Database\Seeders\Lots\WeighingDesignDemoSeeder' --no-interaction
 ```
 
 Una segunda ejecución no duplica jornadas ni ingresos. La fecha de referencia queda fijada por la fecha de ingreso del lote, así que el fixture envejece naturalmente si se conserva la base varios días. La cobertura focalizada está en [WeighingDesignDemoSeederTest](../../tests/Feature/Lots/WeighingDesignDemoSeederTest.php).
+
+La cobertura de integración comprueba la carga general local y el seed de producción con la opción demo activa; la guarda individual excluye producción cuando está apagada. En esta actualización no se pudieron ejecutar PHPUnit ni Pint porque Docker Desktop no estaba disponible y el equipo no dispone de PHP ni dependencias instaladas fuera de Docker.
 
 El 2026-10-07 pasaron sus tres pruebas (16 aserciones), incluido el escenario sin galpón disponible. La carga en la base local `gam` confirmó seis jornadas, 72 ingresos y siete anomalías; las 72 altas quedaron auditadas con origen `seeder`.

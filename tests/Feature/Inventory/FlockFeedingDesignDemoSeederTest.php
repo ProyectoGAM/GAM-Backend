@@ -32,11 +32,9 @@ final class FlockFeedingDesignDemoSeederTest extends TestCase
         $this->travelTo(CarbonImmutable::parse('2026-10-14 12:00', 'America/Montevideo'));
         $this->app->instance('env', 'local');
         Storage::fake('local');
-        $this->seed(DatabaseSeeder::class);
-        $beforeBalance = FeedBalance::query()->sum('quantity_grams');
 
-        // Mutación: ejecuta el fixture completo con las Actions y auditorías de negocio.
-        $this->seed(FlockFeedingDesignDemoSeeder::class);
+        // Mutación: la entrada general incluye el fixture con las Actions y auditorías de negocio.
+        $this->seed(DatabaseSeeder::class);
         $flock = Flock::query()->where('code', 'LOT-FEED-TEST')->firstOrFail();
         $this->assertSame(120, $flock->current_quantity);
         $this->assertSame('2026-10-07', $flock->entry_date->toDateString());
@@ -58,7 +56,7 @@ final class FlockFeedingDesignDemoSeederTest extends TestCase
         $this->assertSame(8500, $corrected->effective()['quantity_grams']);
         $this->assertDatabaseHas('feed_consumption_corrections', ['feed_consumption_id' => $consumptions->get(5)->id, 'quantity_grams' => 8200]);
         $this->assertSame(8, FeedConsumptionMovement::query()->whereIn('feed_consumption_id', $consumptions->modelKeys())->count());
-        $this->assertSame(45500, (int) $beforeBalance - (int) FeedBalance::query()->sum('quantity_grams'));
+        $this->assertSame(-45500, (int) FeedConsumptionMovement::query()->whereIn('feed_consumption_id', $consumptions->modelKeys())->sum('delta_grams'));
         $this->assertSame(7, DB::table('activity_log')->where('event', 'feed_consumption_recorded')->whereIn('subject_id', $consumptions->modelKeys())->count());
 
         // Mutación: repetir otro día conserva saldos, auditoría y registros modificables por el usuario.
@@ -79,13 +77,13 @@ final class FlockFeedingDesignDemoSeederTest extends TestCase
         $this->assertSame(1, Flock::query()->where('code', 'LOT-FEED-TEST')->count());
     }
 
-    // Flujo: el fixture optativo no modifica producción aunque esté habilitada la demo de despliegue.
-    public function test_fixture_is_skipped_outside_local(): void
+    // Flujo: el fixture no modifica producción cuando la demo de despliegue está apagada.
+    public function test_fixture_is_skipped_in_production_without_demo_enabled(): void
     {
-        // Preparación: simula producción sin dependencias y con la opción de demo activa.
+        // Preparación: simula producción sin dependencias y con la opción de demo apagada.
         $this->assertDatabaseCount('flocks', 0);
         $this->app->instance('env', 'production');
-        config(['app.demo_db_reset_enabled' => true]);
+        config(['app.demo_db_reset_enabled' => false]);
 
         // Mutación: invoca el seeder con sus dependencias sin la confirmación de Artisan en producción.
         $this->app->call([new FlockFeedingDesignDemoSeeder, 'run']);

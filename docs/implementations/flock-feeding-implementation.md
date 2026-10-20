@@ -108,11 +108,11 @@ Las Actions escriben con `AuditRecorder` y `AuditEntryData` dentro de la misma t
 
 `FlockFeedingDemoSeeder` está integrado en la entrada oficial. Incluye un lote `DEMO-FEEDING`, tres jornadas (automático 4000 g, manual 6500 g, automático 4000 g) y una rectificación del manual a 6000 g. Repetirlo conserva operaciones, saldos e historia.
 
-Los seeders ordinarios de lotes usan ingreso del día y movimientos sólo dentro de la UP. Los fixtures optativos de historial de huevos y diseño de pesajes, y el lote histórico de alimentación, simulan cronológicamente el reloj del alta en su día y lo restablecen; no introducen una excepción al ingreso ni aceptan altas retroactivas en la API. Se preservan los datos existentes al repetir seeders.
+Los seeders ordinarios de lotes usan ingreso del día y movimientos sólo dentro de la UP. Los fixtures demo de historial de huevos y diseño de pesajes, y el lote histórico de alimentación, simulan cronológicamente el reloj del alta en su día y lo restablecen; no introducen una excepción al ingreso ni aceptan altas retroactivas en la API. Se preservan los datos existentes al repetir seeders.
 
-## Fixture local `LOT-FEED-TEST`
+## Fixture demo `LOT-FEED-TEST`
 
-`FlockFeedingDesignDemoSeeder` es optativo y exclusivo de `local`, incluso cuando producción tiene habilitados los datos demo. Requiere el administrador configurado con permisos de lotes y planes, una UP activa, una raza activa, una receta activa y una vacuna activa. Reutiliza esos catálogos; crea un galpón de capacidad física 120, un lote de 120 aves y una plantilla publicada independiente, copiada al plan del lote.
+Desde el 20 de octubre de 2026, `FlockFeedingDesignDemoSeeder` forma parte de `LocalDemoDataSeeder`, después de los demos básicos y reportes. Se carga automáticamente en `local` y en `production` únicamente con `DEMO_DB_RESET_ENABLED=true`. Requiere el administrador configurado con permisos de lotes y planes, una UP activa, una raza activa, una receta activa y una vacuna activa. Reutiliza esos catálogos; crea un galpón de capacidad física 120, un lote de 120 aves y una plantilla publicada independiente, copiada al plan del lote. El comando individual local sigue disponible:
 
 ```powershell
 docker compose -f compose.dev.yaml exec -T api php artisan db:seed --class='Database\Seeders\Inventory\FlockFeedingDesignDemoSeeder' --no-interaction
@@ -122,9 +122,9 @@ El ingreso se simula siete días antes de la ejecución en America/Montevideo. E
 
 Se crean siete consumos originales de 4800, 4800, 4800, 7200, 8500, 8500 y 7200 g. La sexta jornada tiene una rectificación a 8200 g, con devolución compensatoria de 300 g. El consumo neto inicial es **45500 g** sobre el saldo de alimento de la receta y UP; puede dejarlo negativo según la regla vigente. No se simula elaboración ni se descuenta inventario de vacuna.
 
-Todas las escrituras usan las Actions existentes con auditoría síncrona y quedan dentro de una transacción global. Una falla revierte el fixture completo y el reloj siempre se restablece. El bloqueo del administrador serializa reintentos; las operaciones tienen claves UUID estables. Si ya existe `LOT-FEED-TEST`, la carga sale sin modificar sus registros, configuración, saldos ni cambios posteriores del usuario. No se agrega a la carga automática ni modifica endpoints, permisos, esquema o dependencias.
+Todas las escrituras usan las Actions existentes con auditoría síncrona y quedan dentro de una transacción global. Una falla revierte el fixture completo y el reloj siempre se restablece. El bloqueo del administrador serializa reintentos; las operaciones tienen claves UUID estables. Si ya existe `LOT-FEED-TEST`, la carga sale sin modificar sus registros, configuración, saldos ni cambios posteriores del usuario. La integración no modifica endpoints, contratos OpenAPI, permisos, esquema o dependencias.
 
-La prueba `tests/Feature/Inventory/FlockFeedingDesignDemoSeederTest.php` verifica el plan copiado, manejos vinculados, siete jornadas, compensación, saldo, auditoría, restauración del reloj, repetición otro día y exclusión de producción. Se ejecuta en PostgreSQL aislado con nombre terminado en `_testing`.
+La prueba `tests/Feature/Inventory/FlockFeedingDesignDemoSeederTest.php` verifica la carga general local, el plan copiado, manejos vinculados, siete jornadas, compensación, débito neto, auditoría, restauración del reloj, repetición otro día y exclusión de producción sin la opción demo. `AdminSeederTest` comprueba la inclusión con esa opción activa. Se ejecuta en PostgreSQL aislado con nombre terminado en `_testing`. En esta actualización no se pudieron ejecutar PHPUnit ni Pint porque Docker Desktop no estaba disponible y no hay PHP ni dependencias instaladas fuera de Docker.
 
 La comprobación de exclusión en producción invoca `run` mediante el contenedor de Laravel, igual que el fixture de pesajes. Así ejecuta realmente la guarda de entorno del seeder con sus dependencias y no depende de la confirmación interactiva de `db:seed`. La llamada anterior a `$this->seed()` podía fallar en la suite completa con `OutputStyle::askQuestion()` al simular producción. Las pruebas del historial en local conservan la entrada normal de seeding; no cambian los datos del fixture ni los contratos de la API.
 

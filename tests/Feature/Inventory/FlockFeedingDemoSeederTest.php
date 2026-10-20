@@ -29,8 +29,8 @@ final class FlockFeedingDemoSeederTest extends TestCase
 
         // Mutación: carga la demo oficial y conserva el estado observable.
         $this->seed(DatabaseSeeder::class);
-        $this->assertDatabaseCount('feed_consumptions', 3);
-        $this->assertDatabaseCount('feed_consumption_corrections', 1);
+        $this->assertDatabaseCount('feed_consumptions', 10);
+        $this->assertDatabaseCount('feed_consumption_corrections', 2);
         $this->assertDatabaseHas('feed_consumptions', ['mode' => 'manual', 'quantity_grams' => 6500]);
         $this->assertDatabaseHas('feed_consumption_corrections', ['quantity_grams' => 6000]);
         $before = [

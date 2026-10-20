@@ -3,11 +3,14 @@
 namespace Tests\Feature\Lots;
 
 use App\Models\FarmStructure\PoultryHouse;
+use App\Models\Lots\Breed;
 use App\Models\Lots\DailyWeighing;
 use App\Models\Lots\DailyWeighingEntry;
 use App\Models\Lots\Flock;
+use App\Models\ManagementPlans\PlanTemplate;
 use App\ValueObjects\Lots\FlockAge;
 use Carbon\CarbonImmutable;
+use Database\Seeders\AdminUserSeeder;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\Lots\WeighingDesignDemoSeeder;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -26,10 +29,9 @@ final class WeighingDesignDemoSeederTest extends TestCase
         $this->travelTo(CarbonImmutable::parse('2026-10-07 12:00:00', 'America/Montevideo'));
         $this->app->instance('env', 'local');
         Storage::fake('local');
-        $this->seed(DatabaseSeeder::class);
 
-        // Mutación: siembra el lote y sus ingresos a través de las Actions reales.
-        $this->seed(WeighingDesignDemoSeeder::class);
+        // Mutación: la entrada general siembra también el lote y sus ingresos mediante las Actions reales.
+        $this->seed(DatabaseSeeder::class);
         $flock = Flock::query()->where('code', 'LOT-PESAJE-TEST')->firstOrFail();
         $this->assertSame(60, FlockAge::on($flock->entry_date->toDateString(), CarbonImmutable::now(), config('lots.timezone'))->week);
         $this->assertSame(120, $flock->current_quantity);
@@ -40,7 +42,7 @@ final class WeighingDesignDemoSeederTest extends TestCase
         $today = DailyWeighing::query()->where('flock_id', $flock->id)->whereDate('local_date', '2026-10-07')->firstOrFail();
         $this->assertSame(22, $today->represented_bird_count);
         $this->assertSame(2, $today->anomalous_entry_count);
-        $this->assertSame(72, DB::table('activity_log')->where('event', 'daily_weighing_entry_added')->where('source', 'seeder')->count());
+        $this->assertSame(72, DB::table('activity_log')->where('event', 'daily_weighing_entry_added')->where('source', 'seeder')->whereIn('subject_id', DailyWeighing::query()->where('flock_id', $flock->id)->pluck('id'))->count());
 
         // Mutación: repetir la carga conserva las mismas jornadas e ingresos.
         $before = DailyWeighing::query()->where('flock_id', $flock->id)->orderBy('id')->get()->toArray();
@@ -49,11 +51,12 @@ final class WeighingDesignDemoSeederTest extends TestCase
         $this->assertSame(72, DailyWeighingEntry::query()->whereHas('dailyWeighing', fn ($query) => $query->where('flock_id', $flock->id))->count());
     }
 
-    // Flujo: el fixture de diseño queda limitado al entorno local.
-    public function test_design_seeder_does_not_create_a_lot_outside_local(): void
+    // Flujo: producción sin la opción de demo no recibe el lote de pesajes.
+    public function test_design_seeder_does_not_create_a_lot_in_production_without_demo_enabled(): void
     {
         // Preparación: usa la base aislada sin datos demo y simula producción.
         $this->app->instance('env', 'production');
+        config(['app.demo_db_reset_enabled' => false]);
 
         // Mutación: el seeder sale antes de buscar dependencias o crear registros.
         $this->app->call([new WeighingDesignDemoSeeder, 'run']);
@@ -63,13 +66,13 @@ final class WeighingDesignDemoSeederTest extends TestCase
     // Flujo: crea un galpón operativo cuando todos los existentes están ocupados o indisponibles.
     public function test_design_seeder_creates_house_when_none_is_available(): void
     {
-        // Preparación: carga la demo y retira de servicio los galpones que quedaron libres.
+        // Preparación: crea las dependencias con un único galpón fuera de servicio.
         $this->travelTo(CarbonImmutable::parse('2026-10-07 12:00:00', 'America/Montevideo'));
         $this->app->instance('env', 'local');
-        Storage::fake('local');
-        $this->seed(DatabaseSeeder::class);
-        $occupiedIds = Flock::query()->whereIn('status', ['active', 'quarantined'])->pluck('poultry_house_id');
-        PoultryHouse::query()->whereNotIn('id', $occupiedIds)->where('type', 'poultry')->update(['status' => 'maintenance']);
+        $this->seed(AdminUserSeeder::class);
+        Breed::factory()->create();
+        PlanTemplate::factory()->published()->create();
+        PoultryHouse::factory()->maintenance()->create();
 
         // Mutación: la carga crea una instalación apta y aloja allí el lote.
         $this->seed(WeighingDesignDemoSeeder::class);

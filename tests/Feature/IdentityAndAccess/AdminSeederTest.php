@@ -205,5 +205,8 @@ final class AdminSeederTest extends TestCase
         $this->assertTrue($admin->can('admin.dashboard.view'));
         $this->assertDatabaseHas('production_units', ['name' => 'Granja El Ombú']);
         $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-A']);
+        $this->assertDatabaseHas('flocks', ['code' => 'LOT-EGG-TEST', 'current_quantity' => 229]);
+        $this->assertDatabaseHas('flocks', ['code' => 'LOT-PESAJE-TEST', 'current_quantity' => 120]);
+        $this->assertDatabaseHas('flocks', ['code' => 'LOT-FEED-TEST', 'current_quantity' => 120]);
     }
 }
