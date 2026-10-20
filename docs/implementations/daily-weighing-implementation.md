@@ -92,3 +92,13 @@ Una segunda ejecución no duplica jornadas ni ingresos. La fecha de referencia q
 La cobertura de integración comprueba la carga general local y el seed de producción con la opción demo activa; la guarda individual excluye producción cuando está apagada. En esta actualización no se pudieron ejecutar PHPUnit ni Pint porque Docker Desktop no estaba disponible y el equipo no dispone de PHP ni dependencias instaladas fuera de Docker.
 
 El 2026-10-07 pasaron sus tres pruebas (16 aserciones), incluido el escenario sin galpón disponible. La carga en la base local `gam` confirmó seis jornadas, 72 ingresos y siete anomalías; las 72 altas quedaron auditadas con origen `seeder`.
+
+## Corrección de identificadores durante el seed general
+
+El CI del 20 de octubre de 2026 detectó 14 errores con la misma causa: `DatabaseSeeder` usa `WithoutModelEvents`, mientras que `DailyWeighing` generaba su `public_id` únicamente en el evento `creating`. Al incorporar el historial de huevos a la entrada general, la primera jornada intentaba guardarse sin identificador y PostgreSQL rechazaba la inserción por la restricción `NOT NULL`.
+
+`AddDailyWeighingEntryAction` ahora asigna el ULID de la jornada explícitamente al crearla, igual que ya hacía con sus ingresos. Se conserva el silenciamiento de eventos del seed general y el resto del flujo: permisos, idempotencia, transacción, agregados y auditoría síncrona. No hay cambios de endpoints, contratos OpenAPI, esquema, datos existentes ni dependencias.
+
+La regresión `test_daily_weighing_is_created_and_can_be_read_without_model_events` silencia los eventos después de preparar usuario y lote, registra un ingreso por HTTP y verifica persistencia, agregados, auditoría y lectura por identificador público. La primera ejecución pasó con una prueba y siete aserciones en `gam_testing`.
+
+La verificación focalizada posterior pasó **52 pruebas y 479 aserciones**, seleccionadas con `--filter='DemoSeederTest|AdminSeederTest|DailyWeighingEndpointTest' tests/Feature`, en PostgreSQL aislado `gam_testing` y con las variables del workflow de CI. Incluye los 14 casos que fallaban, la carga de producción con la opción demo habilitada y la repetición de seeders. PHPStan sobre la Action pasó sin errores con el nivel 0 usado por CI; la sintaxis PHP y `git diff --check` también aprobaron. Pint aprobó ambas rutas PHP explícitas; `--dirty` no está disponible porque el contenedor carece de Git. No se volvió a ejecutar la suite completa de 610 pruebas ni se modificó la base demo local o productiva.
