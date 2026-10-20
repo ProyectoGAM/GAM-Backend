@@ -74,6 +74,7 @@ final readonly class SavePlanTemplateAction
             if ($version->status !== 'draft') {
                 throw new LotsConflict('La versión actual no está en borrador.');
             }
+            $this->activities->validateInitialFeeding($version->activities->toArray());
             $before = $this->snapshot($current);
             if ($current->published_version !== null) {
                 PlanTemplateVersion::query()->where('plan_template_id', $current->id)
@@ -128,6 +129,7 @@ final readonly class SavePlanTemplateAction
     /** @param array<int, array<string, mixed>> $activities */
     private function version(PlanTemplate $template, int $number, string $name, ?string $description, array $activities, User $actor, string $operationId): PlanTemplateVersion
     {
+        $this->activities->validateInitialFeeding($activities);
         $version = new PlanTemplateVersion;
         $version->forceFill([
             'plan_template_id' => $template->id, 'number' => $number,
@@ -165,6 +167,7 @@ final readonly class SavePlanTemplateAction
                 'conditional' => $activity->conditional, 'condition' => $activity->condition,
                 'notes' => $activity->notes, 'catalog_type' => $activity->catalog_type,
                 'catalog_snapshot' => $activity->catalog_snapshot,
+                'feed_recipe_id' => $activity->feed_recipe_id, 'grams_per_bird' => $activity->grams_per_bird,
             ])->all(),
         ];
     }

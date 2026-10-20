@@ -49,7 +49,7 @@ final class FeedStockDemoSeederTest extends TestCase
         $this->assertSame('g', $soy->base_unit->value);
         $this->assertSame(['1240000.000000', '760000.000000'], StockBalance::query()->where('product_id', $corn->getKey())->orderBy('stock_location_id')->pluck('on_hand_quantity')->all());
         $this->assertSame(['680000.000000', '420000.000000'], StockBalance::query()->where('product_id', $soy->getKey())->orderBy('stock_location_id')->pluck('on_hand_quantity')->all());
-        $this->assertSame(12, InventoryMovementLine::query()->whereIn('product_id', [$corn->getKey(), $soy->getKey()])->count());
+        $this->assertSame(16, InventoryMovementLine::query()->whereIn('product_id', [$corn->getKey(), $soy->getKey()])->count());
         $this->assertSame(3, InventoryMovement::query()->whereIn('operation_id', [
             '00000000-0000-4000-8000-000000000001',
             '00000000-0000-4000-8000-000000000002',

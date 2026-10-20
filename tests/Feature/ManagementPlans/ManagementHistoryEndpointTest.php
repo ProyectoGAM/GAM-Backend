@@ -25,7 +25,7 @@ final class ManagementHistoryEndpointTest extends LotsTestCase
             'occurred_at' => now()->subMinute()->toIso8601String(),
             'notes' => 'Se colocaron los nidos previstos.',
         ])->assertCreated();
-        $house = PoultryHouse::factory()->create(['bird_capacity' => 50]);
+        $house = PoultryHouse::factory()->create(['bird_capacity' => 50, 'production_unit_id' => $source->production_unit_id]);
 
         // Request: crea el lote hijo y consulta su copia del plan.
         $split = $this->command('POST', '/flocks/'.$source->public_id.'/redistributions', [
@@ -37,7 +37,7 @@ final class ManagementHistoryEndpointTest extends LotsTestCase
         $plan = $this->getJson('/api/v1/flocks/'.$childId.'/plan-manejo')->assertOk();
 
         // Verificación: conserva el pesaje futuro y expone la práctica como antecedente.
-        $plan->assertJsonCount(1, 'data.revisions.0.activities')
+        $plan->assertJsonCount(2, 'data.revisions.0.activities')
             ->assertJsonPath('data.revisions.0.activities.0.title', 'Pesaje siguiente');
         $this->getJson('/api/v1/flocks/'.$childId.'/manejos?type=manual_practice')->assertOk()
             ->assertJsonPath('data.0.plan_activity_id', $practice->public_id)
@@ -59,7 +59,7 @@ final class ManagementHistoryEndpointTest extends LotsTestCase
             'medicine_id' => $medicine->public_id, 'quantity' => 1, 'reason' => 'Segundo manejo',
             'occurred_at' => now()->subMinutes(2)->toIso8601String(),
         ])->assertCreated();
-        $house = PoultryHouse::factory()->create(['bird_capacity' => 50]);
+        $house = PoultryHouse::factory()->create(['bird_capacity' => 50, 'production_unit_id' => $source->production_unit_id]);
 
         // Request: crea lote hijo con copia independiente del plan.
         $split = $this->command('POST', '/flocks/'.$source->public_id.'/redistributions', [

@@ -24,7 +24,7 @@ final class ReportExportWriterTest extends TestCase
         $export = $this->export(ReportExportFormat::Xlsx);
 
         // Acción: escribe el archivo con la fuente pública de prueba.
-        $file = (new ReportExportWriter)->write($export, $this->source(), $this->buildQuery());
+        $file = app(ReportExportWriter::class)->write($export, $this->source(), $this->buildQuery());
 
         // Verificación: confirma que el archivo se creó en la ruta privada registrada.
         Storage::disk('local')->assertExists($file['path']);
@@ -39,7 +39,7 @@ final class ReportExportWriterTest extends TestCase
         $export = $this->export(ReportExportFormat::Pdf);
 
         // Acción: escribe el PDF con la fuente pública de prueba.
-        $file = (new ReportExportWriter)->write($export, $this->source(), $this->buildQuery());
+        $file = app(ReportExportWriter::class)->write($export, $this->source(), $this->buildQuery());
 
         // Verificación: confirma que el archivo PDF quedó disponible en el disco privado.
         Storage::disk('local')->assertExists($file['path']);

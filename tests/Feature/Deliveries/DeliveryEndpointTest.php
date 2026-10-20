@@ -4,7 +4,9 @@ namespace Tests\Feature\Deliveries;
 
 use App\Models\Deliveries\Delivery;
 use App\Models\FarmStructure\ProductionUnit;
+use App\Models\Inventory\EggPresentation;
 use App\Models\User;
+use App\Queries\Inventory\GetEggStockBalanceQuery;
 use App\Services\IdentityAndAccess\PinHasher;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Str;
@@ -20,6 +22,8 @@ final class DeliveryEndpointTest extends TestCase
     /** @param list<string> $permissions */
     private function signIn(array $permissions): User
     {
+        // Preparación: configura precios de prueba, sin modificar datos de desarrollo.
+        EggPresentation::query()->update(['default_unit_price' => 100]);
         config(['identity.pin.pepper' => 'test-only-temporary-value']);
         $user = User::factory()->create([
             'pin_hash' => app(PinHasher::class)->hash('0007'),
@@ -38,6 +42,14 @@ final class DeliveryEndpointTest extends TestCase
     /** @param array<string, mixed> $payload */
     private function command(string $method, string $path, array $payload, ?string $key = null): TestResponse
     {
+        if ($method === 'POST' && ! isset($payload['production_unit_id'])) {
+            if ($path === '/repartos') {
+                $payload['production_unit_id'] = ProductionUnit::query()->value('id') ?? ProductionUnit::factory()->create()->id;
+            } elseif (str_ends_with($path, '/cargas')) {
+                $reference = explode('/', $path)[2];
+                $payload['production_unit_id'] = Delivery::query()->where('public_id', $reference)->value('production_unit_id');
+            }
+        }
         if ($method === 'POST' && ($path === '/repartos' || str_ends_with($path, '/cierre'))) {
             $payload = ['pin' => '0007', ...$payload];
         }
@@ -297,7 +309,8 @@ final class DeliveryEndpointTest extends TestCase
         ]);
 
         // Las cargas previas no se recalculan si el catálogo cambia más adelante.
-        config()->set('delivery_units.maple.eggs_per_unit', 24);
+        // Simula una definición histórica importada distinta para comprobar la copia de la carga.
+        EggPresentation::query()->where('code', 'maple')->update(['eggs_per_unit' => 24]);
         $this->getJson("/api/v1/repartos/{$deliveryId}")->assertOk()
             ->assertJsonPath('data.loads.0.items.0.eggs_per_unit', 30)
             ->assertJsonPath('data.loads.0.items.0.eggs', 15);
@@ -384,10 +397,11 @@ final class DeliveryEndpointTest extends TestCase
             'items' => [['unit' => 'maple', 'amount' => '0.5', 'eggs_per_unit' => 30]],
         ])->assertCreated()->json('data.id');
 
-        config()->set('delivery_units.maple.eggs_per_unit', 24);
+        // Simula una definición histórica importada distinta para comprobar la copia de la carga.
+        EggPresentation::query()->where('code', 'maple')->update(['eggs_per_unit' => 24]);
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
             'client_reference' => 'demo-001', 'status' => 'delivered',
-            'items' => [['unit' => 'maple', 'amount' => '0.5', 'eggs_per_unit' => 30]],
+            'items' => [['unit' => 'maple', 'amount' => '0.5', 'eggs_per_unit' => 30, 'unit_price' => 100]],
         ])->assertOk()->assertJsonPath('data.delivered_quantity', 15);
         $this->getJson("/api/v1/repartos/{$deliveryId}")->assertOk()
             ->assertJsonPath('data.unit_balances.rows.0.remaining_amount', '0');
@@ -570,5 +584,112 @@ final class DeliveryEndpointTest extends TestCase
         $response->assertForbidden();
         $this->assertNotSame($firstDriver->id, $secondDriver->id);
         $this->assertInstanceOf(Delivery::class, Delivery::query()->where('public_id', $deliveryId)->first());
+    }
+
+    // Flujo: cada carga descuenta su UP; la descarga final concentra sobrantes en el destino elegido.
+    public function test_multiple_load_origins_and_itemized_return_move_stock_once(): void
+    {
+        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $firstUnit = ProductionUnit::factory()->create();
+        $secondUnit = ProductionUnit::factory()->create();
+        $query = app(GetEggStockBalanceQuery::class);
+        // Consulta: conserva los saldos iniciales de las dos cuentas.
+        $firstBalance = $query->execute($firstUnit)['balance'];
+        $secondBalance = $query->execute($secondUnit)['balance'];
+        // Requests: inicia y recarga desde UP distintas.
+        $deliveryId = $this->command('POST', '/repartos', [
+            'production_unit_id' => $firstUnit->id, 'items' => [['unit' => 'maple', 'amount' => '1', 'eggs_per_unit' => 30]],
+        ])->assertCreated()->assertJsonPath('data.loads.0.production_unit.id', $firstUnit->id)->json('data.id');
+        $loadKey = (string) Str::uuid();
+        $load = ['production_unit_id' => $secondUnit->id, 'items' => [['unit' => 'maple', 'amount' => '1', 'eggs_per_unit' => 30]]];
+        $this->command('POST', "/repartos/{$deliveryId}/cargas", $load, $loadKey)->assertOk()
+            ->assertJsonPath('data.loads.1.production_unit.id', $secondUnit->id);
+        $this->command('POST', "/repartos/{$deliveryId}/cargas", $load, $loadKey)->assertOk();
+        $this->assertSame($firstBalance - 30, $query->execute($firstUnit)['balance']);
+        $this->assertSame($secondBalance - 30, $query->execute($secondUnit)['balance']);
+        // Request: entrega medio maple con precio particular; no vuelve a descontar stock central.
+        $this->command('POST', "/repartos/{$deliveryId}/entregas", [
+            'client_reference' => 'demo-001', 'status' => 'delivered',
+            'items' => [['unit' => 'maple', 'amount' => '0.5', 'eggs_per_unit' => 30, 'unit_price' => 80]],
+        ])->assertOk()->assertJsonPath('data.total_amount', '40.000');
+        $this->assertSame($secondBalance - 30, $query->execute($secondUnit)['balance']);
+        // Request: exige elegir destino cuando participaron varias UP.
+        $return = ['returned_items' => [['unit' => 'maple', 'amount' => '1.5', 'eggs_per_unit' => 30]]];
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", $return)->assertUnprocessable()
+            ->assertJsonValidationErrors('return_production_unit_id');
+        // Request: devuelve todos los sobrantes a la segunda UP y repite la operación.
+        $return['return_production_unit_id'] = $secondUnit->id;
+        // Request: una descarga parcial no cierra el reparto ni acredita stock.
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", [
+            'return_production_unit_id' => $secondUnit->id,
+            'returned_items' => [['unit' => 'maple', 'amount' => '1', 'eggs_per_unit' => 30]],
+        ])->assertConflict()->assertJsonPath('message', 'La descarga final debe incluir todos los huevos sobrantes para cerrar el reparto.');
+        $this->assertDatabaseHas('deliveries', ['public_id' => $deliveryId, 'status' => 'active']);
+        $this->assertSame($secondBalance - 30, $query->execute($secondUnit)['balance']);
+        $closeKey = (string) Str::uuid();
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", $return, $closeKey)->assertOk()
+            ->assertJsonPath('data.returned_quantity', 45)->assertJsonPath('data.returned_items.0.amount', '1.5')
+            ->assertJsonPath('data.return_production_unit.id', $secondUnit->id);
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", $return, $closeKey)->assertOk();
+        $this->assertSame($firstBalance - 30, $query->execute($firstUnit)['balance']);
+        $this->assertSame($secondBalance + 15, $query->execute($secondUnit)['balance']);
+        $this->assertDatabaseCount('delivery_loads', 2);
+        $this->assertDatabaseCount('egg_stock_transactions', 3);
+    }
+
+    // Flujo: conserva milésimos exactos, admite precio personalizado entero y protege el historial.
+    public function test_integer_unit_price_and_fractional_quantity_preserve_exact_total(): void
+    {
+        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $unit = ProductionUnit::factory()->create();
+        $presentation = EggPresentation::factory()->create(['eggs_per_unit' => 360, 'default_unit_price' => 200]);
+        // Request: registra la carga con una presentación creada por administración.
+        $deliveryId = $this->command('POST', '/repartos', [
+            'production_unit_id' => $unit->id,
+            'items' => [['unit' => $presentation->code, 'amount' => '1', 'eggs_per_unit' => 360]],
+        ])->assertCreated()->json('data.id');
+        $item = ['unit' => $presentation->code, 'amount' => '0.125', 'eggs_per_unit' => 360, 'unit_price' => 101];
+        // Request: conserva exactamente $12,625, sin modificar el precio predeterminado.
+        $event = (string) Str::uuid();
+        $stop = ['client_reference' => 'demo-001', 'status' => 'delivered', 'items' => [$item]];
+        $this->command('POST', "/repartos/{$deliveryId}/entregas", $stop, $event)->assertOk()
+            ->assertJsonPath('data.delivered_quantity', 45)->assertJsonPath('data.total_amount', '12.625')
+            ->assertJsonPath('data.items.0.unit_price', 101)->assertJsonPath('data.items.0.line_amount', '12.625');
+        $this->command('POST', "/repartos/{$deliveryId}/entregas", $stop, $event)->assertOk();
+        $this->assertSame(200, $presentation->fresh()->default_unit_price);
+        // Request: rechaza un precio fraccionario aun con una cantidad válida.
+        $item['unit_price'] = 100.01;
+        $this->command('POST', "/repartos/{$deliveryId}/entregas", [
+            'client_reference' => 'demo-002', 'status' => 'delivered', 'items' => [$item],
+        ])->assertUnprocessable()->assertJsonValidationErrors('items.0.unit_price');
+        // Request: devuelve la fracción restante y conserva su presentación.
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", [
+            'returned_items' => [['unit' => $presentation->code, 'amount' => '0.875', 'eggs_per_unit' => 360]],
+        ])->assertOk()->assertJsonPath('data.returned_quantity', 315);
+        // Mutación de fixture: posteriores definiciones no reescriben el detalle guardado.
+        $presentation->update(['name' => 'Nombre posterior', 'eggs_per_unit' => 24, 'default_unit_price' => 300]);
+        $this->getJson("/api/v1/repartos/{$deliveryId}")->assertOk()
+            ->assertJsonPath('data.delivered_amount', '12.625')
+            ->assertJsonPath('data.stops.0.items.0.eggs_per_unit', 360)
+            ->assertJsonPath('data.returned_items.0.eggs_per_unit', 360)
+            ->assertJsonPath('data.unit_balances.rows.0.remaining_amount', '0');
+    }
+
+    // Flujo: el contrato exige origen explícito y permite consultar todas las UP operativas.
+    public function test_new_load_commands_require_an_explicit_operating_unit(): void
+    {
+        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $first = ProductionUnit::factory()->create();
+        $second = ProductionUnit::factory()->create();
+        // Request: no selecciona automáticamente la primera UP ni siquiera en desarrollo.
+        $this->postJson('/api/v1/repartos', ['pin' => '0007', 'quantity' => 1], ['Idempotency-Key' => (string) Str::uuid()])
+            ->assertUnprocessable()->assertJsonValidationErrors('production_unit_id');
+        $this->getJson('/api/v1/repartos/unidades-productivas')->assertOk()->assertJsonCount(2, 'data');
+        $deliveryId = $this->command('POST', '/repartos', ['production_unit_id' => $first->id, 'quantity' => 1])
+            ->assertCreated()->json('data.id');
+        // Request: la recarga también requiere origen, independientemente del de inicio.
+        $this->postJson("/api/v1/repartos/{$deliveryId}/cargas", ['quantity' => 1], ['Idempotency-Key' => (string) Str::uuid()])
+            ->assertUnprocessable()->assertJsonValidationErrors('production_unit_id');
+        $this->assertNotSame($first->id, $second->id);
     }
 }

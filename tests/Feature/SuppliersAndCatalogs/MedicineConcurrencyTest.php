@@ -16,8 +16,57 @@ use Tests\TestCase;
 #[Group('medicine-concurrency')]
 final class MedicineConcurrencyTest extends TestCase
 {
-    use DatabaseMigrations {
-        runDatabaseMigrations as private migrateIsolatedDatabase;
+    use DatabaseMigrations;
+
+    /** @var array<string, string|false> Valores del proceso que deben restaurarse al cerrar la prueba. */
+    private array $originalProcessEnvironment = [];
+
+    /** @var array<string, string|null> Valores de entorno de PHP previos a la prueba. */
+    private array $originalEnvEnvironment = [];
+
+    /** @var array<string, string|null> Valores del servidor de PHP previos a la prueba. */
+    private array $originalServerEnvironment = [];
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Preparación: comparte la clave de firma y la conexión aislada con los procesos secundarios.
+        $processEnvironment = [
+            'APP_KEY' => (string) config('app.key'),
+            'APP_ENV' => 'testing',
+            'DB_CONNECTION' => 'pgsql',
+            'DB_HOST' => (string) config('database.connections.pgsql.host'),
+            'DB_DATABASE' => DB::connection()->getDatabaseName(),
+        ];
+        foreach ($processEnvironment as $key => $value) {
+            $this->originalProcessEnvironment[$key] = getenv($key);
+            $this->originalEnvEnvironment[$key] = $_ENV[$key] ?? null;
+            $this->originalServerEnvironment[$key] = $_SERVER[$key] ?? null;
+            putenv($key.'='.$value);
+            $_ENV[$key] = $value;
+            $_SERVER[$key] = $value;
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        // Limpieza: evita propagar la configuración particular hacia otras pruebas.
+        foreach ($this->originalProcessEnvironment as $key => $value) {
+            putenv($value === false ? $key : $key.'='.$value);
+            if ($this->originalEnvEnvironment[$key] === null) {
+                unset($_ENV[$key]);
+            } else {
+                $_ENV[$key] = $this->originalEnvEnvironment[$key];
+            }
+            if ($this->originalServerEnvironment[$key] === null) {
+                unset($_SERVER[$key]);
+            } else {
+                $_SERVER[$key] = $this->originalServerEnvironment[$key];
+            }
+        }
+
+        parent::tearDown();
     }
 
     /** Los procesos secundarios necesitan datos confirmados en una base exclusiva de pruebas. */

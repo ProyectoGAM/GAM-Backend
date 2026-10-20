@@ -3,9 +3,9 @@
 namespace App\Services\ReportingAndAnalytics;
 
 use App\DTO\ReportingAndAnalytics\ReportQueryData;
+use App\Enums\ReportingAndAnalytics\ReportExportFormat;
 use App\Interfaces\ReportingAndAnalytics\ReportSource;
 use App\Models\ReportingAndAnalytics\ReportExport;
-use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Spatie\LaravelPdf\Facades\Pdf;
@@ -14,110 +14,69 @@ use Throwable;
 
 final readonly class ReportExportWriter
 {
-    /**
-     * @return array{path: string, file_name: string, mime_type: string, file_size: int}
-     */
+    public function __construct(private ReportSnapshotStore $snapshots) {}
+
+    /** @return array{path: string, file_name: string, mime_type: string, file_size: int} */
     public function write(ReportExport $export, ReportSource $source, ReportQueryData $query): array
     {
-        $disk = Storage::disk($export->disk);
-        $localDisk = Storage::disk('local');
-        $directory = 'report-exports/'.now()->format('Y/m').'/'.$export->getKey();
-        $extension = $export->format->value;
-        $path = $directory.'/reporte-'.$export->getKey().'.'.$extension;
-        $localDisk->makeDirectory($directory);
-
-        if (! $localDisk instanceof FilesystemAdapter) {
-            throw new \RuntimeException('El disco configurado no permite generar archivos locales.');
+        $format = $export->getAttribute('format');
+        if (! $format instanceof ReportExportFormat) {
+            throw new \RuntimeException('El formato de la exportación no es válido.');
         }
-
-        $fullPath = $localDisk->path($path);
-        $columns = $this->resultColumns($query);
-        $rows = $source->rows($query)->take($source->definition()->limits['max_export_rows']);
-
+        $local = Storage::disk('local');
+        $directory = 'report-exports/'.now()->format('Y/m').'/'.$export->getKey();
+        $path = $directory.'/reporte-'.$export->getKey().'.'.$format->value;
+        $local->makeDirectory($directory);
         try {
-            if ($export->format->value === 'xlsx') {
-                $this->writeXlsx($fullPath, $columns, $rows);
-                $mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-            } else {
-                $this->writePdf($fullPath, $columns, $rows, $source->definition()->label);
-                $mimeType = 'application/pdf';
+            $limit = $source->definition()->limits['max_export_rows'];
+            if ($format->value === 'pdf') {
+                $limit = min($limit, (int) config('reporting.pdf_max_rows', 2000));
             }
-            $fileSize = filesize($fullPath);
-            if ($fileSize === false) {
-                throw new \RuntimeException('No fue posible determinar el tamaño de la exportación.');
-            }
-
-            if ($export->disk !== 'local') {
-                $stream = fopen($fullPath, 'rb');
-                if ($stream === false) {
-                    throw new \RuntimeException('No fue posible leer la exportación generada.');
-                }
-
+            $header = $this->snapshots->create($directory, $source, $query, $limit);
+            $rows = $this->snapshots->rows('local', $directory, $header['total']);
+            $labels = array_map(fn (string $column): string => $header['metadata'][$column]['label'], $header['columns']);
+            if ($format->value === 'xlsx') {
+                $writer = SimpleExcelWriter::create($local->path($path))->addHeader($labels);
                 try {
-                    if (! $disk->put($path, $stream)) {
-                        throw new \RuntimeException('No fue posible guardar la exportación.');
+                    foreach ($rows as $row) {
+                        $writer->addRow(array_map(fn (string $column): mixed => $this->excelCell($row[$column] ?? null, $header['metadata'][$column]['type']), $header['columns']));
                     }
                 } finally {
-                    fclose($stream);
-                    $localDisk->delete($path);
+                    $writer->close();
                 }
+                $mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+            } else {
+                $html = view('reporting.export-pdf', ['header' => $header, 'rows' => $rows])->render();
+                Pdf::html($html)->driver('dompdf')->format('a4')->landscape()->save($local->path($path));
+                $mimeType = 'application/pdf';
+            }
+            $fileSize = $local->size($path);
+            if ($export->disk !== 'local') {
+                $destination = Storage::disk($export->disk);
+                foreach ($local->allFiles($directory) as $file) {
+                    $stream = $local->readStream($file);
+                    try {
+                        if (! $destination->put($file, $stream)) {
+                            throw new \RuntimeException('No fue posible guardar la exportación.');
+                        }
+                    } finally {
+                        if (is_resource($stream)) {
+                            fclose($stream);
+                        }
+                    }
+                }
+                $local->deleteDirectory($directory);
             }
         } catch (Throwable $exception) {
-            $localDisk->delete($path);
-
+            $local->deleteDirectory($directory);
+            if ($export->disk !== 'local') {
+                Storage::disk($export->disk)->deleteDirectory($directory);
+            }
             throw $exception;
         }
 
-        return [
-            'path' => $path,
-            'file_name' => Str::slug($source->definition()->label).'-'.$export->getKey().'.'.$extension,
-            'mime_type' => $mimeType,
-            'file_size' => $fileSize,
-        ];
-    }
-
-    /** @param list<string> $columns */
-    private function writeXlsx(string $path, array $columns, iterable $rows): void
-    {
-        $writer = SimpleExcelWriter::create($path);
-        $writer->addHeader($columns);
-        foreach ($rows as $row) {
-            $writer->addRow(array_map(fn (mixed $value): mixed => $this->safeCell($value), $row));
-        }
-        $writer->close();
-    }
-
-    /** @param list<string> $columns */
-    private function writePdf(string $path, array $columns, iterable $rows, string $title): void
-    {
-        $headers = implode('', array_map(
-            fn (string $column): string => '<th>'.htmlspecialchars($column, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</th>',
-            $columns,
-        ));
-        $body = '';
-        foreach ($rows as $row) {
-            $body .= '<tr>'.implode('', array_map(
-                fn (mixed $value): string => '<td>'.htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</td>',
-                $row,
-            )).'</tr>';
-        }
-
-        $html = '<!doctype html><html lang="es"><head><meta charset="utf-8"><style>'
-            .'@page { margin: 18px; } body { font-family: DejaVu Sans, sans-serif; font-size: 9px; } '
-            .'h1 { font-size: 16px; } table { border-collapse: collapse; width: 100%; } '
-            .'th, td { border: 1px solid #999; padding: 4px; text-align: left; } th { background: #eee; }'
-            .'</style></head><body><h1>'.htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
-            .'</h1><table><thead><tr>'.$headers.'</tr></thead><tbody>'.$body.'</tbody></table></body></html>';
-
-        Pdf::html($html)->driver('dompdf')->format('a4')->save($path);
-    }
-
-    /** @param list<string> $columns @return list<string> */
-    private function resultColumns(ReportQueryData $query): array
-    {
-        return $query->groupings !== [] || $query->metrics !== []
-            ? [...$query->groupings, ...$query->metrics]
-            : $query->columns;
+        return ['path' => $path, 'file_name' => Str::slug($source->definition()->label).'-'.$export->getKey().'.'.$format->value,
+            'mime_type' => $mimeType, 'file_size' => $fileSize];
     }
 
     private function safeCell(mixed $value): mixed
@@ -127,5 +86,20 @@ final readonly class ReportExportWriter
         }
 
         return $value;
+    }
+
+    /** Excel admite quince cifras significativas; los valores mayores conservan su texto exacto. */
+    private function excelCell(mixed $value, string $type): mixed
+    {
+        if (is_string($value) && in_array($type, ['number', 'integer', 'quantity', 'money', 'count'], true) && preg_match('/^-?\d+(?:\.\d+)?$/', $value) === 1) {
+            $decimal = str_contains($value, '.');
+            $normalized = $decimal ? rtrim(rtrim($value, '0'), '.') : $value;
+            $digits = ltrim(str_replace(['-', '.'], '', $normalized), '0');
+            if (strlen($digits) <= 15) {
+                return $decimal ? (float) $value : (int) $value;
+            }
+        }
+
+        return $this->safeCell($value);
     }
 }

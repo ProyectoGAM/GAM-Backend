@@ -29,11 +29,15 @@ use App\Services\ReportingAndAnalytics\ReportExportWriter;
 use App\Services\ReportingAndAnalytics\ReportQueryNormalizer;
 use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
 use Database\Seeders\FarmStructure\MaintenanceDemoSeeder;
+use Database\Seeders\Inventory\FeedManufactureDemoSeeder;
+use Database\Seeders\Inventory\FeedRecipeDemoSeeder;
 use Database\Seeders\Inventory\FeedStockDemoSeeder;
+use Database\Seeders\Inventory\FlockFeedingDemoSeeder;
 use Database\Seeders\Lots\EggProductionDemoSeeder;
 use Database\Seeders\Lots\LotsDemoSeeder;
 use Database\Seeders\Lots\WeighingDemoSeeder;
 use Database\Seeders\ManagementPlans\ManagementPlanDemoSeeder;
+use Database\Seeders\ReportingAndAnalytics\ReportingDemoSeeder;
 use Database\Seeders\SuppliersAndCatalogs\MedicineDemoSeeder;
 use Database\Seeders\SuppliersAndCatalogs\VaccineDemoSeeder;
 use Illuminate\Database\Seeder;
@@ -60,6 +64,8 @@ final class LocalDemoDataSeeder extends Seeder
         $this->call(VaccineDemoSeeder::class);
         $locations = $this->seedStockLocations($units);
         $this->call(FeedStockDemoSeeder::class);
+        $this->call(FeedRecipeDemoSeeder::class);
+        $this->call(FeedManufactureDemoSeeder::class);
 
         $this->seedBalances($products, $locations);
         $this->seedMovements($admin, $products, $locations, $suppliers);
@@ -68,6 +74,8 @@ final class LocalDemoDataSeeder extends Seeder
         $this->call(LotsDemoSeeder::class);
         $this->call(EggProductionDemoSeeder::class);
         $this->call(WeighingDemoSeeder::class);
+        $this->call(FlockFeedingDemoSeeder::class);
+        $this->call(ReportingDemoSeeder::class);
     }
 
     /** @return array<string, Locality> */

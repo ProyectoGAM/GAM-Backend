@@ -19,7 +19,137 @@ tags:
     description: "Capturas individuales o grupales, correcciones y consultas históricas."
   - name: "Configuración de pesajes"
     description: "Rangos globales de referencia administrados con control optimista."
+  - name: "Pesajes diarios"
+    description: "Jornadas por lote y fecha local de America/Montevideo."
 paths:
+  "/pesajes-diarios":
+    get:
+      tags: ["Pesajes diarios"]
+      operationId: listDailyWeighings
+      summary: "Pagina las jornadas de un lote, de la fecha más reciente a la más antigua"
+      description: "Permiso weighings.view. El cursor opaco evita omisiones cuando se agregan jornadas nuevas. Una lista vacía indica ausencia de datos."
+      x-permission: weighings.view
+      parameters:
+        - "$ref": "#/components/parameters/RequiredFlockFilter"
+        - "$ref": "#/components/parameters/From"
+        - "$ref": "#/components/parameters/To"
+        - "$ref": "#/components/parameters/Cursor"
+        - "$ref": "#/components/parameters/PerPage"
+      responses:
+        "200": { description: "Página de jornadas.", content: { application/json: { schema: { "$ref": "#/components/schemas/DailyWeighingPage" } } } }
+        "401": { "$ref": "#/components/responses/Unauthenticated" }
+        "403": { "$ref": "#/components/responses/Forbidden" }
+        "422": { "$ref": "#/components/responses/InvalidInput" }
+  "/lotes/{lote}/pesajes-diarios/{fecha}":
+    get:
+      tags: ["Pesajes diarios"]
+      operationId: showDailyWeighingByDate
+      summary: "Consulta la jornada de un lote por fecha local"
+      description: "Permiso weighings.view. Devuelve 404 si no existe jornada para la fecha; status=closed si la fecha local ya terminó. Los ingresos se ordenan por hora e ID y usan cursor opaco."
+      x-permission: weighings.view
+      parameters:
+        - "$ref": "#/components/parameters/FlockPath"
+        - "$ref": "#/components/parameters/LocalDatePath"
+        - "$ref": "#/components/parameters/Cursor"
+        - "$ref": "#/components/parameters/PerPage"
+      responses:
+        "200": { description: "Jornada e ingresos.", content: { application/json: { schema: { "$ref": "#/components/schemas/DailyWeighingDetailResponse" } } } }
+        "401": { "$ref": "#/components/responses/Unauthenticated" }
+        "403": { "$ref": "#/components/responses/Forbidden" }
+        "404": { "$ref": "#/components/responses/NotFound" }
+  "/lotes/{lote}/pesajes-diarios/ingresos":
+    post:
+      tags: ["Pesajes diarios"]
+      operationId: addDailyWeighingEntry
+      summary: "Agrega un ingreso a la jornada local actual del lote"
+      description: "Permiso weighings.manage. Cada ingreso usa gramos. La jornada se crea con el primer ingreso confirmado. Un 409 DAILY_WEIGHING_OUT_OF_RANGE_CONFIRMATION_REQUIRED no persiste nada; reintenta con la misma clave y confirm_out_of_range=true. Los grupos cuentan como un solo ingreso anómalo. Dos usuarios se serializan sobre el lote."
+      security:
+        - bearerAuth: []
+        - sanctumCookie: []
+          csrf: []
+        - bearerAuth: []
+          sharedDeviceHeader: []
+          sharedSessionHeader: []
+        - sanctumCookie: []
+          sharedDeviceCookie: []
+          sharedSessionHeader: []
+          csrf: []
+      x-permission: weighings.manage
+      parameters:
+        - "$ref": "#/components/parameters/FlockPath"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content: { application/json: { schema: { "$ref": "#/components/schemas/AddDailyWeighingEntry" } } }
+      responses:
+        "201": { description: "Ingreso registrado o resultado idempotente.", content: { application/json: { schema: { "$ref": "#/components/schemas/DailyWeighingOperationResponse" } } } }
+        "401": { "$ref": "#/components/responses/Unauthenticated" }
+        "403": { "$ref": "#/components/responses/Forbidden" }
+        "404": { "$ref": "#/components/responses/NotFound" }
+        "409": { "$ref": "#/components/responses/Conflict" }
+        "422": { "$ref": "#/components/responses/InvalidInput" }
+  "/pesajes-diarios/{jornada}":
+    get:
+      tags: ["Pesajes diarios"]
+      operationId: showDailyWeighing
+      summary: "Consulta la jornada y una página de sus ingresos"
+      description: "Permiso weighings.view. La ausencia devuelve 404; la falta de permiso devuelve 403. La jornada permanece consultable cuando queda vacía tras eliminar ingresos."
+      x-permission: weighings.view
+      parameters:
+        - "$ref": "#/components/parameters/DailyWeighingPath"
+        - "$ref": "#/components/parameters/Cursor"
+        - "$ref": "#/components/parameters/PerPage"
+      responses:
+        "200": { description: "Jornada e ingresos.", content: { application/json: { schema: { "$ref": "#/components/schemas/DailyWeighingDetailResponse" } } } }
+        "401": { "$ref": "#/components/responses/Unauthenticated" }
+        "403": { "$ref": "#/components/responses/Forbidden" }
+        "404": { "$ref": "#/components/responses/NotFound" }
+  "/pesajes-diarios/{jornada}/ingresos/{ingreso}":
+    delete:
+      tags: ["Pesajes diarios"]
+      operationId: deleteDailyWeighingEntry
+      summary: "Elimina una medición concreta y devuelve la jornada actualizada"
+      description: "Permiso weighings.manage. También permite jornadas cerradas, siempre con versión y motivo. Conserva la fila como histórica y registra auditoría sin borrar entradas previas. Recalcula aves, peso, promedio, anomalías y último ingreso."
+      security:
+        - bearerAuth: []
+        - sanctumCookie: []
+          csrf: []
+        - bearerAuth: []
+          sharedDeviceHeader: []
+          sharedSessionHeader: []
+        - sanctumCookie: []
+          sharedDeviceCookie: []
+          sharedSessionHeader: []
+          csrf: []
+      x-permission: weighings.manage
+      parameters:
+        - "$ref": "#/components/parameters/DailyWeighingPath"
+        - "$ref": "#/components/parameters/DailyWeighingEntryPath"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content: { application/json: { schema: { "$ref": "#/components/schemas/DeleteDailyWeighingEntry" } } }
+      responses:
+        "200": { description: "Jornada actualizada.", content: { application/json: { schema: { "$ref": "#/components/schemas/DailyWeighingOperationResponse" } } } }
+        "401": { "$ref": "#/components/responses/Unauthenticated" }
+        "403": { "$ref": "#/components/responses/Forbidden" }
+        "404": { "$ref": "#/components/responses/NotFound" }
+        "409": { "$ref": "#/components/responses/Conflict" }
+        "422": { "$ref": "#/components/responses/InvalidInput" }
+  "/pesajes-diarios/{jornada}/distribucion":
+    get:
+      tags: ["Pesajes diarios"]
+      operationId: getDailyWeighingDistribution
+      summary: "Calcula histograma y curva con los pesos individuales activos de la jornada"
+      description: "Permiso weighings.view. Excluye grupos y entradas eliminadas. Con menos de dos individuos devuelve reason=insufficient_sample; con varianza cero, reason=zero_variance. En ambos casos curve=null."
+      x-permission: weighings.view
+      parameters:
+        - "$ref": "#/components/parameters/DailyWeighingPath"
+      responses:
+        "200": { description: "Distribución en gramos.", content: { application/json: { schema: { "$ref": "#/components/schemas/DistributionResponse" } } } }
+        "401": { "$ref": "#/components/responses/Unauthenticated" }
+        "403": { "$ref": "#/components/responses/Forbidden" }
+        "404": { "$ref": "#/components/responses/NotFound" }
   "/pesajes":
     get:
       tags: ["Pesajes"]
@@ -197,6 +327,7 @@ paths:
       tags: ["Configuración de pesajes"]
       operationId: saveWeighingSettings
       summary: "Crea o actualiza los rangos globales"
+      description: "Permiso weighing-settings.manage. Actualiza y reclasifica en la misma transacción todas las jornadas abiertas de la fecha local. Cada etapa conserva el rango propio de su raza si existe y adopta el nuevo valor global si lo hereda. Las jornadas cerradas conservan su rango y resultados históricos."
       security:
         - bearerAuth: []
         - sanctumCookie: []
@@ -263,6 +394,32 @@ components:
       in: header
       required: true
       schema: { type: string, format: uuid }
+    FlockPath:
+      name: lote
+      in: path
+      required: true
+      schema: { type: string }
+    LocalDatePath:
+      name: fecha
+      in: path
+      required: true
+      schema: { type: string, format: date }
+    DailyWeighingPath:
+      name: jornada
+      in: path
+      required: true
+      schema: { type: string }
+    DailyWeighingEntryPath:
+      name: ingreso
+      in: path
+      required: true
+      schema: { type: string }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: "Cursor opaco devuelto como next_cursor en la página anterior."
+      schema: { type: string, maxLength: 2000 }
     Weighing:
       name: pesaje
       in: path
@@ -325,6 +482,104 @@ components:
       description: "Conflicto de pesajes."
       content: { application/problem+json: { schema: { "$ref": "#/components/schemas/Problem" } } }
   schemas:
+    DailyWeighingEntry:
+      type: object
+      additionalProperties: false
+      required: [id, occurred_at, mode, weight_g, bird_count, total_weight_g, average_weight_g, outside_expected_range]
+      properties:
+        id: { type: string }
+        occurred_at: { type: string, format: date-time, description: "Instante almacenado en UTC." }
+        mode: { type: string, enum: [individual, group] }
+        weight_g: { type: [string, "null"], description: "Sólo para modalidad individual." }
+        bird_count: { type: integer }
+        total_weight_g: { type: string }
+        average_weight_g: { type: string }
+        outside_expected_range: { type: boolean }
+    DailyWeighing:
+      type: object
+      required: [id, flock_id, date, status, expected_range, version, represented_bird_count, total_weight_g, average_weight_g, anomalous_entry_count, last_entry]
+      properties:
+        id: { type: string }
+        flock_id: { type: string }
+        date: { type: string, format: date, description: "Fecha de America/Montevideo." }
+        status: { type: string, enum: [in_progress, closed] }
+        expected_range:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [stage, min_weight_g, max_weight_g, unit, reference_version, source, breed_id, breed_version]
+              properties:
+                stage: { type: string, enum: [chick, adult] }
+                min_weight_g: { type: string }
+                max_weight_g: { type: string }
+                unit: { type: string, enum: [g] }
+                reference_version: { type: integer }
+                source: { type: string, enum: [global, breed], description: "Origen del rango capturado para esta etapa." }
+                breed_id: { type: [integer, "null"], description: "Raza del lote al capturar la referencia; null en jornadas previas a esta ampliación." }
+                breed_version: { type: [integer, "null"] }
+        version: { type: integer }
+        represented_bird_count: { type: integer }
+        total_weight_g: { type: string }
+        average_weight_g: { type: [string, "null"], description: "Suma de pesos individuales y totales grupales dividida entre todas las aves pesadas." }
+        anomalous_entry_count: { type: integer, description: "Cuenta ingresos, no aves; un grupo fuera de rango suma uno." }
+        last_entry:
+          oneOf:
+            - type: "null"
+            - "$ref": "#/components/schemas/DailyWeighingEntry"
+    DailyWeighingPage:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data: { type: array, items: { "$ref": "#/components/schemas/DailyWeighing" } }
+        next_cursor: { type: [string, "null"] }
+    DailyWeighingDetailResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          allOf:
+            - "$ref": "#/components/schemas/DailyWeighing"
+            - type: object
+              required: [entries, next_cursor]
+              properties:
+                entries: { type: array, items: { "$ref": "#/components/schemas/DailyWeighingEntry" } }
+                next_cursor: { type: [string, "null"] }
+    AddDailyWeighingEntry:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [mode, weight]
+          properties:
+            mode: { type: string, enum: [individual] }
+            weight: { "$ref": "#/components/schemas/DecimalGrams" }
+            confirm_out_of_range: { type: boolean, default: false }
+        - type: object
+          additionalProperties: false
+          required: [mode, bird_count, total_weight]
+          properties:
+            mode: { type: string, enum: [group] }
+            bird_count: { type: integer, minimum: 1 }
+            total_weight: { "$ref": "#/components/schemas/DecimalGrams" }
+            confirm_out_of_range: { type: boolean, default: false }
+    DeleteDailyWeighingEntry:
+      type: object
+      additionalProperties: false
+      required: [version, reason]
+      properties:
+        version: { type: integer, minimum: 1 }
+        reason: { type: string, minLength: 3, maxLength: 1000 }
+    DailyWeighingOperationResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [operation_id, daily_weighing]
+          properties:
+            operation_id: { type: string, format: uuid }
+            daily_weighing: { "$ref": "#/components/schemas/DailyWeighing" }
+            entry: { "$ref": "#/components/schemas/DailyWeighingEntry" }
+            deleted_entry_id: { type: string }
     DecimalGrams:
       type: string
       pattern: "^(?=.*[1-9])(?:0|[1-9][0-9]{0,12})(?:\\.[0-9])?$"
@@ -554,8 +809,28 @@ components:
         captured_unit: { type: string, enum: [g, kg] }
         notes: { type: [string, "null"] }
         stage: { type: [string, "null"], enum: [chick, adult, "null"] }
-        expected_range: { type: [object, "null"] }
-        reference: { type: [object, "null"] }
+        expected_range:
+          type: [object, "null"]
+          description: "Rango capturado, inmutable ante cambios posteriores; source indica global o breed."
+          properties:
+            min_weight_g: { type: string }
+            max_weight_g: { type: string }
+            unit: { type: string, enum: [g] }
+            source: { type: string, enum: [global, breed] }
+        reference:
+          type: [object, "null"]
+          description: "Snapshot de los cuatro límites efectivos usados, semana de cambio de etapa y procedencia. Se preserva al corregir un pesaje."
+          properties:
+            version: { type: integer, description: "Versión global capturada." }
+            adult_from_week: { type: integer }
+            chick_min_weight_g: { type: string }
+            chick_max_weight_g: { type: string }
+            adult_min_weight_g: { type: string }
+            adult_max_weight_g: { type: string }
+            chick_source: { type: string, enum: [global, breed] }
+            adult_source: { type: string, enum: [global, breed] }
+            breed_id: { type: [integer, "null"] }
+            breed_version: { type: [integer, "null"] }
         represented_bird_count: { type: integer }
         total_weight_g: { type: string }
         average_weight_g: { type: string }

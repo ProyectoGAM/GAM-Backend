@@ -88,6 +88,8 @@ final readonly class RecordMedicineApplicationAction
                 $application->forceFill([
                     'public_id' => $applicationPublicId,
                     'flock_id' => $context->flock->getKey(),
+                    'poultry_house_id' => $context->flock->poultry_house_id,
+                    'production_unit_id' => $context->flock->production_unit_id,
                     'plan_activity_id' => $context->planActivityPublicId,
                     'plan_activity_title_snapshot' => $context->planActivityTitleSnapshot,
                     'medicine_id' => $medicine->getKey(),

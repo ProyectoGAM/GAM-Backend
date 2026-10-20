@@ -4,6 +4,7 @@ namespace App\Http\Requests\ManagementPlans;
 
 use App\Models\User;
 use App\Services\Lots\LotsAuthorization;
+use App\ValueObjects\Inventory\FeedStockGrams;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -42,7 +43,7 @@ abstract class ManagementPlanRequest extends FormRequest
     {
         return [
             'activities' => ['required', 'array', 'min:1', 'max:100'],
-            'activities.*' => ['required', 'array:type,title,timing_kind,start_day,end_day,start_week,end_week,interval_days,conditional,condition,notes,catalog_ref'],
+            'activities.*' => ['required', 'array:type,title,timing_kind,start_day,end_day,start_week,end_week,interval_days,conditional,condition,notes,catalog_ref,grams_per_bird'],
             'activities.*.type' => ['required', 'in:vaccination,medication,ration_change,weighing,manual_practice,flock_movement,egg_collection,mortality'],
             'activities.*.title' => ['required', 'string', 'max:200'],
             'activities.*.timing_kind' => ['required', 'in:day,week,week_range,day_recurrence,unscheduled'],
@@ -54,6 +55,13 @@ abstract class ManagementPlanRequest extends FormRequest
             'activities.*.conditional' => ['sometimes', 'boolean'],
             'activities.*.condition' => ['nullable', 'string', 'max:1000'],
             'activities.*.notes' => ['nullable', 'string', 'max:5000'],
+            'activities.*.grams_per_bird' => ['sometimes', 'required', function (string $attribute, mixed $value, \Closure $fail): void {
+                try {
+                    FeedStockGrams::parse($value, positive: true);
+                } catch (\InvalidArgumentException $exception) {
+                    $fail($exception->getMessage());
+                }
+            }],
             'activities.*.catalog_ref' => ['nullable', function (string $attribute, mixed $value, \Closure $fail): void {
                 if ((! is_string($value) && ! is_int($value)) || strlen((string) $value) > 64) {
                     $fail('La referencia de catálogo debe ser un identificador válido.');

@@ -34,7 +34,7 @@ use Illuminate\Support\Str;
  */
 #[Fillable([
     'public_id', 'driver_id', 'production_unit_id', 'vehicle_reference', 'status',
-    'loaded_quantity', 'returned_quantity', 'start_idempotency_key', 'start_request_hash',
+    'loaded_quantity', 'returned_quantity', 'returned_items', 'return_production_unit_id', 'start_idempotency_key', 'start_request_hash',
     'close_idempotency_key', 'close_request_hash', 'started_at', 'closed_at', 'close_notes',
 ])]
 class Delivery extends Model
@@ -61,6 +61,7 @@ class Delivery extends Model
             'status' => DeliveryStatus::class,
             'loaded_quantity' => 'integer',
             'returned_quantity' => 'integer',
+            'returned_items' => 'array',
             'started_at' => 'immutable_datetime',
             'closed_at' => 'immutable_datetime',
         ];
@@ -76,6 +77,12 @@ class Delivery extends Model
     public function productionUnit(): BelongsTo
     {
         return $this->belongsTo(ProductionUnit::class);
+    }
+
+    /** @return BelongsTo<ProductionUnit, $this> */
+    public function returnProductionUnit(): BelongsTo
+    {
+        return $this->belongsTo(ProductionUnit::class, 'return_production_unit_id');
     }
 
     /** @return HasMany<DeliveryLoad, $this> */

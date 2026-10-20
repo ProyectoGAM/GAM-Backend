@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\ReportingAndAnalytics;
 
+use App\Actions\ReportingAndAnalytics\DownloadReportExportAction;
 use App\DTO\ReportingAndAnalytics\ReportResultData;
 use App\Enums\ReportingAndAnalytics\ReportExportStatus;
 use App\Jobs\ReportingAndAnalytics\GenerateReportExport;
@@ -11,13 +12,17 @@ use App\Models\ReportingAndAnalytics\ReportExport;
 use App\Models\ReportingAndAnalytics\ReportPreset;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\User;
+use App\Services\ReportingAndAnalytics\ReportQueryNormalizer;
+use App\Services\ReportingAndAnalytics\ReportSnapshotStore;
 use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\TestWith;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
@@ -178,7 +183,7 @@ final class ReportingEndpointTest extends TestCase
     {
         // Preparación: registra un archivo completado en el disco privado.
         Storage::fake('local');
-        $owner = $this->userWithPermissions(['reports.view']);
+        $owner = $this->userWithPermissions(['reports.view', 'inventory.view']);
         $export = $this->completedExport($owner);
         $token = $owner->createToken('download-test')->plainTextToken;
 
@@ -211,7 +216,7 @@ final class ReportingEndpointTest extends TestCase
     {
         // Preparación: registra una exportación disponible y autentica al propietario con permiso para compartir.
         Storage::fake('local');
-        $owner = $this->userWithPermissions(['reports.share']);
+        $owner = $this->userWithPermissions(['reports.share', 'reports.view', 'inventory.view']);
         $export = $this->completedExport($owner);
         Sanctum::actingAs($owner, ['*']);
 
@@ -263,6 +268,110 @@ final class ReportingEndpointTest extends TestCase
         $this->assertStringNotContainsString('95.650000', $html);
     }
 
+    // Flujo: comparte con cada duración ofrecida y conserva el archivo por todo el plazo solicitado.
+    #[TestWith([30, '2026-10-13T12:30:00Z'])]
+    #[TestWith([60, '2026-10-13T13:00:00Z'])]
+    #[TestWith([360, '2026-10-13T18:00:00Z'])]
+    #[TestWith([720, '2026-10-14T00:00:00Z'])]
+    #[TestWith([1440, '2026-10-14T12:00:00Z'])]
+    #[TestWith([10080, '2026-10-20T12:00:00Z'])]
+    #[TestWith([43200, '2026-11-12T12:00:00Z'])]
+    public function test_share_duration_is_honored_without_shortening_file_retention(int $minutes, string $expectedExpiry): void
+    {
+        // Preparación: congela la fecha y crea el archivo privado con vencimiento habitual de 24 horas.
+        $this->travelTo(Carbon::parse('2026-10-13T12:00:00Z')->setTimezone(config('app.timezone')));
+        Storage::fake('local');
+        $owner = $this->userWithPermissions(['reports.share', 'reports.view', 'inventory.view']);
+        $export = $this->completedExport($owner);
+        Sanctum::actingAs($owner);
+
+        // Acción: solicita la duración elegida mediante el contrato público.
+        $response = $this->postJson('/api/v1/exportaciones-reportes/'.$export->id.'/enlaces-temporales', ['expires_in' => $minutes])->assertCreated();
+        $this->assertSame(Carbon::parse($expectedExpiry)->timestamp, Carbon::parse($response->json('expires_at'))->timestamp);
+        $expectedFileExpiry = $minutes <= 1440 ? '2026-10-14T12:00:00Z' : $expectedExpiry;
+        $this->assertSame(Carbon::parse($expectedFileExpiry)->timestamp, $export->refresh()->expires_at->timestamp);
+        $this->assertSame($export->expires_at->timestamp, Carbon::parse($response->json('file_expires_at'))->timestamp);
+        $this->assertDatabaseHas('activity_log', ['event' => 'report_export_link_created', 'subject_id' => $export->id]);
+    }
+
+    // Flujo: un enlace largo conserva la instantánea; crear uno corto no revoca ni acorta el anterior.
+    public function test_long_share_survives_cleanup_and_short_links_keep_their_own_expiration(): void
+    {
+        // Preparación: crea dos firmas para la misma exportación con duraciones distintas.
+        $this->travelTo(Carbon::parse('2026-10-13T12:00:00Z')->setTimezone(config('app.timezone')));
+        Storage::fake('local');
+        $owner = $this->userWithPermissions(['reports.share', 'reports.view', 'inventory.view']);
+        $export = $this->completedExport($owner);
+        Sanctum::actingAs($owner);
+        $longLink = $this->postJson('/api/v1/exportaciones-reportes/'.$export->id.'/enlaces-temporales', ['expires_in' => 43200])->assertCreated()->json('url');
+        $shortLink = $this->postJson('/api/v1/exportaciones-reportes/'.$export->id.'/enlaces-temporales', ['expires_in' => 30])->assertCreated()->json('url');
+
+        // Acción: ejecuta limpieza después del vencimiento original y consulta ambas firmas sin sesión.
+        $this->travel(2)->days();
+        $this->artisan('app:cleanup-expired-report-exports')->assertSuccessful();
+        Storage::disk('local')->assertExists($export->path);
+        $this->app['auth']->forgetGuards();
+        $this->get($longLink)->assertOk()->assertSee('test.xlsx');
+        $this->get($shortLink)->assertForbidden();
+        $this->assertSame(ReportExportStatus::Completed, $export->refresh()->status);
+
+        // Acción: vencidos los 30 días, la firma deja de funcionar y la limpieza elimina archivo e instantánea.
+        $this->travel(29)->days();
+        $this->get($longLink)->assertForbidden();
+        $this->artisan('app:cleanup-expired-report-exports')->assertSuccessful();
+        $this->assertSame(ReportExportStatus::Expired, $export->refresh()->status);
+        $this->assertSame([], Storage::disk('local')->allFiles('report-exports'));
+    }
+
+    // Flujo: rechaza duraciones fuera del rango sin ampliar el archivo ni crear auditoría de enlace.
+    #[TestWith([0])]
+    #[TestWith([43201])]
+    public function test_invalid_share_duration_returns_422_without_extending_retention(int $minutes): void
+    {
+        // Preparación: registra un archivo vigente y conserva su vencimiento original.
+        $this->travelTo(Carbon::parse('2026-10-13T12:00:00Z')->setTimezone(config('app.timezone')));
+        Storage::fake('local');
+        $owner = $this->userWithPermissions(['reports.share', 'reports.view', 'inventory.view']);
+        $export = $this->completedExport($owner);
+        $expiry = $export->expires_at->timestamp;
+        Sanctum::actingAs($owner);
+        // Acción: envía un plazo inválido y comprueba que no mutó la exportación.
+        $this->postJson('/api/v1/exportaciones-reportes/'.$export->id.'/enlaces-temporales', ['expires_in' => $minutes])->assertUnprocessable()->assertJsonValidationErrors('expires_in');
+        $this->assertSame($expiry, $export->refresh()->expires_at->timestamp);
+        $this->assertDatabaseMissing('activity_log', ['event' => 'report_export_link_created', 'subject_id' => $export->id]);
+    }
+
+    // Flujo: una exportación ya vencida no revive al solicitar un enlace largo.
+    public function test_expired_export_cannot_be_extended(): void
+    {
+        // Preparación: conserva el archivo, pero vence su disponibilidad.
+        $this->travelTo(Carbon::parse('2026-10-13T12:00:00Z')->setTimezone(config('app.timezone')));
+        Storage::fake('local');
+        $owner = $this->userWithPermissions(['reports.share', 'reports.view', 'inventory.view']);
+        $export = $this->completedExport($owner);
+        $export->update(['expires_at' => now()->subMinute()]);
+        $expiry = $export->expires_at->timestamp;
+        Sanctum::actingAs($owner);
+        // Acción: rechaza la renovación y mantiene el vencimiento anterior.
+        $this->postJson('/api/v1/exportaciones-reportes/'.$export->id.'/enlaces-temporales', ['expires_in' => 43200])->assertConflict();
+        $this->assertSame($expiry, $export->refresh()->expires_at->timestamp);
+    }
+
+    // Flujo: una lectura anterior no marca vencido un archivo cuya disponibilidad ya se amplió.
+    public function test_download_rechecks_current_retention_before_expiring_a_stale_model(): void
+    {
+        // Preparación: representa una consulta desactualizada sin modificar la vigencia real del archivo.
+        Storage::fake('local');
+        $export = $this->completedExport(User::factory()->create());
+        $stale = $export->fresh();
+        $stale->expires_at = now()->subMinute();
+        // Acción: la descarga toma el bloqueo y conserva la ampliación vigente en la base.
+        $response = app(DownloadReportExportAction::class)->execute($stale);
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame(ReportExportStatus::Completed, $export->refresh()->status);
+        $this->assertDatabaseMissing('activity_log', ['event' => 'report_export_expired', 'subject_id' => $export->id]);
+    }
+
     private function completedExport(User $owner): ReportExport
     {
         $export = ReportExport::factory()->for($owner)->create([
@@ -273,6 +382,12 @@ final class ReportingEndpointTest extends TestCase
             'completed_at' => now(),
         ]);
         Storage::disk('local')->put('report-exports/test.xlsx', 'content');
+        // Congela el dataset de prueba para que el HTML no consulte datos posteriores.
+        $source = app(ReportSourceRegistry::class)->get($export->source_key);
+        $input = $export->query;
+        unset($input['source_key'], $input['definition_version']);
+        $query = app(ReportQueryNormalizer::class)->normalize($export->source_key, $input);
+        app(ReportSnapshotStore::class)->create('report-exports', $source, $query, 100);
 
         return $export;
     }

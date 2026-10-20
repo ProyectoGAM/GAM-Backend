@@ -38,7 +38,7 @@ abstract class LotsRequest extends FormRequest
     public function attributesForAction(): array
     {
         $data = $this->validated();
-        foreach (['initial_quantity', 'quantity', 'version', 'destination_version', 'flock_version', 'breed_id', 'supplier_id', 'poultry_house_id', 'destination_poultry_house_id', 'mortality_category_id', 'product_id', 'stock_location_id', 'production_unit_id', 'page', 'per_page'] as $key) {
+        foreach (['initial_quantity', 'quantity', 'version', 'destination_version', 'flock_version', 'breed_id', 'supplier_id', 'poultry_house_id', 'destination_poultry_house_id', 'product_id', 'stock_location_id', 'production_unit_id', 'page', 'per_page'] as $key) {
             if (isset($data[$key])) {
                 $data[$key] = (int) $data[$key];
             }

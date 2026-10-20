@@ -249,7 +249,7 @@ final class InventoryMovementsReportSource implements ReportSource
             if ($grouped && ! in_array($sort['field'], [...$query->groupings, ...$query->metrics], true)) {
                 continue;
             }
-            $builder->orderBy($aliases[$sort['field']], $sort['direction']);
+            $builder->orderBy($aliases[$sort['field']] ?? $sort['field'], $sort['direction']);
         }
 
         return $builder->orderBy($grouped ? $query->groupings[0] ?? $query->metrics[0] ?? 'date' : 'date');

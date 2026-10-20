@@ -17,6 +17,7 @@ final readonly class ListDeliveriesQuery
                 'driver:id,name',
                 'productionUnit:id,name,latitude,longitude',
                 'latestLocation',
+                'returnProductionUnit:id,name',
             ])
             ->withCount([
                 'stops',
@@ -24,10 +25,11 @@ final readonly class ListDeliveriesQuery
                 'stops as delivered_stops_count' => fn (Builder $query): Builder => $query->where('status', 'delivered'),
                 'stops as not_delivered_stops_count' => fn (Builder $query): Builder => $query->where('status', 'not_delivered'),
             ])
+            ->withSum(['stops as delivered_amount' => fn (Builder $query): Builder => $query->where('status', 'delivered')], 'total_amount')
             ->when($forcedStatus, fn (Builder $query, DeliveryStatus $status): Builder => $query->where('status', $status))
             ->when($filters['status'] ?? null, fn (Builder $query, string $status): Builder => $query->where('status', $status))
             ->when($filters['driver_id'] ?? null, fn (Builder $query, int $driverId): Builder => $query->where('driver_id', $driverId))
-            ->when($filters['production_unit_id'] ?? null, fn (Builder $query, int $productionUnitId): Builder => $query->where('production_unit_id', $productionUnitId))
+            ->when($filters['production_unit_id'] ?? null, fn (Builder $query, int $productionUnitId): Builder => $query->where(fn (Builder $origins): Builder => $origins->where('production_unit_id', $productionUnitId)->orWhereHas('loads', fn (Builder $loads): Builder => $loads->where('production_unit_id', $productionUnitId))))
             ->when($filters['date_from'] ?? null, fn (Builder $query, string $date): Builder => $query->whereDate('started_at', '>=', $date))
             ->when($filters['date_to'] ?? null, fn (Builder $query, string $date): Builder => $query->whereDate('started_at', '<=', $date))
             ->orderByDesc('started_at')

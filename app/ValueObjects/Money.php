@@ -9,6 +9,8 @@ use InvalidArgumentException;
 
 final readonly class Money
 {
+    public const string CURRENCY = 'UYU';
+
     private function __construct(private BrickMoney $value) {}
 
     public static function fromDecimal(string $amount, string $currency): self

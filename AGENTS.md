@@ -50,6 +50,7 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 ## Documentation Files
 
 - You must only create documentation files if explicitly requested by the user.
+- The user has explicitly requested documentation for every backend change before a commit or PR. Create or update the relevant guide in `docs/implementations` in the same change, update its index for new guides, and update the OpenAPI contract when an API changes. Follow the documentation checklist in `README.md`.
 
 ## Replies
 

@@ -2,6 +2,7 @@
 
 namespace App\Actions\ManagementPlans;
 
+use App\Actions\Inventory\InitializeFlockFeedingAction;
 use App\Exceptions\Lots\LotsConflict;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
@@ -24,6 +25,7 @@ final readonly class ReviseFlockPlanAction
         private PlanActivityNormalizer $normalizer,
         private LotsHistory $history,
         private FlockActivityJournal $journal,
+        private InitializeFlockFeedingAction $feeding,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -49,6 +51,7 @@ final readonly class ReviseFlockPlanAction
                 throw new LotsConflict('El plan del lote no existe o cambió de revisión.');
             }
             $before = $this->snapshot($plan);
+            $this->normalizer->validateInitialFeeding($data['activities']);
             $number = $plan->current_revision + 1;
             $revision = new FlockPlanRevision;
             $revision->forceFill([
@@ -65,6 +68,7 @@ final readonly class ReviseFlockPlanAction
             }
             $plan->current_revision = $number;
             $plan->save();
+            $this->feeding->execute($locked, $revision, $actor, $operationId, $source);
             $after = $this->snapshot($plan);
             $this->history->audit($plan, $actor, 'flock_plan_revised', 'Plan de manejo del lote revisado', $operationId, $before, $after, $locked->production_unit_id, $source, $data['reason']);
             $this->journal->record($locked, $operationId, 'plan_revision', 'management_plan.flock.revise');
@@ -103,6 +107,7 @@ final readonly class ReviseFlockPlanAction
                     'interval_days' => $activity->interval_days, 'conditional' => $activity->conditional,
                     'condition' => $activity->condition, 'notes' => $activity->notes,
                     'catalog_type' => $activity->catalog_type, 'catalog_snapshot' => $activity->catalog_snapshot,
+                    'feed_recipe_id' => $activity->feed_recipe_id, 'grams_per_bird' => $activity->grams_per_bird,
                 ])->all(),
             ])->all(),
         ];

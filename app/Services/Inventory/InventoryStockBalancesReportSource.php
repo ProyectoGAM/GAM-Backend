@@ -22,7 +22,7 @@ final class InventoryStockBalancesReportSource implements ReportSource
     {
         return new ReportSourceDefinition(
             key: 'inventory.stock-balances',
-            definitionVersion: '2.1',
+            definitionVersion: '2.2',
             label: 'Saldos de inventario',
             description: 'Stock disponible y mínimo por producto y ubicación.',
             permission: 'inventory.view',
@@ -64,6 +64,7 @@ final class InventoryStockBalancesReportSource implements ReportSource
             formats: ['xlsx', 'pdf'],
             limits: ['max_page_size' => 100, 'max_range_days' => 366, 'max_export_rows' => 50000],
             defaultSort: 'product:asc',
+            supportsDateRange: false,
         );
     }
 
@@ -241,7 +242,7 @@ final class InventoryStockBalancesReportSource implements ReportSource
             if ($grouped && ! in_array($sort['field'], [...$query->groupings, ...$query->metrics], true)) {
                 continue;
             }
-            $builder->orderBy($aliases[$sort['field']], $sort['direction']);
+            $builder->orderBy($aliases[$sort['field']] ?? $sort['field'], $sort['direction']);
         }
 
         return $builder->orderBy($grouped ? $query->groupings[0] ?? $query->metrics[0] ?? 'base_unit' : 'product_id');

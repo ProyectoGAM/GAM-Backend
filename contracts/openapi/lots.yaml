@@ -21,7 +21,7 @@ tags:
     description: "Traslados parciales, totales e histórico compensatorio."
   -
     name: "Catálogos"
-    description: "Razas y categorías de mortalidad con vigencia."
+    description: "Razas con vigencia."
   -
     name: "Mortalidad"
     description: "Bajas y correcciones auditadas."
@@ -210,7 +210,7 @@ paths:
       tags: ["Lotes"]
       operationId: "finalizeFlock"
       summary: "Finaliza con egreso de las aves remanentes y sin borrado"
-      description: "Permiso requerido: flocks.finalize. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: flocks.finalize. Pone el saldo en cero y registra sólo el egreso de aves positivas. Si el saldo previo era negativo, registra egreso cero y conserva ese valor en las fotografías y la auditoría. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "flocks.finalize"
       parameters:
         -
@@ -245,7 +245,7 @@ paths:
       tags: ["Redistribuciones"]
       operationId: "redistributeFlock"
       summary: "Redistribuye, une o traslada un lote"
-      description: "Permiso requerido: flocks.redistribute. plan_activity_id es opcional y sólo puede identificar una actividad flock_movement vigente del plan del lote origen; nunca se asocia por fecha o tipo. Una redistribución parcial que crea un lote nuevo copia al plan de destino las actividades futuras del plan origen y conserva su fecha de referencia; los manejos ya realizados aparecen como antecedentes con su operación original. Incorporar aves a un lote receptor existente no modifica el plan de ese receptor. Un traslado total conserva la identidad y el plan del lote. Si la cantidad coincide con todas las aves y se indica un receptor, finaliza el origen y conserva los datos del receptor; sin receptor, traslada el mismo lote a otro galpón. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: flocks.redistribute. plan_activity_id es opcional y sólo puede identificar una actividad flock_movement vigente del plan del lote origen; nunca se asocia por fecha o tipo. Una redistribución parcial que crea un lote nuevo copia al plan de destino las actividades futuras del plan origen y conserva su fecha de referencia; los manejos ya realizados aparecen como antecedentes con su operación original. Incorporar aves a un lote receptor existente no modifica el plan de ese receptor. Un traslado total conserva la identidad y el plan del lote. Si la cantidad coincide con todas las aves y se indica un receptor, finaliza el origen y conserva los datos del receptor; sin receptor, traslada el mismo lote a otro galpón. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original. No se permiten movimientos entre UP; fraccionar conserva edad y alimentación, agrupar conserva el modo y plan del receptor."
       x-permission: "flocks.redistribute"
       parameters:
         -
@@ -280,7 +280,7 @@ paths:
       tags: ["Redistribuciones"]
       operationId: "reverseRedistribution"
       summary: "Compensa una redistribución sin actividad posterior"
-      description: "Permiso requerido: flocks.redistribute. Sólo se permite cuando ningún lote involucrado tiene actividad de negocio posterior, la operación histórica es verificable y el galpón requerido para devolver las aves está libre, operativo y tiene capacidad. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: flocks.redistribute. Sólo se permite cuando ningún lote involucrado tiene actividad de negocio posterior, la operación histórica es verificable y el galpón requerido para devolver las aves está libre, operativo y tiene capacidad. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original. No se permiten movimientos entre UP; fraccionar conserva edad y alimentación, agrupar conserva el modo y plan del receptor."
       x-permission: "flocks.redistribute"
       parameters:
         -
@@ -393,7 +393,7 @@ paths:
       tags: ["Catálogos"]
       operationId: "listBreeds"
       summary: "Lista y busca razas"
-      description: "Permiso requerido: breeds.view. El acceso es global dentro de la empresa."
+      description: "Permiso requerido: breeds.view. Cada raza incluye sus límites propios (null significa herencia) y los rangos efectivos calculados con la configuración global."
       x-permission: "breeds.view"
       parameters:
         -
@@ -410,7 +410,7 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "#/components/schemas/PaginatedCatalogs"
+                "$ref": "#/components/schemas/PaginatedBreeds"
         "401":
           "$ref": "#/components/responses/Unauthenticated"
         "403":
@@ -423,7 +423,7 @@ paths:
       tags: ["Catálogos"]
       operationId: "createBreed"
       summary: "Crea una raza"
-      description: "Permiso requerido: breeds.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: breeds.manage. Si se omite una pareja de límites, la etapa hereda el rango global. Los límites personalizados se expresan en gramos. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "breeds.manage"
       parameters:
         -
@@ -433,7 +433,7 @@ paths:
         content:
           "application/json":
             schema:
-              "$ref": "#/components/schemas/CreateCatalog"
+              "$ref": "#/components/schemas/CreateBreed"
       responses:
         "201":
           description: "Operación registrada o resultado original recuperado por idempotencia."
@@ -455,8 +455,8 @@ paths:
     patch:
       tags: ["Catálogos"]
       operationId: "updateBreed"
-      summary: "Renombra o cambia la vigencia de una raza"
-      description: "Permiso requerido: breeds.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      summary: "Actualiza una raza y sus rangos esperados"
+      description: "Permiso requerido: breeds.manage. Cada pareja mínimo/máximo puede actualizarse por etapa; ambos null restauran la herencia global. Los cambios reclasifican las jornadas abiertas de esa raza y conservan las cerradas. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "breeds.manage"
       parameters:
         -
@@ -468,105 +468,7 @@ paths:
         content:
           "application/json":
             schema:
-              "$ref": "#/components/schemas/UpdateCatalog"
-      responses:
-        "200":
-          description: "Consulta u operación completada."
-          content:
-            "application/json":
-              schema:
-                "$ref": "#/components/schemas/OperationResponse"
-        "401":
-          "$ref": "#/components/responses/Unauthenticated"
-        "403":
-          "$ref": "#/components/responses/Forbidden"
-        "404":
-          "$ref": "#/components/responses/NotFound"
-        "409":
-          "$ref": "#/components/responses/Conflict"
-        "422":
-          "$ref": "#/components/responses/InvalidInput"
-  "/mortality-categories":
-    get:
-      tags: ["Catálogos"]
-      operationId: "listMortalityCategories"
-      summary: "Lista categorías de mortalidad"
-      description: "Permiso requerido: mortality-categories.view. El acceso es global dentro de la empresa."
-      x-permission: "mortality-categories.view"
-      parameters:
-        -
-          "$ref": "#/components/parameters/Page"
-        -
-          "$ref": "#/components/parameters/PerPage"
-        -
-          "$ref": "#/components/parameters/Search"
-        -
-          "$ref": "#/components/parameters/CatalogStatus"
-      responses:
-        "200":
-          description: "Consulta u operación completada."
-          content:
-            "application/json":
-              schema:
-                "$ref": "#/components/schemas/PaginatedCatalogs"
-        "401":
-          "$ref": "#/components/responses/Unauthenticated"
-        "403":
-          "$ref": "#/components/responses/Forbidden"
-        "404":
-          "$ref": "#/components/responses/NotFound"
-        "422":
-          "$ref": "#/components/responses/InvalidInput"
-    post:
-      tags: ["Catálogos"]
-      operationId: "createMortalityCategory"
-      summary: "Crea una categoría de mortalidad"
-      description: "Permiso requerido: mortality-categories.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
-      x-permission: "mortality-categories.manage"
-      parameters:
-        -
-          "$ref": "#/components/parameters/IdempotencyKey"
-      requestBody:
-        required: true
-        content:
-          "application/json":
-            schema:
-              "$ref": "#/components/schemas/CreateCatalog"
-      responses:
-        "201":
-          description: "Operación registrada o resultado original recuperado por idempotencia."
-          content:
-            "application/json":
-              schema:
-                "$ref": "#/components/schemas/OperationResponse"
-        "401":
-          "$ref": "#/components/responses/Unauthenticated"
-        "403":
-          "$ref": "#/components/responses/Forbidden"
-        "404":
-          "$ref": "#/components/responses/NotFound"
-        "409":
-          "$ref": "#/components/responses/Conflict"
-        "422":
-          "$ref": "#/components/responses/InvalidInput"
-  "/mortality-categories/{mortalityCategory}":
-    patch:
-      tags: ["Catálogos"]
-      operationId: "updateMortalityCategory"
-      summary: "Renombra o cambia la vigencia de una categoría"
-      description: "Permiso requerido: mortality-categories.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
-      x-permission: "mortality-categories.manage"
-      parameters:
-        -
-          "$ref": "#/components/parameters/MortalityCategory"
-        -
-          "$ref": "#/components/parameters/IdempotencyKey"
-      requestBody:
-        required: true
-        content:
-          "application/json":
-            schema:
-              "$ref": "#/components/schemas/UpdateCatalog"
+              "$ref": "#/components/schemas/UpdateBreed"
       responses:
         "200":
           description: "Consulta u operación completada."
@@ -723,7 +625,7 @@ paths:
       tags: ["Mortalidad"]
       operationId: "recordMortality"
       summary: "Registra bajas y descuenta aves vivas"
-      description: "Permiso requerido: mortality.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: mortality.manage. Exige fecha, cantidad entera positiva y motivo textual en notes. Puede dejar saldo negativo y conserva el estado del lote. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "mortality.manage"
       parameters:
         -
@@ -831,7 +733,7 @@ paths:
       tags: ["Recolección"]
       operationId: "recordEggCollection"
       summary: "Registra huevos y aumenta el inventario en una transacción"
-      description: "Permiso requerido: egg-collections.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: egg-collections.manage. Requiere un lote abierto con saldo mayor que cero; saldo cero o negativo responde 409 sin recolección ni cambios de stock. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "egg-collections.manage"
       parameters:
         -
@@ -1281,13 +1183,6 @@ components:
       schema:
         type: "integer"
         minimum: 1
-    MortalityCategory:
-      name: "mortalityCategory"
-      in: "path"
-      required: true
-      schema:
-        type: "integer"
-        minimum: 1
     IdempotencyKey:
       name: "Idempotency-Key"
       in: "header"
@@ -1461,7 +1356,8 @@ components:
           maximum: 2147483647
         current_quantity:
           type: "integer"
-          minimum: 0
+          format: "int64"
+          description: "Saldo del lote; admite valores negativos por mortalidad sin modificar su estado."
         entry_date:
           type: "string"
           format: "date"
@@ -1537,7 +1433,8 @@ components:
           maximum: 2147483647
         current_quantity:
           type: "integer"
-          minimum: 0
+          format: "int64"
+          description: "Saldo del lote; admite valores negativos por mortalidad sin modificar su estado."
         entry_date:
           type: "string"
           format: "date"
@@ -1641,7 +1538,7 @@ components:
     Mortality:
       type: "object"
       additionalProperties: false
-      required: ["id", "flock_id", "poultry_house_id", "production_unit_id", "quantity", "occurred_at", "notes", "status", "version", "created_by", "mortality_category_id", "plan_activity_id", "origin_operation_id"]
+      required: ["id", "flock_id", "poultry_house_id", "production_unit_id", "quantity", "occurred_at", "notes", "status", "version", "created_by", "plan_activity_id", "origin_operation_id"]
       properties:
         id:
           type: "string"
@@ -1678,9 +1575,6 @@ components:
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
         created_by:
-          type: "integer"
-          minimum: 1
-        mortality_category_id:
           type: "integer"
           minimum: 1
         plan_activity_id:
@@ -1758,6 +1652,44 @@ components:
           minimum: 1
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
+    BreedCatalog:
+      type: "object"
+      additionalProperties: false
+      required: ["id", "name", "status", "version", "range_overrides", "expected_ranges"]
+      properties:
+        id: { type: integer, minimum: 1 }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        status: { type: string, enum: [active, inactive] }
+        version: { type: integer, minimum: 1, maximum: 2147483647 }
+        range_overrides: { "$ref": "#/components/schemas/BreedRangeOverrides" }
+        expected_ranges: { "$ref": "#/components/schemas/BreedExpectedRanges" }
+    BreedRangeOverrides:
+      type: "object"
+      additionalProperties: false
+      description: "Sólo en razas; null en ambos límites de una etapa significa herencia global."
+      required: ["chick_min_weight_g", "chick_max_weight_g", "adult_min_weight_g", "adult_max_weight_g"]
+      properties:
+        chick_min_weight_g: { type: ["string", "null"] }
+        chick_max_weight_g: { type: ["string", "null"] }
+        adult_min_weight_g: { type: ["string", "null"] }
+        adult_max_weight_g: { type: ["string", "null"] }
+    BreedExpectedRanges:
+      type: ["object", "null"]
+      description: "Sólo en razas. Es null hasta que exista configuración global, que también define la semana de paso a adultas."
+      required: ["adult_from_week", "reference_version", "chick", "adult"]
+      properties:
+        adult_from_week: { type: integer }
+        reference_version: { type: integer }
+        chick: { "$ref": "#/components/schemas/BreedStageRange" }
+        adult: { "$ref": "#/components/schemas/BreedStageRange" }
+    BreedStageRange:
+      type: "object"
+      additionalProperties: false
+      required: ["min_weight_g", "max_weight_g", "source"]
+      properties:
+        min_weight_g: { type: string }
+        max_weight_g: { type: string }
+        source: { type: string, enum: [global, breed] }
     Operation:
       type: "object"
       additionalProperties: false
@@ -1777,10 +1709,13 @@ components:
         collection:
           "$ref": "#/components/schemas/EggCollection"
         catalog:
-          "$ref": "#/components/schemas/Catalog"
+          oneOf:
+            - "$ref": "#/components/schemas/Catalog"
+            - "$ref": "#/components/schemas/BreedCatalog"
     CreateFlock:
       type: "object"
       additionalProperties: false
+      description: "La fecha de ingreso debe coincidir con el día del registro en America/Montevideo; no se admiten fechas anteriores ni futuras."
       required: ["code", "breed_id", "poultry_house_id", "initial_quantity", "entry_date", "plan_template_id", "plan_template_version"]
       properties:
         id:
@@ -1815,7 +1750,7 @@ components:
         plan_template_id:
           type: "string"
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
-          description: "Plantilla publicada elegida para crear la copia propia del lote."
+          description: "Plantilla publicada con exactamente una alimentación inicial (día 1 o semana 1), receta y gramos positivos; su copia inicializa alimentación automática."
         plan_template_version:
           type: "integer"
           minimum: 1
@@ -1976,7 +1911,8 @@ components:
     RecordMortality:
       type: "object"
       additionalProperties: false
-      required: ["version", "quantity", "mortality_category_id"]
+      required: ["version", "quantity", "occurred_at", "notes"]
+      description: "Registra fecha, cantidad entera positiva y motivo obligatorio. Las bajas pueden superar el saldo del lote; conserva su estado incluso con saldo cero o negativo."
       properties:
         id:
           type: "string"
@@ -1995,21 +1931,21 @@ components:
           type: ["string", "null"]
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
           description: "Actividad mortality vigente del mismo lote, cuando se asocia explícitamente."
-        mortality_category_id:
-          type: "integer"
-          minimum: 1
         occurred_at:
           type: "string"
           format: "date-time"
           pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
           description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
         notes:
-          type: ["string", "null"]
+          type: "string"
+          minLength: 1
+          description: "Motivo obligatorio de la mortalidad; no admite texto vacío ni sólo espacios."
           maxLength: 5000
     CorrectMortality:
       type: "object"
       additionalProperties: false
       required: ["version", "flock_version", "reason"]
+      description: "Corrige cantidad, fecha o motivo mediante compensación auditada. La cantidad debe seguir siendo positiva y puede dejar saldo negativo. reason justifica la corrección; notes conserva el motivo del hecho."
       properties:
         version:
           type: "integer"
@@ -2033,11 +1969,15 @@ components:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        mortality_category_id:
-          type: "integer"
-          minimum: 1
+        occurred_at:
+          type: "string"
+          format: "date-time"
+          description: "Fecha corregida dentro del período del mismo galpón histórico; el movimiento original se conserva."
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
         notes:
-          type: ["string", "null"]
+          type: "string"
+          minLength: 1
+          description: "Motivo de la mortalidad; si se envía debe ser texto no vacío."
           maxLength: 5000
     CancelRecord:
       type: "object"
@@ -2298,6 +2238,31 @@ components:
           type: "string"
           minLength: 1
           maxLength: 500
+    CreateBreed:
+      type: "object"
+      additionalProperties: false
+      required: ["name"]
+      description: "Cada etapa recibe ambos límites en gramos o ninguno. Los límites omitidos heredan la configuración global."
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        status: { type: string, enum: [active, inactive] }
+        chick_min_weight_g: { type: ["string", "null"], pattern: "^[0-9]{1,13}(\\.[0-9])?$" }
+        chick_max_weight_g: { type: ["string", "null"], pattern: "^[0-9]{1,13}(\\.[0-9])?$" }
+        adult_min_weight_g: { type: ["string", "null"], pattern: "^[0-9]{1,13}(\\.[0-9])?$" }
+        adult_max_weight_g: { type: ["string", "null"], pattern: "^[0-9]{1,13}(\\.[0-9])?$" }
+    UpdateBreed:
+      type: "object"
+      additionalProperties: false
+      required: ["version"]
+      description: "Las parejas omitidas permanecen iguales; ambos límites null restauran la herencia global. En cada pareja no nula, 0 < mínimo < máximo."
+      properties:
+        version: { type: integer, minimum: 1, maximum: 2147483647 }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        status: { type: string, enum: [active, inactive] }
+        chick_min_weight_g: { type: ["string", "null"], pattern: "^[0-9]{1,13}(\\.[0-9])?$" }
+        chick_max_weight_g: { type: ["string", "null"], pattern: "^[0-9]{1,13}(\\.[0-9])?$" }
+        adult_min_weight_g: { type: ["string", "null"], pattern: "^[0-9]{1,13}(\\.[0-9])?$" }
+        adult_max_weight_g: { type: ["string", "null"], pattern: "^[0-9]{1,13}(\\.[0-9])?$" }
     CreateCatalog:
       type: "object"
       additionalProperties: false
@@ -2523,6 +2488,19 @@ components:
             type: ["string", "null"]
         meta:
           "$ref": "#/components/schemas/PageMeta"
+    PaginatedBreeds:
+      type: "object"
+      additionalProperties: false
+      required: ["data", "links", "meta"]
+      properties:
+        data:
+          type: "array"
+          items: { "$ref": "#/components/schemas/BreedCatalog" }
+        links:
+          type: "object"
+          additionalProperties:
+            type: ["string", "null"]
+        meta: { "$ref": "#/components/schemas/PageMeta" }
     FlockResponse:
       type: "object"
       additionalProperties: false

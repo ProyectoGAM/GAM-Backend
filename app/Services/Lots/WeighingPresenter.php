@@ -45,6 +45,10 @@ final readonly class WeighingPresenter
                 'chick_max_weight_g' => $this->decimal($data['reference_chick_max_weight_g'], 1),
                 'adult_min_weight_g' => $this->decimal($data['reference_adult_min_weight_g'], 1),
                 'adult_max_weight_g' => $this->decimal($data['reference_adult_max_weight_g'], 1),
+                'chick_source' => $data['reference_chick_source'] ?? 'global',
+                'adult_source' => $data['reference_adult_source'] ?? 'global',
+                'breed_id' => isset($data['reference_breed_id']) ? (int) $data['reference_breed_id'] : null,
+                'breed_version' => isset($data['reference_breed_version']) ? (int) $data['reference_breed_version'] : null,
             ];
         }
 
@@ -68,6 +72,9 @@ final readonly class WeighingPresenter
                 'min_weight_g' => $this->decimal($data['min_weight_g'] ?? null, 1),
                 'max_weight_g' => $this->decimal($data['max_weight_g'] ?? null, 1),
                 'unit' => 'g',
+                'source' => $data['stage'] === 'adult'
+                    ? ($data['reference_adult_source'] ?? 'global')
+                    : ($data['reference_chick_source'] ?? 'global'),
             ],
             'reference' => $reference,
             'represented_bird_count' => (int) ($data['represented_bird_count'] ?? 0),

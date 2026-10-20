@@ -14,6 +14,10 @@ use Illuminate\Support\Str;
  * @property string $name
  * @property string $status
  * @property int $version
+ * @property string|null $chick_min_weight_g
+ * @property string|null $chick_max_weight_g
+ * @property string|null $adult_min_weight_g
+ * @property string|null $adult_max_weight_g
  */
 #[Fillable(['name'])]
 class Breed extends Model

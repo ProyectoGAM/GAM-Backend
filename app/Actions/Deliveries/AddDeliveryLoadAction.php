@@ -5,10 +5,12 @@ namespace App\Actions\Deliveries;
 use App\Actions\Inventory\RecordEggStockTransactionAction;
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Enums\Deliveries\DeliveryStatus;
+use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Exceptions\Deliveries\DeliveryConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\Deliveries\Delivery;
 use App\Models\Deliveries\DeliveryLoad;
+use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
 use App\Services\Deliveries\DeliveryLoadUnits;
 use Illuminate\Support\Facades\DB;
@@ -34,9 +36,13 @@ final readonly class AddDeliveryLoadAction
 
             $existing = DeliveryLoad::query()->where('idempotency_key', $idempotencyKey)->first();
             if ($existing !== null) {
+                $legacyData = $data;
+                unset($legacyData['production_unit_id']);
+                $legacyHash = hash('sha256', json_encode($legacyData, JSON_THROW_ON_ERROR));
                 if ($existing->delivery_id !== $locked->getKey()
                     || $existing->type !== 'additional'
-                    || ($existing->request_hash !== null && $existing->request_hash !== $requestHash)
+                    || ($existing->request_hash !== null && $existing->request_hash !== $requestHash
+                        && ! ($existing->request_hash === $legacyHash && $existing->production_unit_id === $data['production_unit_id']))
                     || ($existing->request_hash === null && $existing->quantity !== ($data['quantity'] ?? null))) {
                     throw new DeliveryConflict('La clave de idempotencia ya fue utilizada con otros datos.');
                 }
@@ -52,8 +58,12 @@ final readonly class AddDeliveryLoadAction
                 throw new DeliveryConflict('La carga total supera el máximo permitido.');
             }
 
+            $unit = ProductionUnit::query()->where('status', ProductionUnitStatus::Active)->whereKey($data['production_unit_id'])->lockForUpdate()->first();
+            if ($unit === null) {
+                throw new DeliveryConflict('La unidad productiva indicada no está operativa.');
+            }
             $this->stock->execute(
-                unit: $locked->productionUnit()->lockForUpdate()->firstOrFail(),
+                unit: $unit,
                 type: 'distribution_preparation',
                 quantity: $quantity,
                 operationId: $idempotencyKey,
@@ -68,6 +78,7 @@ final readonly class AddDeliveryLoadAction
             // TODO(Notas3/M13): integrar tipos comerciales y fechas de recolección.
             DeliveryLoad::query()->create([
                 'delivery_id' => $locked->getKey(),
+                'production_unit_id' => $unit->getKey(),
                 'idempotency_key' => $idempotencyKey,
                 'quantity' => $quantity,
                 'items' => $load['items'],
@@ -85,7 +96,8 @@ final readonly class AddDeliveryLoadAction
                 description: 'Carga adicional registrada',
                 operationId: $idempotencyKey,
                 source: 'delivery',
-                properties: ['quantity' => $quantity, 'result' => 'success'],
+                properties: ['quantity' => $quantity, 'production_unit_id' => $unit->getKey(), 'result' => 'success'],
+                upId: $unit->getKey(),
             ));
 
             return $this->load($locked);
@@ -94,6 +106,6 @@ final readonly class AddDeliveryLoadAction
 
     private function load(Delivery $delivery): Delivery
     {
-        return $delivery->load(['driver:id,name', 'productionUnit:id,name,latitude,longitude', 'loads', 'stops', 'latestLocation']);
+        return $delivery->load(['driver:id,name', 'productionUnit:id,name,latitude,longitude', 'loads.productionUnit:id,name', 'returnProductionUnit:id,name', 'stops', 'latestLocation']);
     }
 }

@@ -22,7 +22,7 @@ final class DeliveryUnitBalance
                 $rows[$key] ??= [
                     'unit' => $item['unit'], 'label' => $item['label'],
                     'eggs_per_unit' => (int) $item['eggs_per_unit'],
-                    'loaded_milli' => 0, 'delivered_milli' => 0,
+                    'loaded_milli' => 0, 'delivered_milli' => 0, 'returned_milli' => 0,
                 ];
                 $rows[$key]['loaded_milli'] += $this->milli((string) $item['amount']);
             }
@@ -46,17 +46,24 @@ final class DeliveryUnitBalance
             }
         }
 
-        $unallocatedReturn = (int) $delivery->returned_quantity;
+        $unallocatedReturn = $delivery->returned_items === null ? (int) $delivery->returned_quantity : 0;
+        foreach ($delivery->returned_items ?? [] as $item) {
+            $key = $this->key($item);
+            if (isset($rows[$key])) {
+                $rows[$key]['returned_milli'] += $this->milli((string) $item['amount']);
+            }
+        }
 
         return [
             'rows' => array_values(array_map(function (array $row) use ($unallocated, $unallocatedReturn): array {
-                $available = $row['loaded_milli'] - $row['delivered_milli'];
+                $available = $row['loaded_milli'] - $row['delivered_milli'] - $row['returned_milli'];
                 $eggsPerUnit = $row['eggs_per_unit'];
 
                 return [
                     'unit' => $row['unit'], 'label' => $row['label'], 'eggs_per_unit' => $eggsPerUnit,
                     'loaded_amount' => $this->amount($row['loaded_milli']),
                     'delivered_amount' => $this->amount($row['delivered_milli']),
+                    'returned_amount' => $this->amount($row['returned_milli']),
                     'remaining_amount' => $unallocated === 0 && $unallocatedReturn === 0 ? $this->amount($available) : null,
                     'loaded_eggs' => intdiv($row['loaded_milli'] * $eggsPerUnit, 1000),
                     'delivered_eggs' => intdiv($row['delivered_milli'] * $eggsPerUnit, 1000),
@@ -96,11 +103,11 @@ final class DeliveryUnitBalance
         foreach ($requestedByKey as $key => $milli) {
             $row = $available[$key];
             if ($milli < 1 || $milli > $this->milli($row['remaining_amount'])) {
-                throw ValidationException::withMessages(['items' => 'La entrega supera la cantidad disponible de '.$row['label'].'.']);
+                throw ValidationException::withMessages(['items' => 'La cantidad supera el saldo disponible de '.$row['label'].'.']);
             }
             $eggsScaled = $milli * $row['eggs_per_unit'];
             if ($eggsScaled % 1000 !== 0) {
-                throw ValidationException::withMessages(['items' => 'Cada presentación entregada debe equivaler a huevos enteros.']);
+                throw ValidationException::withMessages(['items' => 'Cada presentación debe equivaler a huevos enteros.']);
             }
             $eggs = intdiv($eggsScaled, 1000);
             $quantity += $eggs;

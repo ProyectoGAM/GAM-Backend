@@ -7,7 +7,85 @@ servers:
   - url: /
 tags:
   - name: Repartos
+  - name: Inventario
 paths:
+  /api/v1/repartos/unidades-productivas:
+    get:
+      tags: [Repartos]
+      summary: Lista UP operativas para elegir el origen de cada carga
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: search, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 1000 } }
+      responses:
+        '200':
+          description: UP accesibles con permiso de lectura de reparto, sin asignaciones por usuario
+          content:
+            application/json:
+              schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/DeliveryProductionUnit' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/inventario/presentaciones-huevos:
+    get:
+      tags: [Inventario]
+      summary: Consulta el catálogo global y su bloqueo; solo administrador
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Los precios nulos corresponden a definiciones anteriores aún sin configurar
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/DeliveryUnit' } }
+                  meta: { type: object, properties: { locked: { type: boolean } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Inventario]
+      summary: Crea una presentación con equivalencia y precio entero en UYU
+      description: Solo administrador. Todas las escrituras del catálogo están bloqueadas si existe cualquier reparto activo.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EggPresentationInput' }
+      responses:
+        '201':
+          description: Presentación creada y auditada
+          content:
+            application/json:
+              schema: { type: object, properties: { data: { $ref: '#/components/schemas/DeliveryUnit' } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/inventario/presentaciones-huevos/{presentation}:
+    patch:
+      tags: [Inventario]
+      summary: Modifica nombre, equivalencia o precio de una presentación
+      description: Solo administrador. Conserva el identificador y no altera las copias históricas. Bloqueado mientras haya cualquier reparto activo.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: presentation, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160 }
+                eggs_per_unit: { type: integer, minimum: 1, maximum: 2147483647 }
+                default_unit_price: { type: integer, minimum: 0, maximum: 2147483647 }
+      responses:
+        '200':
+          description: Presentación actualizada y auditada
+          content:
+            application/json:
+              schema: { type: object, properties: { data: { $ref: '#/components/schemas/DeliveryUnit' } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
   /api/v1/repartos:
     post:
       tags: [Repartos]
@@ -182,28 +260,64 @@ components:
   schemas:
     StartDelivery:
       type: object
-      required: [pin]
+      required: [pin, production_unit_id]
       description: Enviar items para cargas con presentaciones; quantity se conserva para clientes anteriores. No enviar ambos.
       properties:
         pin: { type: string, pattern: '^[0-9]{4}$', description: PIN personal del repartidor; se valida en el servidor y no se guarda en el reparto }
-        production_unit_id: { type: integer, nullable: true }
+        production_unit_id: { type: integer, minimum: 1, description: UP operativa de la carga inicial; obligatoria también en desarrollo }
         quantity: { type: integer, minimum: 1, description: 'Formato anterior: huevos sueltos' }
         items: { type: array, minItems: 1, maxItems: 20, items: { $ref: '#/components/schemas/DeliveryLoadItemInput' } }
         vehicle_reference: { type: string, maxLength: 120 }
     AddDeliveryLoad:
       type: object
+      required: [production_unit_id]
       description: Enviar items o quantity, nunca ambos.
       properties:
+        production_unit_id: { type: integer, minimum: 1, description: UP de esta recarga; puede diferir del origen inicial }
         quantity: { type: integer, minimum: 1, description: 'Formato anterior: huevos sueltos' }
         items: { type: array, minItems: 1, maxItems: 20, items: { $ref: '#/components/schemas/DeliveryLoadItemInput' } }
     DeliveryUnit:
       type: object
-      required: [id, label, category, eggs_per_unit]
+      required: [id, label, category, eggs_per_unit, default_unit_price, currency]
       properties:
         id: { type: string }
         label: { type: string }
         category: { type: string }
         eggs_per_unit: { type: integer, minimum: 1 }
+        default_unit_price: { type: integer, nullable: true, minimum: 0, description: Precio en UYU; nulo únicamente mientras se configura una definición importada }
+        currency: { type: string, enum: [UYU] }
+    DeliveryProductionUnit:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+    EggPresentationInput:
+      type: object
+      required: [name, eggs_per_unit, default_unit_price]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        eggs_per_unit: { type: integer, minimum: 1, maximum: 2147483647 }
+        default_unit_price: { type: integer, minimum: 0, maximum: 2147483647, description: Precio de venta por presentación en pesos uruguayos enteros }
+    ExactDeliveryAmount:
+      type: string
+      pattern: '^[0-9]+[.][0-9]{3}$'
+      description: Importe exacto en UYU, transmitido como texto y conservado con tres decimales; ejemplo 12.625, sin redondear
+      example: '12.625'
+    DeliveryStopItemInput:
+      allOf:
+        - $ref: '#/components/schemas/DeliveryLoadItemInput'
+        - type: object
+          properties:
+            unit_price: { type: integer, minimum: 0, maximum: 2147483647, description: Precio aplicado a esta entrega en pesos enteros; si se omite se usa el predeterminado compatible. Si no hay precio configurado debe indicarse explícitamente. }
+    DeliveryReturnItem:
+      allOf:
+        - $ref: '#/components/schemas/DeliveryLoadItemInput'
+        - type: object
+          properties:
+            label: { type: string, description: Nombre conservado de la carga }
+            eggs: { type: integer, minimum: 1 }
     DeliveryLoadItemInput:
       type: object
       required: [unit, amount, eggs_per_unit]
@@ -221,12 +335,13 @@ components:
             eggs: { type: integer, minimum: 1 }
     DeliveryStopItem:
       allOf:
-        - $ref: '#/components/schemas/DeliveryLoadItemInput'
+        - $ref: '#/components/schemas/DeliveryStopItemInput'
         - type: object
           required: [label, eggs]
           properties:
             label: { type: string }
             eggs: { type: integer, minimum: 1 }
+            line_amount: { $ref: '#/components/schemas/ExactDeliveryAmount', nullable: true }
     DeliveryUnitBalanceRow:
       type: object
       required: [unit, label, eggs_per_unit, loaded_amount, delivered_amount, remaining_amount, loaded_eggs, delivered_eggs]
@@ -236,6 +351,7 @@ components:
         eggs_per_unit: { type: integer, minimum: 1, description: Equivalencia conservada de la carga }
         loaded_amount: { type: string, description: Cantidad exacta en esta presentación }
         delivered_amount: { type: string, description: Cantidad entregada en esta presentación }
+        returned_amount: { type: string, description: Cantidad descargada al cerrar en esta presentación }
         remaining_amount: { type: string, nullable: true, description: Nulo si existen entregas o devoluciones antiguas sin presentación }
         loaded_eggs: { type: integer }
         delivered_eggs: { type: integer }
@@ -261,7 +377,7 @@ components:
       properties:
         client_reference: { type: string, maxLength: 80 }
         status: { type: string, enum: [delivered, not_delivered] }
-        items: { type: array, minItems: 1, maxItems: 20, items: { $ref: '#/components/schemas/DeliveryLoadItemInput' }, description: 'Obligatorio para delivered y prohibido para not_delivered. El servidor calcula los huevos desde la equivalencia registrada en la carga.' }
+        items: { type: array, minItems: 1, maxItems: 20, items: { $ref: '#/components/schemas/DeliveryStopItemInput' }, description: 'Obligatorio para delivered y prohibido para not_delivered. El servidor calcula los huevos desde la equivalencia registrada en la carga.' }
         visit_reason: { type: string, nullable: true, maxLength: 120 }
         notes: { type: string, nullable: true, maxLength: 2000 }
     DeliveryLocationInput:
@@ -276,10 +392,16 @@ components:
         captured_at: { type: string, format: date-time }
     CloseDelivery:
       type: object
-      required: [returned_quantity, pin]
+      required: [pin]
+      description: Enviar returned_items para la descarga por presentaciones. La descarga debe incluir todos los huevos sobrantes para cerrar el reparto. returned_quantity se conserva para cierres anteriores sin desglose; no enviar ambos.
+      oneOf:
+        - required: [returned_items]
+        - required: [returned_quantity]
       properties:
         pin: { type: string, pattern: '^[0-9]{4}$', description: PIN personal del repartidor; el cierre requiere conexión y no se encola }
-        returned_quantity: { type: integer, minimum: 0 }
+        returned_quantity: { type: integer, minimum: 0, description: Formato anterior en huevos; no reconstruye presentaciones }
+        returned_items: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/DeliveryLoadItemInput' }, description: Cantidades de las presentaciones cargadas; acepta fracciones que equivalen a huevos enteros. Lista vacía si no hay devolución. }
+        return_production_unit_id: { type: integer, nullable: true, description: Destino único de todos los sobrantes; debe pertenecer a las UP de las cargas. Obligatorio para una devolución cuando hay varias UP de origen. }
         notes: { type: string, nullable: true, maxLength: 2000 }
     Delivery:
       type: object
@@ -288,11 +410,15 @@ components:
         id: { type: string }
         status: { type: string, enum: [active, completed, cancelled] }
         driver: { type: object, nullable: true }
-        production_unit: { type: object, nullable: true }
+        production_unit: { type: object, nullable: true, description: UP inicial conservada para compatibilidad; cada carga expone su propio origen }
         vehicle_reference: { type: string, nullable: true }
         loaded_quantity: { type: integer }
         delivered_quantity: { type: integer }
         returned_quantity: { type: integer }
+        returned_items: { type: array, nullable: true, items: { $ref: '#/components/schemas/DeliveryReturnItem' } }
+        return_production_unit: { $ref: '#/components/schemas/DeliveryProductionUnit', nullable: true }
+        delivered_amount: { $ref: '#/components/schemas/ExactDeliveryAmount', nullable: true, description: Valor de mercadería entregada; nulo si hay entregas históricas sin precios }
+        currency: { type: string, enum: [UYU] }
         remaining_quantity: { type: integer }
         unit_balances: { $ref: '#/components/schemas/DeliveryUnitBalances', description: Disponible cuando se consultan las cargas y visitas del reparto }
         stops_summary: { type: object }
@@ -308,6 +434,8 @@ components:
         client_reference: { type: string }
         status: { type: string, enum: [pending, delivered, not_delivered] }
         delivered_quantity: { type: integer, minimum: 0 }
+        total_amount: { $ref: '#/components/schemas/ExactDeliveryAmount', nullable: true }
+        currency: { type: string, enum: [UYU] }
         items: { type: array, nullable: true, items: { $ref: '#/components/schemas/DeliveryStopItem' }, description: Nulo solo para registros de desarrollo anteriores sin detalle por presentación }
         visit_reason: { type: string, nullable: true }
         notes: { type: string, nullable: true }
@@ -323,6 +451,7 @@ components:
         id: { type: integer }
         idempotency_key: { type: string, format: uuid }
         quantity: { type: integer }
+        production_unit: { $ref: '#/components/schemas/DeliveryProductionUnit', nullable: true }
         items: { type: array, items: { $ref: '#/components/schemas/DeliveryLoadItem' } }
         type: { type: string }
         created_at: { type: string, format: date-time }
@@ -338,7 +467,7 @@ components:
       description: Reparto
       content:
         application/json:
-          schema: { type: object, properties: { data: { $ref: '#/components/schemas/Delivery' } } }
+          schema: { type: object, properties: { data: { $ref: '#/components/schemas/Delivery' }, catalog: { type: array, items: { $ref: '#/components/schemas/DeliveryUnit' }, description: Catálogo confirmado al iniciar para conservar localmente } } }
     DeliveryPage:
       description: Repartos paginados
       content:

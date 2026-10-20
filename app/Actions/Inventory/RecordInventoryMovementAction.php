@@ -5,12 +5,14 @@ namespace App\Actions\Inventory;
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\DTO\Inventory\InventoryMovementCommand;
 use App\Enums\FarmStructure\PoultryHouseType;
+use App\Enums\Inventory\InventoryMovementType;
 use App\Enums\Inventory\StockLocationStatus;
 use App\Enums\SuppliersAndCatalogs\BaseUnit;
 use App\Enums\SuppliersAndCatalogs\ProductKind;
 use App\Exceptions\Inventory\InventoryConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\Inventory\EggStockAccount;
+use App\Models\Inventory\FeedStockOperation;
 use App\Models\Inventory\InventoryMovement;
 use App\Models\Inventory\InventoryMovementLine;
 use App\Models\Inventory\StockBalance;
@@ -33,7 +35,7 @@ final readonly class RecordInventoryMovementAction
         private GetActiveSupplierQuery $getActiveSupplier,
     ) {}
 
-    public function execute(InventoryMovementCommand $command, User $actor, string $source = 'api'): InventoryMovement
+    public function execute(InventoryMovementCommand $command, User $actor, string $source = 'api', ?FeedStockOperation $feedCompensation = null): InventoryMovement
     {
         $legacyRequestHash = $this->legacyRequestHash($command);
         $normalizedCommand = $this->normalizeCommand($command);
@@ -45,7 +47,7 @@ final readonly class RecordInventoryMovementAction
         }
 
         try {
-            return DB::transaction(function () use ($normalizedCommand, $actor, $requestHash, $legacyRequestHash, $source): InventoryMovement {
+            return DB::transaction(function () use ($normalizedCommand, $actor, $requestHash, $legacyRequestHash, $source, $feedCompensation): InventoryMovement {
                 $existingInsideTransaction = $this->existingMovement($normalizedCommand->operationId);
                 if ($existingInsideTransaction !== null) {
                     return $this->resolveReplay($existingInsideTransaction, $requestHash, $legacyRequestHash);
@@ -55,6 +57,7 @@ final readonly class RecordInventoryMovementAction
                     throw new InventoryConflict('La operación debe contener al menos una línea.');
                 }
 
+                $compensatedProductIds = $feedCompensation === null ? [] : $this->feedCompensationProducts($normalizedCommand, $feedCompensation);
                 $lineKeys = [];
                 $locationIds = [];
                 $normalizedLines = [];
@@ -77,7 +80,7 @@ final readonly class RecordInventoryMovementAction
                 foreach ($normalizedCommand->lines as $line) {
                     /** Bloquea los productos antes de consultar su estado y unidad. */
                     $product = $products->get($line['product_id']);
-                    if ($product === null || $product->status->value !== 'active' || ! $product->stock_tracked) {
+                    if ($product === null || ($product->status->value !== 'active' && ! in_array((int) $product->getKey(), $compensatedProductIds, true)) || ! $product->stock_tracked) {
                         throw new InventoryConflict('El producto indicado no está activo o no controla stock.');
                     }
                     if ($product->system_key === 'generic_egg' && ! $normalizedCommand->eggAccountOperation) {
@@ -298,7 +301,7 @@ final readonly class RecordInventoryMovementAction
                 ));
 
                 return $movement->load([
-                    'lines.product' => static fn (BelongsTo $productRelation): Builder => $productRelation->getQuery()->withResourceMetadata(),
+                    'lines.product' => fn (BelongsTo $productRelation): Builder => $this->productResourceMetadata($productRelation),
                     'lines.stockLocation',
                     'supplier',
                     'creator',
@@ -343,6 +346,40 @@ final readonly class RecordInventoryMovementAction
             reversesMovementId: $command->reversesMovementId,
             eggAccountOperation: $command->eggAccountOperation,
         ))->requestHash();
+    }
+
+    /**
+     * Sólo admite la inversa completa de una elaboración ligada a su cancelación transaccional.
+     *
+     * @return list<int>
+     */
+    private function feedCompensationProducts(InventoryMovementCommand $command, FeedStockOperation $original): array
+    {
+        $original = FeedStockOperation::query()->whereKey($original->getKey())->where('kind', 'manufacture')->sharedLock()->first();
+        $cancellation = FeedStockOperation::query()->where('operation_id', $command->operationId)->where('kind', 'cancellation')->first();
+        if ($original === null || $cancellation === null
+            || (int) $cancellation->cancels_operation_id !== (int) $original->getKey()
+            || $command->type !== InventoryMovementType::Reversal
+            || $command->reversesMovementId !== (int) $original->inventory_movement_id
+            || $command->referenceType !== 'feed_manufacture_cancellation'
+            || $command->referenceId !== (string) $cancellation->getKey()) {
+            throw new InventoryConflict('La compensación debe corresponder a la cancelación de una elaboración original.');
+        }
+        $movement = InventoryMovement::query()->whereKey($original->inventory_movement_id)->firstOrFail()->load('lines');
+        if ($movement->reference_type !== 'feed_manufacture' || $movement->reference_id !== (string) $original->getKey()
+            || count($command->lines) !== $movement->lines->count() || $movement->reversal()->exists()) {
+            throw new InventoryConflict('La compensación no corresponde al movimiento original de elaboración.');
+        }
+        foreach ($command->lines as $line) {
+            $originalLine = $movement->lines->first(fn ($item): bool => (int) $item->product_id === $line['product_id']
+                && (int) $item->stock_location_id === $line['stock_location_id']);
+            if ($originalLine === null || BigDecimal::of((string) $originalLine->on_hand_delta)->compareTo(0) >= 0
+                || BigDecimal::of($line['on_hand_delta'])->compareTo(BigDecimal::of((string) $originalLine->on_hand_delta)->negated()) !== 0) {
+                throw new InventoryConflict('Debes devolver exactamente los ingredientes del movimiento original.');
+            }
+        }
+
+        return $movement->lines->pluck('product_id')->map(fn ($id): int => (int) $id)->unique()->values()->all();
     }
 
     private function normalizeCommand(InventoryMovementCommand $command): InventoryMovementCommand
@@ -421,7 +458,7 @@ final readonly class RecordInventoryMovementAction
         }
 
         return $movement->load([
-            'lines.product' => static fn (BelongsTo $productRelation): Builder => $productRelation->getQuery()->withResourceMetadata(),
+            'lines.product' => fn (BelongsTo $productRelation): Builder => $this->productResourceMetadata($productRelation),
             'lines.stockLocation',
             'supplier',
             'creator',
@@ -431,5 +468,16 @@ final readonly class RecordInventoryMovementAction
     private function isUniqueViolation(QueryException $exception): bool
     {
         return (string) ($exception->errorInfo[0] ?? $exception->getCode()) === '23505';
+    }
+
+    /**
+     * Conserva el tipo concreto del producto al cargar metadatos públicos.
+     *
+     * @param  BelongsTo<Product, InventoryMovementLine>  $relation
+     * @return Builder<Product>
+     */
+    private function productResourceMetadata(BelongsTo $relation): Builder
+    {
+        return $relation->getQuery()->withResourceMetadata();
     }
 }

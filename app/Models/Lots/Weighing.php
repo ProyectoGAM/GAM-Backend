@@ -34,6 +34,10 @@ use Illuminate\Support\Str;
  * @property string|null $reference_adult_max_weight_g
  * @property string|null $reference_unit
  * @property int|null $reference_version
+ * @property string|null $reference_chick_source
+ * @property string|null $reference_adult_source
+ * @property int|null $reference_breed_id
+ * @property int|null $reference_breed_version
  * @property int $represented_bird_count
  * @property string $total_weight_g
  * @property string $average_weight_g
@@ -70,6 +74,8 @@ class Weighing extends Model
             'occurred_at' => 'immutable_datetime',
             'reference_adult_from_week' => 'integer',
             'reference_version' => 'integer',
+            'reference_breed_id' => 'integer',
+            'reference_breed_version' => 'integer',
             'represented_bird_count' => 'integer',
             'outside_expected_range' => 'boolean',
             'version' => 'integer',

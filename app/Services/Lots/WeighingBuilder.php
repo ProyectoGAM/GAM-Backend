@@ -11,7 +11,7 @@ use Carbon\CarbonImmutable;
 
 final readonly class WeighingBuilder
 {
-    public function __construct(private WeighingMath $math) {}
+    public function __construct(private WeighingMath $math, private BreedWeighingReference $references) {}
 
     /**
      * @param  array<string, mixed>  $data
@@ -27,7 +27,7 @@ final readonly class WeighingBuilder
         $rows = [];
         $totalWeight = [];
         $represented = 0;
-        $reference = $this->reference($settings, $historicalReference);
+        $reference = $this->reference($flock, $settings, $historicalReference);
         $age = FlockAge::on($projection['entry_date'], $occurredAt, config('lots.timezone'));
         $stage = null;
         $minimum = null;
@@ -95,6 +95,7 @@ final readonly class WeighingBuilder
             'stage' => $stage,
             'min_weight_g' => $minimum,
             'max_weight_g' => $maximum,
+            'range_source' => $stage === null ? null : ($reference[$stage.'_source'] ?? 'global'),
             'reference' => $reference,
             'represented_bird_count' => $represented,
             'total_weight_g' => $total,
@@ -105,23 +106,13 @@ final readonly class WeighingBuilder
     }
 
     /** @return array<string, mixed>|null */
-    private function reference(?WeighingReferenceSettings $settings, ?array $historicalReference): ?array
+    private function reference(Flock $flock, ?WeighingReferenceSettings $settings, ?array $historicalReference): ?array
     {
         if ($historicalReference !== null) {
             return $historicalReference;
         }
-        if ($settings === null) {
-            return null;
-        }
+        $flock->loadMissing('breed');
 
-        return [
-            'version' => $settings->version,
-            'unit' => $settings->captured_unit,
-            'adult_from_week' => $settings->adult_from_week,
-            'chick_min_weight_g' => (string) $settings->chick_min_weight_g,
-            'chick_max_weight_g' => (string) $settings->chick_max_weight_g,
-            'adult_min_weight_g' => (string) $settings->adult_min_weight_g,
-            'adult_max_weight_g' => (string) $settings->adult_max_weight_g,
-        ];
+        return $this->references->resolve($flock->breed, $settings);
     }
 }

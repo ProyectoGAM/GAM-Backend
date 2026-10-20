@@ -1,0 +1,150 @@
+openapi: 3.1.0
+info:
+  title: Alimentación cuantitativa y donaciones
+  version: 1.0.0
+  description: Registros de negocio que alimentan reportes. Idempotencia por header y auditoría transaccional.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+  - sanctumCookie: []
+  - bearerAuth: []
+    sharedDevice: []
+    sharedSession: []
+paths:
+  /alimentacion/productos:
+    get:
+      summary: Busca alimentos terminados activos con permiso de manejo
+      operationId: listarAlimentosParaSuministro
+      parameters:
+        - { name: search, in: query, schema: { type: string, maxLength: 160 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Alimentos con id y name; meta con current_page y last_page. }
+        '403': { description: Requiere management-plans.view o management-plans.execute. }
+  /flocks/{flock}/alimentacion:
+    parameters:
+      - $ref: '#/components/parameters/Flock'
+    get:
+      summary: Lista suministros propios del lote por fecha descendente
+      operationId: listarSuministrosDeAlimento
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: per_page, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: Colección paginada Laravel con metadata y enlaces.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/FeedSupply' } }
+                  meta: { type: object, additionalProperties: true }
+                  links: { type: object, additionalProperties: true }
+        '403': { description: Requiere management-plans.view o management-plans.execute. }
+    post:
+      summary: Registra alimento efectivamente administrado al lote
+      operationId: registrarSuministroDeAlimento
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [product_id, quantity, unit, occurred_at]
+              properties:
+                product_id: { type: integer, minimum: 1 }
+                quantity: { type: string, pattern: '^(?=.*[1-9])\d{1,12}(?:\.\d{1,6})?$' }
+                unit: { type: string, enum: [kg, g] }
+                occurred_at: { type: string, format: date-time, description: Instante ISO con segundos y offset explícito. }
+                notes: { type: [string, 'null'], maxLength: 5000 }
+      responses:
+        '201': { description: 'data incluye operation_id y feed_supply con public_id, quantity y unit. Repetir la misma clave conserva ambos; public_id identifica el suministro para anularlo.' }
+        '403': { description: Requiere management-plans.execute. }
+        '409': { description: Conflicto de lote o clave utilizada con otro contenido. }
+        '422': { description: Entrada inválida. }
+  /flocks/{flock}/alimentacion/{feedSupply}/anulacion:
+    parameters:
+      - $ref: '#/components/parameters/Flock'
+      - { name: feedSupply, in: path, required: true, schema: { type: string, format: ulid } }
+    post:
+      summary: Anula suministro del lote conservando historial y auditoría
+      operationId: anularSuministroDeAlimento
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              additionalProperties: false
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '200': { description: 'data incluye operation_id y feed_supply con public_id y status cancelled.' }
+        '403': { description: Requiere management-plans.execute. }
+        '404': { description: Suministro inexistente o de otro lote. }
+        '409': { description: Suministro ya anulado o clave reutilizada. }
+        '422': { description: Entrada inválida. }
+  /donaciones/unidades-productivas:
+    get:
+      summary: Lista unidades activas para donaciones a nivel empresa
+      operationId: listarUnidadesParaDonaciones
+      parameters:
+        - { name: search, in: query, schema: { type: string, maxLength: 160 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 10000 } }
+      responses:
+        '200': { description: data con id y name; meta con current_page y last_page. }
+        '403': { description: Requiere egg-stock.view o egg-stock.move. }
+  /unidades-productivas/{productionUnit}/donaciones:
+    parameters:
+      - { name: productionUnit, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    post:
+      summary: Registra donación independiente y descuenta inventario de huevos
+      operationId: registrarDonacionDeHuevos
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [quantity, occurred_at, reason]
+              properties:
+                quantity: { type: integer, minimum: 1, maximum: 2147483647 }
+                occurred_at: { type: string, format: date-time }
+                reason: { type: string, minLength: 1, maxLength: 500 }
+                notes: { type: [string, 'null'], maxLength: 5000 }
+      responses:
+        '201': { description: data con transaction ULID y movement_id; reintentos no descuentan dos veces. }
+        '403': { description: Requiere egg-stock.move. }
+        '409': { description: Unidad inactiva o clave reutilizada con otro contenido. }
+        '422': { description: Entrada inválida. }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: Sanctum }
+    sanctumCookie: { type: apiKey, in: cookie, name: gam_session }
+    sharedDevice: { type: apiKey, in: header, name: X-Shared-Device-Token }
+    sharedSession: { type: apiKey, in: header, name: X-GAM-Session }
+  parameters:
+    Flock: { name: flock, in: path, required: true, schema: { type: string, format: ulid } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, format: uuid } }
+  schemas:
+    FeedSupply:
+      type: object
+      properties:
+        id: { type: string, format: ulid }
+        product: { type: string }
+        quantity: { type: string }
+        unit: { type: string, enum: [kg, g] }
+        occurred_at: { type: string, format: date-time }
+        status: { type: string, enum: [recorded, cancelled] }
+        notes: { type: [string, 'null'] }

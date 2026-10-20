@@ -380,6 +380,66 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/StockBalanceEnvelope' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /alimentacion/productos:
+    get:
+      summary: Busca alimentos terminados activos para registrar suministros
+      parameters:
+        - { name: search, in: query, schema: { type: string, maxLength: 160 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: data con id y name y meta de paginación. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /flocks/{flock}/alimentacion:
+    parameters: [{ $ref: '#/components/parameters/Flock' }]
+    get:
+      summary: Lista suministros registrados y anulados del lote
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: per_page, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200': { description: 'Colección paginada de suministros con id, producto, cantidad, unidad, fecha y estado.' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      summary: Registra alimento efectivamente suministrado al lote
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [product_id, quantity, unit, occurred_at]
+              properties:
+                product_id: { type: integer, minimum: 1 }
+                quantity: { type: string, pattern: '^(?=.*[1-9])\d{1,12}(?:\.\d{1,6})?$' }
+                unit: { type: string, enum: [kg, g] }
+                occurred_at: { type: string, format: date-time }
+                notes: { type: [string, 'null'], maxLength: 5000 }
+      responses:
+        '201': { description: 'data con operation_id y feed_supply, incluido public_id para su anulación, quantity y unit. Requiere management-plans.execute.' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /flocks/{flock}/alimentacion/{feedSupply}/anulacion:
+    parameters:
+      - $ref: '#/components/parameters/Flock'
+      - { name: feedSupply, in: path, required: true, schema: { type: string, format: ulid } }
+    post:
+      summary: Anula el suministro con auditoría compensatoria
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '200': { description: 'data con operation_id y feed_supply con public_id y status cancelled.' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
 components:
   securitySchemes:
     bearerAuth:
@@ -450,7 +510,7 @@ components:
       pattern: '^[0-7][0-9A-HJKMNP-TV-Z]{25}$'
     PlanActivityInput:
       type: object
-      description: En day_recurrence se indica exactamente uno de end_day o end_week; start_day e interval_days son obligatorios.
+      description: En day_recurrence se indica exactamente uno de end_day o end_week; start_day e interval_days son obligatorios. Cada plan requiere una única alimentación inicial en día 1 o semana 1. Las etapas ration_change referencian recetas globales activas mediante catalog_ref, con grams_per_bird entero positivo; permiten día, semana o tramo y no pueden ser condicionales. Permanecen hasta una etapa posterior disponible.
       additionalProperties: false
       required: [type, title, timing_kind]
       properties:
@@ -473,7 +533,12 @@ components:
             - { type: integer, minimum: 1 }
             - { type: string, pattern: '^[1-9][0-9]*$' }
             - { type: 'null' }
-          description: Vacuna o medicamento por ULID, alimento terminado por ID de Producto. Su nombre se copia al plan.
+          description: Vacuna o medicamento por ULID, receta global de alimentación por ID estable. Su nombre se copia al plan.
+        grams_per_bird:
+          oneOf:
+            - { type: integer, minimum: 1, maximum: 999999999999 }
+            - { type: string, pattern: '^[1-9][0-9]{0,11}$' }
+          description: Estimación obligatoria de gramos enteros por ave para ration_change; no corresponde a otras actividades.
     PlanActivity:
       type: object
       required: [id, type, title, timing_kind, conditional, catalog_snapshot]
@@ -490,8 +555,10 @@ components:
         conditional: { type: boolean }
         condition: { type: [string, 'null'] }
         notes: { type: [string, 'null'] }
-        catalog_type: { type: [string, 'null'], enum: [vaccine, medicine, product, null] }
+        catalog_type: { type: [string, 'null'], enum: [vaccine, medicine, product, feed_recipe, null] }
         catalog_snapshot: { type: [object, 'null'], additionalProperties: true }
+        feed_recipe_id: { type: [integer, 'null'], description: ID estable de receta copiada. }
+        grams_per_bird: { type: [integer, 'null'], minimum: 1, maximum: 999999999999 }
     CreateTemplate:
       type: object
       additionalProperties: false
@@ -615,6 +682,7 @@ components:
           required: [vaccine_id, occurred_at]
           properties:
             vaccine_id: { $ref: '#/components/schemas/Ulid' }
+            vaccine_batch: { type: [string, 'null'], maxLength: 160, description: Partida del producto de vacuna aplicado; independiente del lote de gallinas. }
             notes: { type: [string, 'null'], maxLength: 5000 }
             stock_consumption:
               type: object
@@ -633,13 +701,22 @@ components:
             reason: { type: string, maxLength: 500 }
             notes: { type: [string, 'null'], maxLength: 5000, description: Puede describir la dosis libremente. }
     RationInput:
+      description: Cambia configuración de alimentación del día y conserva el permiso management-plans.execute. Receta, total diario o ambos; todos los valores quedan manuales. No registra comidas ni descuenta alimento inmediatamente. No admite fecha anterior al día del registro.
+      anyOf:
+        - required: [feed_recipe_id]
+        - required: [daily_quantity_grams]
       allOf:
         - $ref: '#/components/schemas/ExecutionBase'
         - type: object
           required: [ration_description, occurred_at]
           properties:
             ration_description: { type: string }
-            finished_feed_product_id: { type: [integer, 'null'] }
+            feed_recipe_id: { type: integer, minimum: 1, description: 'Receta activa. Indica receta, cantidad diaria o ambas.' }
+            daily_quantity_grams:
+              oneOf:
+                - { type: integer, minimum: 1, maximum: 999999999999 }
+                - { type: string, pattern: '^[1-9][0-9]{0,11}$' }
+              description: Total diario manual positivo; la configuración afecta el día del registro, con occurred_at de ese día. No registra comidas ni descuenta stock inmediatamente.
             notes: { type: [string, 'null'] }
     PracticeInput:
       allOf:

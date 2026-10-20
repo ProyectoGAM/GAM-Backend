@@ -2,6 +2,7 @@
 
 namespace Database\Factories\ManagementPlans;
 
+use App\Models\Inventory\FeedRecipe;
 use App\Models\ManagementPlans\PlanTemplate;
 use App\Models\ManagementPlans\PlanTemplateActivity;
 use App\Models\ManagementPlans\PlanTemplateVersion;
@@ -39,6 +40,14 @@ class PlanTemplateFactory extends Factory
                 'description' => $template->description, 'published_at' => now(),
             ]);
             PlanTemplateActivity::factory()->for($version, 'version')->create();
+            $recipe = FeedRecipe::factory()->create();
+            PlanTemplateActivity::factory()->for($version, 'version')->create([
+                'sort_order' => 2, 'type' => 'ration_change', 'title' => 'Alimentación inicial',
+                'timing_kind' => 'day', 'start_day' => 1, 'start_week' => null,
+                'feed_recipe_id' => $recipe->id, 'grams_per_bird' => 40,
+                'catalog_type' => 'feed_recipe', 'catalog_id' => $recipe->id,
+                'catalog_snapshot' => ['id' => $recipe->id, 'name' => $recipe->name],
+            ]);
             $template->forceFill(['published_version' => 1])->save();
         });
     }

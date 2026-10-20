@@ -3,13 +3,12 @@
 namespace App\Http\Requests\Lots;
 
 use App\Models\Lots\Breed;
-use App\Models\Lots\MortalityCategory;
 
 final class ListLotsCatalogRequest extends LotsRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('viewAny', str_contains($this->route()->getName(), '.breeds.') ? Breed::class : MortalityCategory::class) ?? false;
+        return $this->user()?->can('viewAny', Breed::class) ?? false;
     }
 
     /** @return array<string, mixed> */

@@ -9,11 +9,13 @@ use App\Actions\Deliveries\RecordDeliveryStopAction;
 use App\Actions\Deliveries\StartDeliveryAction;
 use App\Actions\IdentityAndAccess\AuthenticateSharedPinAction;
 use App\Enums\Deliveries\DeliveryStatus;
+use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Exceptions\IdentityAndAccess\IdentityException;
 use App\Http\Requests\Deliveries\CloseDeliveryRequest;
 use App\Http\Requests\Deliveries\CurrentDeliveriesRequest;
 use App\Http\Requests\Deliveries\ListDeliveriesRequest;
 use App\Http\Requests\Deliveries\ListDeliveryClientsRequest;
+use App\Http\Requests\Deliveries\ListDeliveryProductionUnitsRequest;
 use App\Http\Requests\Deliveries\ShowDeliveryRequest;
 use App\Http\Requests\Deliveries\StartDeliveryRequest;
 use App\Http\Requests\Deliveries\StoreDeliveryLoadRequest;
@@ -22,6 +24,7 @@ use App\Http\Requests\Deliveries\StoreDeliveryStopRequest;
 use App\Http\Resources\Deliveries\DeliveryResource;
 use App\Http\Resources\Deliveries\DeliveryStopResource;
 use App\Models\Deliveries\Delivery;
+use App\Models\FarmStructure\ProductionUnit;
 use App\Queries\Deliveries\ListDeliveriesQuery;
 use App\Queries\Deliveries\ShowDeliveryQuery;
 use App\Services\Deliveries\DeliveryLoadUnits;
@@ -45,7 +48,16 @@ final readonly class DeliveryController
         return response()->json(['data' => $units->catalog()]);
     }
 
-    public function store(StartDeliveryRequest $request, StartDeliveryAction $action, AuthenticateSharedPinAction $pinAuth): JsonResponse
+    public function productionUnits(ListDeliveryProductionUnitsRequest $request): JsonResponse
+    {
+        $units = ProductionUnit::query()->where('status', ProductionUnitStatus::Active)
+            ->when($request->validated('search'), fn ($query, string $search) => $query->where('name', 'ilike', '%'.$search.'%'))
+            ->orderBy('name')->orderBy('id')->limit((int) $request->validated('limit', 1000))->get(['id', 'name']);
+
+        return response()->json(['data' => $units]);
+    }
+
+    public function store(StartDeliveryRequest $request, StartDeliveryAction $action, AuthenticateSharedPinAction $pinAuth, DeliveryLoadUnits $units): JsonResponse
     {
         $this->confirmDriverPin($request, $pinAuth);
         $delivery = $action->execute(
@@ -54,7 +66,7 @@ final readonly class DeliveryController
             $request->idempotencyKey(),
         );
 
-        return (new DeliveryResource($delivery))
+        return (new DeliveryResource($delivery))->additional(['catalog' => $units->catalog()])
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
     }

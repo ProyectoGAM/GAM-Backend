@@ -10,8 +10,10 @@ use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\Deliveries\Delivery;
 use App\Models\Deliveries\DeliveryStop;
 use App\Models\User;
+use App\Services\Deliveries\DeliveryPricing;
 use App\Services\Deliveries\DeliveryUnitBalance;
 use App\Services\Deliveries\LocalDeliveryClientCatalog;
+use App\ValueObjects\Money;
 use Illuminate\Support\Facades\DB;
 
 final readonly class RecordDeliveryStopAction
@@ -20,6 +22,7 @@ final readonly class RecordDeliveryStopAction
         private AuditRecorder $audit,
         private LocalDeliveryClientCatalog $clients,
         private DeliveryUnitBalance $balances,
+        private DeliveryPricing $pricing,
     ) {}
 
     /** @param array{client_reference:string,status:string,items?:array,visit_reason?:string|null,notes?:string|null} $data */
@@ -32,17 +35,17 @@ final readonly class RecordDeliveryStopAction
             if ($lockedDelivery->driver_id !== $actor->getKey()) {
                 throw new DeliveryConflict('No puedes registrar entregas de otro repartidor.');
             }
-            if ($lockedDelivery->status !== DeliveryStatus::Active) {
-                throw new DeliveryConflict('El reparto ya está cerrado.');
-            }
-
             $replayed = DeliveryStop::query()->where('idempotency_key', $idempotencyKey)->first();
             if ($replayed !== null) {
-                if ($replayed->request_hash !== $requestHash) {
+                if ($replayed->delivery_id !== $lockedDelivery->getKey() || $replayed->request_hash !== $requestHash) {
                     throw new DeliveryConflict('La clave de idempotencia ya fue utilizada con otros datos.');
                 }
 
                 return $replayed;
+            }
+
+            if ($lockedDelivery->status !== DeliveryStatus::Active) {
+                throw new DeliveryConflict('El reparto ya está cerrado.');
             }
 
             $stop = DeliveryStop::query()
@@ -71,10 +74,14 @@ final readonly class RecordDeliveryStopAction
                 throw new DeliveryConflict('La cantidad entregada supera la carga disponible.');
             }
 
+            $priced = $allocated === null ? ['items' => [], 'total_amount' => '0.000']
+                : $this->pricing->calculate($allocated['items'], $data['items']);
+
             $attributes = [
                 'status' => $data['status'],
                 'delivered_quantity' => $quantity,
-                'items' => $allocated['items'] ?? [],
+                'items' => $priced['items'],
+                'total_amount' => $priced['total_amount'],
                 'visit_reason' => $data['visit_reason'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'idempotency_key' => $idempotencyKey,
@@ -111,7 +118,9 @@ final readonly class RecordDeliveryStopAction
                     'client_reference' => $stop->client_reference,
                     'status' => $stop->status->value,
                     'delivered_quantity' => $quantity,
-                    'items' => $allocated['items'] ?? [],
+                    'items' => $priced['items'],
+                    'total_amount' => $priced['total_amount'],
+                    'currency' => Money::CURRENCY,
                     'result' => 'success',
                 ],
             ));
