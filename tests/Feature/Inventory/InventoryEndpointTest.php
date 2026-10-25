@@ -49,6 +49,8 @@ final class InventoryEndpointTest extends TestCase
         $this->getJson('/api/v1/inventory/balances')
             ->assertOk()
             ->assertJsonPath('data.0.available_quantity', '8.000000')
+            ->assertJsonStructure(['data' => [['stock_location' => ['poultry_house_name']]]])
+            ->assertJsonPath('data.0.stock_location.poultry_house_name', null)
             ->assertJsonMissingPath('data.0.physical_quantity')
             ->assertJsonMissingPath('data.0.reserved_quantity');
     }

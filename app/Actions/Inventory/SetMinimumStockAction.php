@@ -44,7 +44,7 @@ final readonly class SetMinimumStockAction
 
             return $locked->load([
                 'product' => static fn (BelongsTo $productRelation): Builder => $productRelation->getQuery()->withResourceMetadata(),
-                'stockLocation',
+                'stockLocation.poultryHouse:id,name',
             ]);
         });
     }

@@ -201,6 +201,27 @@ components:
           type: array
           items: { $ref: '#/components/schemas/InventoryMovementLine' }
         created_at: { type: string, format: date-time }
+    StockLocation:
+      type: object
+      description: >-
+        Ubicación de inventario expuesta en /stock-locations, su detalle y
+        stock_location de /inventory/balances o del alta de ingredientes.
+        name conserva el nombre técnico; poultry_house_name contiene el nombre
+        vigente de la planta vinculada, o null cuando no hay una planta asociada.
+      required: [id, name, status, system_managed, poultry_house_id, poultry_house_name, created_at, updated_at]
+      properties:
+        id: { type: integer }
+        name: { type: string, description: 'Nombre de la ubicación; en plantas puede ser «Planta de ración #ID».' }
+        status: { type: string, enum: [active, inactive] }
+        system_managed: { type: boolean }
+        production_unit: { type: [object, 'null'] }
+        poultry_house_id: { type: [integer, 'null'] }
+        poultry_house_name:
+          type: [string, 'null']
+          description: Nombre actual de la planta; se resuelve al consultar y refleja sus cambios de nombre.
+          example: Planta El Ombú
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
     StockBalance:
       type: object
       required: [id, product_id, stock_location_id, product, stock_location, available_quantity, is_negative, minimum_quantity, created_at, updated_at]
@@ -209,7 +230,7 @@ components:
         product_id: { type: integer }
         stock_location_id: { type: integer }
         product: { $ref: '#/components/schemas/Product' }
-        stock_location: { type: object }
+        stock_location: { $ref: '#/components/schemas/StockLocation' }
         available_quantity: { type: string, pattern: '^-?\d+(?:\.\d{1,6})?$' }
         is_negative: { type: boolean }
         minimum_quantity: { type: string, pattern: '^\d+(?:\.\d{1,6})?$' }

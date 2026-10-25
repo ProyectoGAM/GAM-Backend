@@ -9,7 +9,7 @@ final readonly class GetStockLocationQuery
     public function execute(int $stockLocationId): StockLocation
     {
         return StockLocation::query()
-            ->with('productionUnit')
+            ->with(['productionUnit', 'poultryHouse:id,name'])
             ->whereKey($stockLocationId)
             ->firstOrFail();
     }

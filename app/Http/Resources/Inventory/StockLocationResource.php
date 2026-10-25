@@ -20,6 +20,7 @@ final class StockLocationResource extends JsonResource
             'system_managed' => $this->system_managed,
             'production_unit' => ProductionUnitResource::make($this->whenLoaded('productionUnit')),
             'poultry_house_id' => $this->poultry_house_id === null ? null : (int) $this->poultry_house_id,
+            'poultry_house_name' => $this->whenLoaded('poultryHouse', fn (): string => $this->poultryHouse->name, null),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

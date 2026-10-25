@@ -23,6 +23,33 @@ El alta recibe `sku`, `nombre`, `cantidad` y, opcionalmente, `unidad` (`g` o `kg
 
 Las consultas responden con `scope`, `scope_id` e `items`. Cada ítem contiene el producto, `total_g`, `is_negative` y el detalle por planta (`plant_id`, `plant_name`, `poultry_house_id`, `production_unit_id`, `stock_location_id`, `stock_g`, `is_negative` e `included_in_totals`). En la consulta por planta se incluye el saldo aunque la planta esté inactiva; en los agregados, ese detalle queda marcado como excluido.
 
+## Nombre de planta en las consultas generales de Inventario
+
+Las ubicaciones técnicas conservan su `name` generado (`Planta de ración #ID`) y sus identificadores. Para que el frontend identifique la planta sin una consulta adicional, su representación agrega `poultry_house_name`, junto a `poultry_house_id`. El nuevo campo contiene el nombre vigente de la planta vinculada y es `null` en ubicaciones sin planta. Se resuelve desde la relación al consultar, por lo que renombrar una planta se refleja también en las ubicaciones existentes sin sincronizar nombres ni migrar datos.
+
+El campo aparece en:
+
+- `GET /api/v1/stock-locations` y `GET /api/v1/stock-locations/{stockLocation}`: `data[].poultry_house_name` y `data.poultry_house_name`, respectivamente.
+- `GET /api/v1/inventory/balances`: `data[].stock_location.poultry_house_name`.
+- `PATCH /api/v1/inventory/balances/{stockBalance}/minimum-stock`: `data.stock_location.poultry_house_name`.
+- `POST /api/v1/plantas-racion/{poultryHouse}/ingredientes`: `data.stock.stock_location.poultry_house_name`, tanto en el alta como en su repetición idempotente.
+- Las respuestas de alta, edición y cambio de estado de ubicaciones manuales incluyen el campo como `null`.
+
+En `GET /api/v1/reference/options`, las etiquetas de `stock_locations` usan el nombre actual de la planta seguido de la UP, y las de `inventory_balances` usan SKU, producto y nombre actual de la planta. Las ubicaciones sin planta conservan sus etiquetas anteriores. Los `value` siguen siendo los IDs de la ubicación y del saldo; no deben sustituirse por el ID de la planta. Los contratos están en [feed-stock.yaml](../../contracts/openapi/feed-stock.yaml) y [reference-data.yaml](../../contracts/openapi/reference-data.yaml).
+
+Las consultas específicas de alimentación conservan `items[].details[].plant_name`. Las relaciones de plantas se cargan anticipadamente para evitar consultas por cada fila. No cambia el orden de los listados ni los filtros por nombre técnico de ubicación.
+
+Se conservan los permisos de cada operación: `inventory.view` para consultar stock y las autorizaciones existentes para administrar ubicaciones y mínimos. Las referencias de Inventario no requieren permisos de estructura de granjas para mostrar el nombre. Esta ampliación de lectura no agrega mutaciones, auditorías ni cambios de idempotencia, concurrencia o cantidades.
+
+La verificación automatizada cubre el nombre actual tras renombrar una planta, ubicaciones sin planta, listado y detalle de ubicaciones, saldos, ajuste de mínimo, alta y repetición de ingredientes, y etiquetas de referencia. Ejecutar:
+
+```sh
+docker compose -f compose.dev.yaml exec -T api php artisan test --compact tests/Feature/Inventory/FeedStockEndpointTest.php tests/Feature/Inventory/InventoryEndpointTest.php tests/Feature/ReferenceData/ReferenceOptionsEndpointTest.php
+docker compose -f compose.dev.yaml exec -T api php vendor/bin/pint --dirty --format agent
+```
+
+Resultado: 23 pruebas aprobadas y 160 aserciones en la base de testing, separada de los datos de desarrollo. Ambos contratos YAML se analizaron correctamente. Pint pasó sobre los diez archivos PHP modificados, indicando sus rutas explícitamente porque `--dirty` no dispone de Git dentro del contenedor. No se ejecutó una aceptación visual en el frontend.
+
 ## Datos demo locales
 
 `DatabaseSeeder` registra [FeedStockDemoSeeder](../../database/seeders/Inventory/FeedStockDemoSeeder.php) a través de `LocalDemoDataSeeder`. Sólo se ejecuta con `APP_ENV=local` y usa claves fijas para que las recargas sean idempotentes.
