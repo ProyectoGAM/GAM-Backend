@@ -11,7 +11,7 @@ use InvalidArgumentException;
 
 final readonly class FeedConsumptionStock
 {
-    public function __construct(private FeedOperationRunner $operations) {}
+    public function __construct(private FeedOperationRunner $operations, private FeedBalanceEvaluator $evaluator) {}
 
     /**
      * Bloquea saldos en orden de receta y anexa movimientos sin usar las restricciones de cancelación.
@@ -41,6 +41,7 @@ final readonly class FeedConsumptionStock
                 'feed_recipe_id' => $recipeId, 'production_unit_id' => $consumption->production_unit_id,
                 'delta_grams' => $delta, 'balance_before' => $before, 'balance_after' => $after, 'operation_id' => $operationId,
             ])->save();
+            $this->evaluator->evaluate($balance, $correction === null ? 'consumption' : 'consumption_correction', $operationId);
             $movements[] = ['id' => $movement->id, 'recipe_id' => $recipeId, 'delta_grams' => (string) $delta, 'balance_before' => (string) $before, 'balance_after' => (string) $after];
         }
 

@@ -6,13 +6,14 @@ use App\Exceptions\Inventory\FeedRecipeConflict;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\FeedStockOperation;
 use App\Models\User;
+use App\Services\Inventory\FeedBalanceEvaluator;
 use App\Services\Inventory\FeedOperationRunner;
 use App\ValueObjects\Inventory\FeedStockGrams;
 use InvalidArgumentException;
 
 final readonly class AdjustFeedBalanceAction
 {
-    public function __construct(private FeedOperationRunner $operations) {}
+    public function __construct(private FeedOperationRunner $operations, private FeedBalanceEvaluator $evaluator) {}
 
     public function execute(int $recipeId, int $unitId, string $mode, mixed $value, string $reason, string $key, User $actor, string $source = 'api'): FeedStockOperation
     {
@@ -39,6 +40,7 @@ final readonly class AdjustFeedBalanceAction
                 ]);
                 $operation->save();
                 $this->operations->audit($operation, $actor, 'Saldo de alimento ajustado independientemente', $source);
+                $this->evaluator->evaluate($balance, 'feed_adjustment', $operationId);
 
                 return $operation;
             });

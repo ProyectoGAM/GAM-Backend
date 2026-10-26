@@ -17,3 +17,6 @@ El tercer bloque consume FeedBalance por receta/UP sin tocar ingredientes ni ela
 
 ## Disponibilidad al comenzar etapas automáticas
 Las etapas automáticas evalúan receta disponible a las 00:00 de su día de comienzo en America/Montevideo. Si estaba activa, queda vigente aunque se desactive durante esa misma jornada; recuperar consumos usa esa disponibilidad histórica. El alta, una revisión explícita y el regreso a automático seleccionan su ancla en el instante de la operación. Esta entrega sustituye las notas anteriores que dejaban el consumo de lotes pendiente o fuera de alcance.
+
+## Mínimos de alimento por receta y UP
+FeedBalance.minimum_quantity_grams es nullable; null significa sin configurar, cero es válido y el rango es 0..999999999999 gramos enteros. El mínimo pertenece a receta/UP, nunca a planta. Configurarlo requiere inventory.manage o admin y auditoría síncrona en la misma transacción; no modifica quantity_grams y puede materializar una cuenta en cero sin movimientos. Estado y atención se calculan con FeedBalanceStatus: atención sólo con mínimo configurado y saldo <= mínimo. FeedBalanceEvaluated se publica después del commit de elaboraciones, ajustes, cancelaciones, consumos, rectificaciones y mínimos; Alertas será responsable de notificaciones y deduplicación.

@@ -9,6 +9,7 @@ use App\Http\Resources\Inventory\FeedBalanceResource;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\FeedBalance;
 use App\Models\Inventory\FeedRecipe;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 final class FeedBalanceController extends Controller
@@ -31,6 +32,14 @@ final class FeedBalanceController extends Controller
         foreach (['receta_id' => 'feed_recipe_id', 'up_id' => 'production_unit_id'] as $public => $column) {
             if ($request->has($public)) {
                 $query->where($column, $request->validated($public));
+            }
+        }
+
+        if ($request->has('requiere_atencion')) {
+            if ($request->boolean('requiere_atencion')) {
+                $query->whereNotNull('minimum_quantity_grams')->whereColumn('quantity_grams', '<=', 'minimum_quantity_grams');
+            } else {
+                $query->where(static fn (Builder $balances): Builder => $balances->whereNull('minimum_quantity_grams')->orWhereColumn('quantity_grams', '>', 'minimum_quantity_grams'));
             }
         }
 

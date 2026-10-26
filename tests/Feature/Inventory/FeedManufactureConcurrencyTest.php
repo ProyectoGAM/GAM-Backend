@@ -5,6 +5,7 @@ namespace Tests\Feature\Inventory;
 use App\Actions\Inventory\AdjustFeedBalanceAction;
 use App\Actions\Inventory\CancelFeedManufactureAction;
 use App\Actions\Inventory\ManufactureFeedAction;
+use App\Actions\Inventory\SetFeedBalanceMinimumAction;
 use App\Exceptions\Inventory\FeedRecipeConflict;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\Inventory\FeedRecipe;
@@ -204,6 +205,30 @@ final class FeedManufactureConcurrencyTest extends TestCase
         $this->assertDatabaseHas('feed_balances', ['quantity_grams' => 30]);
         $this->assertDatabaseCount('feed_stock_operations', 2);
         $this->assertDatabaseCount('inventory_movements', 0);
+    }
+
+    // Flujo: configurar el mínimo y acreditar stock simultáneamente materializa una sola cuenta sin perder atributos.
+    public function test_minimum_configuration_and_stock_credit_share_the_same_locked_account(): void
+    {
+        // Preparación: usa una cuenta inexistente que será creada por dos procesos.
+        $data = $this->fixture();
+        $recipeId = $data['recipe']->id;
+        $unitId = $data['plants'][0]->production_unit_id;
+        $actorId = $data['actor']->id;
+
+        // Mutación: configura un mínimo mientras otro proceso registra alimento.
+        $minimum = static fn (): int => (int) app(SetFeedBalanceMinimumAction::class)->execute(
+            $recipeId, $unitId, 250000, User::query()->findOrFail($actorId))->id;
+        $credit = static fn (): int => (int) app(AdjustFeedBalanceAction::class)->execute(
+            $recipeId, $unitId, 'sumar', 200000, 'Recuento concurrente', (string) Str::uuid(), User::query()->findOrFail($actorId))->id;
+        Concurrency::driver('process')->run([$minimum, $credit], timeout: 30);
+
+        // Consulta: una única fila conserva el crédito y el mínimo independientemente del orden de llegada.
+        $this->assertDatabaseCount('feed_balances', 1);
+        $this->assertDatabaseHas('feed_balances', ['feed_recipe_id' => $recipeId, 'production_unit_id' => $unitId,
+            'quantity_grams' => 200000, 'minimum_quantity_grams' => 250000]);
+        $this->assertDatabaseCount('feed_stock_operations', 1);
+        $this->assertDatabaseHas('activity_log', ['event' => 'feed_balance_minimum_changed']);
     }
 
     /** @return array{actor:User, recipe:FeedRecipe, product:Product, plants:list<PoultryHouse>} */

@@ -18,6 +18,7 @@ use App\Http\Controllers\Inventory\EggPresentationController;
 use App\Http\Controllers\Inventory\EggStockController;
 use App\Http\Controllers\Inventory\FeedAdjustmentController;
 use App\Http\Controllers\Inventory\FeedBalanceController;
+use App\Http\Controllers\Inventory\FeedBalanceMinimumController;
 use App\Http\Controllers\Inventory\FeedConsumptionController;
 use App\Http\Controllers\Inventory\FeedManufactureController;
 use App\Http\Controllers\Inventory\FeedRecipeController;
@@ -331,6 +332,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/elaboraciones/{operation}/cancelacion', [FeedManufactureController::class, 'cancel'])->whereNumber('operation')->name('manufactures.cancel');
             Route::get('/saldos-alimento', [FeedBalanceController::class, 'index'])->name('balances.index');
             Route::get('/unidades-productivas/{productionUnit}/recetas/{recipe}/saldo', [FeedBalanceController::class, 'show'])->name('balances.show');
+            Route::patch('/unidades-productivas/{productionUnit}/recetas/{recipe}/minimo', [FeedBalanceMinimumController::class, 'update'])->name('balances.minimum');
             Route::get('/ajustes-alimentacion', [FeedAdjustmentController::class, 'index'])->name('adjustments.index');
             Route::post('/unidades-productivas/{productionUnit}/recetas/{recipe}/ajustes', [FeedAdjustmentController::class, 'feed'])->name('adjustments.feed');
             Route::post('/plantas-racion/{poultryHouse}/ingredientes/{product}/ajustes', [FeedAdjustmentController::class, 'ingredient'])->name('adjustments.ingredient');

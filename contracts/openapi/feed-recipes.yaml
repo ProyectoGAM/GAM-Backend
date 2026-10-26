@@ -1,16 +1,18 @@
 openapi: 3.1.0
 info:
   title: Recetas, elaboración y stock de alimento
-  version: 2.0.0
+  version: 2.1.0
   description: >-
     Alta, consulta, edición exclusiva de cantidades, estados y cálculo exacto
     y elaboración inmediata con descuento distribuido de ingredientes, saldo de alimento
-    por receta y UP, cancelación compensatoria y ajustes independientes.
+    por receta y UP, cancelación compensatoria, ajustes independientes y mínimos configurables.
     Los endpoints del catálogo y cálculo conservan sus permisos originales.
     Las nuevas operaciones requieren autenticación y sesión válida, sin permiso
-    específico provisional. No implementa consumo de lotes ni transferencias.
+    específico provisional, salvo la configuración de mínimos que requiere inventory.manage
+    o rol admin. El consumo de lotes tiene su contrato propio en flock-feeding.yaml.
     Los nombres pueden repetirse. El rendimiento es independiente de la suma
-    de ingredientes. Todas las cantidades usan gramos enteros positivos.
+    de ingredientes. Los saldos usan gramos enteros con signo; los mínimos son
+    enteros no negativos o null cuando no están configurados.
 servers:
   - url: /api/v1
 security:
@@ -354,6 +356,9 @@ paths:
         del usuario. Para sesión compartida nativa exige Bearer, X-Shared-Device-Token
         y X-GAM-Session vigentes; web usa sesión stateful, gam_shared_device y
         X-GAM-Session. Las escrituras web conservan CSRF. No hay asignaciones por UP.
+        Incluye cuentas materializadas al configurar mínimos aunque no tengan movimientos.
+        Un mínimo null indica sin configurar. Requieren atención los saldos iguales
+        o inferiores a un mínimo configurado; no se generan notificaciones en esta consulta.
       parameters:
         - name: receta_id
           in: query
@@ -363,6 +368,10 @@ paths:
           in: query
           description: ID de unidad productiva.
           schema: {type: integer, minimum: 1, format: int64}
+        - name: requiere_atencion
+          in: query
+          description: 1 devuelve saldos en mínimo o por debajo; 0 devuelve suficientes o sin configurar. Omitido devuelve todos.
+          schema: {type: integer, enum: [0, 1]}
         - name: por_pagina
           in: query
           description: Tamaño de página entre 1 y 100; predeterminado 25.
@@ -413,6 +422,52 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '404': {$ref: '#/components/responses/NotFound'}
         '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /unidades-productivas/{productionUnit}/recetas/{recipe}/minimo:
+    parameters:
+      - {$ref: '#/components/parameters/ProductionUnitId'}
+      - {$ref: '#/components/parameters/RecipeId'}
+    patch:
+      tags: [Recetas]
+      operationId: setFeedBalanceMinimum
+      summary: Configura o quita el mínimo de alimento por receta y UP
+      description: >-
+        Requiere autenticación, sesión válida e inventory.manage o rol admin.
+        Funciona con recetas activas o inactivas y sin movimientos anteriores.
+        Materializa una cuenta en cero si todavía no existe, sin acreditar ni
+        descontar alimento. minimo_g admite gramos enteros entre 0 y 999999999999;
+        null deja el mínimo sin configurar. No requiere Idempotency-Key.
+        Repetir la asignación conserva el estado y registra una nueva auditoría.
+        La auditoría comparte transacción con el mínimo; la evaluación para futuras
+        alertas se publica sólo tras confirmar la transacción. No envía notificaciones.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [minimo_g]
+              properties:
+                minimo_g:
+                  oneOf:
+                    - {type: string, pattern: '^[0-9]+$', description: Gramos enteros no negativos hasta 999999999999.}
+                    - {type: integer, minimum: 0, maximum: 999999999999}
+                    - {type: 'null'}
+            example: {minimo_g: '300000'}
+      responses:
+        '200':
+          description: Saldo actual, mínimo y estado evaluado; la cantidad de alimento no cambia.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: {$ref: '#/components/schemas/FeedBalance'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
         '422': {$ref: '#/components/responses/ValidationError'}
   /unidades-productivas/{productionUnit}/recetas/{recipe}/ajustes:
     parameters:
@@ -596,7 +651,7 @@ components:
       allOf: [{"if":{"properties":{"accion":{"enum":["sumar","restar"]}}},"then":{"properties":{"valor_g":{"$ref":"#/components/schemas/StockPositiveGrams"}}}}]
     FeedBalance:
       type: "object"
-      required: ["receta_id","nombre_receta","estado_receta","up_id","nombre_up","saldo_g"]
+      required: ["receta_id","nombre_receta","estado_receta","up_id","nombre_up","saldo_g","minimo_g","estado_stock","requiere_atencion"]
       properties:
         receta_id:
           type: "integer"
@@ -614,6 +669,17 @@ components:
           type: "string"
           pattern: "^-?[0-9]+$"
           description: "Saldo entero acumulado por receta y UP; puede ser cero o negativo."
+        minimo_g:
+          type: [string, 'null']
+          pattern: '^[0-9]+$'
+          description: Mínimo configurado en gramos enteros entre 0 y 999999999999; null significa sin configurar.
+        estado_stock:
+          type: string
+          enum: [sin_configurar, suficiente, en_minimo, por_debajo]
+          description: Sin configurar si el mínimo es null; suficiente si saldo es mayor; en mínimo si son iguales; por debajo si es menor.
+        requiere_atencion:
+          type: boolean
+          description: Verdadero cuando hay un mínimo configurado y el saldo es igual o inferior a él.
     FeedOperation:
       type: "object"
       required: ["id","operacion_id","tipo","receta_id","up_id","planta_id","producto_id","cantidad_g","factor","accion","motivo","saldo_anterior_g","saldo_resultante_g","delta_g","movimiento_id","cancela_id","actor_id","registrado_en","nombre_receta","nombre_planta","nombre_producto","sku","rendimiento_g","estado","ingredientes","distribucion"]
