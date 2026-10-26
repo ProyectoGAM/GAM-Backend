@@ -6,4 +6,5 @@ Before planning or editing, find the row whose globs match the file's path and r
 | --- | --- |
 | app/**/Inventory/*Recipe*.php, app/**/Inventory/*Feed*.php | .ai/rules/inventory.md |
 | database/seeders/** | .ai/rules/seeders.md |
+| app/**/SuppliersAndCatalogs/*.php | .ai/rules/suppliers-and-catalogs.md |
 | tests/** | .ai/rules/tests.md |

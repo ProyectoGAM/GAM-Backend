@@ -39,10 +39,9 @@ final readonly class ListReferenceOptionsQuery
             'inventory_balances' => [],
             'movements' => [],
             'types' => [
-                'products' => $this->enumOptions(ProductKind::cases(), [
+                'products' => $this->enumOptions(ProductKind::creatableCases(), [
                     'raw_material' => 'Materia prima',
                     'supply' => 'Suministro',
-                    'finished_feed' => 'Alimento terminado',
                     'egg' => 'Huevo',
                     'medicine' => 'Medicamento',
                     'vaccine' => 'Vacuna',
@@ -235,8 +234,8 @@ final readonly class ListReferenceOptionsQuery
             ->map(fn (StockLocation $location): array => $this->option(
                 $location->getKey(),
                 $location->productionUnit === null
-                    ? ($location->poultryHouse?->name ?? $location->name)
-                    : ($location->poultryHouse?->name ?? $location->name).' — '.$location->productionUnit->name,
+                    ? ($location->poultryHouse->name ?? $location->name)
+                    : ($location->poultryHouse->name ?? $location->name).' — '.$location->productionUnit->name,
             ))
             ->values()
             ->all();
@@ -251,7 +250,7 @@ final readonly class ListReferenceOptionsQuery
             ->get(['id', 'product_id', 'stock_location_id'])
             ->map(fn (StockBalance $balance): array => $this->option(
                 $balance->getKey(),
-                $balance->product->sku.' — '.$balance->product->name.' · '.($balance->stockLocation->poultryHouse?->name ?? $balance->stockLocation->name),
+                $balance->product->sku.' — '.$balance->product->name.' · '.($balance->stockLocation->poultryHouse->name ?? $balance->stockLocation->name),
             ))
             ->values()
             ->all();

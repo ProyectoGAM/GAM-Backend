@@ -29,6 +29,10 @@ paths:
         en lugar del nombre técnico de la ubicación. Los valores siguen siendo
         los IDs de la ubicación y del saldo, respectivamente. Las ubicaciones
         sin planta conservan su propio nombre.
+        types.products contiene sólo los tipos operativos para nuevas altas:
+        raw_material, supply, egg, medicine, vaccine y other. finished_feed está
+        retirado de esa lista; los productos históricos siguen consultables en
+        products y en sus referencias existentes.
       responses:
         '200':
           description: Opciones disponibles para el usuario autenticado.

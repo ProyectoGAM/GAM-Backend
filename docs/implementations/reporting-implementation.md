@@ -45,17 +45,20 @@ Rutas canónicas bajo `/api/v1`, documentadas en `contracts/openapi/reporting.ya
 
 Las rutas inglesas anteriores siguen disponibles. Los enlaces ya emitidos conservan su ruta y firma. La pantalla usa rutas españolas; se corrige la diferencia previa entre `download` real y `descarga` documentada. Las opciones de cada fuente usan su permiso funcional y admiten búsqueda/paginación sin exigir permisos de edición del catálogo.
 
-Registro de alimentación y donaciones (`contracts/openapi/reporting-operations.yaml`):
+Suministros históricos y donaciones (`contracts/openapi/reporting-operations.yaml`):
 
-- `GET alimentacion/productos`; `GET/POST flocks/{flock}/alimentacion`.
+- `GET alimentacion/productos` está deprecado y devuelve una lista vacía; `GET flocks/{flock}/alimentacion` conserva el historial.
+- `POST flocks/{flock}/alimentacion` sólo reproduce operaciones históricas guardadas; las cargas nuevas reciben 410 sin efectos.
 - `POST flocks/{flock}/alimentacion/{feedSupply}/anulacion`.
 - `GET donaciones/unidades-productivas`; `POST unidades-productivas/{productionUnit}/donaciones`.
 
-Ejemplo de suministro, con `Idempotency-Key` UUID en header:
+Formato histórico de suministro, conservado para reintentos con su `Idempotency-Key` original; no permite una carga nueva:
 
 ```json
 {"product_id": 3, "quantity": "25.500000", "unit": "kg", "occurred_at": "2026-10-12T10:00:00-03:00", "notes": "Ración administrada"}
 ```
+
+La [guía de retirada de finished_feed](finished-feed-retirement.md) detalla la transición. Se conservan el reporte, nombres guardados, cantidades y anulaciones, sin convertir suministros en consumos ni descontar otra vez el saldo de recetas. `ReportingDemoSeeder` deja de crear los productos y suministros antiguos; preserva los datos ya existentes.
 
 Ejemplo de donación, con el mismo protocolo de idempotencia:
 
