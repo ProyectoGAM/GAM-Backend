@@ -50,6 +50,31 @@ docker compose -f compose.dev.yaml exec -T api php vendor/bin/pint --dirty --for
 
 Resultado: 23 pruebas aprobadas y 160 aserciones en la base de testing, separada de los datos de desarrollo. Ambos contratos YAML se analizaron correctamente. Pint pasó sobre los diez archivos PHP modificados, indicando sus rutas explícitamente porque `--dirty` no dispone de Git dentro del contenedor. No se ejecutó una aceptación visual en el frontend.
 
+## Responsable de los movimientos
+
+La representación compartida de movimientos de Inventario agrega `created_by_name`, conservando `created_by` como ID. El campo contiene el nombre vigente del usuario que registró el movimiento, incluido cuando fue dado de baja mediante borrado lógico. No se atribuye el movimiento al usuario que está consultando. Cuando no hay usuario asociado, ambos campos son `null`.
+
+Ejemplo parcial:
+
+```json
+{
+  "created_by": 7,
+  "created_by_name": "Ana Pérez"
+}
+```
+
+Se incluye en `GET /api/v1/inventory/movements`, su detalle `GET /api/v1/inventory/movements/{inventoryMovement}`, las respuestas de ingresos, salidas, pérdidas, ajustes, transferencias y reversiones, y `data.movement` del alta de ingredientes, también en repeticiones idempotentes. El contrato compartido está en [feed-stock.yaml](../../contracts/openapi/feed-stock.yaml).
+
+El nombre se resuelve desde la relación `creator`, ya cargada anticipadamente en las consultas y operaciones existentes, sin consultas adicionales por fila ni exposición del resto del usuario. Es un nombre actual, no una instantánea del nombre al registrar. No requiere migraciones ni cambios de datos, permisos, auditoría, idempotencia, concurrencia o cantidades de stock.
+
+La verificación cubre alta, repetición, reversión, listado y detalle, nombres actualizados, usuarios dados de baja y movimientos sin responsable, además del movimiento anidado del alta de ingredientes. Ejecutar:
+
+```sh
+docker compose -f compose.dev.yaml exec -T api php artisan test --compact tests/Feature/Inventory/InventoryEndpointTest.php tests/Feature/Inventory/FeedStockEndpointTest.php
+```
+
+Resultado: 21 pruebas aprobadas y 172 aserciones en la base de testing. Pint y PHPStan pasaron sobre los archivos PHP afectados; Pint recibió las rutas explícitas porque `--dirty` requiere Git, que no está disponible dentro del contenedor. La visualización del nombre en el frontend requiere consumir `created_by_name`; esta entrega modifica la respuesta del backend y no incluye verificación visual.
+
 ## Datos demo locales
 
 `DatabaseSeeder` registra [FeedStockDemoSeeder](../../database/seeders/Inventory/FeedStockDemoSeeder.php) a través de `LocalDemoDataSeeder`. Sólo se ejecuta con `APP_ENV=local` y usa claves fijas para que las recargas sean idempotentes.

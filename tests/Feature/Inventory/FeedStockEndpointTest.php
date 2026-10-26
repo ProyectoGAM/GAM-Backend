@@ -56,6 +56,8 @@ final class FeedStockEndpointTest extends TestCase
         $this->assertSame('1500.000000', $first->json('data.stock.available_quantity'));
         $first->assertJsonPath('data.stock.stock_location.poultry_house_name', $house->name);
         $second->assertJsonPath('data.stock.stock_location.poultry_house_name', $house->name);
+        $first->assertJsonPath('data.movement.created_by_name', $actor->name);
+        $second->assertJsonPath('data.movement.created_by_name', $actor->name);
         $this->assertDatabaseCount('inventory_movements', 1);
         $this->assertDatabaseHas('stock_balances', ['on_hand_quantity' => '1500.000000', 'allow_negative' => true]);
     }

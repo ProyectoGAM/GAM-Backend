@@ -185,7 +185,7 @@ components:
         physical_delta: { type: string, pattern: '^-?\d+(?:\.\d{1,6})?$' }
     InventoryMovement:
       type: object
-      required: [id, operation_id, type, supplier, reference_type, reference_id, reason, occurred_at, created_by, reverses_movement_id, lines, created_at]
+      required: [id, operation_id, type, supplier, reference_type, reference_id, reason, occurred_at, created_by, created_by_name, reverses_movement_id, lines, created_at]
       properties:
         id: { type: integer }
         operation_id: { type: string, format: uuid }
@@ -196,6 +196,9 @@ components:
         reason: { type: [string, 'null'] }
         occurred_at: { type: string, format: date-time }
         created_by: { type: [integer, 'null'] }
+        created_by_name:
+          type: [string, 'null']
+          description: Nombre vigente del usuario responsable, incluso si fue dado de baja; null cuando no hay usuario asociado.
         reverses_movement_id: { type: [integer, 'null'] }
         lines:
           type: array
