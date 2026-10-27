@@ -12,7 +12,7 @@ final readonly class ListStockLocationsQuery
     public function execute(array $filters): LengthAwarePaginator
     {
         return StockLocation::query()
-            ->with('productionUnit')
+            ->with(['productionUnit', 'poultryHouse:id,name'])
             ->when($filters['search'] ?? null, fn (Builder $query, string $search): Builder => $query->where('name', 'ilike', '%'.$search.'%'))
             ->when($filters['status'] ?? null, fn (Builder $query, string $status): Builder => $query->where('status', $status))
             ->when($filters['production_unit_id'] ?? null, fn (Builder $query, int $productionUnitId): Builder => $query->where('production_unit_id', $productionUnitId))

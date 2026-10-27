@@ -8,6 +8,7 @@ use App\Exceptions\Inventory\FeedRecipeConflict;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\Inventory\FeedStockOperation;
 use App\Models\User;
+use App\Services\Inventory\FeedBalanceEvaluator;
 use App\Services\Inventory\FeedIngredientStocks;
 use App\Services\Inventory\FeedOperationRunner;
 use App\Services\Inventory\FeedRecipeCalculator;
@@ -21,6 +22,7 @@ final readonly class ManufactureFeedAction
         private FeedIngredientStocks $stocks,
         private FeedRecipeCalculator $calculator,
         private RecordInventoryMovementAction $recordMovement,
+        private FeedBalanceEvaluator $evaluator,
     ) {}
 
     public function execute(int $recipeId, int $houseId, mixed $quantity, string $key, User $actor, string $source = 'api'): FeedStockOperation
@@ -85,6 +87,7 @@ final readonly class ManufactureFeedAction
                 $operation->forceFill(['inventory_movement_id' => $movement->id, 'snapshot' => $snapshot])->save();
                 $feedBalance->forceFill(['quantity_grams' => $after])->save();
                 $this->operations->audit($operation, $actor, 'Alimento elaborado inmediatamente', $source);
+                $this->evaluator->evaluate($feedBalance, 'manufacture', $operationId);
 
                 return $operation;
             });

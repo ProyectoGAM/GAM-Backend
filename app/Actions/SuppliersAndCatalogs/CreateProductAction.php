@@ -25,6 +25,9 @@ final readonly class CreateProductAction
     {
         Gate::forUser($actor)->authorize('create', Product::class);
         $this->assertAllowedAttributes($attributes);
+        if (in_array($attributes['kind'], [ProductKind::FinishedFeed, ProductKind::FinishedFeed->value], true)) {
+            throw new SuppliersAndCatalogsConflict('No se pueden crear productos de tipo finished_feed. La ración se gestiona mediante recetas y saldos por unidad productiva.');
+        }
         $attributes = $this->normalizeRawMaterialAttributes($attributes);
         $this->assertRawMaterialAttributes($attributes);
 

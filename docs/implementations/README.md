@@ -13,6 +13,7 @@ Cada guía describe el alcance entregado, las decisiones de negocio, el contrato
 - [Medicamentos](medication-implementation-plan.md)
 - [Vacunas](vaccination-implementation.md)
 - [Plantas de ración y stock de ingredientes](feed-stock-implementation.md)
+- [Retirada operativa de productos finished_feed](finished-feed-retirement.md)
 - [Recetas, elaboración inmediata, ajustes y stock de alimento](feed-recipes-implementation.md)
 - [Alimentación de lotes, consumo diario y rectificaciones](flock-feeding-implementation.md)
 

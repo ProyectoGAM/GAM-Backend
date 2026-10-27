@@ -3,6 +3,7 @@
 namespace Tests\Feature\Inventory;
 
 use App\Enums\SuppliersAndCatalogs\BaseUnit;
+use App\Models\Inventory\InventoryMovement;
 use App\Models\Inventory\StockBalance;
 use App\Models\Inventory\StockLocation;
 use App\Models\SuppliersAndCatalogs\Product;
@@ -29,12 +30,15 @@ final class InventoryEndpointTest extends TestCase
             'supplier_id' => $proveedor->getKey(),
             'lines' => [['product_id' => $producto->getKey(), 'stock_location_id' => $location->getKey(), 'quantity' => '10.500000']],
             'occurred_at' => '2026-08-31T17:00',
-        ], ['Idempotency-Key' => $receiveKey])->assertCreated();
+        ], ['Idempotency-Key' => $receiveKey])->assertCreated()
+            ->assertJsonPath('data.created_by', $actor->getKey())
+            ->assertJsonPath('data.created_by_name', $actor->name);
 
         // Acción 2: registra la salida de 2,5 unidades.
         $this->postJson('/api/v1/inventory/issues', [
             'lines' => [['product_id' => $producto->getKey(), 'stock_location_id' => $location->getKey(), 'quantity' => '2.500000']],
-        ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated();
+        ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated()
+            ->assertJsonPath('data.created_by_name', $actor->name);
 
         // Verificación: confirma saldo proyectado, movimientos y auditoría.
         $this->assertDatabaseHas('stock_balances', [
@@ -49,6 +53,8 @@ final class InventoryEndpointTest extends TestCase
         $this->getJson('/api/v1/inventory/balances')
             ->assertOk()
             ->assertJsonPath('data.0.available_quantity', '8.000000')
+            ->assertJsonStructure(['data' => [['stock_location' => ['poultry_house_name']]]])
+            ->assertJsonPath('data.0.stock_location.poultry_house_name', null)
             ->assertJsonMissingPath('data.0.physical_quantity')
             ->assertJsonMissingPath('data.0.reserved_quantity');
     }
@@ -56,7 +62,7 @@ final class InventoryEndpointTest extends TestCase
     // Flujo: repite el mismo ingreso; verifica que la idempotencia evita duplicados.
     public function test_replaying_the_same_idempotency_key_does_not_duplicate_stock(): void
     {
-        [, $producto, $location, $proveedor] = $this->inventoryScenario();
+        [$actor, $producto, $location, $proveedor] = $this->inventoryScenario();
         $key = (string) Str::uuid();
         $payload = [
             'supplier_id' => $proveedor->getKey(),
@@ -71,9 +77,57 @@ final class InventoryEndpointTest extends TestCase
 
         // Verificación: confirma replay del mismo movimiento sin duplicar efectos.
         $this->assertSame($first->json('data.id'), $second->json('data.id'));
+        $first->assertJsonPath('data.created_by_name', $actor->name);
+        $second->assertJsonPath('data.created_by_name', $actor->name);
         $this->assertDatabaseCount('inventory_movements', 1);
         $this->assertDatabaseHas('stock_balances', ['on_hand_quantity' => '4.000000']);
         $this->assertDatabaseCount('activity_log', 1);
+    }
+
+    // Flujo: consulta responsables vigentes, dados de baja y ausentes sin atribuir movimientos al lector.
+    public function test_movement_reads_expose_current_responsible_names_including_deleted_users(): void
+    {
+        // Preparación: autentica un lector distinto de los responsables de los movimientos.
+        $reader = User::factory()->create(['name' => 'Lector de inventario']);
+        $reader->givePermissionTo(Permission::findOrCreate('inventory.view', 'web'));
+        Sanctum::actingAs($reader, ['*']);
+        $responsible = User::factory()->create(['name' => 'Ana Original']);
+        $deletedResponsible = User::factory()->create(['name' => 'Luis Histórico']);
+        $movement = InventoryMovement::factory()->for($responsible, 'creator')->create([
+            'occurred_at' => '2026-10-25T15:00:00Z',
+        ]);
+        $historicalMovement = InventoryMovement::factory()->for($deletedResponsible, 'creator')->create([
+            'occurred_at' => '2026-10-24T15:00:00Z',
+        ]);
+        $systemMovement = InventoryMovement::factory()->create([
+            'created_by' => null,
+            'occurred_at' => '2026-10-23T15:00:00Z',
+        ]);
+
+        // Mutación: cambia el nombre vigente y da de baja al otro responsable conservando el historial.
+        $responsible->update(['name' => 'Ana Actualizada']);
+        $deletedResponsible->delete();
+
+        // Consulta: el listado conserva IDs y nombres; las operaciones sin usuario devuelven null.
+        $this->getJson('/api/v1/inventory/movements')->assertOk()
+            ->assertJsonStructure(['data' => [['created_by', 'created_by_name']]])
+            ->assertJsonPath('data.0.id', $movement->getKey())
+            ->assertJsonPath('data.0.created_by', $responsible->getKey())
+            ->assertJsonPath('data.0.created_by_name', 'Ana Actualizada')
+            ->assertJsonPath('data.1.id', $historicalMovement->getKey())
+            ->assertJsonPath('data.1.created_by', $deletedResponsible->getKey())
+            ->assertJsonPath('data.1.created_by_name', 'Luis Histórico')
+            ->assertJsonPath('data.2.id', $systemMovement->getKey())
+            ->assertJsonPath('data.2.created_by', null)
+            ->assertJsonPath('data.2.created_by_name', null);
+
+        // Consulta: cada detalle utiliza la misma representación del responsable que el listado.
+        foreach ([[$movement, 'Ana Actualizada'], [$historicalMovement, 'Luis Histórico'], [$systemMovement, null]] as [$item, $name]) {
+            $this->getJson('/api/v1/inventory/movements/'.$item->getKey())->assertOk()
+                ->assertJsonStructure(['data' => ['created_by_name']])
+                ->assertJsonPath('data.created_by', $item->created_by)
+                ->assertJsonPath('data.created_by_name', $name);
+        }
     }
 
     // Flujo: reutiliza la clave con otro payload; verifica el conflicto sin cambios extra.
@@ -118,7 +172,7 @@ final class InventoryEndpointTest extends TestCase
     // Flujo: transfiere, ajusta y revierte stock; verifica la proyección final por ubicación.
     public function test_transfer_adjustment_and_reversal_keep_the_projection_consistent(): void
     {
-        [, $producto, $origin, $proveedor] = $this->inventoryScenario();
+        [$actor, $producto, $origin, $proveedor] = $this->inventoryScenario();
 
         // Preparación: crea la ubicación destino para la transferencia.
         $destination = StockLocation::factory()->create();
@@ -150,7 +204,8 @@ final class InventoryEndpointTest extends TestCase
         // Acción 4: revierte la transferencia original.
         $this->postJson('/api/v1/inventory/movements/'.$transfer->json('data.id').'/reversals', [
             'reason' => 'Corrección de transferencia',
-        ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated();
+        ], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated()
+            ->assertJsonPath('data.created_by_name', $actor->name);
 
         // Verificación final: confirma que la reversión conserva una proyección coherente.
         $this->assertDatabaseHas('stock_balances', ['product_id' => $producto->getKey(), 'stock_location_id' => $origin->getKey(), 'on_hand_quantity' => '9.000000']);

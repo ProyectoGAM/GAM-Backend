@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Alimentación cuantitativa y donaciones
-  version: 1.0.0
-  description: Registros de negocio que alimentan reportes. Idempotencia por header y auditoría transaccional.
+  version: 1.1.0
+  description: Suministros históricos y donaciones. Nuevos suministros retirados; lectura, reintentos guardados y anulaciones conservados.
 servers:
   - url: /api/v1
 security:
@@ -14,13 +14,14 @@ security:
 paths:
   /alimentacion/productos:
     get:
-      summary: Busca alimentos terminados activos con permiso de manejo
+      summary: Selector histórico retirado; devuelve una lista vacía
+      deprecated: true
       operationId: listarAlimentosParaSuministro
       parameters:
         - { name: search, in: query, schema: { type: string, maxLength: 160 } }
         - { name: page, in: query, schema: { type: integer, minimum: 1 } }
       responses:
-        '200': { description: Alimentos con id y name; meta con current_page y last_page. }
+        '200': { description: data vacío; meta con current_page y last_page. No ofrece productos para cargas nuevas. }
         '403': { description: Requiere management-plans.view o management-plans.execute. }
   /flocks/{flock}/alimentacion:
     parameters:
@@ -44,7 +45,13 @@ paths:
                   links: { type: object, additionalProperties: true }
         '403': { description: Requiere management-plans.view o management-plans.execute. }
     post:
-      summary: Registra alimento efectivamente administrado al lote
+      summary: Reproduce operaciones históricas de suministro; rechaza cargas nuevas
+      deprecated: true
+      description: >-
+        Una clave nueva responde 410 sin suministro, consumo ni descuento.
+        Una operación anterior del mismo actor, clave y contenido devuelve su
+        resultado guardado sin repetir efectos. La alimentación actual se gestiona
+        mediante recetas y saldos por UP; no se migran registros automáticamente.
       operationId: registrarSuministroDeAlimento
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -63,7 +70,8 @@ paths:
                 occurred_at: { type: string, format: date-time, description: Instante ISO con segundos y offset explícito. }
                 notes: { type: [string, 'null'], maxLength: 5000 }
       responses:
-        '201': { description: 'data incluye operation_id y feed_supply con public_id, quantity y unit. Repetir la misma clave conserva ambos; public_id identifica el suministro para anularlo.' }
+        '201': { description: Sólo reproducción de un resultado histórico guardado; no registra otro suministro. }
+        '410': { description: Las nuevas cargas están retiradas. Respuesta application/problem+json con status 410 y explicación en español. }
         '403': { description: Requiere management-plans.execute. }
         '409': { description: Conflicto de lote o clave utilizada con otro contenido. }
         '422': { description: Entrada inválida. }

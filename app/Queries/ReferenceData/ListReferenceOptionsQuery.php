@@ -39,10 +39,9 @@ final readonly class ListReferenceOptionsQuery
             'inventory_balances' => [],
             'movements' => [],
             'types' => [
-                'products' => $this->enumOptions(ProductKind::cases(), [
+                'products' => $this->enumOptions(ProductKind::creatableCases(), [
                     'raw_material' => 'Materia prima',
                     'supply' => 'Suministro',
-                    'finished_feed' => 'Alimento terminado',
                     'egg' => 'Huevo',
                     'medicine' => 'Medicamento',
                     'vaccine' => 'Vacuna',
@@ -228,15 +227,15 @@ final readonly class ListReferenceOptionsQuery
     private function stockLocations(): array
     {
         return StockLocation::query()
-            ->with('productionUnit:id,name')
+            ->with(['productionUnit:id,name', 'poultryHouse:id,name'])
             ->orderBy('name')
             ->orderBy('id')
-            ->get(['id', 'production_unit_id', 'name'])
+            ->get(['id', 'production_unit_id', 'poultry_house_id', 'name'])
             ->map(fn (StockLocation $location): array => $this->option(
                 $location->getKey(),
                 $location->productionUnit === null
-                    ? $location->name
-                    : $location->name.' — '.$location->productionUnit->name,
+                    ? ($location->poultryHouse->name ?? $location->name)
+                    : ($location->poultryHouse->name ?? $location->name).' — '.$location->productionUnit->name,
             ))
             ->values()
             ->all();
@@ -246,12 +245,12 @@ final readonly class ListReferenceOptionsQuery
     private function stockBalances(): array
     {
         return StockBalance::query()
-            ->with(['product:id,sku,name', 'stockLocation:id,name'])
+            ->with(['product:id,sku,name', 'stockLocation:id,poultry_house_id,name', 'stockLocation.poultryHouse:id,name'])
             ->orderBy('id')
             ->get(['id', 'product_id', 'stock_location_id'])
             ->map(fn (StockBalance $balance): array => $this->option(
                 $balance->getKey(),
-                $balance->product->sku.' — '.$balance->product->name.' · '.$balance->stockLocation->name,
+                $balance->product->sku.' — '.$balance->product->name.' · '.($balance->stockLocation->poultryHouse->name ?? $balance->stockLocation->name),
             ))
             ->values()
             ->all();

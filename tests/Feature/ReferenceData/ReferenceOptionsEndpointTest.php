@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\ReferenceData;
 
+use App\Actions\Inventory\CreateFeedStockLocationAction;
+use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Geography\Department;
 use App\Models\Geography\Locality;
@@ -51,7 +53,9 @@ final class ReferenceOptionsEndpointTest extends TestCase
             ->assertJsonPath('data.products.0.value', $product->getKey())
             ->assertJsonPath('data.products.0.label', 'ALIMENTO-001 — Ración inicial')
             ->assertJsonPath('data.stock_locations.0.value', $location->getKey())
+            ->assertJsonPath('data.stock_locations.0.label', 'Depósito principal — Granja Norte')
             ->assertJsonPath('data.inventory_balances.0.value', $balance->getKey())
+            ->assertJsonPath('data.inventory_balances.0.label', 'ALIMENTO-001 — Ración inicial · Depósito principal')
             ->assertJsonMissingPath('data.reservas')
             ->assertJsonMissingPath('data.lineas_reserva')
             ->assertJsonPath('data.types.base_units.0.value', 'unit')
@@ -59,6 +63,30 @@ final class ReferenceOptionsEndpointTest extends TestCase
             ->assertJsonCount(2, 'data.statuses.production_units')
             ->assertJsonPath('data.statuses.production_units.0.value', 'active')
             ->assertJsonPath('data.statuses.production_units.1.value', 'inactive');
+    }
+
+    // Flujo: las referencias de inventario muestran el nombre vigente de la planta y mantienen sus IDs técnicos.
+    public function test_inventory_options_use_the_current_plant_name_without_farm_permissions(): void
+    {
+        // Preparación: crea una planta con ubicación técnica y saldo de un ingrediente.
+        $actor = $this->userWithPermissions(['inventory.view']);
+        Sanctum::actingAs($actor, ['*']);
+        $unit = ProductionUnit::factory()->create(['name' => 'Granja Norte']);
+        $house = PoultryHouse::factory()->feed()->create(['production_unit_id' => $unit->getKey(), 'name' => 'Planta original']);
+        $location = app(CreateFeedStockLocationAction::class)->execute($house, $actor);
+        $product = Product::factory()->create(['sku' => 'MAIZ-001', 'name' => 'Maíz', 'kind' => 'raw_material', 'base_unit' => 'g']);
+        $balance = StockBalance::factory()->create(['product_id' => $product->getKey(), 'stock_location_id' => $location->getKey()]);
+
+        // Mutación: cambia el nombre de la planta y conserva el nombre técnico almacenado.
+        $house->update(['name' => 'Planta El Ombú']);
+
+        // Consulta: las etiquetas se resuelven con el nombre actual sin exigir acceso al módulo de granjas.
+        $this->getJson('/api/v1/reference/options')->assertOk()
+            ->assertJsonPath('data.stock_locations.0.value', $location->getKey())
+            ->assertJsonPath('data.stock_locations.0.label', 'Planta El Ombú — Granja Norte')
+            ->assertJsonPath('data.inventory_balances.0.value', $balance->getKey())
+            ->assertJsonPath('data.inventory_balances.0.label', 'MAIZ-001 — Maíz · Planta El Ombú')
+            ->assertJsonCount(0, 'data.poultry_houses');
     }
 
     // Flujo: intenta consultar referencias sin sesión y confirma el límite de autenticación.

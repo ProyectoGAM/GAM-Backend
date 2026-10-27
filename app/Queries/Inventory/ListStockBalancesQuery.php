@@ -15,7 +15,7 @@ final readonly class ListStockBalancesQuery
         return StockBalance::query()
             ->with([
                 'product' => static fn (BelongsTo $productRelation): Builder => $productRelation->getQuery()->withResourceMetadata(),
-                'stockLocation',
+                'stockLocation.poultryHouse:id,name',
             ])
             ->when($filters['product_id'] ?? null, fn (Builder $query, int $productId): Builder => $query->where('product_id', $productId))
             ->when($filters['stock_location_id'] ?? null, fn (Builder $query, int $locationId): Builder => $query->where('stock_location_id', $locationId))

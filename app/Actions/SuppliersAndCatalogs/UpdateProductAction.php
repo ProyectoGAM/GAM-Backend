@@ -33,6 +33,9 @@ final readonly class UpdateProductAction
             return DB::transaction(function () use ($product, $attributes, $actor, $auditOperationId, $source, $recordVaccineAudit): Product {
                 $locked = Product::query()->whereKey($product->getKey())->lockForUpdate()->firstOrFail();
                 Gate::forUser($actor)->authorize('update', $locked);
+                if (in_array($attributes['kind'] ?? null, [ProductKind::FinishedFeed, ProductKind::FinishedFeed->value], true) && $locked->kind !== ProductKind::FinishedFeed) {
+                    throw new SuppliersAndCatalogsConflict('No se puede convertir un producto a finished_feed. La ración se gestiona mediante recetas y saldos por unidad productiva.');
+                }
                 $vaccine = Vaccine::query()->where('product_id', $locked->getKey())->lockForUpdate()->first();
                 if ($vaccine !== null && (! $actor->hasRole('admin') || $actor->trashed())) {
                     throw new AuthorizationException;

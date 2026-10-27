@@ -3,7 +3,10 @@
 namespace Tests\Feature\ReportingAndAnalytics;
 
 use App\Actions\Inventory\RecordManualEggStockAction;
+use App\DTO\AuditAndTraceability\AuditEntryData;
+use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\FarmStructure\ProductionUnit;
+use App\Models\Inventory\FeedBalance;
 use App\Models\Lots\DailyWeighing;
 use App\Models\Lots\DailyWeighingEntry;
 use App\Models\Lots\EggCollection;
@@ -13,6 +16,7 @@ use App\Models\Lots\WeighingMeasurement;
 use App\Models\ManagementPlans\FeedSupply;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\User;
+use App\Services\Lots\RunLotsCommand;
 use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Http\Request;
@@ -78,20 +82,40 @@ final class BusinessReportSourcesTest extends TestCase
         $this->assertSame(0, bccomp($response->json('data.rows.0.feed_quantity'), '2', 6));
     }
 
-    // Flujo: el registro real de alimentación es idempotente y su anulación conserva auditoría.
+    // Flujo: rechaza cargas nuevas, conserva reintentos históricos y permite anular sin descontar otra vez.
     public function test_feed_registration_replay_and_cancel(): void
     {
-        // Preparación: selecciona lote y alimento terminado, con permisos de manejo.
+        // Preparación: simula un suministro previo a la retirada y su operación idempotente histórica.
         $flock = Flock::factory()->create();
         $product = Product::factory()->create(['kind' => 'finished_feed']);
-        Sanctum::actingAs($this->actor(['management-plans.view', 'management-plans.execute']));
+        $actor = $this->actor(['management-plans.view', 'management-plans.execute']);
+        Sanctum::actingAs($actor);
         $body = ['idempotency_key' => (string) Str::uuid(), 'product_id' => $product->id, 'quantity' => '10.500000', 'unit' => 'kg', 'occurred_at' => now()->startOfSecond()->toIso8601String()];
-        // Acción: repite la misma petición y verifica que no duplica suministros.
+        $supply = FeedSupply::factory()->for($flock)->create(['product_id' => $product->id, 'quantity' => '10.500000', 'unit' => 'kg']);
+        $currentBalance = FeedBalance::factory()->create(['production_unit_id' => $flock->production_unit_id,
+            'quantity_grams' => 800000, 'minimum_quantity_grams' => 300000]);
+        $snapshot = ['public_id' => $supply->public_id, 'quantity' => '10.500000', 'unit' => 'kg'];
+        $historical = app(RunLotsCommand::class)->execute($actor, 'management-plans.execute', 'management-plans.feed.record',
+            $body['idempotency_key'], ['flock' => $flock->public_id, ...$body], static function (string $operationId) use ($supply, $actor, $snapshot): array {
+                app(AuditRecorder::class)->record(AuditEntryData::forSubject(
+                    subject: $supply, actor: $actor, logName: 'management_plans', event: 'feed_supply_recorded',
+                    description: 'Suministro histórico registrado antes de la retirada', operationId: $operationId,
+                    properties: ['subject_snapshot' => $snapshot],
+                ));
+
+                return ['feed_supply' => $snapshot];
+            });
+
+        // Request: una clave nueva recibe la retirada explícita y no agrega suministros.
         $url = '/api/v1/flocks/'.$flock->public_id.'/alimentacion';
+        $this->withHeader('Idempotency-Key', (string) Str::uuid())->postJson($url, array_diff_key($body, ['idempotency_key' => true]))
+            ->assertGone()->assertJsonPath('status', 410);
+
+        // Requests: una operación ya guardada puede reproducirse sin ejecutar otra carga.
         $first = $this->withHeader('Idempotency-Key', $body['idempotency_key'])->postJson($url, $body)->assertCreated()
             ->assertJsonPath('data.feed_supply.quantity', '10.500000')
             ->assertJsonPath('data.feed_supply.unit', 'kg');
-        $supply = FeedSupply::query()->sole();
+        $this->assertSame($historical->operation_id, $first->json('data.operation_id'));
         $first->assertJsonPath('data.feed_supply.public_id', $supply->public_id);
         $this->postJson($url, $body)->assertCreated()->assertJsonPath('data.operation_id', $first->json('data.operation_id'));
         $this->assertDatabaseCount('feed_supplies', 1);
@@ -102,6 +126,11 @@ final class BusinessReportSourcesTest extends TestCase
         $this->assertDatabaseHas('feed_supplies', ['public_id' => $id, 'status' => 'cancelled']);
         $this->assertDatabaseHas('activity_log', ['event' => 'feed_supply_recorded']);
         $this->assertDatabaseHas('activity_log', ['event' => 'feed_supply_cancelled']);
+        $this->assertDatabaseCount('activity_log', 2);
+        $this->assertDatabaseCount('feed_consumptions', 0);
+        $this->assertSame(800000, $currentBalance->fresh()->quantity_grams);
+        $this->assertSame(300000, $currentBalance->fresh()->minimum_quantity_grams);
+        $this->assertDatabaseCount('inventory_movements', 0);
     }
 
     // Flujo: una donación independiente descuenta stock y aparece una sola vez en el reporte.

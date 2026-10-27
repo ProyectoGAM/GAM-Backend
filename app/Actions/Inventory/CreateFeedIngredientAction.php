@@ -180,7 +180,7 @@ final readonly class CreateFeedIngredientAction
                 ->where('stock_location_id', $location->getKey())
                 ->with([
                     'product' => static fn (BelongsTo $productRelation): Builder => $productRelation->getQuery()->withResourceMetadata(),
-                    'stockLocation',
+                    'stockLocation.poultryHouse:id,name',
                 ])
                 ->firstOrFail();
             $product = Product::query()->withResourceMetadata()->findOrFail($product->getKey());
@@ -235,7 +235,7 @@ final readonly class CreateFeedIngredientAction
             ->where('stock_location_id', $line->stock_location_id)
             ->with([
                 'product' => static fn (BelongsTo $productRelation): Builder => $productRelation->getQuery()->withResourceMetadata(),
-                'stockLocation',
+                'stockLocation.poultryHouse:id,name',
             ])
             ->firstOrFail();
 

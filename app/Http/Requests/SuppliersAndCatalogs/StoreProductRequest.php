@@ -23,10 +23,16 @@ final class StoreProductRequest extends FormRequest
         return [
             'sku' => ['required', 'string', 'max:80'],
             'name' => ['required', 'string', 'max:160'],
-            'kind' => ['required', Rule::enum(ProductKind::class)],
+            'kind' => ['required', Rule::enum(ProductKind::class)->only(ProductKind::creatableCases())],
             'base_unit' => ['required', Rule::enum(BaseUnit::class)],
             'stock_tracked' => ['sometimes', 'boolean'],
         ];
+    }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return ['kind.enum' => 'Selecciona un tipo de producto disponible. La ración se gestiona mediante recetas y saldos por unidad productiva.'];
     }
 
     /** @return array<int, callable> */

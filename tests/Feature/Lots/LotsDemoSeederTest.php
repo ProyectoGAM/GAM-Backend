@@ -42,10 +42,11 @@ final class LotsDemoSeederTest extends LotsTestCase
         $this->assertDatabaseHas('flocks', ['code' => 'LOT-FEED-TEST', 'current_quantity' => 120]);
         $this->assertDatabaseCount('flocks', 11);
         $this->assertSame([], DB::table('flocks')->select('poultry_house_id')->whereIn('status', ['active', 'quarantined'])->groupBy('poultry_house_id')->havingRaw('COUNT(*) > 1')->pluck('poultry_house_id')->all());
-        $this->assertDatabaseCount('flock_operations', 393);
-        $this->assertSame(1, FlockOperation::query()->where('command', 'management-plans.feed.record')->count());
-        $this->assertDatabaseCount('feed_supplies', 1);
-        $this->assertDatabaseHas('feed_supplies', ['quantity' => '25.500000', 'unit' => 'kg', 'status' => 'recorded']);
+        // Verificación: la demo conserva las operaciones actuales sin recrear suministros retirados.
+        $this->assertDatabaseCount('flock_operations', 392);
+        $this->assertSame(0, FlockOperation::query()->where('command', 'management-plans.feed.record')->count());
+        $this->assertDatabaseCount('feed_supplies', 0);
+        $this->assertDatabaseMissing('products', ['kind' => 'finished_feed']);
         $product = Product::query()->where('system_key', 'generic_egg')->firstOrFail();
         $this->assertDatabaseMissing('products', ['sku' => 'HUEVO-LOTES-DEMO']);
         $before = Flock::query()->orderBy('id')->get()->toArray();
@@ -58,7 +59,8 @@ final class LotsDemoSeederTest extends LotsTestCase
         $this->assertSame($auditCount, DB::table('activity_log')->where('log_name', 'lots')->count());
         $this->assertDatabaseCount('flock_operations', count($operationsBefore));
         $this->assertSame($operationsBefore, FlockOperation::query()->orderBy('id')->get()->toArray());
-        $this->assertDatabaseCount('feed_supplies', 1);
+        $this->assertDatabaseCount('feed_supplies', 0);
+        $this->assertDatabaseMissing('products', ['kind' => 'finished_feed']);
         $this->assertSame([], DB::table('flocks')->select('poultry_house_id')->whereIn('status', ['active', 'quarantined'])->groupBy('poultry_house_id')->havingRaw('COUNT(*) > 1')->pluck('poultry_house_id')->all());
         $this->assertDatabaseHas('stock_balances', ['product_id' => $product->id, 'on_hand_quantity' => '477.000000']);
         $this->assertDatabaseHas('stock_balances', ['product_id' => $product->id, 'on_hand_quantity' => '9279.000000']);
