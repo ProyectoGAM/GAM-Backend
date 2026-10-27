@@ -72,6 +72,8 @@ La clasificación de cada producto debe decidirse explícitamente. No existe una
 
 `ReportingDemoSeeder` conserva las donaciones y configuraciones de reportes. Ya no crea `RACION-REPORTES`, otro producto `finished_feed` ni nuevos `feed_supplies`. Si esos registros ya existen, repetir el seeder los deja intactos. Los demos del sistema de recetas siguen siendo los propietarios de sus elaboraciones y consumos.
 
+La prueba integrada `LotsDemoSeederTest::test_local_database_seed_includes_lots_and_is_repeatable` refleja esta retirada: una carga general desde una base vacía registra 392 operaciones de lotes, en vez de las 393 anteriores, porque ya no incluye `management-plans.feed.record`. Comprueba cero suministros antiguos y cero productos `finished_feed` tanto en la primera carga como al repetirla, conservando las comprobaciones exactas de operaciones, auditorías, lotes y saldos de huevos. La preservación de registros históricos existentes sigue cubierta por `FinishedFeedRetirementTest`. Esta corrección de expectativas no cambia los seeders, datos persistidos ni el contrato API.
+
 Las consultas de `FeedSupplyReportSource` no cambian: siguen usando `feed_supplies`, unidades y nombres guardados, y excluyendo anulaciones de los totales efectivos. Los fixtures `finished_feed` de las pruebas representan filas anteriores a la transición; no constituyen un seeder ni una nueva vía operativa.
 
 ## Verificación
@@ -87,5 +89,19 @@ docker compose -f compose.dev.yaml exec -T -e LOG_CHANNEL=null api php artisan t
 ```
 
 Pint pasó con rutas explícitas de los PHP modificados y nuevos, tras intentar `--dirty`, que no dispone de Git dentro del contenedor. PHPStan/Larastan nivel 5 pasó sobre las fuentes y el seeder modificados con la configuración existente `.phpstan-vaccines.neon`, sin baselines nuevos. Los contratos se verificaron contra las rutas y referencias locales en las pruebas. `git diff --check` pasó y las decisiones de compatibilidad se registraron con `record-rule` de Boost.
+
+### Regresión de la carga general
+
+Se reprodujo el fallo que esperaba 393 operaciones después de retirar el suministro antiguo. Tras corregir las expectativas, `LotsDemoSeederTest` y `FinishedFeedRetirementTest` aprobaron conjuntamente: **14 pruebas y 170 aserciones**. Pint aprobó el archivo de prueba corregido, usando su ruta explícita porque el contenedor no dispone de Git para `--dirty`.
+
+```powershell
+docker compose -f compose.dev.yaml exec -T -e LOG_CHANNEL=null api php artisan test --compact tests/Feature/Lots/LotsDemoSeederTest.php tests/Feature/SuppliersAndCatalogs/FinishedFeedRetirementTest.php
+```
+
+La regresión completa también aprobó: **650 pruebas y 6193 aserciones**, con 149 MB de memoria. Se ejecutó PHPUnit directamente con un límite de 512 MB para ese proceso, después de que el límite predeterminado de 128 MB interrumpiera el primer intento. No se modificó la configuración de PHP del proyecto.
+
+```powershell
+docker compose -f compose.dev.yaml exec -T -e LOG_CHANNEL=null api php -d memory_limit=512M vendor/bin/phpunit
+```
 
 Volver al [índice de implementaciones](README.md).
