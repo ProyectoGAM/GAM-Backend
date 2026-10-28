@@ -2,6 +2,7 @@
 paths:
   - 'app/**/Inventory/*Recipe*.php'
   - 'app/**/Inventory/*Feed*.php'
+  - 'app/**/Inventory/*.php'
 ---
 
 # Inventory
@@ -20,3 +21,6 @@ Las etapas automáticas evalúan receta disponible a las 00:00 de su día de com
 
 ## Mínimos de alimento por receta y UP
 FeedBalance.minimum_quantity_grams es nullable; null significa sin configurar, cero es válido y el rango es 0..999999999999 gramos enteros. El mínimo pertenece a receta/UP, nunca a planta. Configurarlo requiere inventory.manage o admin y auditoría síncrona en la misma transacción; no modifica quantity_grams y puede materializar una cuenta en cero sin movimientos. Estado y atención se calculan con FeedBalanceStatus: atención sólo con mínimo configurado y saldo <= mínimo. FeedBalanceEvaluated se publica después del commit de elaboraciones, ajustes, cancelaciones, consumos, rectificaciones y mínimos; Alertas será responsable de notificaciones y deduplicación.
+
+## Compatibilidad de productos en movimientos
+La consulta productos-permitidos y el registro transaccional comparten StockProductCompatibility para categoria y unidad por ubicacion. El filtro loss exige saldo local positivo solo para el selector: no cambia los negativos permitidos de materias primas ni reserva stock. Al cambiar ubicacion u operacion, el cliente debe invalidar selecciones y respuestas anteriores; una pagina o busqueda parcial no demuestra incompatibilidad.

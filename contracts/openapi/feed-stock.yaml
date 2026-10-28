@@ -20,6 +20,86 @@ tags:
   - name: Plantas de ración
     description: Stock de materias primas por planta y por unidad productiva.
 paths:
+  /inventario/productos-permitidos:
+    get:
+      tags: [Plantas de ración]
+      operationId: listAllowedStockProducts
+      summary: Consulta productos permitidos por ubicación y operación de stock
+      description: >-
+        Requiere inventory.view o rol admin y el contexto de sesión compartida
+        cuando corresponda. Devuelve productos activos que controlan stock,
+        compatibles con la ubicación elegida. Los depósitos generales excluyen
+        materias primas; las plantas de ración sólo admiten materias primas en
+        gramos. Excluye el producto técnico Huevo y las cuentas técnicas de huevos.
+        Las ubicaciones inactivas o vinculadas a galpones de tipo distinto de feed
+        devuelven una colección vacía. Para loss exige saldo estrictamente positivo
+        en esa misma ubicación; las demás operaciones incluyen productos sin saldo,
+        en cero o con saldo negativo permitido. No reserva stock. Al cambiar de
+        ubicación u operación, el cliente debe volver a consultar, reiniciar la
+        paginación y descartar selecciones que dejen de ser válidas. Los movimientos
+        revalidan la compatibilidad dentro de su transacción.
+      parameters:
+        - name: stock_location_id
+          in: query
+          required: true
+          description: Identificador de la ubicación de inventario, no del galpón.
+          schema: { type: integer }
+        - name: operation
+          in: query
+          required: true
+          description: >-
+            Recepción, salida, pérdida, ajuste o transferencia. Para transferencias
+            se consulta cada ubicación y se conservan los productos compatibles
+            con ambas. Los valores son identificadores estables de operación.
+          schema:
+            type: string
+            enum: [receipt, issue, loss, adjustment, transfer]
+        - name: search
+          in: query
+          description: Búsqueda parcial por nombre, sin distinguir mayúsculas.
+          schema: { type: string, maxLength: 120 }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+      responses:
+        '200':
+          description: >-
+            Productos ordenados por nombre e identificador, con saldo local en
+            unidad base y seis decimales. Sin cuenta de stock el saldo es cero.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, links, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AllowedStockProduct' }
+                  links: { type: object }
+                  meta:
+                    type: object
+                    required: [current_page, last_page, per_page, total]
+                    properties:
+                      current_page: { type: integer }
+                      last_page: { type: integer }
+                      per_page: { type: integer }
+                      total: { type: integer }
+              example:
+                data:
+                  - id: 18
+                    sku: MAIZ-026
+                    name: Maíz partido
+                    kind: raw_material
+                    base_unit: g
+                    available_quantity: '2500.000000'
+                links: { first: null, last: null, prev: null, next: null }
+                meta: { current_page: 1, last_page: 1, per_page: 50, total: 1 }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
   /plantas-racion/{poultryHouse}/ingredientes:
     parameters:
       - $ref: '#/components/parameters/PoultryHouse'
@@ -115,6 +195,22 @@ components:
       required: true
       schema: { type: string, format: uuid }
   schemas:
+    AllowedStockProduct:
+      type: object
+      required: [id, sku, name, kind, base_unit, available_quantity]
+      properties:
+        id: { type: integer }
+        sku: { type: string }
+        name: { type: string }
+        kind:
+          type: string
+          description: Categoría compatible según las reglas de inventario de la ubicación.
+          enum: [raw_material, supply, finished_feed, egg, medicine, vaccine, other]
+        base_unit: { type: string, enum: [unit, kg, g, l, ml, dose] }
+        available_quantity:
+          type: string
+          pattern: '^-?\d+\.\d{6}$'
+          description: Saldo de la ubicación elegida; cero si no existe cuenta y mayor que cero para pérdidas.
     CreateIngredient:
       type: object
       additionalProperties: false

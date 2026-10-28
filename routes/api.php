@@ -384,6 +384,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::patch('/stock-locations/{stockLocation}', [StockLocationController::class, 'update'])->name('stock-locations.update');
         Route::patch('/stock-locations/{stockLocation}/status', [StockLocationStatusController::class, 'update'])->name('stock-locations.status.update');
 
+        Route::get('/inventario/productos-permitidos', [InventoryReadController::class, 'allowedProducts'])->name('inventory.allowed-products.index');
+
         Route::prefix('inventory')->name('inventory.')->group(function (): void {
             Route::get('/balances', [InventoryReadController::class, 'balances'])->name('balances.index');
             Route::patch('/balances/{stockBalance}/minimum-stock', [InventoryReadController::class, 'minimum'])->name('balances.minimum');

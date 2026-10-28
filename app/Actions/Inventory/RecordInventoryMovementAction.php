@@ -20,6 +20,7 @@ use App\Models\Inventory\StockLocation;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\User;
 use App\Queries\SuppliersAndCatalogs\GetActiveSupplierQuery;
+use App\Services\Inventory\StockProductCompatibility;
 use App\ValueObjects\Inventory\InventoryQuantity;
 use Brick\Math\BigDecimal;
 use Illuminate\Database\Eloquent\Builder;
@@ -33,6 +34,7 @@ final readonly class RecordInventoryMovementAction
     public function __construct(
         private AuditRecorder $auditRecorder,
         private GetActiveSupplierQuery $getActiveSupplier,
+        private StockProductCompatibility $productCompatibility,
     ) {}
 
     public function execute(InventoryMovementCommand $command, User $actor, string $source = 'api', ?FeedStockOperation $feedCompensation = null): InventoryMovement
@@ -137,24 +139,7 @@ final readonly class RecordInventoryMovementAction
                 foreach ($normalizedLines as $line) {
                     $product = $products->get($line['product_id']);
                     $location = $locations->get($line['stock_location_id']);
-                    $hasPoultryHouseLink = $location->poultry_house_id !== null;
-                    $isFeedLocation = $hasPoultryHouseLink
-                        && $location->poultryHouse?->type === PoultryHouseType::Feed;
-                    $isRawMaterial = $product->kind === ProductKind::RawMaterial;
-
-                    if ($hasPoultryHouseLink && ! $isFeedLocation) {
-                        throw new InventoryConflict('La ubicación vinculada no corresponde a una planta de ración.');
-                    }
-
-                    if ($isFeedLocation !== $isRawMaterial) {
-                        throw new InventoryConflict($isFeedLocation
-                            ? 'Una planta de ración sólo puede almacenar materias primas.'
-                            : 'Las materias primas sólo pueden moverse en plantas de ración.');
-                    }
-
-                    if ($isFeedLocation && ($product->base_unit !== BaseUnit::Gram || ! $product->stock_tracked)) {
-                        throw new InventoryConflict('Las materias primas de una planta de ración deben controlar stock en gramos.');
-                    }
+                    $this->productCompatibility->assertCompatible($product, $location);
                 }
 
                 $sortedLines = $normalizedLines;

@@ -75,6 +75,102 @@ docker compose -f compose.dev.yaml exec -T api php artisan test --compact tests/
 
 Resultado: 21 pruebas aprobadas y 172 aserciones en la base de testing. Pint y PHPStan pasaron sobre los archivos PHP afectados; Pint recibió las rutas explícitas porque `--dirty` requiere Git, que no está disponible dentro del contenedor. La visualización del nombre en el frontend requiere consumir `created_by_name`; esta entrega modifica la respuesta del backend y no incluye verificación visual.
 
+## Productos permitidos por ubicación y operación
+
+El registro de movimientos dispone de `GET /api/v1/inventario/productos-permitidos`.
+La compatibilidad por categoría y unidad se centraliza en `StockProductCompatibility`,
+utilizada tanto por esta consulta como por `RecordInventoryMovementAction`. Agregar
+tipos de ubicación requiere extender esa regla del backend; el cliente consume sus
+resultados sin mantener una tabla propia de categorías compatibles.
+
+Parámetros:
+
+- `stock_location_id`: obligatorio, ID de Inventario devuelto por el catálogo de
+  ubicaciones; no es el ID del galpón.
+- `operation`: obligatorio; `receipt`, `issue`, `loss`, `adjustment` o `transfer`.
+- `search`: búsqueda parcial por nombre, sin distinguir mayúsculas, hasta 120 caracteres.
+- `per_page`: entre 1 y 100, por defecto 50. `page`: entero positivo, por defecto 1.
+  Los enlaces de paginación conservan los filtros validados de ubicación, operación y búsqueda.
+
+Ejemplo de consulta para pérdidas:
+
+```http
+GET /api/v1/inventario/productos-permitidos?stock_location_id=12&operation=loss
+```
+
+Cada elemento de `data` contiene exclusivamente los datos necesarios para seleccionar
+el producto y conocer el saldo local; la respuesta incluye `links` y `meta` de paginación,
+ordenada por nombre e ID:
+
+```json
+{
+  "id": 18,
+  "sku": "MAIZ-026",
+  "name": "Maíz partido",
+  "kind": "raw_material",
+  "base_unit": "g",
+  "available_quantity": "2500.000000"
+}
+```
+
+Reglas de elegibilidad:
+
+- Sólo productos activos con control de stock. Se excluyen el producto técnico
+  `generic_egg` y los pares producto/ubicación administrados por cuentas de huevos.
+- Depósitos generales: categorías distintas de `raw_material`. Plantas de ración:
+  únicamente `raw_material` en gramos. Una ubicación vinculada a otro tipo de galpón
+  o una ubicación de inventario inactiva devuelve `data: []`, con total cero.
+- `loss`: exclusivamente saldo local mayor que cero, incluso cantidades tan pequeñas
+  como `0.000001`; stock positivo en otra ubicación no habilita el producto.
+- Las otras operaciones ofrecen productos compatibles aunque no tengan cuenta, su saldo
+  sea cero o sea negativo. Sin cuenta se informa `0.000000`. Los identificadores históricos,
+  incluido `finished_feed`, conservan las reglas de lectura y movimiento existentes;
+  esta consulta no crea productos ni modifica la retirada de sus altas.
+
+Integración del formulario:
+
+1. Elegir ubicación y operación antes de habilitar la selección de productos.
+2. Consultar el endpoint y cargar las opciones, con su unidad base y saldo local.
+3. Al cambiar ubicación u operación, invalidar las opciones anteriores, reiniciar la
+   búsqueda/paginación y limpiar los productos cuya compatibilidad no esté confirmada.
+   Limpiar toda la selección antes de recargar es una estrategia válida y evita inferir
+   que un producto no existe sólo porque quedó fuera de la página o búsqueda actual.
+4. Ignorar respuestas de consultas anteriores que lleguen después de cambiar la ubicación.
+   Para transferencias, consultar origen y destino y permitir sólo productos válidos en ambos.
+5. Refrescar las opciones tras guardar una pérdida: el saldo puede haber llegado a cero.
+
+La limpieza del selector corresponde al frontend. Esta entrega implementa el contrato
+backend y rechaza selecciones incompatibles al guardar, sin modificar una interfaz web.
+La consulta requiere sesión autenticada, contexto compartido vigente cuando corresponde
+y `inventory.view` o rol `admin`, igual que la lectura de movimientos. El acceso sigue
+siendo global para todas las UP, sin asignaciones por usuario. Las escrituras conservan
+sus permisos específicos (`inventory.move` o `inventory.adjust`).
+
+Es una lectura sin caché de aplicación, reservas, saldos nuevos, auditorías ni claves de
+idempotencia. No requiere migraciones, seeders, cambios de datos ni dependencias.
+El saldo es informativo: puede cambiar entre consulta y envío. Las escrituras conservan
+sus locks, validación transaccional, idempotencia y auditoría síncrona. El filtro positivo
+de pérdidas orienta el selector y no modifica las reglas existentes de saldos negativos
+permitidos para materias primas.
+
+La verificación cubre categorías por ubicación, estado, control de stock, huevos técnicos,
+saldos ausentes/cero/negativos, aislamiento del saldo por ubicación, cambios de ubicación,
+rechazo transaccional de selecciones anteriores, búsqueda, paginación, filtros inválidos,
+autenticación y permiso. El contrato está en [feed-stock.yaml](../../contracts/openapi/feed-stock.yaml).
+
+```sh
+docker compose -f compose.dev.yaml exec -T api php artisan test --compact tests/Feature/Inventory/AllowedStockProductsEndpointTest.php tests/Feature/Inventory/InventoryEndpointTest.php tests/Feature/Inventory/FeedStockEndpointTest.php tests/Feature/Inventory/FeedManufactureEndpointTest.php tests/Feature/Inventory/FeedAdjustmentEndpointTest.php tests/Feature/Inventory/EggStockEndpointTest.php
+docker compose -f compose.dev.yaml exec -T api php vendor/bin/pint --dirty --format agent
+```
+
+Resultado: 88 pruebas aprobadas y 581 aserciones en la base de testing. Tras agregar
+la conservación de filtros en los enlaces de paginación se repitieron las 21 pruebas
+del nuevo endpoint, aprobadas con 109 aserciones. PHPStan pasó sobre los archivos PHP
+afectados y se repitió sobre la consulta final; el contrato YAML se analizó correctamente
+y `route:list` confirmó la ruta. Pint pasó con las rutas exactas de los PHP modificados,
+porque `--dirty` necesita Git y el contenedor no lo incluye. No se ejecutó la suite
+completa ni una aceptación visual del frontend.
+
 ## Datos demo locales
 
 `DatabaseSeeder` registra [FeedStockDemoSeeder](../../database/seeders/Inventory/FeedStockDemoSeeder.php) a través de `LocalDemoDataSeeder`. Sólo se ejecuta con `APP_ENV=local` y usa claves fijas para que las recargas sean idempotentes.
