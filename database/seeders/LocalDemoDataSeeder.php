@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Actions\Inventory\PrepareStockStorageAction;
 use App\Enums\FarmStructure\PoultryHouseStatus;
 use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Enums\Inventory\InventoryMovementType;
@@ -34,6 +35,7 @@ use Database\Seeders\Inventory\FeedRecipeDemoSeeder;
 use Database\Seeders\Inventory\FeedStockDemoSeeder;
 use Database\Seeders\Inventory\FlockFeedingDemoSeeder;
 use Database\Seeders\Inventory\FlockFeedingDesignDemoSeeder;
+use Database\Seeders\Inventory\HealthStockDemoSeeder;
 use Database\Seeders\Lots\EggHistoryDemoSeeder;
 use Database\Seeders\Lots\EggProductionDemoSeeder;
 use Database\Seeders\Lots\LotsDemoSeeder;
@@ -82,6 +84,8 @@ final class LocalDemoDataSeeder extends Seeder
         $this->call(EggHistoryDemoSeeder::class);
         $this->call(WeighingDesignDemoSeeder::class);
         $this->call(FlockFeedingDesignDemoSeeder::class);
+        app(PrepareStockStorageAction::class)->execute($admin);
+        $this->call(HealthStockDemoSeeder::class);
     }
 
     /** @return array<string, Locality> */
@@ -195,7 +199,9 @@ final class LocalDemoDataSeeder extends Seeder
                 'name' => $definition['name'],
                 'kind' => $definition['kind'],
                 'base_unit' => $definition['unit'],
-                'stock_tracked' => true,
+                'stock_tracked' => $definition['kind'] === ProductKind::Vaccine
+                    ? ($product->exists ? $product->stock_tracked : (bool) config('inventory.health_stock_enabled'))
+                    : true,
                 'status' => ProductStatus::Active,
             ])->save();
             $products[$key] = $product;
@@ -234,6 +240,10 @@ final class LocalDemoDataSeeder extends Seeder
         ];
 
         foreach ($balances as $definition) {
+            // Futuro: conservar los datos de demo sin generar stock sanitario mientras esté deshabilitado.
+            if (! config('inventory.health_stock_enabled') && in_array($products[$definition['product']]->kind, [ProductKind::Medicine, ProductKind::Vaccine], true)) {
+                continue;
+            }
             $balance = StockBalance::query()->firstOrNew([
                 'product_id' => $products[$definition['product']]->getKey(),
                 'stock_location_id' => $locations[$definition['location']]->getKey(),
@@ -385,6 +395,15 @@ final class LocalDemoDataSeeder extends Seeder
         ?string $referenceType = null,
         ?string $referenceId = null,
     ): void {
+        // Futuro: excluir líneas sanitarias nuevas sin borrar movimientos ni líneas históricas existentes.
+        if (! config('inventory.health_stock_enabled')) {
+            $healthProductIds = Product::query()->whereIn('kind', [ProductKind::Medicine, ProductKind::Vaccine])->pluck('id')->all();
+            $lines = array_values(array_filter($lines, static fn (array $line): bool => ! in_array($line['product_id'], $healthProductIds, true)));
+        }
+        if ($lines === []) {
+            return;
+        }
+
         $movement = InventoryMovement::query()->firstOrNew(['operation_id' => $operationId]);
         $movement->forceFill([
             'operation_id' => $operationId,

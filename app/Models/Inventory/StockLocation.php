@@ -3,6 +3,7 @@
 namespace App\Models\Inventory;
 
 use App\Enums\Inventory\StockLocationStatus;
+use App\Enums\Inventory\StockLocationType;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
 use Database\Factories\Inventory\StockLocationFactory;
@@ -20,8 +21,9 @@ use Illuminate\Support\Str;
  * @property string $name
  * @property StockLocationStatus $status
  * @property bool $system_managed
+ * @property StockLocationType $type
  */
-#[Fillable(['production_unit_id', 'name', 'status', 'system_managed'])]
+#[Fillable(['production_unit_id', 'name', 'status', 'system_managed', 'type'])]
 class StockLocation extends Model
 {
     /** @use HasFactory<StockLocationFactory> */
@@ -30,7 +32,7 @@ class StockLocation extends Model
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['status' => StockLocationStatus::class, 'system_managed' => 'boolean'];
+        return ['status' => StockLocationStatus::class, 'system_managed' => 'boolean', 'type' => StockLocationType::class];
     }
 
     /** Normaliza el nombre para mantener la unicidad a nivel de empresa. */

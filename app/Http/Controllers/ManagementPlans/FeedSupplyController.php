@@ -9,7 +9,6 @@ use App\Http\Resources\Lots\LotsOperationResource;
 use App\Http\Resources\ManagementPlans\FeedSupplyResource;
 use App\Models\Lots\Flock;
 use App\Models\ManagementPlans\FeedSupply;
-use App\Models\SuppliersAndCatalogs\Product;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -23,13 +22,7 @@ final readonly class FeedSupplyController
 
     public function products(ListFeedSuppliesRequest $request): JsonResponse
     {
-        $query = Product::query()->where('kind', 'finished_feed')->where('status', 'active');
-        if ($request->filled('search')) {
-            $query->where('name', 'ilike', '%'.$request->validated('search').'%');
-        }
-        $page = $query->orderBy('name')->orderBy('id')->paginate(50, ['id', 'name']);
-
-        return response()->json(['data' => $page->items(), 'meta' => ['current_page' => $page->currentPage(), 'last_page' => $page->lastPage()]]);
+        return response()->json(['data' => [], 'meta' => ['current_page' => (int) $request->validated('page', 1), 'last_page' => 1]]);
     }
 
     public function store(StoreFeedSupplyRequest $request, Flock $flock, RecordFeedSupplyAction $action): JsonResponse

@@ -382,12 +382,13 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
   /alimentacion/productos:
     get:
-      summary: Busca alimentos terminados activos para registrar suministros
+      summary: Selector retirado; ya no ofrece alimentos terminados
+      deprecated: true
       parameters:
         - { name: search, in: query, schema: { type: string, maxLength: 160 } }
         - { name: page, in: query, schema: { type: integer, minimum: 1 } }
       responses:
-        '200': { description: data con id y name y meta de paginación. }
+        '200': { description: data vacío y meta de paginación por compatibilidad. }
         '403': { $ref: '#/components/responses/Forbidden' }
   /flocks/{flock}/alimentacion:
     parameters: [{ $ref: '#/components/parameters/Flock' }]
@@ -400,7 +401,13 @@ paths:
         '200': { description: 'Colección paginada de suministros con id, producto, cantidad, unidad, fecha y estado.' }
         '403': { $ref: '#/components/responses/Forbidden' }
     post:
-      summary: Registra alimento efectivamente suministrado al lote
+      summary: Reproduce suministros históricos; las cargas nuevas están retiradas
+      deprecated: true
+      description: >-
+        Nuevas operaciones responden 410 sin efectos. Clave, actor y contenido
+        previamente registrados conservan su resultado idempotente. La consulta
+        y anulación históricas permanecen disponibles. Utilizar recetas y saldos
+        por UP para la alimentación actual; no hay conversión automática de datos.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -417,7 +424,8 @@ paths:
                 occurred_at: { type: string, format: date-time }
                 notes: { type: [string, 'null'], maxLength: 5000 }
       responses:
-        '201': { description: 'data con operation_id y feed_supply, incluido public_id para su anulación, quantity y unit. Requiere management-plans.execute.' }
+        '201': { description: Sólo reintento de una operación histórica guardada; requiere management-plans.execute. }
+        '410': { description: Las cargas nuevas de suministros están retiradas; no hay cambios de stock. }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
   /flocks/{flock}/alimentacion/{feedSupply}/anulacion:
@@ -684,12 +692,8 @@ components:
             vaccine_id: { $ref: '#/components/schemas/Ulid' }
             vaccine_batch: { type: [string, 'null'], maxLength: 160, description: Partida del producto de vacuna aplicado; independiente del lote de gallinas. }
             notes: { type: [string, 'null'], maxLength: 5000 }
-            stock_consumption:
-              type: object
-              required: [quantity, stock_location_id]
-              properties:
-                quantity: { type: string, description: Cantidad en la unidad base del producto de vacuna. }
-                stock_location_id: { type: integer, minimum: 1 }
+            # Futuro: sanidad física está deshabilitada; enviar consumo devuelve 422.
+            stock_consumption: false
     MedicationInput:
       allOf:
         - $ref: '#/components/schemas/ExecutionBase'
@@ -700,6 +704,8 @@ components:
             quantity: { type: integer, minimum: 1, maximum: 2147483647 }
             reason: { type: string, maxLength: 500 }
             notes: { type: [string, 'null'], maxLength: 5000, description: Puede describir la dosis libremente. }
+            # Futuro: sanidad física está deshabilitada; enviar consumo devuelve 422.
+            stock_consumption: false
     RationInput:
       description: Cambia configuración de alimentación del día y conserva el permiso management-plans.execute. Receta, total diario o ambos; todos los valores quedan manuales. No registra comidas ni descuenta alimento inmediatamente. No admite fecha anterior al día del registro.
       anyOf:

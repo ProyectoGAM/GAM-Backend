@@ -8,19 +8,32 @@ use App\Enums\SuppliersAndCatalogs\BaseUnit;
 use App\Exceptions\Inventory\InventoryConflict;
 use App\Models\Inventory\InventoryMovement;
 use App\Models\Inventory\StockBalance;
-use App\Models\Inventory\StockLocation;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\User;
+use App\Services\Inventory\StockLocationLocks;
+use App\Services\Inventory\StockProductCompatibility;
+use App\Services\Lots\LotsAuthorization;
 use App\ValueObjects\Inventory\InventoryQuantity;
 use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
 
 final readonly class AdjustStockToCountAction
 {
-    public function __construct(private RecordInventoryMovementAction $recordMovement) {}
+    public function __construct(private RecordInventoryMovementAction $recordMovement, private StockLocationLocks $locationLocks, private StockProductCompatibility $compatibility) {}
 
     /** @param array<string, mixed> $attributes */
     public function execute(array $attributes, User $actor): InventoryMovement
+    {
+        return DB::transaction(function () use ($attributes, $actor): InventoryMovement {
+            $currentActor = User::query()->whereKey($actor->getKey())->lockForUpdate()->firstOrFail();
+            LotsAuthorization::ensure($currentActor, 'inventory.adjust');
+
+            return $this->executeWithinTransaction($attributes, $currentActor);
+        }, 3);
+    }
+
+    /** @param array<string, mixed> $attributes */
+    private function executeWithinTransaction(array $attributes, User $actor): InventoryMovement
     {
         $preparedLines = $this->prepareLines($attributes['lines']);
         $payload = [
@@ -42,9 +55,17 @@ final readonly class AdjustStockToCountAction
 
         return DB::transaction(function () use ($attributes, $preparedLines, $actor, $payload): InventoryMovement {
             $productIds = array_values(array_unique(array_map(static fn (array $line): int => (int) $line['product_id'], $preparedLines)));
-            Product::query()->whereIn('id', $productIds)->orderBy('id')->sharedLock()->get();
+            $products = Product::query()->whereIn('id', $productIds)->orderBy('id')->sharedLock()->get()->keyBy('id');
             $locationIds = array_values(array_unique(array_map(static fn (array $line): int => (int) $line['stock_location_id'], $preparedLines)));
-            StockLocation::query()->whereIn('id', $locationIds)->orderBy('id')->lockForUpdate()->get();
+            $locations = $this->locationLocks->lock($locationIds);
+            foreach ($preparedLines as $line) {
+                $product = $products->get((int) $line['product_id']);
+                $location = $locations->get((int) $line['stock_location_id']);
+                if ($product === null || $product->status->value !== 'active' || ! $this->compatibility->isOperational($location)) {
+                    throw new InventoryConflict('El producto y la ubicación deben estar activos.');
+                }
+                $this->compatibility->assertCompatible($product, $location);
+            }
             $keys = array_map(static fn (array $line): string => $line['product_id'].':'.$line['stock_location_id'], $preparedLines);
             $now = now();
             StockBalance::query()->insertOrIgnore(array_map(function (string $key) use ($now): array {
@@ -90,7 +111,7 @@ final readonly class AdjustStockToCountAction
                 reason: (string) $attributes['reason'],
                 occurredAt: $attributes['occurred_at'] ?? null,
                 idempotencyPayload: $payload,
-            ), $actor);
+            ), $actor, requiredPermission: 'inventory.adjust');
         }, 3);
     }
 
@@ -106,7 +127,7 @@ final readonly class AdjustStockToCountAction
             static fn (array $line): int => (int) $line['product_id'],
             $lines,
         )));
-        $products = Product::query()->whereIn('id', $productIds)->get()->keyBy('id');
+        $products = Product::query()->whereIn('id', $productIds)->orderBy('id')->sharedLock()->get()->keyBy('id');
 
         return array_map(function (array $line) use ($products): array {
             $product = $products->get((int) $line['product_id']);

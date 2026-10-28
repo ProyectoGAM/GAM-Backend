@@ -21,10 +21,7 @@ use Illuminate\Support\Str;
 
 final readonly class CreateVaccineAction
 {
-    public function __construct(
-        private AuditRecorder $auditRecorder,
-        private CreateProductAction $createProduct,
-    ) {}
+    public function __construct(private AuditRecorder $auditRecorder) {}
 
     /** @param array{sku: string, name: string, description: string, details?: string|null, supplier_id: int, base_unit?: string|null, idempotency_key: string} $attributes */
     public function execute(array $attributes, User $actor, string $source = 'api'): Vaccine
@@ -74,17 +71,26 @@ final readonly class CreateVaccineAction
 
                 $product = Product::query()->where('sku', $sku)->lockForUpdate()->first();
                 if ($product === null) {
-                    $product = $this->createProduct->execute([
+                    // La identidad del catálogo de vacunas no crea existencia física ni ubicación.
+                    $product = Product::query()->create([
                         'sku' => $sku,
                         'name' => $name,
                         'kind' => ProductKind::Vaccine->value,
                         'base_unit' => $unit ?? BaseUnit::Dose->value,
-                        'stock_tracked' => true,
+                        'stock_tracked' => (bool) config('inventory.health_stock_enabled'),
                         'status' => ProductStatus::Active->value,
-                    ], $currentActor, $operationId, $source);
+                    ]);
+                    $productSnapshot = $product->only(['sku', 'name', 'kind', 'base_unit', 'stock_tracked', 'status']);
+                    $this->auditRecorder->record(AuditEntryData::forSubject(
+                        subject: $product, actor: $currentActor, logName: 'suppliers_and_catalogs',
+                        event: 'product_created', description: 'Producto de catálogo de vacuna creado',
+                        properties: ['subject_snapshot' => $productSnapshot],
+                        attributeChanges: ['old' => [], 'new' => $productSnapshot],
+                        operationId: $operationId, source: $source,
+                    ));
                 } else {
-                    if ($product->status !== ProductStatus::Active || $product->kind !== ProductKind::Vaccine || ! $product->stock_tracked) {
-                        throw new VaccineConflict('El SKU indicado debe corresponder a un producto vacuna activo que controle stock.');
+                    if ($product->status !== ProductStatus::Active || $product->kind !== ProductKind::Vaccine || (config('inventory.health_stock_enabled') && ! $product->stock_tracked)) {
+                        throw new VaccineConflict('El SKU indicado debe corresponder a un producto vacuna activo.');
                     }
                     if (Str::lower(trim($product->name)) !== Str::lower($name)) {
                         throw new VaccineConflict('El nombre no coincide con el producto identificado por el SKU.');

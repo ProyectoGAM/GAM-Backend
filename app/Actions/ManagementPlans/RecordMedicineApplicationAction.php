@@ -2,9 +2,12 @@
 
 namespace App\Actions\ManagementPlans;
 
+use App\Actions\Inventory\IssueStockAction;
 use App\DTO\AuditAndTraceability\AuditEntryData;
+use App\Enums\Inventory\StockLocationType;
 use App\Exceptions\Lots\LotsConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
+use App\Models\Inventory\StockLocation;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
 use App\Models\ManagementPlans\MedicineApplication;
@@ -23,6 +26,7 @@ final readonly class RecordMedicineApplicationAction
         private ResolveManagementExecutionContext $contextResolver,
         private FlockActivityJournal $activities,
         private AuditRecorder $auditRecorder,
+        private IssueStockAction $issueStock,
     ) {}
 
     /** @param array<string, mixed> $attributes */
@@ -35,6 +39,10 @@ final readonly class RecordMedicineApplicationAction
             $attributes['idempotency_key'],
             ['flock' => $flock->public_id, ...$attributes],
             function (string $operationId) use ($flock, $attributes, $actor, $source): array {
+                // Futuro: conservar el consumo físico sin admitirlo mediante llamadas internas hoy.
+                if (isset($attributes['stock_consumption']) && ! config('inventory.health_stock_enabled')) {
+                    throw new LotsConflict('El stock físico de sanidad está deshabilitado.');
+                }
                 $context = $this->contextResolver->execute($flock, $actor, $attributes, 'medication');
                 $candidate = Medicine::query()->where('public_id', $attributes['medicine_id'])->firstOrFail();
                 $medicine = Medicine::query()->whereKey($candidate->getKey())->lockForUpdate()->firstOrFail();
@@ -108,6 +116,28 @@ final readonly class RecordMedicineApplicationAction
                     'operation_id' => $operationId,
                 ])->save();
 
+                $inventorySnapshot = null;
+                if (isset($attributes['stock_consumption'])) {
+                    if ($medicine->product_id === null) {
+                        throw new LotsConflict('El medicamento todavía no está vinculado al inventario físico.');
+                    }
+                    if (! StockLocation::query()->whereKey($attributes['stock_consumption']['stock_location_id'])
+                        ->where('type', StockLocationType::Health)->where('production_unit_id', $context->flock->production_unit_id)->exists()) {
+                        throw new LotsConflict('El consumo sanitario debe salir de la ubicación de sanidad de la UP del lote.');
+                    }
+                    $inventoryMovement = $this->issueStock->execute([
+                        'idempotency_key' => $operationId,
+                        'lines' => [['product_id' => (int) $medicine->product_id, 'stock_location_id' => (int) $attributes['stock_consumption']['stock_location_id'], 'quantity' => (string) $attributes['stock_consumption']['quantity']]],
+                        'occurred_at' => $context->occurredAt->toIso8601String(),
+                        'reason' => 'Consumo físico por aplicación de medicamento '.$medicine->public_id,
+                        'reference_type' => 'medicine_application', 'reference_id' => $application->public_id,
+                    ], $actor, 'management-plans.execute');
+                    $application->forceFill(['inventory_movement_id' => $inventoryMovement->getKey()])->save();
+                    $inventorySnapshot = ['movement_id' => (int) $inventoryMovement->getKey(), 'product_id' => (int) $medicine->product_id,
+                        'quantity' => ltrim((string) $inventoryMovement->lines->firstOrFail()->on_hand_delta, '-'),
+                        'stock_location_id' => (int) $attributes['stock_consumption']['stock_location_id']];
+                }
+
                 $snapshot = [
                     'id' => $application->public_id,
                     'flock_id' => $context->flock->public_id,
@@ -128,6 +158,7 @@ final readonly class RecordMedicineApplicationAction
                         'balance_after' => $balanceAfter,
                     ],
                     'created_by' => (int) $actor->getKey(),
+                    'inventory_consumption' => $inventorySnapshot,
                 ];
                 $warning = $balanceAfter < 0 ? [
                     'code' => 'MEDICINE_STOCK_NEGATIVE',
@@ -174,7 +205,7 @@ final readonly class RecordMedicineApplicationAction
 
                 return [
                     'medicine_application' => $snapshot,
-                    'stock_balance' => ['quantity' => $balanceAfter, 'version' => $balance->version],
+                    'stock_balance' => ['quantity' => $balanceAfter, 'version' => $balance->version, 'balance_scope' => 'clinical_global'],
                     'warnings' => $warning === null ? [] : [$warning],
                 ];
             },

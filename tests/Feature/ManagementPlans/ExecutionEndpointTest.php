@@ -118,11 +118,13 @@ final class ExecutionEndpointTest extends LotsTestCase
     // Flujo: una vacunación que no puede descontar inventario revierte también la aplicación.
     public function test_vaccination_and_inventory_issue_commit_together(): void
     {
+        // Futuro: verifica la integración conservada sin activar sanidad en la configuración real.
+        config()->set('inventory.health_stock_enabled', true);
         // Preparación: crea una vacuna controlada sin existencias en la ubicación.
         $this->signIn(['management-plans.execute']);
         $flock = $this->flockWithPlan();
         $vaccine = Vaccine::factory()->create();
-        $location = StockLocation::factory()->create();
+        $location = StockLocation::factory()->create(['type' => 'health', 'production_unit_id' => $flock->production_unit_id, 'system_managed' => true]);
 
         // Request: solicita consumo superior a lo disponible y obtiene conflicto.
         $this->command('POST', '/flocks/'.$flock->public_id.'/vacunaciones', [

@@ -9,6 +9,7 @@ use App\Models\Inventory\FeedStockOperation;
 use App\Models\Inventory\InventoryMovement;
 use App\Models\Inventory\InventoryMovementLine;
 use App\Models\User;
+use App\Services\Inventory\FeedBalanceEvaluator;
 use App\Services\Inventory\FeedIngredientStocks;
 use App\Services\Inventory\FeedOperationRunner;
 use Brick\Math\BigDecimal;
@@ -19,6 +20,7 @@ final readonly class CancelFeedManufactureAction
         private FeedOperationRunner $operations,
         private FeedIngredientStocks $stocks,
         private RecordInventoryMovementAction $recordMovement,
+        private FeedBalanceEvaluator $evaluator,
     ) {}
 
     public function execute(int $manufactureId, string $reason, string $key, User $actor, string $source = 'api'): FeedStockOperation
@@ -82,7 +84,7 @@ final readonly class CancelFeedManufactureAction
                     operationId: $operationId, referenceType: 'feed_manufacture_cancellation', referenceId: (string) $operation->id,
                     reason: $reason, reversesMovementId: (int) $movement->id,
                     occurredAt: $operation->occurred_at->toIso8601String(),
-                ), $actor, $source, $original);
+                ), $actor, $source, $original, requiredPermission: null);
                 $compensatingLines = $compensation->lines->keyBy(fn (InventoryMovementLine $line): string => $line->product_id.':'.$line->stock_location_id);
                 $compensatingDistribution = array_map(function (array $line) use ($compensatingLines): array {
                     $movementLine = $compensatingLines->get($line['product_id'].':'.$line['stock_location_id']);
@@ -98,6 +100,7 @@ final readonly class CancelFeedManufactureAction
                 ])->save();
                 $balance->forceFill(['quantity_grams' => $after])->save();
                 $this->operations->audit($operation, $actor, 'Elaboración cancelada con movimientos compensatorios', $source);
+                $this->evaluator->evaluate($balance, 'cancellation', $operationId);
 
                 return $operation;
             });

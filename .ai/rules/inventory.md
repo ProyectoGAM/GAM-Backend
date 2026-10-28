@@ -2,6 +2,7 @@
 paths:
   - 'app/**/Inventory/*Recipe*.php'
   - 'app/**/Inventory/*Feed*.php'
+  - 'app/**/Inventory/*.php'
 ---
 
 # Inventory
@@ -17,3 +18,18 @@ El tercer bloque consume FeedBalance por receta/UP sin tocar ingredientes ni ela
 
 ## Disponibilidad al comenzar etapas automáticas
 Las etapas automáticas evalúan receta disponible a las 00:00 de su día de comienzo en America/Montevideo. Si estaba activa, queda vigente aunque se desactive durante esa misma jornada; recuperar consumos usa esa disponibilidad histórica. El alta, una revisión explícita y el regreso a automático seleccionan su ancla en el instante de la operación. Esta entrega sustituye las notas anteriores que dejaban el consumo de lotes pendiente o fuera de alcance.
+
+## Mínimos de alimento por receta y UP
+FeedBalance.minimum_quantity_grams es nullable; null significa sin configurar, cero es válido y el rango es 0..999999999999 gramos enteros. El mínimo pertenece a receta/UP, nunca a planta. Configurarlo requiere inventory.manage o admin y auditoría síncrona en la misma transacción; no modifica quantity_grams y puede materializar una cuenta en cero sin movimientos. Estado y atención se calculan con FeedBalanceStatus: atención sólo con mínimo configurado y saldo <= mínimo. FeedBalanceEvaluated se publica después del commit de elaboraciones, ajustes, cancelaciones, consumos, rectificaciones y mínimos; Alertas será responsable de notificaciones y deduplicación.
+
+## Compatibilidad de productos en movimientos
+La consulta productos-permitidos y el registro transaccional comparten StockProductCompatibility para categoria y unidad por ubicacion. El filtro loss exige saldo local positivo solo para el selector: no cambia los negativos permitidos de materias primas ni reserva stock. Al cambiar ubicacion u operacion, el cliente debe invalidar selecciones y respuestas anteriores; una pagina o busqueda parcial no demuestra incompatibilidad.
+
+## Tipos de almacenamiento y sanidad por UP
+StockLocation.type define warehouse (supply/other), feed_plant (raw_material en g), egg_account (egg protegido), health (medicine/vaccine) y unknown (ninguno). Sanidad es unica por UP. Consultas y escritura usan StockProductCompatibility; nuevos movimientos requieren ubicaciones y UP activas y plantas operativas. Preparar metadatos es explicito y auditado; no reclasificar ni trasladar cantidades automaticamente. Regularizacion solo reduce un saldo incompatible hacia cero y anexa historial. Proveedor interno usa suppliers.system_key=internal_supplier; resolverlo en ingresos no crea ni reactiva proveedores. El contador clinico global de medicamentos no es existencia fisica por UP.
+
+## Sanidad física reservada y deshabilitada
+Decisión posterior del 28/10/2026 sustituye la habilitación operativa de sanidad: config inventory.health_stock_enabled queda fijo en false, sin env. Conservar implementación comentada para futuro y datos históricos. No aprovisionar health al crear UP ni preparar almacenamiento; no vincular medicamentos al inventario ni ejecutar HealthStockDemoSeeder. Health.allowedKinds es vacío y movimientos/consumos físicos nuevos quedan bloqueados en HTTP y Actions; medicamentos y vacunas son catálogos globales. No borrar saldos, ubicaciones, ledger ni compensaciones históricas. Mantener contador clínico global existente. Pruebas de integración futura pueden habilitar config sólo dentro del test/proceso y deben coexistir con cobertura del estado real deshabilitado.
+
+## Compensar consumos sanitarios históricos con sanidad deshabilitada
+La corrección de una aplicación previa conserva la reversión física aun con health_stock_enabled=false o producto sin stock_tracked. Exigir management-plans.execute y validar en RecordInventoryMovementAction que el movimiento pertenece a una aplicación sanitaria real, que no está revertido y que el comando invierte exactamente todas sus líneas originales con iguales producto y ubicación. No usar esa excepción para ingresos o consumos nuevos, reactivar productos ni borrar historia.

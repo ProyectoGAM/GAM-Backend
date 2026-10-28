@@ -18,6 +18,7 @@ use App\Http\Controllers\Inventory\EggPresentationController;
 use App\Http\Controllers\Inventory\EggStockController;
 use App\Http\Controllers\Inventory\FeedAdjustmentController;
 use App\Http\Controllers\Inventory\FeedBalanceController;
+use App\Http\Controllers\Inventory\FeedBalanceMinimumController;
 use App\Http\Controllers\Inventory\FeedConsumptionController;
 use App\Http\Controllers\Inventory\FeedManufactureController;
 use App\Http\Controllers\Inventory\FeedRecipeController;
@@ -27,6 +28,7 @@ use App\Http\Controllers\Inventory\InventoryMovementController;
 use App\Http\Controllers\Inventory\InventoryReadController;
 use App\Http\Controllers\Inventory\StockLocationController;
 use App\Http\Controllers\Inventory\StockLocationStatusController;
+use App\Http\Controllers\Inventory\StockRegularizationController;
 use App\Http\Controllers\Lots\BreedController;
 use App\Http\Controllers\Lots\DailyWeighingController;
 use App\Http\Controllers\Lots\EggCollectionController;
@@ -331,6 +333,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/elaboraciones/{operation}/cancelacion', [FeedManufactureController::class, 'cancel'])->whereNumber('operation')->name('manufactures.cancel');
             Route::get('/saldos-alimento', [FeedBalanceController::class, 'index'])->name('balances.index');
             Route::get('/unidades-productivas/{productionUnit}/recetas/{recipe}/saldo', [FeedBalanceController::class, 'show'])->name('balances.show');
+            Route::patch('/unidades-productivas/{productionUnit}/recetas/{recipe}/minimo', [FeedBalanceMinimumController::class, 'update'])->name('balances.minimum');
             Route::get('/ajustes-alimentacion', [FeedAdjustmentController::class, 'index'])->name('adjustments.index');
             Route::post('/unidades-productivas/{productionUnit}/recetas/{recipe}/ajustes', [FeedAdjustmentController::class, 'feed'])->name('adjustments.feed');
             Route::post('/plantas-racion/{poultryHouse}/ingredientes/{product}/ajustes', [FeedAdjustmentController::class, 'ingredient'])->name('adjustments.ingredient');
@@ -381,6 +384,9 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('/stock-locations/{stockLocation}', [StockLocationController::class, 'show'])->name('stock-locations.show');
         Route::patch('/stock-locations/{stockLocation}', [StockLocationController::class, 'update'])->name('stock-locations.update');
         Route::patch('/stock-locations/{stockLocation}/status', [StockLocationStatusController::class, 'update'])->name('stock-locations.status.update');
+
+        Route::get('/inventario/productos-permitidos', [InventoryReadController::class, 'allowedProducts'])->name('inventory.allowed-products.index');
+        Route::post('/inventario/saldos/{stockBalance}/regularizaciones', [StockRegularizationController::class, 'store'])->name('inventory.regularizations.store');
 
         Route::prefix('inventory')->name('inventory.')->group(function (): void {
             Route::get('/balances', [InventoryReadController::class, 'balances'])->name('balances.index');

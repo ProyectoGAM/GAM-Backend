@@ -19,6 +19,8 @@ final class ListStockBalancesRequest extends FormRequest
             'product_id' => ['sometimes', 'integer', 'exists:products,id'],
             'stock_location_id' => ['sometimes', 'integer', 'exists:stock_locations,id'],
             'below_minimum' => ['sometimes', 'boolean'],
+            'incompatible_only' => ['sometimes', 'boolean'],
+            'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }

@@ -25,6 +25,15 @@ final readonly class CreateProductAction
     {
         Gate::forUser($actor)->authorize('create', Product::class);
         $this->assertAllowedAttributes($attributes);
+        if (in_array($attributes['kind'], [ProductKind::Medicine, ProductKind::Medicine->value, ProductKind::Vaccine, ProductKind::Vaccine->value], true)) {
+            throw new SuppliersAndCatalogsConflict('Los medicamentos y vacunas se registran en sus catálogos globales, sin stock físico.');
+        }
+        if (in_array($attributes['kind'], [ProductKind::Egg, ProductKind::Egg->value], true)) {
+            throw new SuppliersAndCatalogsConflict('No se pueden crear productos de tipo Huevo. Los huevos se gestionan como unidades en el stock de cada UP y mediante sus presentaciones.');
+        }
+        if (in_array($attributes['kind'], [ProductKind::FinishedFeed, ProductKind::FinishedFeed->value], true)) {
+            throw new SuppliersAndCatalogsConflict('No se pueden crear productos de tipo finished_feed. La ración se gestiona mediante recetas y saldos por unidad productiva.');
+        }
         $attributes = $this->normalizeRawMaterialAttributes($attributes);
         $this->assertRawMaterialAttributes($attributes);
 

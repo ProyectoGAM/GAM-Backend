@@ -17,7 +17,7 @@ final class VaccineDemoSeederTest extends TestCase
 {
     use LazilyRefreshDatabase;
 
-    // Flujo: integra la ficha sobre VAC-001 y conserva sus existencias demo al repetir la carga.
+    // Flujo: integra la ficha global sobre VAC-001 sin generar existencias físicas al repetir la carga.
     public function test_local_demo_adopts_existing_vaccine_product_idempotently(): void
     {
         // Preparación: habilita el entorno local y aísla el almacenamiento de las otras demos.
@@ -29,6 +29,9 @@ final class VaccineDemoSeederTest extends TestCase
         $product = Product::query()->where('sku', 'VAC-001')->firstOrFail();
         $before = Vaccine::query()->where('product_id', $product->id)->sole()->getAttributes();
         $inventoryBefore = $this->inventorySnapshot($product->id);
+        $this->assertFalse($product->stock_tracked);
+        $this->assertSame(0, StockBalance::query()->where('product_id', $product->id)->count());
+        $this->assertSame(0, InventoryMovementLine::query()->where('product_id', $product->id)->count());
 
         // Acción: repite el seeder del módulo en el mismo entorno local.
         $this->seed(VaccineDemoSeeder::class);

@@ -15,6 +15,7 @@ use Illuminate\Support\Str;
  * @property string $name
  * @property string $description
  * @property int $supplier_id
+ * @property int|null $product_id
  * @property string $supplier_name_snapshot
  * @property int $created_by
  * @property string $created_by_name
@@ -48,6 +49,7 @@ class Medicine extends Model
     {
         return [
             'supplier_id' => 'integer',
+            'product_id' => 'integer',
             'created_by' => 'integer',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
@@ -58,5 +60,11 @@ class Medicine extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    /** @return BelongsTo<Product, $this> */
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
     }
 }

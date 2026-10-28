@@ -4,6 +4,7 @@ namespace App\Actions\Inventory;
 
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Enums\Inventory\StockLocationStatus;
+use App\Enums\Inventory\StockLocationType;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\Inventory\StockLocation;
 use App\Models\User;
@@ -19,6 +20,7 @@ final readonly class CreateStockLocationAction
         return DB::transaction(function () use ($attributes, $actor): StockLocation {
             $location = StockLocation::query()->create([
                 ...$attributes,
+                'type' => StockLocationType::Warehouse,
                 'status' => StockLocationStatus::Active,
             ]);
             $snapshot = $this->snapshot($location);
@@ -46,6 +48,7 @@ final readonly class CreateStockLocationAction
             'production_unit_id' => $location->production_unit_id,
             'name' => $location->name,
             'status' => $location->status->value,
+            'type' => $location->type->value,
         ];
     }
 }

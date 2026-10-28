@@ -105,11 +105,12 @@ Contrato: [OpenAPI de recetas y alimento](../../contracts/openapi/feed-recipes.y
 | POST | `/elaboraciones/{operation}/cancelacion` | Devuelve el detalle de la elaboración cancelada |
 | GET | `/saldos-alimento` | Cuentas materializadas paginadas |
 | GET | `/unidades-productivas/{productionUnit}/recetas/{recipe}/saldo` | Cuenta puntual o cero |
+| PATCH | `/unidades-productivas/{productionUnit}/recetas/{recipe}/minimo` | Configura o quita el mínimo; `inventory.manage` o rol admin |
 | POST | `/unidades-productivas/{productionUnit}/recetas/{recipe}/ajustes` | Ajuste de alimento por UP |
 | POST | `/plantas-racion/{poultryHouse}/ingredientes/{product}/ajustes` | Ajuste de ingrediente |
 | GET | `/ajustes-alimentacion` | Historia paginada con motivo y saldos |
 
-Todas las nuevas mutaciones requieren `Idempotency-Key` UUID exclusivamente en el encabezado. Ejemplo de elaboración:
+Elaboraciones, cancelaciones y ajustes requieren `Idempotency-Key` UUID exclusivamente en el encabezado. La asignación del mínimo usa PATCH y no exige clave. Ejemplo de elaboración:
 
 ```json
 {"receta_id": 1, "planta_id": 2, "cantidad_g": "26000"}
@@ -123,7 +124,7 @@ Ejemplo de ajuste de alimento:
 
 Cancelación: `{"motivo":"Corrección de elaboración"}`.
 
-Filtros de elaboraciones: `receta_id`, `up_id`, `planta_id`, `estado=elaborada|cancelada`, `por_pagina` y `page`. Ajustes reutilizan los identificadores, admiten `producto_id` y `tipo=ingrediente|alimento`. Saldos aceptan receta y UP. Paginación de 1 a 100, predeterminada 25; página entre 1 y 1000000. No se aceptan campos ajenos al contrato.
+Filtros de elaboraciones: `receta_id`, `up_id`, `planta_id`, `estado=elaborada|cancelada`, `por_pagina` y `page`. Ajustes reutilizan los identificadores, admiten `producto_id` y `tipo=ingrediente|alimento`. Saldos aceptan receta, UP y `requiere_atencion=1|0`. Paginación de 1 a 100, predeterminada 25; página entre 1 y 1000000. No se aceptan campos ajenos al contrato.
 
 Las cantidades de alimento se exponen como cadenas enteras; ingredientes y distribución usan cadenas decimales exactas. El detalle incluye `operacion_id`, `actor_id`, `registrado_en`, `ingredientes`, `distribucion`, `movimiento_id`, `estado` y `cancelacion`.
 
@@ -131,7 +132,7 @@ Errores: 401 sin sesión/contexto válido, 404 entidad inexistente o detalle que
 
 ## Autorización, idempotencia, auditoría y bloqueos
 
-Por decisión expresa del usuario, **los nuevos endpoints permiten cualquier usuario autenticado con sesión válida** hasta definir el permiso funcional específico. El catálogo conserva sus permisos. No se inventan roles ni asignaciones por UP.
+Por decisión expresa del usuario, **los endpoints de elaboración, ajustes y consulta de saldos permiten cualquier usuario autenticado con sesión válida** hasta definir el permiso funcional específico. Configurar mínimos requiere `inventory.manage` o rol admin. El catálogo conserva sus permisos. El permiso de mínimos se aplica a todas las UP; no hay asignaciones por usuario o por registro.
 
 Las rutas nuevas reutilizan `auth:sanctum`, `shared.device:any` y `shared.session.conditional`. El acceso compartido nativo exige Bearer, `X-Shared-Device-Token`, `X-GAM-Session` y generación vigente. Web conserva sesión stateful, CSRF, cookie HttpOnly `gam_shared_device` y contexto de sesión compartida. Los secretos nunca se copian al historial o auditoría.
 
@@ -140,6 +141,47 @@ La fila del actor serializa reintentos antes de buscar la clave. Unicidad por ac
 El orden técnico de adquisición es receta compartida, productos compartidos por ID, plantas compartidas por ID, ubicaciones exclusivas por ID y saldos por ubicación/producto. La prioridad de consumo se calcula después. Las cancelaciones bloquean primero la operación/movimiento original; mantienen el mismo orden técnico para ingredientes. La cuenta receta/UP se materializa con unicidad y se bloquea antes de leer y actualizar. Las transacciones pueden reintentarse ante deadlock hasta tres veces sin conservar efectos de intentos fallidos.
 
 Los Actions propietarios escriben auditoría con `AuditRecorder` y `AuditEntryData` dentro de la misma transacción. Eventos: `feed_manufacture_recorded`, `feed_cancellation_recorded`, `feed_ingredient_adjustment_recorded` y `feed_feed_adjustment_recorded`, además del movimiento de Inventario. Conservan operación, traza, actor, sujeto, UP, origen, resultado, instantánea permitida y cambios explícitos de saldo y distribución. La auditoría es append-only. Consultarla desde la API transversal sigue requiriendo `audit.view`; las consultas de operaciones de alimento no exponen entradas crudas de auditoría.
+
+## Mínimos de alimento por receta y UP
+
+`FeedBalance.minimum_quantity_grams` almacena un mínimo opcional en gramos enteros, entre cero y `999999999999`. `null` significa que todavía no está configurado y es el valor inicial para las cuentas existentes y nuevas. La configuración pertenece exclusivamente a la pareja receta/UP; no se reparte entre plantas ni cambia la acreditación de elaboraciones o el descuento de consumos.
+
+`PATCH /api/v1/unidades-productivas/{productionUnit}/recetas/{recipe}/minimo` recibe únicamente `minimo_g` como entero JSON, cadena de gramos enteros o `null` para quitarlo. Ejemplo:
+
+```json
+{"minimo_g": "300000"}
+```
+
+El endpoint acepta cero, saldo cero o negativo y recetas activas o inactivas. Si la cuenta no existe, la materializa con saldo cero para guardar el mínimo. No genera movimientos, elaboraciones, consumos ni ajustes, y no cambia `quantity_grams`. Las entidades inexistentes responden 404; sin sesión responde 401, sin permiso 403 y valores inválidos o campos ajenos 422. Se rechazan negativos, floats, fracciones y notación científica. El encabezado `Idempotency-Key` no es necesario: repetir la asignación conserva el estado y agrega una auditoría por solicitud.
+
+La Action propietaria bloquea receta, UP y cuenta con el mismo mecanismo de materialización única y lock de `FeedOperationRunner`. Escribir el mínimo y registrar `feed_balance_minimum_changed` comparten transacción. La auditoría incluye operación, traza del contexto de auditoría, actor, cuenta, UP, resultado, mínimo anterior/nuevo e instantánea permitida con los nombres y el saldo conservado. Si falla, también se revierte una cuenta recién materializada. No se actualiza ni elimina historia previa.
+
+Las consultas puntual y paginada incorporan `minimo_g` (cadena o null), `estado_stock` y `requiere_atencion`:
+
+| Estado | Condición | Requiere atención |
+| --- | --- | --- |
+| `sin_configurar` | Mínimo null, incluso con saldo negativo | No |
+| `suficiente` | Saldo mayor al mínimo | No |
+| `en_minimo` | Saldo igual al mínimo | Sí |
+| `por_debajo` | Saldo menor al mínimo | Sí |
+
+Un saldo virtual consultado sin movimientos devuelve cero, mínimo null y `sin_configurar`, sin crear filas. Una cuenta creada al configurar el mínimo aparece en el listado aunque nunca haya tenido movimientos. El filtro `requiere_atencion=1` devuelve igualdad o saldo inferior con mínimo configurado; `0` devuelve suficientes o sin configurar. Omitirlo conserva todos los resultados. Se aplica en SQL antes de paginar y se combina con receta y UP.
+
+En el ejemplo de San José, iniciador con `saldo_g=800000` y `minimo_g=300000` está suficiente; ponedora con `saldo_g=200000` y `minimo_g=250000` está por debajo. Sólo ponedora aparece al filtrar atención.
+
+### Evaluación preparada para Alertas
+
+`FeedBalance::stockStatus()` centraliza la comparación, reutilizada por la respuesta y por `FeedBalanceEvaluator`. Tras una elaboración, ajuste de alimento, cancelación, consumo diario, rectificación efectiva o configuración de mínimo, se solicita una evaluación del saldo resultante. La señal `FeedBalanceEvaluated` implementa `ShouldDispatchAfterCommit`: un rollback la descarta y los consumidores la reciben después de confirmar la transacción.
+
+La señal contiene una instantánea inmutable con ID de cuenta, receta, UP, cantidad, mínimo nullable, estado, motivo técnico y UUID de la operación. Los motivos son `manufacture`, `feed_adjustment`, `cancellation`, `consumption`, `consumption_correction` y `minimum_changed`. Incluye estados suficientes y sin configurar para que Alertas pueda resolver una condición anterior. Los reintentos idempotentes de operaciones de stock no generan otra evaluación. Las rectificaciones que cambian receta evalúan ambas cuentas afectadas; un delta cero no modifica stock ni necesita señal nueva.
+
+No se incorporan notificaciones, listeners ni historial de alertas en esta entrega. El futuro módulo de Alertas gestionará apertura, resolución, deduplicación y entrega; podrá contrastar el saldo vigente al procesar señales concurrentes. El evento en memoria no sustituye un mecanismo persistente de entrega o recuperación que ese módulo pueda necesitar.
+
+### Migración de mínimos
+
+`2026_10_26_041132_add_minimum_quantity_grams_to_feed_balances_table.php` agrega una columna bigint nullable con CHECK de rango. Conserva todas las cantidades y cuentas existentes, sin backfill ni cambios de distribución. No altera las tablas de movimientos. Aplicar la migración antes de usar el código nuevo. El rollback elimina la configuración de mínimos y debe reservarse para entornos donde esa pérdida sea aceptable.
+
+La migración nueva se aplicó únicamente en el entorno local verificado con `php artisan env`. No se aplicaron migraciones pendientes ajenas a este cambio ni cambios de producción.
 
 ## Migración y demo
 
@@ -151,6 +193,18 @@ Sólo se ejecuta en local o en la demo de producción explícitamente habilitada
 
 ## Verificación
 
+### Mínimos y evaluación de saldos — 26/10/2026
+
+La regresión integrada de Inventario pasó con **185 pruebas y 2054 aserciones**, incluidos los casos nuevos y la concurrencia real:
+
+```powershell
+docker compose -f compose.dev.yaml exec -T -e LOG_CHANNEL=null api php artisan test --compact tests/Feature/Inventory tests/Unit/Inventory
+```
+
+Pint pasó sobre los PHP modificados y nuevos usando rutas explícitas, tras comprobar que `--dirty` no dispone de Git en el contenedor. PHPStan/Larastan nivel 5 pasó sin errores sobre las fuentes del cambio con `.phpstan-vaccines.neon`. `FeedRecipeContractTest` verificó rutas y referencias OpenAPI, y `git diff --check` pasó. Se contrastó el comportamiento de eventos y validación con la documentación de Laravel 13 y se registraron las reglas durables mediante `record-rule` de Boost.
+
+La cobertura de mínimos usa PostgreSQL de testing separado del entorno local. Se verificó la ruta PATCH real con `route:list`; no se ejecutaron pruebas visuales del frontend ni verificaciones de producción o de notificaciones, que quedan fuera del alcance.
+
 Cobertura nueva:
 
 - `FeedManufactureEndpointTest`: distribución por ingrediente, prioridad y empate, misma UP, estados, insuficiencia sin efectos parciales, acumulación, historia, devoluciones exactas de inactivos, cancelación inválida, reintentos, límites, precisión, autenticación y sesión compartida, rollback de auditoría.
@@ -158,6 +212,10 @@ Cobertura nueva:
 - `FeedManufactureConcurrencyTest`: procesos reales contra PostgreSQL, reintentos, doble consumo entre recetas/actores con plantas iniciales opuestas, cancelación única y acumulación concurrente.
 - `FeedManufactureDemoSeederTest`: registro en la entrada oficial, instantáneas, auditoría, reintentos y protección por ambiente.
 - `FeedRecipeContractTest`: rutas reales y referencias del contrato ampliado.
+- `FeedBalanceMinimumEndpointTest`: configuración sin movimientos, cero, null, negativos existentes, rango, autorización, filtros, estados, aislamiento entre cuentas y rollback de auditoría.
+- `FeedBalanceEvaluationTest`: señales de elaboración, ajuste y cancelación, reintentos, instantáneas inmutables, espera del commit y descarte al revertir.
+- `FlockFeedingEndpointTest`: señales de consumo y rectificación de ambas cuentas afectadas, manteniendo la historia y cantidades existentes.
+- `FeedManufactureConcurrencyTest`: configuración del mínimo concurrente con crédito sobre una cuenta todavía inexistente.
 
 Se ejecutaron además las regresiones del catálogo, cálculo, stock de ingredientes, motor de inventario, huevos, reglas de productos y reporte de saldos. La ejecución integrada del 13/10/2026 pasó con **126 pruebas y 1549 aserciones**, incluidos los cuatro casos de concurrencia real:
 

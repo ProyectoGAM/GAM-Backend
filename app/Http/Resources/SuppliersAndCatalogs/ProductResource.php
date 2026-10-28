@@ -51,6 +51,9 @@ final class ProductResource extends JsonResource
         $canChangeStatus = ! $hasSpecializedOwner && ($actor?->can('changeStatus', $product) ?? false);
 
         $editableFields = $canUpdate ? ['sku', 'name', 'kind', 'base_unit', 'stock_tracked'] : [];
+        if ($product->has_medicine) {
+            $editableFields = array_values(array_diff($editableFields, ['kind', 'base_unit', 'stock_tracked']));
+        }
         if ($product->has_movement_lines) {
             $editableFields = array_values(array_diff($editableFields, ['base_unit']));
         }

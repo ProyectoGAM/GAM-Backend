@@ -6,7 +6,9 @@ use App\Actions\Inventory\ChangeFeedRecipeStatusAction;
 use App\Actions\Inventory\ChangeFlockFeedingAction;
 use App\Actions\Inventory\CorrectFeedConsumptionAction;
 use App\Actions\Inventory\RecordDailyFeedConsumptionAction;
+use App\Enums\Inventory\FeedBalanceStatus;
 use App\Enums\Inventory\FeedRecipeStatus;
+use App\Events\Inventory\FeedBalanceEvaluated;
 use App\Exceptions\Lots\LotsConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\FarmStructure\PoultryHouse;
@@ -22,6 +24,7 @@ use App\Models\SharedDevice;
 use App\Models\User;
 use App\Services\IdentityAndAccess\AuthSessionService;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -79,6 +82,10 @@ final class FlockFeedingEndpointTest extends LotsTestCase
         $this->localTime('2026-10-05 12:00');
         $this->signIn();
         $flock = $this->admitted(1000);
+        $recipeId = FlockFeedingChange::query()->where('flock_id', $flock->id)->value('feed_recipe_id');
+        FeedBalance::factory()->create(['feed_recipe_id' => $recipeId, 'production_unit_id' => $flock->production_unit_id,
+            'minimum_quantity_grams' => 0]);
+        Event::fake([FeedBalanceEvaluated::class]);
         $this->getJson('/api/v1'.$this->feedingUrl($flock))->assertOk()->assertJsonPath('data.modo', 'automatico')->assertJsonPath('data.cantidad_diaria_g', '40000');
 
         // Request: registra cien bajas del lunes.
@@ -99,6 +106,9 @@ final class FlockFeedingEndpointTest extends LotsTestCase
         $this->assertDatabaseHas('activity_log', ['event' => 'feed_consumption_recorded', 'causer_id' => null, 'source' => 'scheduler', 'up_id' => $flock->production_unit_id]);
         $this->assertDatabaseCount('inventory_movements', 0);
         $this->assertDatabaseCount('feed_stock_operations', 0);
+        Event::assertDispatched(FeedBalanceEvaluated::class, 1);
+        Event::assertDispatched(FeedBalanceEvaluated::class, fn (FeedBalanceEvaluated $event): bool => $event->reason === 'consumption' && $event->quantityGrams === -36000 && $event->minimumQuantityGrams === 0
+            && $event->status === FeedBalanceStatus::BelowMinimum && $event->operationId === $first->operation_id);
     }
 
     /** @return array<string,array{int,int}> */
@@ -376,8 +386,12 @@ final class FlockFeedingEndpointTest extends LotsTestCase
 
         // Request: devuelve cuatro mil gramos y descuenta tres mil de otra receta.
         $payload = ['receta_id' => $inactive->id, 'cantidad_g' => '3000', 'motivo' => 'Corrección de receta'];
+        Event::fake([FeedBalanceEvaluated::class]);
         $first = $this->command('POST', $path, $payload, $key)->assertCreated();
         $this->command('POST', $path, $payload, $key)->assertCreated()->assertExactJson($first->json());
+        Event::assertDispatched(FeedBalanceEvaluated::class, 2);
+        Event::assertDispatched(FeedBalanceEvaluated::class, fn (FeedBalanceEvaluated $event): bool => $event->reason === 'consumption_correction' && $event->recipeId === $inactive->id
+            && $event->quantityGrams === -3000 && $event->minimumQuantityGrams === null);
         $this->assertDatabaseHas('feed_balances', ['feed_recipe_id' => $consumption->feed_recipe_id, 'quantity_grams' => 0]);
         $this->assertDatabaseHas('feed_balances', ['feed_recipe_id' => $inactive->id, 'quantity_grams' => -3000]);
 
