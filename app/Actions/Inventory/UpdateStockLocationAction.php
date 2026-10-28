@@ -3,6 +3,7 @@
 namespace App\Actions\Inventory;
 
 use App\DTO\AuditAndTraceability\AuditEntryData;
+use App\Enums\Inventory\StockLocationType;
 use App\Exceptions\Inventory\InventoryConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\Inventory\StockLocation;
@@ -18,7 +19,7 @@ final readonly class UpdateStockLocationAction
     {
         return DB::transaction(function () use ($location, $attributes, $actor): StockLocation {
             $locked = StockLocation::query()->whereKey($location->getKey())->lockForUpdate()->firstOrFail();
-            if ($locked->system_managed) {
+            if ($locked->system_managed || $locked->type !== StockLocationType::Warehouse) {
                 throw new InventoryConflict('La ubicación técnica está protegida y no puede modificarse de forma independiente.');
             }
             $before = $this->snapshot($locked);

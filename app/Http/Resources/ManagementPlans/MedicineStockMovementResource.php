@@ -25,6 +25,7 @@ final class MedicineStockMovementResource extends JsonResource
             'movement_type' => $this->movement_type,
             'quantity_delta' => (int) $this->quantity_delta,
             'balance_after' => (int) $this->balance_after,
+            'balance_scope' => 'clinical_global',
             'is_negative' => (int) $this->balance_after < 0,
             'stock_warning' => (int) $this->balance_after < 0 ? [
                 'code' => 'MEDICINE_STOCK_NEGATIVE',

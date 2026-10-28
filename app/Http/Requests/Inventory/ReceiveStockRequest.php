@@ -18,7 +18,7 @@ final class ReceiveStockRequest extends InventoryCommandRequest
     {
         return [
             'idempotency_key' => ['required', 'uuid'],
-            'supplier_id' => ['required', 'integer', 'exists:suppliers,id'],
+            'supplier_id' => ['sometimes', 'nullable', 'integer', 'min:1', 'exists:suppliers,id'],
             'lines' => ['required', 'array', 'min:1', 'max:100'],
             'lines.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'lines.*.stock_location_id' => ['required', 'integer', 'exists:stock_locations,id'],

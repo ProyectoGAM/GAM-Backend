@@ -14,6 +14,7 @@ final class MedicineResource extends JsonResource
     {
         return [
             'id' => $this->public_id,
+            'product_id' => $this->product_id,
             'name' => $this->name,
             'description' => $this->description,
             'supplier' => [

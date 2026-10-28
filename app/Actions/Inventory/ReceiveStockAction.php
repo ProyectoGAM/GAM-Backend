@@ -25,11 +25,11 @@ final readonly class ReceiveStockAction
             type: InventoryMovementType::Receipt,
             lines: $lines,
             operationId: (string) $attributes['idempotency_key'],
-            supplierId: (int) $attributes['supplier_id'],
+            supplierId: isset($attributes['supplier_id']) ? (int) $attributes['supplier_id'] : null,
             referenceType: $attributes['reference_type'] ?? null,
             referenceId: $attributes['reference_id'] ?? null,
             reason: $attributes['reason'] ?? null,
             occurredAt: $attributes['occurred_at'] ?? null,
-        ), $actor);
+        ), $actor, requiredPermission: 'inventory.move');
     }
 }

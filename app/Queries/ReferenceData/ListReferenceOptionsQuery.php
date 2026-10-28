@@ -41,11 +41,10 @@ final readonly class ListReferenceOptionsQuery
             'types' => [
                 'products' => $this->enumOptions(ProductKind::creatableCases(), [
                     'raw_material' => 'Materia prima',
-                    'supply' => 'Suministro',
-                    'egg' => 'Huevo',
+                    'supply' => 'Insumo',
                     'medicine' => 'Medicamento',
                     'vaccine' => 'Vacuna',
-                    'other' => 'Otro',
+                    'other' => 'Otros',
                 ]),
                 'base_units' => $this->enumOptions(BaseUnit::cases(), [
                     'unit' => 'Unidad',

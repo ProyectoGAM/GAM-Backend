@@ -60,7 +60,7 @@ final readonly class AdjustFeedIngredientAction
                         lines: [['product_id' => $productId, 'stock_location_id' => (int) $balance->stock_location_id, 'on_hand_delta' => (string) $delta]],
                         operationId: $operationId, referenceType: 'feed_ingredient_adjustment', referenceId: (string) $operation->id,
                         reason: $input['reason'], occurredAt: $operation->occurred_at->toIso8601String(),
-                    ), $actor, $source);
+                    ), $actor, $source, requiredPermission: null);
                     $operation->forceFill(['inventory_movement_id' => $movement->id])->save();
                 }
                 $this->operations->audit($operation, $actor, 'Ingrediente ajustado independientemente', $source);

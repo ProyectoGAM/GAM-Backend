@@ -17,6 +17,7 @@ final class MedicineStockResource extends JsonResource
         return [
             'medicine' => ['id' => $this['id'], 'name' => $this['name']],
             'quantity' => $this['quantity'],
+            'balance_scope' => 'clinical_global',
             'version' => $this['version'],
             'is_negative' => $this['is_negative'],
             'stock_warning' => $this['stock_warning'],

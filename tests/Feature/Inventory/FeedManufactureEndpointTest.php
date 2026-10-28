@@ -33,6 +33,7 @@ use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 final class FeedManufactureEndpointTest extends TestCase
@@ -433,6 +434,7 @@ final class FeedManufactureEndpointTest extends TestCase
     {
         // Preparación: crea una elaboración con sus líneas originales.
         $data = $this->fixture();
+        $data['actor']->givePermissionTo(Permission::findOrCreate('inventory.adjust', 'web'));
         $created = $this->manufacture($data)->assertCreated();
         $movement = InventoryMovement::query()->findOrFail($created->json('data.movimiento_id'));
 
@@ -452,6 +454,7 @@ final class FeedManufactureEndpointTest extends TestCase
     {
         // Preparación: elabora y desactiva un ingrediente sin crear una cancelación.
         $data = $this->fixture();
+        $data['actor']->givePermissionTo(Permission::findOrCreate('inventory.move', 'web'));
         $created = $this->manufacture($data)->assertCreated();
         $original = FeedStockOperation::query()->findOrFail($created->json('data.id'));
         $data['products'][0]->forceFill(['status' => ProductStatus::Inactive])->save();

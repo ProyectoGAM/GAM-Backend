@@ -692,12 +692,8 @@ components:
             vaccine_id: { $ref: '#/components/schemas/Ulid' }
             vaccine_batch: { type: [string, 'null'], maxLength: 160, description: Partida del producto de vacuna aplicado; independiente del lote de gallinas. }
             notes: { type: [string, 'null'], maxLength: 5000 }
-            stock_consumption:
-              type: object
-              required: [quantity, stock_location_id]
-              properties:
-                quantity: { type: string, description: Cantidad en la unidad base del producto de vacuna. }
-                stock_location_id: { type: integer, minimum: 1 }
+            # Futuro: sanidad física está deshabilitada; enviar consumo devuelve 422.
+            stock_consumption: false
     MedicationInput:
       allOf:
         - $ref: '#/components/schemas/ExecutionBase'
@@ -708,6 +704,8 @@ components:
             quantity: { type: integer, minimum: 1, maximum: 2147483647 }
             reason: { type: string, maxLength: 500 }
             notes: { type: [string, 'null'], maxLength: 5000, description: Puede describir la dosis libremente. }
+            # Futuro: sanidad física está deshabilitada; enviar consumo devuelve 422.
+            stock_consumption: false
     RationInput:
       description: Cambia configuración de alimentación del día y conserva el permiso management-plans.execute. Receta, total diario o ambos; todos los valores quedan manuales. No registra comidas ni descuenta alimento inmediatamente. No admite fecha anterior al día del registro.
       anyOf:

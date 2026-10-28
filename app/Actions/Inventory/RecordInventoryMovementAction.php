@@ -6,9 +6,10 @@ use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\DTO\Inventory\InventoryMovementCommand;
 use App\Enums\FarmStructure\PoultryHouseType;
 use App\Enums\Inventory\InventoryMovementType;
-use App\Enums\Inventory\StockLocationStatus;
+use App\Enums\Inventory\StockLocationType;
 use App\Enums\SuppliersAndCatalogs\BaseUnit;
 use App\Enums\SuppliersAndCatalogs\ProductKind;
+use App\Enums\SuppliersAndCatalogs\SupplierStatus;
 use App\Exceptions\Inventory\InventoryConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\Inventory\EggStockAccount;
@@ -17,10 +18,14 @@ use App\Models\Inventory\InventoryMovement;
 use App\Models\Inventory\InventoryMovementLine;
 use App\Models\Inventory\StockBalance;
 use App\Models\Inventory\StockLocation;
+use App\Models\ManagementPlans\MedicineApplication;
+use App\Models\ManagementPlans\VaccinationApplication;
 use App\Models\SuppliersAndCatalogs\Product;
+use App\Models\SuppliersAndCatalogs\Supplier;
 use App\Models\User;
-use App\Queries\SuppliersAndCatalogs\GetActiveSupplierQuery;
+use App\Services\Inventory\StockLocationLocks;
 use App\Services\Inventory\StockProductCompatibility;
+use App\Services\Lots\LotsAuthorization;
 use App\ValueObjects\Inventory\InventoryQuantity;
 use Brick\Math\BigDecimal;
 use Illuminate\Database\Eloquent\Builder;
@@ -33,11 +38,30 @@ final readonly class RecordInventoryMovementAction
 {
     public function __construct(
         private AuditRecorder $auditRecorder,
-        private GetActiveSupplierQuery $getActiveSupplier,
         private StockProductCompatibility $productCompatibility,
+        private StockLocationLocks $locationLocks,
     ) {}
 
-    public function execute(InventoryMovementCommand $command, User $actor, string $source = 'api', ?FeedStockOperation $feedCompensation = null): InventoryMovement
+    public function execute(InventoryMovementCommand $command, User $actor, string $source = 'api', ?FeedStockOperation $feedCompensation = null, ?StockBalance $regularization = null, ?string $requiredPermission = 'inventory.move', ?InventoryMovement $healthCompensation = null): InventoryMovement
+    {
+        return DB::transaction(function () use ($command, $actor, $source, $feedCompensation, $regularization, $requiredPermission, $healthCompensation): InventoryMovement {
+            $currentActor = User::query()->whereKey($actor->getKey())->lockForUpdate()->firstOrFail();
+            if ($requiredPermission !== null) {
+                LotsAuthorization::ensure($currentActor, $requiredPermission);
+            }
+            if ($healthCompensation !== null) {
+                LotsAuthorization::ensure($currentActor, 'management-plans.execute');
+            }
+            $existing = $this->existingMovement($command->operationId);
+            if ($existing !== null && (int) $existing->created_by !== (int) $currentActor->getKey()) {
+                throw new InventoryConflict('La clave de idempotencia pertenece a otra operación.');
+            }
+
+            return $this->executeWithinTransaction($command, $currentActor, $source, $feedCompensation, $regularization, $healthCompensation);
+        }, 3);
+    }
+
+    private function executeWithinTransaction(InventoryMovementCommand $command, User $actor, string $source, ?FeedStockOperation $feedCompensation, ?StockBalance $regularization, ?InventoryMovement $healthCompensation): InventoryMovement
     {
         $legacyRequestHash = $this->legacyRequestHash($command);
         $normalizedCommand = $this->normalizeCommand($command);
@@ -49,7 +73,7 @@ final readonly class RecordInventoryMovementAction
         }
 
         try {
-            return DB::transaction(function () use ($normalizedCommand, $actor, $requestHash, $legacyRequestHash, $source, $feedCompensation): InventoryMovement {
+            return DB::transaction(function () use ($normalizedCommand, $actor, $requestHash, $legacyRequestHash, $source, $feedCompensation, $regularization, $healthCompensation): InventoryMovement {
                 $existingInsideTransaction = $this->existingMovement($normalizedCommand->operationId);
                 if ($existingInsideTransaction !== null) {
                     return $this->resolveReplay($existingInsideTransaction, $requestHash, $legacyRequestHash);
@@ -60,6 +84,9 @@ final readonly class RecordInventoryMovementAction
                 }
 
                 $compensatedProductIds = $feedCompensation === null ? [] : $this->feedCompensationProducts($normalizedCommand, $feedCompensation);
+                if ($healthCompensation !== null) {
+                    $this->assertHealthCompensation($normalizedCommand, $healthCompensation);
+                }
                 $lineKeys = [];
                 $locationIds = [];
                 $normalizedLines = [];
@@ -82,7 +109,10 @@ final readonly class RecordInventoryMovementAction
                 foreach ($normalizedCommand->lines as $line) {
                     /** Bloquea los productos antes de consultar su estado y unidad. */
                     $product = $products->get($line['product_id']);
-                    if ($product === null || ($product->status->value !== 'active' && ! in_array((int) $product->getKey(), $compensatedProductIds, true)) || ! $product->stock_tracked) {
+                    $isHistoricalRecount = $regularization !== null && $normalizedCommand->type === InventoryMovementType::Adjustment
+                        && count($normalizedCommand->lines) === 1 && (int) $regularization->product_id === $line['product_id']
+                        && (int) $regularization->stock_location_id === $line['stock_location_id'];
+                    if ($product === null || (! $isHistoricalRecount && $healthCompensation === null && (($product->status->value !== 'active' && ! in_array((int) $product->getKey(), $compensatedProductIds, true)) || ! $product->stock_tracked))) {
                         throw new InventoryConflict('El producto indicado no está activo o no controla stock.');
                     }
                     if ($product->system_key === 'generic_egg' && ! $normalizedCommand->eggAccountOperation) {
@@ -120,25 +150,37 @@ final readonly class RecordInventoryMovementAction
                     $locationIds[$line['stock_location_id']] = true;
                 }
 
-                if ($normalizedCommand->supplierId !== null && $this->getActiveSupplier->execute($normalizedCommand->supplierId) === null) {
-                    throw new InventoryConflict('El proveedor indicado no está activo.');
+                $supplierId = $normalizedCommand->supplierId;
+                if ($supplierId !== null || ($normalizedCommand->type === InventoryMovementType::Receipt && ! $normalizedCommand->eggAccountOperation)) {
+                    $supplier = Supplier::query()
+                        ->when($supplierId !== null, fn (Builder $query): Builder => $query->whereKey($supplierId), fn (Builder $query): Builder => $query->where('system_key', 'internal_supplier'))
+                        ->sharedLock()->first();
+                    if ($supplier === null || $supplier->status !== SupplierStatus::Active) {
+                        throw new InventoryConflict($supplierId === null ? 'El proveedor interno Propio no está configurado o está inactivo.' : 'El proveedor indicado no está activo.');
+                    }
+                    $supplierId = (int) $supplier->getKey();
                 }
 
-                $locations = StockLocation::query()
-                    ->whereIn('id', array_keys($locationIds))
-                    ->with('poultryHouse')
-                    ->orderBy('id')
-                    ->lockForUpdate()
-                    ->get()
-                    ->keyBy('id');
+                $locations = $this->locationLocks->lock(array_keys($locationIds));
 
-                if ($locations->count() !== count($locationIds) || $locations->contains(fn (StockLocation $location): bool => $location->status !== StockLocationStatus::Active)) {
+                if ($locations->count() !== count($locationIds) || $locations->contains(fn (StockLocation $location): bool => ! $this->productCompatibility->isOperational($location)
+                    && ($regularization === null || (int) $regularization->stock_location_id !== (int) $location->getKey()))) {
                     throw new InventoryConflict('Una de las ubicaciones indicadas no está activa.');
                 }
 
                 foreach ($normalizedLines as $line) {
                     $product = $products->get($line['product_id']);
                     $location = $locations->get($line['stock_location_id']);
+                    if ($regularization !== null && (int) $regularization->product_id === $line['product_id'] && (int) $regularization->stock_location_id === $line['stock_location_id']) {
+                        $this->assertRegularization($normalizedCommand, $regularization, $product, $location, $line['on_hand_delta']);
+
+                        continue;
+                    }
+                    // Una corrección histórica sólo devuelve las líneas originales, sin habilitar sanidad nueva.
+                    if ($healthCompensation !== null && $location->type === StockLocationType::Health
+                        && in_array($product->kind, [ProductKind::Medicine, ProductKind::Vaccine], true)) {
+                        continue;
+                    }
                     $this->productCompatibility->assertCompatible($product, $location);
                 }
 
@@ -161,6 +203,7 @@ final readonly class RecordInventoryMovementAction
                 ));
 
                 $balances = [];
+                $balanceChanges = [];
                 foreach ($sortedLines as $line) {
                     $balance = StockBalance::query()
                         ->where('product_id', $line['product_id'])
@@ -196,6 +239,14 @@ final readonly class RecordInventoryMovementAction
                         'on_hand_quantity' => (string) $onHand,
                         'allow_negative' => $allowNegative,
                     ])->save();
+                    $balanceChanges[] = [
+                        'product_id' => (int) $product->getKey(), 'product_name' => $product->name,
+                        'stock_location_id' => (int) $location->getKey(), 'stock_location_name' => $location->name,
+                        'location_type' => $location->type->value, 'unit' => $product->base_unit->value,
+                        'production_unit_id' => $location->production_unit_id,
+                        'before' => (string) $previousOnHand, 'after' => (string) $onHand,
+                        'allow_negative_before' => $previousAllowNegative, 'allow_negative_after' => $allowNegative,
+                    ];
 
                     if ($isFeedRawMaterial && ! $previousOnHand->isNegative() && $onHand->isNegative()) {
                         $this->auditRecorder->record(AuditEntryData::forSubject(
@@ -243,7 +294,7 @@ final readonly class RecordInventoryMovementAction
                     'operation_id' => $normalizedCommand->operationId,
                     'request_hash' => $requestHash,
                     'type' => $normalizedCommand->type,
-                    'supplier_id' => $normalizedCommand->supplierId,
+                    'supplier_id' => $supplierId,
                     'reference_type' => $normalizedCommand->referenceType,
                     'reference_id' => $normalizedCommand->referenceId,
                     'reason' => $normalizedCommand->reason,
@@ -275,13 +326,18 @@ final readonly class RecordInventoryMovementAction
                     upId: null,
                     properties: [
                         'movement_type' => $normalizedCommand->type->value,
-                        'supplier_id' => $normalizedCommand->supplierId,
+                        'supplier_id' => $supplierId,
                         'reference_type' => $normalizedCommand->referenceType,
                         'reference_id' => $normalizedCommand->referenceId,
                         'line_count' => count($sortedLines),
                         'product_ids' => array_values(array_unique(array_column($sortedLines, 'product_id'))),
                         'stock_location_ids' => array_values(array_unique(array_column($sortedLines, 'stock_location_id'))),
                         'result' => 'success',
+                        'subject_snapshot' => ['balances' => $balanceChanges, 'supplier_id' => $supplierId],
+                    ],
+                    attributeChanges: [
+                        'old' => ['balances' => array_map(static fn (array $change): array => ['product_id' => $change['product_id'], 'stock_location_id' => $change['stock_location_id'], 'quantity' => $change['before'], 'allow_negative' => $change['allow_negative_before']], $balanceChanges)],
+                        'new' => ['balances' => array_map(static fn (array $change): array => ['product_id' => $change['product_id'], 'stock_location_id' => $change['stock_location_id'], 'quantity' => $change['after'], 'allow_negative' => $change['allow_negative_after']], $balanceChanges)],
                     ],
                 ));
 
@@ -367,6 +423,52 @@ final readonly class RecordInventoryMovementAction
         return $movement->lines->pluck('product_id')->map(fn ($id): int => (int) $id)->unique()->values()->all();
     }
 
+    /** Sólo admite la inversa exacta de un consumo vinculado a una aplicación sanitaria existente. */
+    private function assertHealthCompensation(InventoryMovementCommand $command, InventoryMovement $original): void
+    {
+        $movement = InventoryMovement::query()->whereKey($original->getKey())->lockForUpdate()->firstOrFail()->load('lines');
+        $application = match ($movement->reference_type) {
+            'medicine_application' => MedicineApplication::query()->where('public_id', $movement->reference_id)->where('inventory_movement_id', $movement->getKey())->exists(),
+            'vaccination_application' => VaccinationApplication::query()->where('public_id', $movement->reference_id)->where('inventory_movement_id', $movement->getKey())->exists(),
+            default => false,
+        };
+        if (! $application || $command->type !== InventoryMovementType::Reversal
+            || $command->reversesMovementId !== (int) $movement->getKey()
+            || $command->referenceType !== 'inventory_movement' || $command->referenceId !== (string) $movement->getKey()
+            || count($command->lines) !== $movement->lines->count() || $movement->reversal()->exists()) {
+            throw new InventoryConflict('La compensación sanitaria debe corresponder a una aplicación original.');
+        }
+        foreach ($command->lines as $line) {
+            $originalLine = $movement->lines->first(fn ($item): bool => (int) $item->product_id === $line['product_id']
+                && (int) $item->stock_location_id === $line['stock_location_id']);
+            if ($originalLine === null || BigDecimal::of((string) $originalLine->on_hand_delta)->compareTo(0) >= 0
+                || BigDecimal::of($line['on_hand_delta'])->compareTo(BigDecimal::of((string) $originalLine->on_hand_delta)->negated()) !== 0) {
+                throw new InventoryConflict('Debes devolver exactamente el consumo sanitario original.');
+            }
+        }
+    }
+
+    private function assertRegularization(InventoryMovementCommand $command, StockBalance $candidate, Product $product, StockLocation $location, string $delta): void
+    {
+        $balance = StockBalance::query()->whereKey($candidate->getKey())->lockForUpdate()->firstOrFail();
+        $before = BigDecimal::of((string) $balance->on_hand_quantity);
+        $after = $before->plus($delta);
+        if ($command->referenceType !== 'stock_regularization' || $this->productCompatibility->isCompatible($product, $location)
+            || $before->isZero() || (! $after->isZero() && ($before->isNegative() !== $after->isNegative() || $after->abs()->compareTo($before->abs()) >= 0))) {
+            throw new InventoryConflict('La regularización sólo puede reducir un saldo histórico incompatible hacia cero.');
+        }
+        if (count($command->lines) === 1 && ! $after->isZero()) {
+            throw new InventoryConflict('El recuento de regularización debe dejar el saldo incompatible en cero.');
+        }
+        if (count($command->lines) > 1) {
+            $counterpart = array_values(array_filter($command->lines, fn (array $line): bool => $line['stock_location_id'] !== (int) $balance->stock_location_id));
+            if ($command->type !== InventoryMovementType::Transfer || $before->isNegative() || count($counterpart) !== 1
+                || $counterpart[0]['product_id'] !== (int) $balance->product_id || BigDecimal::of($counterpart[0]['on_hand_delta'])->compareTo(BigDecimal::of($delta)->negated()) !== 0) {
+                throw new InventoryConflict('La regularización debe conservar la cantidad trasladada a un destino compatible.');
+            }
+        }
+    }
+
     private function normalizeCommand(InventoryMovementCommand $command): InventoryMovementCommand
     {
         if ($command->lines === []) {
@@ -377,7 +479,7 @@ final readonly class RecordInventoryMovementAction
             static fn (array $line): int => (int) $line['product_id'],
             $command->lines,
         )));
-        $products = Product::query()->whereIn('id', $productIds)->get()->keyBy('id');
+        $products = Product::query()->whereIn('id', $productIds)->orderBy('id')->sharedLock()->get()->keyBy('id');
         $lines = [];
 
         foreach ($command->lines as $line) {
