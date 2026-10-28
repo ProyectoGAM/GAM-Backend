@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: API de vacunas GAM
   version: 1.0.0
-  description: Catálogo administrativo de vacunas vinculadas a productos de inventario. Todas las operaciones requieren el rol ADMIN activo.
+  description: Catálogo global de vacunas sin stock físico. Mantiene un producto vinculado como identidad de catálogo, con stock_tracked falso para altas nuevas. No crea ubicaciones, saldos ni movimientos. Todas las operaciones requieren el rol ADMIN activo.
 servers:
   - url: /api/v1
 security:
@@ -27,7 +27,7 @@ paths:
     post:
       summary: Registra o adopta una vacuna por SKU
       description: >-
-        Sólo ADMIN. El SKU identifica el producto de inventario: si existe un producto activo de tipo vaccine con seguimiento de stock y sin ficha, se adopta sin cambiar su identidad ni movimientos; si no existe, se crea. El nombre es único global. Si unidad_base se omite, la alta nueva usa dose y la adopción hereda la unidad existente. El proveedor debe existir y estar activo, o devuelve 404 y 409 respectivamente. Idempotency-Key se normaliza como UUID en minúsculas junto con el comando: la primera ejecución devuelve 201 y la repetición del mismo comando devuelve 200 con la representación actual; la misma clave con otro comando devuelve 409.
+        Sólo ADMIN. El SKU identifica el producto de catálogo: si existe un producto activo de tipo vaccine y sin ficha, se adopta sin cambiar su identidad ni movimientos; si no existe, se crea sin control de stock. El nombre es único global. Si unidad_base se omite, la alta nueva usa dose y la adopción hereda la unidad existente. El proveedor debe existir y estar activo, o devuelve 404 y 409 respectivamente. Idempotency-Key se normaliza como UUID en minúsculas junto con el comando: la primera ejecución devuelve 201 y la repetición del mismo comando devuelve 200 con la representación actual; la misma clave con otro comando devuelve 409.
       parameters:
         - name: Idempotency-Key
           in: header

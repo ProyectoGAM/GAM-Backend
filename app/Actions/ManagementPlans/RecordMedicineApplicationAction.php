@@ -39,6 +39,10 @@ final readonly class RecordMedicineApplicationAction
             $attributes['idempotency_key'],
             ['flock' => $flock->public_id, ...$attributes],
             function (string $operationId) use ($flock, $attributes, $actor, $source): array {
+                // Futuro: conservar el consumo físico sin admitirlo mediante llamadas internas hoy.
+                if (isset($attributes['stock_consumption']) && ! config('inventory.health_stock_enabled')) {
+                    throw new LotsConflict('El stock físico de sanidad está deshabilitado.');
+                }
                 $context = $this->contextResolver->execute($flock, $actor, $attributes, 'medication');
                 $candidate = Medicine::query()->where('public_id', $attributes['medicine_id'])->firstOrFail();
                 $medicine = Medicine::query()->whereKey($candidate->getKey())->lockForUpdate()->firstOrFail();

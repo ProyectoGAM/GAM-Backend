@@ -40,6 +40,10 @@ final readonly class RecordVaccinationApplicationAction
             $attributes['idempotency_key'],
             ['flock' => $flock->public_id, ...$attributes],
             function (string $operationId) use ($flock, $attributes, $actor, $source): array {
+                // Futuro: conservar el consumo físico sin admitirlo mediante llamadas internas hoy.
+                if (isset($attributes['stock_consumption']) && ! config('inventory.health_stock_enabled')) {
+                    throw new LotsConflict('El stock físico de sanidad está deshabilitado.');
+                }
                 $context = $this->contextResolver->execute($flock, $actor, $attributes, 'vaccination');
                 $candidate = Vaccine::query()->where('public_id', $attributes['vaccine_id'])->firstOrFail();
                 $product = Product::query()->whereKey($candidate->product_id)->sharedLock()->firstOrFail();

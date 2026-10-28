@@ -5,12 +5,13 @@ info:
   description: >-
     Política común de lectura y escritura. warehouse admite supply y other;
     feed_plant admite raw_material con stock en g; egg_account admite egg;
-    health admite medicine y vaccine; unknown no admite productos.
+    health queda reservado y deshabilitado, al igual que unknown no admite productos.
     finished_feed conserva exclusivamente su lectura histórica. Los huevos
     técnicos sólo se mueven por los comandos de Stock de huevos.
     Nuevos movimientos exigen producto activo con stock y ubicación/UP activas;
     las plantas deben estar operativas. Las transferencias validan ambos extremos.
-    Sanidad tiene una ubicación por UP, compartida por medicamentos y vacunas.
+    Medicamentos y vacunas se registran globalmente sin stock físico.
+    No se crean ubicaciones sanitarias; las existentes conservan su lectura histórica.
 servers:
   - url: /api/v1
 security:

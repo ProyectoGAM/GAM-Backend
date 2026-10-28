@@ -73,7 +73,10 @@ final readonly class CreateMedicineAction
                 'request_hash' => $hash,
             ])->save();
 
-            $this->medicineProduct->execute($medicine, $currentActor);
+            // Futuro: vincular al inventario físico sólo cuando se habilite sanidad por UP.
+            if (config('inventory.health_stock_enabled')) {
+                $this->medicineProduct->execute($medicine, $currentActor);
+            }
             $snapshot = $medicine->only([
                 'public_id', 'name', 'description', 'supplier_id', 'supplier_name_snapshot',
                 'created_by', 'created_by_name', 'operation_id', 'product_id',

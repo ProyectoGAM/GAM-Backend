@@ -14,6 +14,11 @@ final class HealthStockDemoSeeder extends Seeder
 {
     public function run(): void
     {
+        // Futuro: conservar la demo sanitaria sin crear ubicaciones, saldos ni movimientos hoy.
+        if (! config('inventory.health_stock_enabled')) {
+            return;
+        }
+
         if (! app()->environment('local') && ! (app()->environment('production') && config('app.demo_db_reset_enabled'))) {
             return;
         }

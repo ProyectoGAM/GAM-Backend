@@ -136,6 +136,8 @@ final class VaccineConcurrencyTest extends TestCase
             // Acción: pausa tras observar el FOR SHARE real del ingreso hasta que la baja intente el lock exclusivo.
             $movementTask = static function () use ($actorId, $supplierId, $productId, $locationId, $movementLocked, $statusReady): string {
                 self::assertTestingDatabase();
+                // Futuro: prueba la integración preservada, deshabilitada en la aplicación real.
+                config()->set('inventory.health_stock_enabled', true);
                 $assertSharedLock = self::assertRealProductSharedLock($productId, $movementLocked, $statusReady);
 
                 try {
@@ -253,6 +255,8 @@ final class VaccineConcurrencyTest extends TestCase
             // Acción: pausa tras observar el FOR SHARE real del ingreso hasta que la unidad intente cambiarse.
             $movementTask = static function () use ($actorId, $supplierId, $productId, $locationId, $movementLocked, $unitReady): string {
                 self::assertTestingDatabase();
+                // Futuro: prueba la integración preservada, deshabilitada en la aplicación real.
+                config()->set('inventory.health_stock_enabled', true);
                 $assertSharedLock = self::assertRealProductSharedLock($productId, $movementLocked, $unitReady);
 
                 try {

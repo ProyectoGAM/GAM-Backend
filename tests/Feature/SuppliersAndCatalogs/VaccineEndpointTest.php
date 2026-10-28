@@ -47,7 +47,7 @@ final class VaccineEndpointTest extends TestCase
 
         // Verificación: asocia un solo producto y audita la operación sin afectar inventario.
         $vaccine = Vaccine::query()->sole();
-        $this->assertDatabaseHas('products', ['id' => $vaccine->product_id, 'kind' => 'vaccine', 'stock_tracked' => true]);
+        $this->assertDatabaseHas('products', ['id' => $vaccine->product_id, 'kind' => 'vaccine', 'stock_tracked' => false]);
         $this->assertDatabaseCount('inventory_movements', 0);
         $this->assertDatabaseHas('activity_log', ['event' => 'vaccine_created', 'operation_id' => $vaccine->operation_id]);
         $this->withHeader('Idempotency-Key', $key)->postJson('/api/v1/vacunas', $payload)

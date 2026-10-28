@@ -4,6 +4,7 @@ namespace App\Actions\Inventory;
 
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Enums\Inventory\StockLocationType;
+use App\Exceptions\Inventory\InventoryConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\StockLocation;
@@ -16,6 +17,11 @@ final readonly class EnsureHealthStockLocationAction
 
     public function execute(ProductionUnit $unit, User $actor): StockLocation
     {
+        // Futuro: la implementación queda disponible sin aprovisionar ubicaciones en esta entrega.
+        if (! config('inventory.health_stock_enabled')) {
+            throw new InventoryConflict('El stock físico de sanidad está deshabilitado.');
+        }
+
         return DB::transaction(function () use ($unit, $actor): StockLocation {
             ProductionUnit::query()->whereKey($unit->getKey())->lockForUpdate()->firstOrFail();
             $location = StockLocation::query()->where('type', StockLocationType::Health)->where('production_unit_id', $unit->getKey())->first();

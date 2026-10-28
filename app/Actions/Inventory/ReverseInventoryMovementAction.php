@@ -58,7 +58,9 @@ final readonly class ReverseInventoryMovementAction
                     'movement_id' => (int) $locked->getKey(),
                     'reason' => (string) $attributes['reason'],
                 ],
-            ), $actor, $source, requiredPermission: $requiredPermission);
+            ), $actor, $source, requiredPermission: $requiredPermission,
+                healthCompensation: in_array($locked->reference_type, ['vaccination_application', 'medicine_application'], true) ? $locked : null,
+            );
         }, 3);
     }
 }

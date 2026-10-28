@@ -117,7 +117,7 @@ Reglas de elegibilidad:
 
 - Sólo productos activos con control de stock. Se excluyen el producto técnico
   `generic_egg` y los pares producto/ubicación administrados por cuentas de huevos.
-- Cámaras: sólo `supply` y `other`; sanidad: `medicine` y `vaccine`; cuentas de huevos: `egg` con las protecciones del dominio; plantas: sólo `raw_material` en gramos. Una ubicación desconocida, inactiva, con UP inactiva o planta no operativa devuelve `data: []`, con total cero. La política completa y su migración están en la [guía de almacenamiento](inventory-storage-implementation.md).
+- Cámaras: sólo `supply` y `other`; sanidad queda deshabilitada y no admite categorías; cuentas de huevos: `egg` con las protecciones del dominio; plantas: sólo `raw_material` en gramos. Una ubicación desconocida, sanitaria deshabilitada, inactiva, con UP inactiva o planta no operativa devuelve `data: []`, con total cero. La política completa y su migración están en la [guía de almacenamiento](inventory-storage-implementation.md).
 - `loss`: exclusivamente saldo local mayor que cero, incluso cantidades tan pequeñas
   como `0.000001`; stock positivo en otra ubicación no habilita el producto.
 - Las otras operaciones ofrecen productos compatibles aunque no tengan cuenta, su saldo

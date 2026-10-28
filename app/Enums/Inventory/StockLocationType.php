@@ -19,7 +19,8 @@ enum StockLocationType: string
             self::Warehouse => [ProductKind::Supply, ProductKind::Other],
             self::FeedPlant => [ProductKind::RawMaterial],
             self::EggAccount => [ProductKind::Egg],
-            self::Health => [ProductKind::Medicine, ProductKind::Vaccine],
+            // Futuro: sanidad conserva su tipo histórico, pero hoy no admite movimientos nuevos.
+            self::Health => config('inventory.health_stock_enabled') ? [ProductKind::Medicine, ProductKind::Vaccine] : [],
             self::Unknown => [],
         };
     }

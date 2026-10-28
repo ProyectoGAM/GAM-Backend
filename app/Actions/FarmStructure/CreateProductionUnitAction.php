@@ -25,7 +25,10 @@ final readonly class CreateProductionUnitAction
                 'status' => ProductionUnitStatus::from($attributes['status'] ?? ProductionUnitStatus::Active->value),
             ]);
 
-            $this->healthLocation->execute($productionUnit, $actor);
+            // Futuro: aprovisionar sanidad por UP al habilitar su inventario físico.
+            if (config('inventory.health_stock_enabled')) {
+                $this->healthLocation->execute($productionUnit, $actor);
+            }
             $snapshot = $this->snapshot($productionUnit);
 
             $this->auditRecorder->record(AuditEntryData::forSubject(

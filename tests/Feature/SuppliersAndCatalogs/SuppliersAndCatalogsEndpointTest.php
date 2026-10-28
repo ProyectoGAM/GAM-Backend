@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
@@ -37,24 +38,32 @@ final class SuppliersAndCatalogsEndpointTest extends TestCase
     }
 
     // Flujo: crea un producto de catálogo y verifica su tipo, unidad y persistencia.
-    public function test_valid_product_payload_creates_flexible_catalog_item(): void
+    #[DataProvider('creatableProducts')]
+    public function test_valid_product_payload_creates_flexible_catalog_item(string $kind, string $unit): void
     {
         // Preparación: autentica al usuario con permiso de gestión de products.
         Sanctum::actingAs($this->userWithPermissions(['products.manage']), ['*']);
 
         // Acción: registra el producto del catálogo.
         $this->postJson('/api/v1/products', [
-            'sku' => 'HUEVO-BOLITA',
-            'name' => 'Huevo Bolita',
-            'kind' => 'egg',
-            'base_unit' => 'unit',
+            'sku' => 'PRODUCTO-1',
+            'name' => 'Producto de catálogo',
+            'kind' => $kind,
+            'base_unit' => $unit,
             'stock_tracked' => true,
         ])->assertCreated()
-            ->assertJsonPath('data.kind', 'egg')
-            ->assertJsonPath('data.base_unit', 'unit');
+            ->assertJsonPath('data.kind', $kind)
+            ->assertJsonPath('data.base_unit', $unit);
 
         // Verificación: confirma SKU y nombre normalizado persistidos.
-        $this->assertDatabaseHas('products', ['sku' => 'HUEVO-BOLITA', 'normalized_name' => 'huevo bolita']);
+        $this->assertDatabaseHas('products', ['sku' => 'PRODUCTO-1', 'normalized_name' => 'producto de catálogo', 'kind' => $kind, 'base_unit' => $unit]);
+        $this->assertDatabaseHas('activity_log', ['event' => 'product_created']);
+    }
+
+    /** @return array<string, array{string, string}> */
+    public static function creatableProducts(): array
+    {
+        return ['insumo' => ['supply', 'unit'], 'materia prima' => ['raw_material', 'g'], 'otros' => ['other', 'unit']];
     }
 
     // Flujo: autentica un usuario sin permiso y verifica que el alta es prohibida.

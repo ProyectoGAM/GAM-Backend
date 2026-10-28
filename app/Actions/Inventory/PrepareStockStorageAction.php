@@ -53,8 +53,11 @@ final readonly class PrepareStockStorageAction
                 ));
             }, 3);
         });
-        ProductionUnit::query()->orderBy('id')->eachById(fn (ProductionUnit $unit): StockLocation => $this->healthLocations->execute($unit, $actor));
-        Medicine::query()->whereNull('product_id')->orderBy('id')->eachById(fn (Medicine $medicine) => $this->medicineProducts->execute($medicine, $actor));
+        // Futuro: conservar la preparación de sanidad sin ejecutarla en el alcance actual.
+        if (config('inventory.health_stock_enabled')) {
+            ProductionUnit::query()->orderBy('id')->eachById(fn (ProductionUnit $unit): StockLocation => $this->healthLocations->execute($unit, $actor));
+            Medicine::query()->whereNull('product_id')->orderBy('id')->eachById(fn (Medicine $medicine) => $this->medicineProducts->execute($medicine, $actor));
+        }
         $this->internalSupplier->execute($actor);
     }
 }

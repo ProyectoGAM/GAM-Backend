@@ -60,7 +60,9 @@ final readonly class StockProductCompatibility
         throw new InventoryConflict(match ($location->type) {
             StockLocationType::FeedPlant => 'Una planta de ración sólo puede almacenar materias primas.',
             StockLocationType::Warehouse => 'Una cámara de insumos sólo puede almacenar insumos y otros productos.',
-            StockLocationType::Health => 'Una ubicación de sanidad sólo puede almacenar medicamentos y vacunas.',
+            StockLocationType::Health => config('inventory.health_stock_enabled')
+                ? 'Una ubicación de sanidad sólo puede almacenar medicamentos y vacunas.'
+                : 'El stock físico de sanidad está deshabilitado. Medicamentos y vacunas se registran globalmente.',
             StockLocationType::EggAccount => 'Una cuenta de huevos sólo puede almacenar huevos.',
             StockLocationType::Unknown => 'La ubicación no tiene un tipo de almacenamiento reconocido.',
         });

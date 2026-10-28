@@ -21,13 +21,15 @@ final class UpdateProductRequest extends FormRequest
     public function rules(): array
     {
         $product = $this->route('product');
-        $excludedKinds = $product instanceof Product && $product->kind === ProductKind::FinishedFeed
-            ? [] : [ProductKind::FinishedFeed];
+        $allowedKinds = ProductKind::creatableCases();
+        if ($product instanceof Product && ! in_array($product->kind, $allowedKinds, true)) {
+            $allowedKinds[] = $product->kind;
+        }
 
         return [
             'sku' => ['sometimes', 'string', 'max:80'],
             'name' => ['sometimes', 'string', 'max:160'],
-            'kind' => ['sometimes', Rule::enum(ProductKind::class)->except($excludedKinds)],
+            'kind' => ['sometimes', Rule::enum(ProductKind::class)->only($allowedKinds)],
             'base_unit' => ['sometimes', Rule::enum(BaseUnit::class)],
             'stock_tracked' => ['sometimes', 'boolean'],
         ];
@@ -36,7 +38,7 @@ final class UpdateProductRequest extends FormRequest
     /** @return array<string, string> */
     public function messages(): array
     {
-        return ['kind.enum' => 'Selecciona un tipo de producto disponible. La ración se gestiona mediante recetas y saldos por unidad productiva.'];
+        return ['kind.enum' => 'Selecciona un tipo de producto disponible: Insumo, Materia prima u Otros.'];
     }
 
     /** @return array<int, callable> */

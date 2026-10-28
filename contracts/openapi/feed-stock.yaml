@@ -29,7 +29,7 @@ paths:
         Requiere inventory.view o rol admin y el contexto de sesión compartida
         cuando corresponda. Devuelve productos activos que controlan stock,
         compatibles con el tipo explícito de ubicación. Las cámaras sólo admiten
-        supply y other; sanidad admite medicine y vaccine; las cuentas de huevos
+        supply y other; sanidad está deshabilitada y no admite productos; las cuentas de huevos
         admiten egg y las plantas de ración sólo admiten materias primas en
         gramos. Excluye el producto técnico Huevo y las cuentas técnicas de huevos.
         Las ubicaciones inactivas, desconocidas, con UP inactiva o plantas no operativas

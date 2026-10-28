@@ -99,7 +99,9 @@ final class MedicineConcurrencyTest extends TestCase
         $results = Concurrency::driver('process')->run([$task, $task], timeout: 30);
         $this->assertSame($results[0], $results[1]);
         $this->assertDatabaseCount('medicines', 1);
-        $this->assertDatabaseCount('activity_log', 2);
+        $this->assertDatabaseCount('activity_log', 1);
+        $this->assertDatabaseCount('products', 0);
+        $this->assertDatabaseHas('medicines', ['product_id' => null]);
         $this->assertDatabaseHas('activity_log', ['operation_id' => $results[0], 'event' => 'medicine_created']);
     }
 }

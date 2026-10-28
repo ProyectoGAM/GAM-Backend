@@ -1,12 +1,12 @@
-# Catálogo e inventario de vacunas — implementación
+# Catálogo global de vacunas — implementación
 
 La sección de Vacunas pertenece funcionalmente a **06 — Manejo productivo y sanidad** y técnicamente a `SuppliersAndCatalogs`, con integración sobre el inventario compartido. Una vacuna representa en esta etapa una ficha de catálogo con **SKU, nombre, descripción, detalles opcionales y proveedor**, vinculada uno a uno con un `Product` existente o creado durante el alta.
 
-**Estado funcional: catálogo e inventario de Vacunas implementados; módulo 06 aún incompleto.** Las aplicaciones e historial se integran en Planes de manejo. Desde el 28/10/2026 el consumo físico opcional requiere sanidad de la UP del lote y se compensa desde la corrección del manejo; véase la [guía de almacenamiento](inventory-storage-implementation.md). La programación, próximas aplicaciones y notificaciones conservan el alcance de sus módulos. El seguimiento local se registra en [notion.md](../notion.md) sin mover la tarjeta completa del módulo a `Do Test`.
+**Estado funcional: catálogo global de Vacunas implementado; stock físico y sanidad por UP deshabilitados y reservados para el futuro.** Las aplicaciones e historial se integran en Planes de manejo. El alta mantiene su producto como identidad de catálogo con `stock_tracked: false`, sin ubicación, saldo ni movimiento físico. Enviar `stock_consumption` en una aplicación devuelve 422. Se preserva la historia existente; véase la [guía de almacenamiento](inventory-storage-implementation.md). La programación, próximas aplicaciones y notificaciones conservan el alcance de sus módulos. El seguimiento local se registra en [notion.md](../notion.md) sin mover la tarjeta completa del módulo a `Do Test`.
 
 ## Alcance y decisiones confirmadas
 
-- El SKU identifica el producto de inventario de la vacuna y no se implementan variantes.
+- El SKU identifica el producto de catálogo de la vacuna y no se implementan variantes.
 - El nombre es único mediante el catálogo global de Productos; no se diferencia por dosis.
 - La descripción es obligatoria y los detalles son opcionales.
 - El proveedor es obligatorio y reutiliza el catálogo existente de `Supplier`.
@@ -34,18 +34,18 @@ La PK interna y el ULID no cambian cuando se modifican nombre, proveedor, unidad
 
 ## Integración con Productos e Inventario
 
-Vacunas no crea un subsistema de stock. `Product` continúa siendo la identidad canónica para SKU, nombre, tipo, unidad, seguimiento y estado; `stock_balances`, `inventory_movements` e `inventory_movement_lines` continúan siendo la única fuente de saldos e historial.
+Vacunas no crea un subsistema de stock. `Product` continúa siendo la identidad canónica para SKU, nombre, tipo, unidad y estado. El control de stock está deshabilitado en altas nuevas; `stock_balances`, `inventory_movements` e `inventory_movement_lines` conservan exclusivamente los datos físicos anteriores de vacunas, sin nuevas operaciones sanitarias.
 
 Durante el alta:
 
 1. Se bloquea y vuelve a autorizar al actor.
 2. Se bloquea y valida el proveedor activo.
-3. Si el SKU no existe, se crea un Product activo, `kind=vaccine`, con stock controlado y unidad recibida o `dose`.
+3. Si el SKU no existe, la Action de Vacunas crea y audita un Product activo, `kind=vaccine`, sin control de stock y con unidad recibida o `dose`.
 4. Si existe un Product compatible, se adopta sin reemplazar su ID, unidad ni movimientos.
-5. Si el Product está inactivo, tiene otro tipo, no controla stock, no coincide en nombre o ya posee una ficha, se devuelve `409`.
+5. Si el Product está inactivo, tiene otro tipo, no coincide en nombre o ya posee una ficha, se devuelve `409`. No se exige control de stock para adoptar una ficha global.
 6. Se crea la ficha y se registran las auditorías dentro de la misma transacción.
 
-El SKU de una vacuna vinculada es inmutable. El endpoint genérico de Productos tampoco puede cambiar su tipo, desactivar el seguimiento de stock ni modificar la unidad después del primer movimiento. Cambiar el nombre mediante Productos actualiza y audita también la ficha de Vacuna.
+El SKU de una vacuna vinculada es inmutable. El endpoint genérico de Productos tampoco puede cambiar su tipo, habilitar seguimiento de stock ni modificar la unidad después del primer movimiento histórico. Cambiar el nombre mediante Productos actualiza y audita también la ficha de Vacuna.
 
 `RecordInventoryMovementAction` y `AdjustStockToCountAction` bloquean los Productos antes de validar estado y unidad. Las transiciones de estado y los cambios de unidad usan bloqueo exclusivo del Product, por lo que un movimiento concurrente no puede confirmar una combinación incompatible de estado, unidad y saldo.
 

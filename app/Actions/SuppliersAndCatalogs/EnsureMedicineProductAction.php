@@ -3,6 +3,7 @@
 namespace App\Actions\SuppliersAndCatalogs;
 
 use App\DTO\AuditAndTraceability\AuditEntryData;
+use App\Exceptions\SuppliersAndCatalogs\SuppliersAndCatalogsConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\SuppliersAndCatalogs\Medicine;
 use App\Models\SuppliersAndCatalogs\Product;
@@ -15,6 +16,11 @@ final readonly class EnsureMedicineProductAction
 
     public function execute(Medicine $medicine, User $actor): Product
     {
+        // Futuro: no crear vínculos de inventario hasta habilitar sanidad física.
+        if (! config('inventory.health_stock_enabled')) {
+            throw new SuppliersAndCatalogsConflict('Los medicamentos se registran globalmente, sin stock físico.');
+        }
+
         return DB::transaction(function () use ($medicine, $actor): Product {
             $locked = Medicine::query()->whereKey($medicine->getKey())->lockForUpdate()->firstOrFail();
             if ($locked->product_id !== null) {

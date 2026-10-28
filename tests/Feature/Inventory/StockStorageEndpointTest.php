@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Inventory;
 
+use App\Actions\FarmStructure\CreateProductionUnitAction;
 use App\Actions\Inventory\EnsureEggStockAccountAction;
 use App\Actions\Inventory\EnsureHealthStockLocationAction;
 use App\Actions\Inventory\PrepareStockStorageAction;
@@ -10,6 +11,7 @@ use App\Actions\SuppliersAndCatalogs\ConfigureInternalSupplierAction;
 use App\DTO\Inventory\InventoryMovementCommand;
 use App\Enums\Inventory\InventoryMovementType;
 use App\Enums\Inventory\StockLocationType;
+use App\Exceptions\Inventory\InventoryConflict;
 use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
@@ -64,7 +66,7 @@ final class StockStorageEndpointTest extends TestCase
     {
         return [
             'cámara con UP' => ['warehouse', ['other', 'supply']],
-            'sanidad' => ['health', ['medicine', 'vaccine']],
+            'sanidad reservada' => ['health', []],
             'planta' => ['feed_plant', ['raw_material']],
             'cuenta real' => ['egg_account', ['egg']],
             'gestionada desconocida' => ['unknown', []],
@@ -146,7 +148,7 @@ final class StockStorageEndpointTest extends TestCase
         $this->assertNull($namedOnly->fresh()->system_key);
     }
 
-    // Flujo: clasifica por relaciones reales, prepara sanidad y vincula fichas sin trasladar existencias.
+    // Flujo: clasifica por relaciones reales sin activar sanidad ni vincular medicamentos al inventario.
     public function test_preparation_is_idempotent_audited_and_preserves_historical_balances(): void
     {
         // Preparación: crea ubicaciones previas, una ficha sin vínculo y un saldo incompatible.
@@ -167,21 +169,21 @@ final class StockStorageEndpointTest extends TestCase
         $this->assertSame(StockLocationType::Warehouse, $warehouse->fresh()->type);
         $this->assertSame(StockLocationType::Unknown, $orphan->fresh()->type);
         $this->assertDatabaseCount('inventory_movements', 0);
-        $this->assertSame(1, StockLocation::query()->where('type', 'health')->where('production_unit_id', $unit->id)->count());
-        $this->assertDatabaseHas('products', ['id' => $medicine->fresh()->product_id, 'kind' => 'medicine', 'base_unit' => 'unit']);
+        $this->assertSame(0, StockLocation::query()->where('type', 'health')->where('production_unit_id', $unit->id)->count());
+        $this->assertNull($medicine->fresh()->product_id);
     }
 
     // Flujo: regulariza un saldo incompatible mediante traslado compensatorio e idempotente.
     public function test_regularization_moves_only_historical_incompatible_stock_and_preserves_history(): void
     {
-        // Preparación: el medicamento antiguo está fuera de sanidad y conserva su historial original.
+        // Preparación: la materia prima antigua está fuera de una planta y conserva su historial original.
         $actor = $this->admin();
-        $product = Product::factory()->create(['kind' => 'medicine', 'base_unit' => 'unit']);
+        $product = Product::factory()->create(['kind' => 'raw_material', 'base_unit' => 'g']);
         $warehouse = StockLocation::factory()->create();
-        $health = $this->location('health', $actor);
+        $destination = $this->location('feed_plant', $actor);
         $balance = StockBalance::factory()->create(['product_id' => $product->id, 'stock_location_id' => $warehouse->id, 'on_hand_quantity' => '8']);
         $key = (string) Str::uuid();
-        $payload = ['mode' => 'trasladar', 'quantity' => '8', 'to_stock_location_id' => $health->id, 'reason' => 'Regularización revisada del depósito antiguo'];
+        $payload = ['mode' => 'trasladar', 'quantity' => '8', 'to_stock_location_id' => $destination->id, 'reason' => 'Regularización revisada del depósito antiguo'];
         $url = '/api/v1/inventario/saldos/'.$balance->id.'/regularizaciones';
 
         // Consulta: la revisión muestra el saldo incompatible sin cambiarlo.
@@ -191,7 +193,7 @@ final class StockStorageEndpointTest extends TestCase
         $first = $this->postJson($url, $payload, ['Idempotency-Key' => $key])->assertCreated();
         $this->postJson($url, $payload, ['Idempotency-Key' => $key])->assertCreated()->assertJsonPath('data.id', $first->json('data.id'));
         $this->assertDatabaseHas('stock_balances', ['id' => $balance->id, 'on_hand_quantity' => '0']);
-        $this->assertDatabaseHas('stock_balances', ['product_id' => $product->id, 'stock_location_id' => $health->id, 'on_hand_quantity' => '8']);
+        $this->assertDatabaseHas('stock_balances', ['product_id' => $product->id, 'stock_location_id' => $destination->id, 'on_hand_quantity' => '8']);
         $this->assertDatabaseCount('inventory_movements', 1);
         $this->getJson('/api/v1/inventory/balances?incompatible_only=1')->assertOk()->assertJsonPath('meta.total', 0);
         $this->postJson('/api/v1/inventory/movements/'.$first->json('data.id').'/reversals', ['reason' => 'No reintroducir saldo inválido'], ['Idempotency-Key' => (string) Str::uuid()])->assertConflict();
@@ -228,27 +230,34 @@ final class StockStorageEndpointTest extends TestCase
         $this->assertDatabaseCount('inventory_movements', 0);
     }
 
-    // Flujo: permite las cinco operaciones válidas sobre medicamentos en sanidad.
+    // Flujo: rechaza las cinco operaciones físicas sobre medicamentos mientras sanidad está desactivada.
     #[DataProvider('validHealthOperations')]
-    public function test_health_storage_accepts_valid_generic_movements(string $operation): void
+    public function test_disabled_health_storage_rejects_generic_movements(string $operation, string $kind): void
     {
         // Preparación: inicia stock físico suficiente y dos ubicaciones sanitarias.
         $actor = $this->admin();
         $location = $this->location('health', $actor);
         $destination = $this->location('health', $actor);
-        $product = Product::factory()->create(['kind' => 'medicine', 'base_unit' => 'unit']);
+        $product = Product::factory()->create(['kind' => $kind, 'base_unit' => 'unit']);
         StockBalance::factory()->create(['product_id' => $product->id, 'stock_location_id' => $location->id, 'on_hand_quantity' => '5']);
 
-        // Request: el comando guarda su variación en el ledger y en el saldo físico.
+        // Request: el comando no puede utilizar ubicaciones sanitarias históricas aunque tengan saldo.
         $payload = $this->payload($operation, $product, $location, $destination);
-        $this->postJson('/api/v1/inventory/'.$operation, $payload, ['Idempotency-Key' => (string) Str::uuid()])->assertCreated();
-        $this->assertDatabaseCount('inventory_movements', 1);
-        $this->assertDatabaseHas('stock_balances', ['product_id' => $product->id, 'stock_location_id' => $location->id, 'on_hand_quantity' => in_array($operation, ['receipts', 'adjustments'], true) ? '6' : '4']);
+        $this->postJson('/api/v1/inventory/'.$operation, $payload, ['Idempotency-Key' => (string) Str::uuid()])->assertConflict();
+        $this->assertDatabaseCount('inventory_movements', 0);
+        $this->assertDatabaseHas('stock_balances', ['product_id' => $product->id, 'stock_location_id' => $location->id, 'on_hand_quantity' => '5']);
     }
 
     public static function validHealthOperations(): array
     {
-        return array_map(static fn (string $operation): array => [$operation], ['receipts', 'issues', 'losses', 'adjustments', 'transfers']);
+        $cases = [];
+        foreach (['medicine', 'vaccine'] as $kind) {
+            foreach (['receipts', 'issues', 'losses', 'adjustments', 'transfers'] as $operation) {
+                $cases[$kind.' '.$operation] = [$operation, $kind];
+            }
+        }
+
+        return $cases;
     }
 
     // Flujo: valida incluso un extremo intermedio cuyo delta neto se cancelaría.
@@ -286,8 +295,8 @@ final class StockStorageEndpointTest extends TestCase
         $this->assertDatabaseHas('stock_balances', ['product_id' => $product->id, 'stock_location_id' => $location->id, 'on_hand_quantity' => '4']);
     }
 
-    // Flujo: la demo prepara sanidad y dos ingresos repetibles sin reescribir saldos existentes.
-    public function test_health_demo_seeder_is_idempotent(): void
+    // Flujo: la demo sanitaria queda reservada sin crear ubicaciones ni existencias físicas.
+    public function test_disabled_health_demo_seeder_has_no_inventory_effects(): void
     {
         // Preparación: arma únicamente las referencias que consume el demo de sanidad.
         $actor = $this->admin();
@@ -304,7 +313,9 @@ final class StockStorageEndpointTest extends TestCase
         $this->seed(HealthStockDemoSeeder::class);
         $this->assertSame($before, StockBalance::query()->orderBy('id')->get()->toArray());
         $this->assertSame($auditCount, AuditEntry::query()->count());
-        $this->assertDatabaseCount('inventory_movements', 2);
+        $this->assertDatabaseCount('inventory_movements', 0);
+        $this->assertDatabaseCount('stock_balances', 0);
+        $this->assertSame(0, StockLocation::query()->where('type', 'health')->count());
     }
 
     // Flujo: el contrato público permite descubrir sanidad por tipo y UP sin heurísticas.
@@ -317,7 +328,7 @@ final class StockStorageEndpointTest extends TestCase
 
         // Consulta: filtra por tipo explícito y publica sus categorías estables.
         $this->getJson('/api/v1/stock-locations?type=health&production_unit_id='.$health->production_unit_id)->assertOk()
-            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.type', 'health')->assertJsonPath('data.0.allowed_product_kinds', ['medicine', 'vaccine']);
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.type', 'health')->assertJsonPath('data.0.allowed_product_kinds', []);
         $this->getJson('/api/v1/stock-locations?type=invalid')->assertUnprocessable()->assertJsonValidationErrors('type');
     }
 
@@ -443,17 +454,40 @@ final class StockStorageEndpointTest extends TestCase
     {
         // Preparación: vincula una ficha a un producto físico válido.
         $this->admin();
-        $product = Product::factory()->create(['kind' => 'medicine', 'base_unit' => 'unit']);
+        $product = Product::factory()->create(['kind' => 'medicine', 'base_unit' => 'unit', 'stock_tracked' => false]);
         Medicine::factory()->create(['product_id' => $product->id]);
 
         // Requests: cada atributo estructural se protege antes de escribir o auditar una edición.
-        foreach ([['kind' => 'supply'], ['base_unit' => 'kg'], ['stock_tracked' => false]] as $payload) {
+        foreach ([['kind' => 'supply'], ['base_unit' => 'kg'], ['stock_tracked' => true]] as $payload) {
             $this->patchJson('/api/v1/products/'.$product->id, $payload)->assertConflict();
         }
         $this->getJson('/api/v1/products/'.$product->id)->assertOk()->assertJsonPath('data.capabilities.editable_fields', ['sku', 'name']);
         $this->assertSame('medicine', $product->fresh()->kind->value);
         $this->assertSame('unit', $product->fresh()->base_unit->value);
-        $this->assertTrue($product->fresh()->stock_tracked);
+        $this->assertFalse($product->fresh()->stock_tracked);
+    }
+
+    // Flujo: crear una UP no aprovisiona sanidad y una llamada interna tampoco puede habilitarla.
+    public function test_new_production_unit_does_not_provision_disabled_health_storage(): void
+    {
+        // Preparación: conserva la configuración real deshabilitada y un actor autorizado.
+        $actor = $this->admin();
+        $this->assertFalse(config('inventory.health_stock_enabled'));
+        $attributes = ProductionUnit::factory()->make()->only(['locality_id', 'name', 'address', 'latitude', 'longitude']);
+
+        // Mutación: el alta operativa sólo registra la UP y su propia auditoría.
+        $unit = app(CreateProductionUnitAction::class)->execute($attributes, $actor);
+        $this->assertSame(0, StockLocation::query()->where('type', 'health')->count());
+        $this->assertDatabaseHas('activity_log', ['event' => 'production_unit_created', 'subject_id' => $unit->id]);
+
+        // Mutación: el aprovisionamiento directo reservado para el futuro también queda bloqueado.
+        try {
+            app(EnsureHealthStockLocationAction::class)->execute($unit, $actor);
+            $this->fail('Sanidad no debe aprovisionarse mientras esté deshabilitada.');
+        } catch (InventoryConflict $exception) {
+            $this->assertSame('El stock físico de sanidad está deshabilitado.', $exception->getMessage());
+            $this->assertSame(0, StockLocation::query()->where('type', 'health')->count());
+        }
     }
 
     private function admin(): User
@@ -472,7 +506,8 @@ final class StockStorageEndpointTest extends TestCase
     {
         $unit = ProductionUnit::factory()->create();
         if ($type === 'health') {
-            return app(EnsureHealthStockLocationAction::class)->execute($unit, $actor);
+            // Preparación: representa una ubicación histórica, sin ejecutar el aprovisionamiento deshabilitado.
+            return StockLocation::factory()->create(['type' => 'health', 'production_unit_id' => $unit->id, 'system_managed' => true]);
         }
         if ($type === 'egg_account') {
             return app(EnsureEggStockAccountAction::class)->execute($unit)->stockLocation;

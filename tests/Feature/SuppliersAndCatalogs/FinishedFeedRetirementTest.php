@@ -39,7 +39,7 @@ final class FinishedFeedRetirementTest extends TestCase
         // Preparación: autentica un gestor y conserva un suministro genérico existente.
         $this->signIn();
         $product = Product::factory()->create();
-        $message = 'Selecciona un tipo de producto disponible. La ración se gestiona mediante recetas y saldos por unidad productiva.';
+        $message = 'Selecciona un tipo de producto disponible: Insumo, Materia prima u Otros.';
 
         // Requests: ambos contratos rechazan el tipo retirado antes de guardar productos o auditorías.
         $this->postJson('/api/v1/products', ['sku' => 'RACION-NUEVA', 'name' => 'Ración nueva', 'kind' => 'finished_feed', 'base_unit' => 'kg'])
@@ -132,7 +132,7 @@ final class FinishedFeedRetirementTest extends TestCase
         Product::factory()->create(['kind' => ProductKind::FinishedFeed]);
 
         // Consultas: los seis tipos operativos permanecen disponibles y el selector retirado queda vacío.
-        $response = $this->getJson('/api/v1/reference/options')->assertOk()->assertJsonCount(6, 'data.types.products');
+        $response = $this->getJson('/api/v1/reference/options')->assertOk()->assertJsonCount(3, 'data.types.products');
         $this->assertNotContains('finished_feed', array_column($response->json('data.types.products'), 'value'));
         $this->getJson('/api/v1/alimentacion/productos')->assertOk()->assertJsonCount(0, 'data');
     }
