@@ -2,6 +2,7 @@
 
 namespace App\Actions\FarmStructure;
 
+use App\Actions\Inventory\EnsureHealthStockLocationAction;
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
@@ -11,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 
 final readonly class CreateProductionUnitAction
 {
-    public function __construct(private AuditRecorder $auditRecorder) {}
+    public function __construct(private AuditRecorder $auditRecorder, private EnsureHealthStockLocationAction $healthLocation) {}
 
     /**
      * @param  array{locality_id: int|null, name: string, address: string, latitude: numeric-string, longitude: numeric-string, status?: string}  $attributes
@@ -24,6 +25,7 @@ final readonly class CreateProductionUnitAction
                 'status' => ProductionUnitStatus::from($attributes['status'] ?? ProductionUnitStatus::Active->value),
             ]);
 
+            $this->healthLocation->execute($productionUnit, $actor);
             $snapshot = $this->snapshot($productionUnit);
 
             $this->auditRecorder->record(AuditEntryData::forSubject(

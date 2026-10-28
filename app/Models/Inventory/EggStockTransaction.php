@@ -4,11 +4,13 @@ namespace App\Models\Inventory;
 
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
+/** @property CarbonImmutable $occurred_at */
 class EggStockTransaction extends Model
 {
     protected $table = 'egg_stock_transactions';

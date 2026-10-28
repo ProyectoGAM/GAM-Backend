@@ -1,0 +1,195 @@
+openapi: 3.1.0
+info:
+  title: Almacenamiento de inventario y sanidad
+  version: 1.0.0
+  description: >-
+    Política común de lectura y escritura. warehouse admite supply y other;
+    feed_plant admite raw_material con stock en g; egg_account admite egg;
+    health admite medicine y vaccine; unknown no admite productos.
+    finished_feed conserva exclusivamente su lectura histórica. Los huevos
+    técnicos sólo se mueven por los comandos de Stock de huevos.
+    Nuevos movimientos exigen producto activo con stock y ubicación/UP activas;
+    las plantas deben estar operativas. Las transferencias validan ambos extremos.
+    Sanidad tiene una ubicación por UP, compartida por medicamentos y vacunas.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+  - sessionCookie: []
+paths:
+  /stock-locations:
+    get:
+      summary: Lista ubicaciones con tipo explícito y categorías admitidas
+      description: Requiere inventory.view o admin. No hay asignaciones de usuarios a UP.
+      operationId: listTypedStockLocations
+      parameters:
+        - { name: type, in: query, schema: { type: string, enum: [warehouse, feed_plant, egg_account, health, unknown] } }
+        - { name: production_unit_id, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: status, in: query, schema: { type: string, enum: [active, inactive] } }
+        - { name: search, in: query, schema: { type: string, maxLength: 120 } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PerPage' }
+      responses:
+        '200':
+          description: Ubicaciones ordenadas por nombre e ID; tipo independiente del nombre y de system_managed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: 'feed-stock.yaml#/components/schemas/StockLocation' } }
+                  links: { type: object }
+                  meta: { type: object }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /inventory/balances:
+    get:
+      summary: Consulta saldos y revisa existencias históricas incompatibles
+      description: >-
+        Requiere inventory.view o admin. incompatible_only=1 devuelve saldos
+        distintos de cero cuya categoría, unidad o estructura de ubicación no
+        coincide con la política. No modifica saldos. La inactividad por sí sola
+        no reclasifica una existencia como incompatible. Orden por ubicación,
+        producto e ID. La regularización requiere inventory.adjust.
+      operationId: listStorageBalances
+      parameters:
+        - { name: incompatible_only, in: query, schema: { type: boolean } }
+        - { name: product_id, in: query, schema: { type: integer } }
+        - { name: stock_location_id, in: query, schema: { type: integer } }
+        - { name: below_minimum, in: query, schema: { type: boolean } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PerPage' }
+      responses:
+        '200':
+          description: Saldos paginados con available_quantity decimal, producto y ubicación tipada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: 'feed-stock.yaml#/components/schemas/StockBalance' } }
+                  links: { type: object }
+                  meta: { type: object }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /inventory/receipts:
+    post:
+      summary: Registra un ingreso con proveedor explícito o interno
+      operationId: receiveCompatibleStock
+      description: >-
+        Requiere inventory.move o admin. supplier_id omitido o null usa la
+        identidad estable internal_supplier, configurada previamente mediante
+        inventario:preparar-almacenamiento. No busca por nombre, crea ni reactiva
+        proveedores durante el movimiento. Un ID explícito tiene prioridad.
+        Si el proveedor no está activo responde 409. Un reintento idéntico
+        devuelve el movimiento original incluso si el proveedor fue desactivado
+        después. No reevalúa ni duplica una operación confirmada.
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lines]
+              properties:
+                supplier_id: { type: [integer, 'null'], minimum: 1 }
+                lines:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [product_id, stock_location_id, quantity]
+                    properties:
+                      product_id: { type: integer }
+                      stock_location_id: { type: integer }
+                      quantity: { type: string, pattern: '^(?=.*[1-9])\d+(?:\.\d{1,6})?$' }
+                      unit: { type: [string, 'null'], enum: [g, kg, null], description: Sólo conversión de entrada entre g y kg. Omitir para las demás unidades base. }
+                reason: { type: [string, 'null'], maxLength: 255 }
+                occurred_at: { type: string, format: date-time }
+                reference_type: { type: [string, 'null'], maxLength: 120 }
+                reference_id: { type: [string, 'null'], maxLength: 120 }
+      responses:
+        '201': { $ref: '#/components/responses/Movement' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /inventario/saldos/{stockBalance}/regularizaciones:
+    post:
+      summary: Regulariza un saldo histórico incompatible sin borrar historia
+      operationId: regularizeIncompatibleStock
+      description: >-
+        Requiere inventory.adjust o admin. trasladar reduce un saldo positivo
+        incompatible y suma exactamente la misma cantidad en un destino activo
+        compatible. recontar lleva a cero un saldo incompatible positivo o
+        negativo tras revisión humana, sin crear un destino. El motivo queda
+        auditado junto al movimiento y sus cantidades antes/después. No permite
+        nuevos ingresos incompatibles, saldos compatibles ni huevos técnicos.
+        La ubicación de origen puede estar inactiva. Recontar permite cerrar productos históricos inactivos o sin control de stock, sin reactivarlos. No se puede revertir genéricamente una
+        regularización porque reintroduciría stock incompatible. La repetición
+        con la misma clave y contenido devuelve el movimiento original; cambiar
+        los datos o reutilizar una clave ajena devuelve 409.
+      parameters:
+        - { name: stockBalance, in: path, required: true, schema: { type: integer } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [mode, reason, to_stock_location_id, quantity]
+                  properties:
+                    mode: { const: trasladar }
+                    reason: { type: string, minLength: 1, maxLength: 255 }
+                    to_stock_location_id: { type: integer }
+                    quantity: { type: string, pattern: '^(?=.*[1-9])\d{1,12}(?:\.\d{1,6})?$' }
+                - type: object
+                  required: [mode, reason]
+                  properties:
+                    mode: { const: recontar }
+                    reason: { type: string, minLength: 1, maxLength: 255 }
+      responses:
+        '201': { $ref: '#/components/responses/Movement' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: Saldo inexistente. }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Invalid' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer }
+    sessionCookie: { type: apiKey, in: cookie, name: gam_session }
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1 }
+    PerPage:
+      name: per_page
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+  responses:
+    Movement:
+      description: Movimiento confirmado con proveedor real, líneas y auditoría en la misma transacción.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: 'feed-stock.yaml#/components/schemas/InventoryMovement' }
+    Unauthorized: { description: Se requiere autenticación. }
+    Forbidden: { description: Permiso insuficiente. }
+    Conflict: { description: 'Estado, compatibilidad, proveedor, saldo o idempotencia en conflicto.' }
+    Invalid: { description: Entrada inválida; errores en español. }

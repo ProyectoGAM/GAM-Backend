@@ -78,8 +78,8 @@ final class MedicineConcurrencyTest extends TestCase
         $this->migrateIsolatedDatabase();
     }
 
-    // Flujo: dos procesos con la misma clave devuelven una sola alta auditada.
-    public function test_concurrent_replays_create_one_medicine_and_one_audit(): void
+    // Flujo: dos procesos con la misma clave crean una ficha, un producto y sus dos eventos auditados.
+    public function test_concurrent_replays_create_one_medicine_and_one_product_link(): void
     {
         // Preparación: confirma actor, proveedor y comando compartidos entre procesos.
         $admin = User::factory()->create();
@@ -99,7 +99,7 @@ final class MedicineConcurrencyTest extends TestCase
         $results = Concurrency::driver('process')->run([$task, $task], timeout: 30);
         $this->assertSame($results[0], $results[1]);
         $this->assertDatabaseCount('medicines', 1);
-        $this->assertDatabaseCount('activity_log', 1);
+        $this->assertDatabaseCount('activity_log', 2);
         $this->assertDatabaseHas('activity_log', ['operation_id' => $results[0], 'event' => 'medicine_created']);
     }
 }

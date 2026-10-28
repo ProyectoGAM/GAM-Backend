@@ -694,6 +694,7 @@ components:
             notes: { type: [string, 'null'], maxLength: 5000 }
             stock_consumption:
               type: object
+              description: Consumo físico opcional desde sanidad de la misma UP del lote. No admite saldo físico negativo.
               required: [quantity, stock_location_id]
               properties:
                 quantity: { type: string, description: Cantidad en la unidad base del producto de vacuna. }
@@ -708,6 +709,14 @@ components:
             quantity: { type: integer, minimum: 1, maximum: 2147483647 }
             reason: { type: string, maxLength: 500 }
             notes: { type: [string, 'null'], maxLength: 5000, description: Puede describir la dosis libremente. }
+            stock_consumption:
+              type: object
+              additionalProperties: false
+              description: Consumo físico opcional e independiente del contador clínico global. Requiere producto vinculado, saldo suficiente y sanidad de la misma UP. Se compensa al corregir la aplicación.
+              required: [quantity, stock_location_id]
+              properties:
+                quantity: { type: string, description: Cantidad física positiva en unidades enteras. }
+                stock_location_id: { type: integer, minimum: 1 }
     RationInput:
       description: Cambia configuración de alimentación del día y conserva el permiso management-plans.execute. Receta, total diario o ambos; todos los valores quedan manuales. No registra comidas ni descuenta alimento inmediatamente. No admite fecha anterior al día del registro.
       anyOf:

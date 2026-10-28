@@ -122,7 +122,7 @@ final class ExecutionEndpointTest extends LotsTestCase
         $this->signIn(['management-plans.execute']);
         $flock = $this->flockWithPlan();
         $vaccine = Vaccine::factory()->create();
-        $location = StockLocation::factory()->create();
+        $location = StockLocation::factory()->create(['type' => 'health', 'production_unit_id' => $flock->production_unit_id, 'system_managed' => true]);
 
         // Request: solicita consumo superior a lo disponible y obtiene conflicto.
         $this->command('POST', '/flocks/'.$flock->public_id.'/vacunaciones', [

@@ -7,6 +7,7 @@ use App\Enums\SuppliersAndCatalogs\BaseUnit;
 use App\Enums\SuppliersAndCatalogs\ProductKind;
 use App\Exceptions\SuppliersAndCatalogs\SuppliersAndCatalogsConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
+use App\Models\SuppliersAndCatalogs\Medicine;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\SuppliersAndCatalogs\Vaccine;
 use App\Models\User;
@@ -37,6 +38,13 @@ final readonly class UpdateProductAction
                     throw new SuppliersAndCatalogsConflict('No se puede convertir un producto a finished_feed. La ración se gestiona mediante recetas y saldos por unidad productiva.');
                 }
                 $vaccine = Vaccine::query()->where('product_id', $locked->getKey())->lockForUpdate()->first();
+                if (Medicine::query()->where('product_id', $locked->getKey())->exists()) {
+                    foreach (['kind' => 'medicine', 'base_unit' => 'unit', 'stock_tracked' => true] as $field => $required) {
+                        if (array_key_exists($field, $attributes) && $attributes[$field] !== $required) {
+                            throw new SuppliersAndCatalogsConflict('Un medicamento vinculado debe conservar su tipo, unidad y control de stock.');
+                        }
+                    }
+                }
                 if ($vaccine !== null && (! $actor->hasRole('admin') || $actor->trashed())) {
                     throw new AuthorizationException;
                 }

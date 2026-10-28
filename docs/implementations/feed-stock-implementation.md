@@ -6,7 +6,7 @@ Los galpones distinguen los tipos `poultry` (avícola, valor por defecto) y `fee
 
 El stock de ingredientes se conserva en Inventario, con `raw_material` como tipo de producto y gramos (`g`) como unidad base. Los movimientos pueden declarar gramos o kilogramos; el backend convierte los kilogramos a gramos con aritmética decimal antes de persistirlos. El saldo puede ser negativo en una planta y la respuesta expone `is_negative`. La transición a saldo negativo queda auditada de forma síncrona; la notificación visible se agregará cuando exista el módulo correspondiente.
 
-Una planta puede estar operativa, en mantenimiento, fuera de servicio o inactiva. Los movimientos se permiten en cualquiera de esos estados. Una planta inactiva conserva su saldo y su historial. En la consulta de esa planta, `total_g` se devuelve como `0` y el saldo real permanece en `details.stock_g` con `included_in_totals: false`. En los totales de la unidad productiva y global, ese detalle se excluye hasta que la planta vuelva a estar activa. Las plantas en mantenimiento u `out_of_service` siguen contando en los totales.
+Una planta puede estar operativa, en mantenimiento, fuera de servicio o inactiva. Desde las restricciones de almacenamiento del 28/10/2026, los movimientos nuevos exigen una planta operativa y una UP activa. Una planta inactiva conserva su saldo y su historial. En la consulta de esa planta, `total_g` se devuelve como `0` y el saldo real permanece en `details.stock_g` con `included_in_totals: false`. En los totales de la unidad productiva y global, ese detalle se excluye hasta que la planta vuelva a estar activa. Las plantas en mantenimiento u `out_of_service` siguen contando en los totales.
 
 ## API
 
@@ -117,15 +117,11 @@ Reglas de elegibilidad:
 
 - Sólo productos activos con control de stock. Se excluyen el producto técnico
   `generic_egg` y los pares producto/ubicación administrados por cuentas de huevos.
-- Depósitos generales: categorías distintas de `raw_material`. Plantas de ración:
-  únicamente `raw_material` en gramos. Una ubicación vinculada a otro tipo de galpón
-  o una ubicación de inventario inactiva devuelve `data: []`, con total cero.
+- Cámaras: sólo `supply` y `other`; sanidad: `medicine` y `vaccine`; cuentas de huevos: `egg` con las protecciones del dominio; plantas: sólo `raw_material` en gramos. Una ubicación desconocida, inactiva, con UP inactiva o planta no operativa devuelve `data: []`, con total cero. La política completa y su migración están en la [guía de almacenamiento](inventory-storage-implementation.md).
 - `loss`: exclusivamente saldo local mayor que cero, incluso cantidades tan pequeñas
   como `0.000001`; stock positivo en otra ubicación no habilita el producto.
 - Las otras operaciones ofrecen productos compatibles aunque no tengan cuenta, su saldo
-  sea cero o sea negativo. Sin cuenta se informa `0.000000`. Los identificadores históricos,
-  incluido `finished_feed`, conservan las reglas de lectura y movimiento existentes;
-  esta consulta no crea productos ni modifica la retirada de sus altas.
+  sea cero o sea negativo. Sin cuenta se informa `0.000000`. `finished_feed` conserva lectura histórica, pero no admite movimientos nuevos por el selector ni por los comandos genéricos. Los saldos incompatibles se corrigen mediante regularización auditada.
 
 Integración del formulario:
 
@@ -181,4 +177,4 @@ Si la base local conserva el demo anterior, ejecuta `docker compose -f compose.d
 
 ## Límites actuales
 
-La entrega original de stock no implementó recetas, elaboración de alimento ni notificaciones visibles. El catálogo global y el cálculo exacto de recetas se incorporan ahora en la [guía de recetas](feed-recipes-implementation.md); la elaboración y las notificaciones continúan pendientes. No se define capacidad física máxima para las plantas. La aceptación manual de los flujos queda pendiente y debe ejecutarse en un ambiente local o QA.
+La entrega original de stock se amplió con recetas, elaboración inmediata y alimentación de lotes, descritas en las guías de recetas y alimentación. Las restricciones actuales y la regularización histórica están en la [guía de almacenamiento](inventory-storage-implementation.md); las notificaciones visibles conservan su alcance documentado en Alertas. No se define capacidad física máxima para las plantas. La aceptación manual de los flujos queda pendiente y debe ejecutarse en un ambiente local o QA.

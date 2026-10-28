@@ -2,7 +2,7 @@
 
 La sección de Vacunas pertenece funcionalmente a **06 — Manejo productivo y sanidad** y técnicamente a `SuppliersAndCatalogs`, con integración sobre el inventario compartido. Una vacuna representa en esta etapa una ficha de catálogo con **SKU, nombre, descripción, detalles opcionales y proveedor**, vinculada uno a uno con un `Product` existente o creado durante el alta.
 
-**Estado funcional: catálogo e inventario de Vacunas implementados; módulo 06 aún incompleto.** La relación con Plan Maestro o Plan de Manejo, aplicaciones a lotes, historial sanitario, programación, próximas aplicaciones, notificaciones y consumo de stock por vacunación permanecen fuera de alcance. El seguimiento local se registra en [notion.md](../notion.md) sin mover la tarjeta completa del módulo a `Do Test`.
+**Estado funcional: catálogo e inventario de Vacunas implementados; módulo 06 aún incompleto.** Las aplicaciones e historial se integran en Planes de manejo. Desde el 28/10/2026 el consumo físico opcional requiere sanidad de la UP del lote y se compensa desde la corrección del manejo; véase la [guía de almacenamiento](inventory-storage-implementation.md). La programación, próximas aplicaciones y notificaciones conservan el alcance de sus módulos. El seguimiento local se registra en [notion.md](../notion.md) sin mover la tarjeta completa del módulo a `Do Test`.
 
 ## Alcance y decisiones confirmadas
 

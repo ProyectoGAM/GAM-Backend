@@ -34,6 +34,7 @@ use Database\Seeders\Inventory\FeedRecipeDemoSeeder;
 use Database\Seeders\Inventory\FeedStockDemoSeeder;
 use Database\Seeders\Inventory\FlockFeedingDemoSeeder;
 use Database\Seeders\Inventory\FlockFeedingDesignDemoSeeder;
+use Database\Seeders\Inventory\HealthStockDemoSeeder;
 use Database\Seeders\Lots\EggHistoryDemoSeeder;
 use Database\Seeders\Lots\EggProductionDemoSeeder;
 use Database\Seeders\Lots\LotsDemoSeeder;
@@ -82,6 +83,7 @@ final class LocalDemoDataSeeder extends Seeder
         $this->call(EggHistoryDemoSeeder::class);
         $this->call(WeighingDesignDemoSeeder::class);
         $this->call(FlockFeedingDesignDemoSeeder::class);
+        $this->call(HealthStockDemoSeeder::class);
     }
 
     /** @return array<string, Locality> */

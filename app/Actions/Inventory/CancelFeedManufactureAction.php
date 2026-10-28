@@ -84,7 +84,7 @@ final readonly class CancelFeedManufactureAction
                     operationId: $operationId, referenceType: 'feed_manufacture_cancellation', referenceId: (string) $operation->id,
                     reason: $reason, reversesMovementId: (int) $movement->id,
                     occurredAt: $operation->occurred_at->toIso8601String(),
-                ), $actor, $source, $original);
+                ), $actor, $source, $original, requiredPermission: null);
                 $compensatingLines = $compensation->lines->keyBy(fn (InventoryMovementLine $line): string => $line->product_id.':'.$line->stock_location_id);
                 $compensatingDistribution = array_map(function (array $line) use ($compensatingLines): array {
                     $movementLine = $compensatingLines->get($line['product_id'].':'.$line['stock_location_id']);

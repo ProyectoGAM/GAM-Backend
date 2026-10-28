@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
 
 final readonly class CreateMedicineAction
 {
-    public function __construct(private AuditRecorder $auditRecorder) {}
+    public function __construct(private AuditRecorder $auditRecorder, private EnsureMedicineProductAction $medicineProduct) {}
 
     /** @param array{name: string, description: string, supplier_id: int, idempotency_key: string} $attributes */
     public function execute(array $attributes, User $actor, string $source = 'api'): Medicine
@@ -73,9 +73,10 @@ final readonly class CreateMedicineAction
                 'request_hash' => $hash,
             ])->save();
 
+            $this->medicineProduct->execute($medicine, $currentActor);
             $snapshot = $medicine->only([
                 'public_id', 'name', 'description', 'supplier_id', 'supplier_name_snapshot',
-                'created_by', 'created_by_name', 'operation_id',
+                'created_by', 'created_by_name', 'operation_id', 'product_id',
             ]);
             $this->auditRecorder->record(AuditEntryData::forSubject(
                 subject: $medicine,

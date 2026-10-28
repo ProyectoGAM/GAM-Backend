@@ -28,6 +28,7 @@ use App\Http\Controllers\Inventory\InventoryMovementController;
 use App\Http\Controllers\Inventory\InventoryReadController;
 use App\Http\Controllers\Inventory\StockLocationController;
 use App\Http\Controllers\Inventory\StockLocationStatusController;
+use App\Http\Controllers\Inventory\StockRegularizationController;
 use App\Http\Controllers\Lots\BreedController;
 use App\Http\Controllers\Lots\DailyWeighingController;
 use App\Http\Controllers\Lots\EggCollectionController;
@@ -385,6 +386,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::patch('/stock-locations/{stockLocation}/status', [StockLocationStatusController::class, 'update'])->name('stock-locations.status.update');
 
         Route::get('/inventario/productos-permitidos', [InventoryReadController::class, 'allowedProducts'])->name('inventory.allowed-products.index');
+        Route::post('/inventario/saldos/{stockBalance}/regularizaciones', [StockRegularizationController::class, 'store'])->name('inventory.regularizations.store');
 
         Route::prefix('inventory')->name('inventory.')->group(function (): void {
             Route::get('/balances', [InventoryReadController::class, 'balances'])->name('balances.index');

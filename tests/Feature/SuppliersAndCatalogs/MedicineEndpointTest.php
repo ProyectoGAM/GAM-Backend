@@ -65,7 +65,8 @@ final class MedicineEndpointTest extends TestCase
         $this->assertSame([], $audit->attribute_changes['old']);
         $this->assertSame('Medicamento A', $audit->attribute_changes['new']['name']);
         $this->assertSame($before, [$flock->fresh()->getAttributes(), $house->fresh()->getAttributes(), $balance->fresh()->getAttributes()]);
-        $this->assertDatabaseCount('products', 1);
+        $this->assertDatabaseCount('products', 2);
+        $this->assertDatabaseHas('products', ['id' => $medicine->product_id, 'kind' => 'medicine', 'base_unit' => 'unit']);
         foreach (['flock_movements', 'flock_operations', 'inventory_movements', 'inventory_movement_lines'] as $table) {
             $this->assertDatabaseCount($table, 0);
         }
@@ -223,7 +224,7 @@ final class MedicineEndpointTest extends TestCase
         $this->postJson('/api/v1/medicines', $data)->assertConflict()
             ->assertJsonPath('detail', 'La clave de idempotencia ya fue utilizada con otros datos.');
         $this->assertDatabaseCount('medicines', 1);
-        $this->assertDatabaseCount('activity_log', 1);
+        $this->assertDatabaseCount('activity_log', 2);
     }
 
     // Flujo: admite nombres repetidos y aísla claves iguales de administradores distintos.
@@ -242,7 +243,7 @@ final class MedicineEndpointTest extends TestCase
         $this->assertNotSame($first->json('data.id'), $second->json('data.id'));
         $this->assertNotSame($first->json('data.id'), $third->json('data.id'));
         $this->assertDatabaseCount('medicines', 3);
-        $this->assertDatabaseCount('activity_log', 3);
+        $this->assertDatabaseCount('activity_log', 6);
     }
 
     // Flujo: una auditoría fallida revierte el alta y permite reintentar la clave.
@@ -263,7 +264,7 @@ final class MedicineEndpointTest extends TestCase
         $this->app->instance(AuditRecorder::class, $recorder);
         $this->postJson('/api/v1/medicines', $data)->assertCreated();
         $this->assertDatabaseCount('medicines', 1);
-        $this->assertDatabaseCount('activity_log', 1);
+        $this->assertDatabaseCount('activity_log', 2);
     }
 
     // Flujo: el caso de uso protege datos inválidos también desde un seeder.

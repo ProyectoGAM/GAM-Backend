@@ -111,8 +111,9 @@ components:
     Medicine:
       type: object
       additionalProperties: false
-      required: [id, name, description, supplier, created_by, created_at, operation_id]
+      required: [id, product_id, name, description, supplier, created_by, created_at, operation_id]
       properties:
+        product_id: { type: [integer, 'null'], description: Producto de inventario físico en unidades; null sólo en fichas históricas pendientes de preparación. }
         id:
           type: string
           pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'

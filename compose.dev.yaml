@@ -327,6 +327,7 @@ services:
          {"url":"/docs/openapi/vaccination.yaml","name":"Vacunas"},
          {"url":"/docs/openapi/products.yaml","name":"Productos"},
          {"url":"/docs/openapi/feed-stock.yaml","name":"Plantas de ración y stock"},
+         {"url":"/docs/openapi/inventory-storage.yaml","name":"Almacenamiento y sanidad"},
          {"url":"/docs/openapi/feed-recipes.yaml","name":"Recetas y cálculo"},
          {"url":"/docs/openapi/flock-feeding.yaml","name":"Alimentación de lotes"},
          {"url":"/docs/openapi/reporting.yaml","name":"Reportes e indicadores"},

@@ -24,3 +24,6 @@ FeedBalance.minimum_quantity_grams es nullable; null significa sin configurar, c
 
 ## Compatibilidad de productos en movimientos
 La consulta productos-permitidos y el registro transaccional comparten StockProductCompatibility para categoria y unidad por ubicacion. El filtro loss exige saldo local positivo solo para el selector: no cambia los negativos permitidos de materias primas ni reserva stock. Al cambiar ubicacion u operacion, el cliente debe invalidar selecciones y respuestas anteriores; una pagina o busqueda parcial no demuestra incompatibilidad.
+
+## Tipos de almacenamiento y sanidad por UP
+StockLocation.type define warehouse (supply/other), feed_plant (raw_material en g), egg_account (egg protegido), health (medicine/vaccine) y unknown (ninguno). Sanidad es unica por UP. Consultas y escritura usan StockProductCompatibility; nuevos movimientos requieren ubicaciones y UP activas y plantas operativas. Preparar metadatos es explicito y auditado; no reclasificar ni trasladar cantidades automaticamente. Regularizacion solo reduce un saldo incompatible hacia cero y anexa historial. Proveedor interno usa suppliers.system_key=internal_supplier; resolverlo en ingresos no crea ni reactiva proveedores. El contador clinico global de medicamentos no es existencia fisica por UP.

@@ -9,7 +9,7 @@ info:
     defecto; las plantas de ración usan tipo feed, no admiten lotes ni
     capacidad de aves, y su tipo no puede cambiarse después del alta. Las
     plantas pueden estar operativas, en mantenimiento, fuera de servicio o
-    inactivas; los movimientos se permiten en cualquiera de esos estados y
+    inactivas; los nuevos movimientos exigen plantas operativas y
     sólo las inactivas se excluyen de los agregados.
 servers:
   - url: /api/v1
@@ -28,10 +28,11 @@ paths:
       description: >-
         Requiere inventory.view o rol admin y el contexto de sesión compartida
         cuando corresponda. Devuelve productos activos que controlan stock,
-        compatibles con la ubicación elegida. Los depósitos generales excluyen
-        materias primas; las plantas de ración sólo admiten materias primas en
+        compatibles con el tipo explícito de ubicación. Las cámaras sólo admiten
+        supply y other; sanidad admite medicine y vaccine; las cuentas de huevos
+        admiten egg y las plantas de ración sólo admiten materias primas en
         gramos. Excluye el producto técnico Huevo y las cuentas técnicas de huevos.
-        Las ubicaciones inactivas o vinculadas a galpones de tipo distinto de feed
+        Las ubicaciones inactivas, desconocidas, con UP inactiva o plantas no operativas
         devuelven una colección vacía. Para loss exige saldo estrictamente positivo
         en esa misma ubicación; las demás operaciones incluyen productos sin saldo,
         en cero o con saldo negativo permitido. No reserva stock. Al cambiar de
@@ -231,8 +232,8 @@ components:
         id: { type: integer }
         sku: { type: string }
         name: { type: string }
-        kind: { type: string, enum: [raw_material] }
-        base_unit: { type: string, enum: [g] }
+        kind: { type: string, enum: [raw_material, supply, other, egg, medicine, vaccine, finished_feed] }
+        base_unit: { type: string, enum: [g, kg, unit, dose, l, ml] }
         stock_tracked: { type: boolean }
         status: { type: string, enum: [active, inactive] }
         created_at: { type: string, format: date-time }
@@ -277,7 +278,7 @@ components:
         product: { $ref: '#/components/schemas/Product' }
         product_id: { type: integer }
         stock_location_id: { type: integer }
-        unit: { type: string, enum: [g] }
+        unit: { type: string, enum: [g, kg, unit, dose, l, ml] }
         physical_delta: { type: string, pattern: '^-?\d+(?:\.\d{1,6})?$' }
     InventoryMovement:
       type: object
@@ -285,8 +286,14 @@ components:
       properties:
         id: { type: integer }
         operation_id: { type: string, format: uuid }
-        type: { type: string, enum: [opening_balance, receipt] }
-        supplier: { type: [object, 'null'] }
+        type: { type: string, enum: [opening_balance, receipt, issue, loss, adjustment, transfer, reversal] }
+        supplier:
+          type: [object, 'null']
+          properties:
+            id: { type: integer }
+            name: { type: string }
+            status: { type: string, enum: [active, inactive] }
+            is_internal: { type: boolean, description: Identidad interna estable; no depende del nombre editable. }
         reference_type: { type: [string, 'null'] }
         reference_id: { type: [string, 'null'] }
         reason: { type: [string, 'null'] }
@@ -307,8 +314,12 @@ components:
         stock_location de /inventory/balances o del alta de ingredientes.
         name conserva el nombre técnico; poultry_house_name contiene el nombre
         vigente de la planta vinculada, o null cuando no hay una planta asociada.
-      required: [id, name, status, system_managed, poultry_house_id, poultry_house_name, created_at, updated_at]
+      required: [id, name, type, allowed_product_kinds, status, system_managed, poultry_house_id, poultry_house_name, created_at, updated_at]
       properties:
+        type: { type: string, enum: [warehouse, feed_plant, egg_account, health, unknown] }
+        allowed_product_kinds:
+          type: array
+          items: { type: string, enum: [raw_material, supply, other, egg, medicine, vaccine] }
         id: { type: integer }
         name: { type: string, description: 'Nombre de la ubicación; en plantas puede ser «Planta de ración #ID».' }
         status: { type: string, enum: [active, inactive] }

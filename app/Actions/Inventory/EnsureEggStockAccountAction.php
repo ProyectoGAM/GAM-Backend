@@ -2,6 +2,7 @@
 
 namespace App\Actions\Inventory;
 
+use App\Enums\Inventory\StockLocationType;
 use App\Enums\SuppliersAndCatalogs\BaseUnit;
 use App\Enums\SuppliersAndCatalogs\ProductKind;
 use App\Enums\SuppliersAndCatalogs\ProductStatus;
@@ -50,6 +51,7 @@ final readonly class EnsureEggStockAccountAction
                                 'name' => 'Cuenta de huevos - UP '.$unit->getKey(),
                                 'status' => 'active',
                                 'system_managed' => true,
+                                'type' => StockLocationType::EggAccount,
                             ])->save();
                         }
                         $account = new EggStockAccount;

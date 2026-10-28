@@ -77,7 +77,7 @@ final readonly class ManufactureFeedAction
                     operationId: $operationId, referenceType: 'feed_manufacture', referenceId: (string) $operation->id,
                     reason: 'Ingredientes utilizados en elaboración de alimento',
                     occurredAt: $operation->occurred_at->toIso8601String(),
-                ), $actor, $source);
+                ), $actor, $source, requiredPermission: null);
                 $snapshot['distribution'] = array_map(function (array $line) use ($movement): array {
                     $movementLine = $movement->lines->first(fn ($item): bool => (int) $item->product_id === $line['product_id']
                         && (int) $item->stock_location_id === $line['stock_location_id']);

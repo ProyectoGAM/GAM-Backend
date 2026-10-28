@@ -18,7 +18,7 @@ final class StoreVaccinationApplicationRequest extends ManagementExecutionReques
             'vaccine_id' => ['required', 'ulid'],
             'vaccine_batch' => ['sometimes', 'nullable', 'string', 'max:160'],
             'notes' => ['sometimes', 'nullable', 'string', 'max:5000'],
-            'stock_consumption' => ['sometimes', 'array'],
+            'stock_consumption' => ['sometimes', 'array:quantity,stock_location_id', 'required_array_keys:quantity,stock_location_id'],
             'stock_consumption.quantity' => ['required_with:stock_consumption', 'string', 'regex:/^(?=.*[1-9])\\d{1,12}(?:\\.\\d{1,6})?$/'],
             'stock_consumption.stock_location_id' => ['required_with:stock_consumption', 'integer', 'min:1', 'max:9223372036854775807'],
         ];

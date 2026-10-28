@@ -18,6 +18,7 @@ final class SupplierResource extends JsonResource
             'name' => $this->name,
             'address' => $this->address,
             'status' => $this->status->value,
+            'is_internal' => $this->system_key === 'internal_supplier',
             'locality' => LocalityResource::make($this->whenLoaded('locality')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

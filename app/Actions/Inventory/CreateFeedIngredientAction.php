@@ -20,9 +20,10 @@ use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\User;
 use App\ValueObjects\Inventory\InventoryQuantity;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
@@ -39,6 +40,18 @@ final readonly class CreateFeedIngredientAction
      * @return array{product:Product, movement:InventoryMovement, stock:StockBalance}
      */
     public function execute(PoultryHouse $house, array $attributes, User $actor): array
+    {
+        return DB::transaction(function () use ($house, $attributes, $actor): array {
+            $currentActor = User::query()->whereKey($actor->getKey())->lockForUpdate()->firstOrFail();
+            Gate::forUser($currentActor)->authorize('create', Product::class);
+            Gate::forUser($currentActor)->authorize('create', InventoryMovement::class);
+
+            return $this->executeWithinTransaction($house, $attributes, $currentActor);
+        }, 3);
+    }
+
+    /** @param array{sku:string, nombre:string, cantidad:string, unidad?:string, proveedor_id?:int|null, idempotency_key:string} $attributes @return array{product:Product, movement:InventoryMovement, stock:StockBalance} */
+    private function executeWithinTransaction(PoultryHouse $house, array $attributes, User $actor): array
     {
         if ($house->type !== PoultryHouseType::Feed) {
             throw new InventoryConflict('El galpón indicado no es una planta de ración.');
@@ -179,7 +192,7 @@ final readonly class CreateFeedIngredientAction
                 ->where('product_id', $product->getKey())
                 ->where('stock_location_id', $location->getKey())
                 ->with([
-                    'product' => static fn (BelongsTo $productRelation): Builder => $productRelation->getQuery()->withResourceMetadata(),
+                    'product' => fn (Relation $productRelation): Builder => $this->productResourceMetadata($productRelation),
                     'stockLocation.poultryHouse:id,name',
                 ])
                 ->firstOrFail();
@@ -234,11 +247,20 @@ final readonly class CreateFeedIngredientAction
             ->where('product_id', $line->product_id)
             ->where('stock_location_id', $line->stock_location_id)
             ->with([
-                'product' => static fn (BelongsTo $productRelation): Builder => $productRelation->getQuery()->withResourceMetadata(),
+                'product' => fn (Relation $productRelation): Builder => $this->productResourceMetadata($productRelation),
                 'stockLocation.poultryHouse:id,name',
             ])
             ->firstOrFail();
 
         return ['product' => $line->product, 'movement' => $movement, 'stock' => $stock];
+    }
+
+    /** @return Builder<Product> */
+    private function productResourceMetadata(Relation $relation): Builder
+    {
+        /** @var Builder<Product> $query */
+        $query = $relation->getQuery();
+
+        return $query->withResourceMetadata();
     }
 }

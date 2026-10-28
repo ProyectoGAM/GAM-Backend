@@ -3,7 +3,6 @@
 namespace App\Queries\Inventory;
 
 use App\Enums\Inventory\InventoryMovementType;
-use App\Enums\Inventory\StockLocationStatus;
 use App\Enums\SuppliersAndCatalogs\ProductStatus;
 use App\Models\Inventory\EggStockAccount;
 use App\Models\Inventory\StockBalance;
@@ -38,7 +37,7 @@ final readonly class ListAllowedStockProductsQuery
 
         $this->compatibility->constrain($query, $location);
 
-        if ($location->status !== StockLocationStatus::Active) {
+        if (! $this->compatibility->isOperational($location)) {
             $query->whereKey([]);
         }
 
