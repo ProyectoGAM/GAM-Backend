@@ -2,7 +2,7 @@ openapi: "3.1.0"
 info:
   title: "09 — Producción y stock de huevos"
   version: "2.0.0"
-  description: "Contrato de Lotes y producción de huevos para web y mobile. La recolección de huevo genérico ingresa atómicamente a una cuenta corriente por unidad productiva; las correcciones son compensaciones auditadas. No hay borrado ni interfaz mobile en esta entrega. Los valores de status, eventos, tipos y permisos son identificadores estables en inglés."
+  description: "Contrato de Lotes y producción de huevos para web y mobile. La capacidad de aves del galpón es un umbral de alerta: altas, redistribuciones, restituciones y reversiones pueden superarlo; se mantiene un único lote abierto por galpón. Las consultas de galpones informan capacity_exceeded, excess_quantity y capacity_alert. La recolección de huevo genérico ingresa atómicamente a una cuenta corriente por unidad productiva; las correcciones son compensaciones auditadas. No hay borrado ni interfaz mobile en esta entrega. Los valores de status, eventos, tipos y permisos son identificadores estables en inglés."
   license:
     name: "Proprietary"
     identifier: "Proprietary"
@@ -21,7 +21,7 @@ tags:
     description: "Traslados parciales, totales e histórico compensatorio."
   -
     name: "Catálogos"
-    description: "Razas y categorías de mortalidad con vigencia."
+    description: "Razas con vigencia."
   -
     name: "Mortalidad"
     description: "Bajas y correcciones auditadas."
@@ -210,7 +210,7 @@ paths:
       tags: ["Lotes"]
       operationId: "finalizeFlock"
       summary: "Finaliza con egreso de las aves remanentes y sin borrado"
-      description: "Permiso requerido: flocks.finalize. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: flocks.finalize. Pone el saldo en cero y registra sólo el egreso de aves positivas. Si el saldo previo era negativo, registra egreso cero y conserva ese valor en las fotografías y la auditoría. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "flocks.finalize"
       parameters:
         -
@@ -245,7 +245,7 @@ paths:
       tags: ["Redistribuciones"]
       operationId: "redistributeFlock"
       summary: "Redistribuye, une o traslada un lote"
-      description: "Permiso requerido: flocks.redistribute. plan_activity_id es opcional y sólo puede identificar una actividad flock_movement vigente del plan del lote origen; nunca se asocia por fecha o tipo. Una redistribución parcial que crea un lote nuevo copia al plan de destino las actividades futuras del plan origen y conserva su fecha de referencia; los manejos ya realizados aparecen como antecedentes con su operación original. Incorporar aves a un lote receptor existente no modifica el plan de ese receptor. Un traslado total conserva la identidad y el plan del lote. Si la cantidad coincide con todas las aves y se indica un receptor, finaliza el origen y conserva los datos del receptor; sin receptor, traslada el mismo lote a otro galpón. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: flocks.redistribute. plan_activity_id es opcional y sólo puede identificar una actividad flock_movement vigente del plan del lote origen; nunca se asocia por fecha o tipo. Una redistribución parcial que crea un lote nuevo copia al plan de destino las actividades futuras del plan origen y conserva su fecha de referencia; los manejos ya realizados aparecen como antecedentes con su operación original. Incorporar aves a un lote receptor existente no modifica el plan de ese receptor. Un traslado total conserva la identidad y el plan del lote. Si la cantidad coincide con todas las aves y se indica un receptor, finaliza el origen y conserva los datos del receptor; sin receptor, traslada el mismo lote a otro galpón. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original. No se permiten movimientos entre UP; fraccionar conserva edad y alimentación, agrupar conserva el modo y plan del receptor."
       x-permission: "flocks.redistribute"
       parameters:
         -
@@ -280,7 +280,7 @@ paths:
       tags: ["Redistribuciones"]
       operationId: "reverseRedistribution"
       summary: "Compensa una redistribución sin actividad posterior"
-      description: "Permiso requerido: flocks.redistribute. Sólo se permite cuando ningún lote involucrado tiene actividad de negocio posterior, la operación histórica es verificable y el galpón requerido para devolver las aves está libre, operativo y tiene capacidad. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: flocks.redistribute. Sólo se permite cuando ningún lote involucrado tiene actividad de negocio posterior, la operación histórica es verificable y el galpón requerido para devolver las aves está operativo y disponible para ese lote. Superar su capacidad no bloquea la reversión. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original. No se permiten movimientos entre UP; fraccionar conserva edad y alimentación, agrupar conserva el modo y plan del receptor."
       x-permission: "flocks.redistribute"
       parameters:
         -
@@ -486,104 +486,6 @@ paths:
           "$ref": "#/components/responses/Conflict"
         "422":
           "$ref": "#/components/responses/InvalidInput"
-  "/mortality-categories":
-    get:
-      tags: ["Catálogos"]
-      operationId: "listMortalityCategories"
-      summary: "Lista categorías de mortalidad"
-      description: "Permiso requerido: mortality-categories.view. El acceso es global dentro de la empresa."
-      x-permission: "mortality-categories.view"
-      parameters:
-        -
-          "$ref": "#/components/parameters/Page"
-        -
-          "$ref": "#/components/parameters/PerPage"
-        -
-          "$ref": "#/components/parameters/Search"
-        -
-          "$ref": "#/components/parameters/CatalogStatus"
-      responses:
-        "200":
-          description: "Consulta u operación completada."
-          content:
-            "application/json":
-              schema:
-                "$ref": "#/components/schemas/PaginatedCatalogs"
-        "401":
-          "$ref": "#/components/responses/Unauthenticated"
-        "403":
-          "$ref": "#/components/responses/Forbidden"
-        "404":
-          "$ref": "#/components/responses/NotFound"
-        "422":
-          "$ref": "#/components/responses/InvalidInput"
-    post:
-      tags: ["Catálogos"]
-      operationId: "createMortalityCategory"
-      summary: "Crea una categoría de mortalidad"
-      description: "Permiso requerido: mortality-categories.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
-      x-permission: "mortality-categories.manage"
-      parameters:
-        -
-          "$ref": "#/components/parameters/IdempotencyKey"
-      requestBody:
-        required: true
-        content:
-          "application/json":
-            schema:
-              "$ref": "#/components/schemas/CreateCatalog"
-      responses:
-        "201":
-          description: "Operación registrada o resultado original recuperado por idempotencia."
-          content:
-            "application/json":
-              schema:
-                "$ref": "#/components/schemas/OperationResponse"
-        "401":
-          "$ref": "#/components/responses/Unauthenticated"
-        "403":
-          "$ref": "#/components/responses/Forbidden"
-        "404":
-          "$ref": "#/components/responses/NotFound"
-        "409":
-          "$ref": "#/components/responses/Conflict"
-        "422":
-          "$ref": "#/components/responses/InvalidInput"
-  "/mortality-categories/{mortalityCategory}":
-    patch:
-      tags: ["Catálogos"]
-      operationId: "updateMortalityCategory"
-      summary: "Renombra o cambia la vigencia de una categoría"
-      description: "Permiso requerido: mortality-categories.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
-      x-permission: "mortality-categories.manage"
-      parameters:
-        -
-          "$ref": "#/components/parameters/MortalityCategory"
-        -
-          "$ref": "#/components/parameters/IdempotencyKey"
-      requestBody:
-        required: true
-        content:
-          "application/json":
-            schema:
-              "$ref": "#/components/schemas/UpdateCatalog"
-      responses:
-        "200":
-          description: "Consulta u operación completada."
-          content:
-            "application/json":
-              schema:
-                "$ref": "#/components/schemas/OperationResponse"
-        "401":
-          "$ref": "#/components/responses/Unauthenticated"
-        "403":
-          "$ref": "#/components/responses/Forbidden"
-        "404":
-          "$ref": "#/components/responses/NotFound"
-        "409":
-          "$ref": "#/components/responses/Conflict"
-        "422":
-          "$ref": "#/components/responses/InvalidInput"
   "/mortalities":
     get:
       tags: ["Mortalidad"]
@@ -650,7 +552,7 @@ paths:
       tags: ["Mortalidad"]
       operationId: "correctMortality"
       summary: "Rectifica cantidad, categoría o notas con auditoría"
-      description: "Permiso requerido: mortality.manage. Si la corrección devuelve aves a un lote finalizado por mortalidad, exige confirm_reactivation=true y un galpón libre, operativo y con capacidad; sin confirmación responde 409 sin mutación. Un lote finalizado por unión o egreso posterior no se reactiva por esta ruta. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: mortality.manage. Si la corrección devuelve aves a un lote finalizado por mortalidad, exige confirm_reactivation=true y un galpón libre y operativo; sin confirmación responde 409 sin mutación. Superar la capacidad no bloquea la restitución. Un lote finalizado por unión o egreso posterior no se reactiva por esta ruta. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "mortality.manage"
       parameters:
         -
@@ -723,7 +625,7 @@ paths:
       tags: ["Mortalidad"]
       operationId: "recordMortality"
       summary: "Registra bajas y descuenta aves vivas"
-      description: "Permiso requerido: mortality.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: mortality.manage. Exige fecha, cantidad entera positiva y motivo textual en notes. Puede dejar saldo negativo y conserva el estado del lote. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "mortality.manage"
       parameters:
         -
@@ -758,7 +660,7 @@ paths:
       tags: ["Mortalidad"]
       operationId: "cancelMortality"
       summary: "Cancela y restituye aves con reactivación confirmada"
-      description: "Permiso requerido: mortality.manage. Si la restitución devuelve aves a un lote finalizado por mortalidad, se requiere confirm_reactivation=true y un galpón libre, operativo y con capacidad. Un lote finalizado por unión o egreso no se reactiva por esta ruta. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: mortality.manage. Si la restitución devuelve aves a un lote finalizado por mortalidad, se requiere confirm_reactivation=true y un galpón libre y operativo. Superar la capacidad no bloquea la restitución. Un lote finalizado por unión o egreso no se reactiva por esta ruta. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "mortality.manage"
       parameters:
         -
@@ -831,7 +733,7 @@ paths:
       tags: ["Recolección"]
       operationId: "recordEggCollection"
       summary: "Registra huevos y aumenta el inventario en una transacción"
-      description: "Permiso requerido: egg-collections.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: "Permiso requerido: egg-collections.manage. Requiere un lote abierto con saldo mayor que cero; saldo cero o negativo responde 409 sin recolección ni cambios de stock. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
       x-permission: "egg-collections.manage"
       parameters:
         -
@@ -1281,13 +1183,6 @@ components:
       schema:
         type: "integer"
         minimum: 1
-    MortalityCategory:
-      name: "mortalityCategory"
-      in: "path"
-      required: true
-      schema:
-        type: "integer"
-        minimum: 1
     IdempotencyKey:
       name: "Idempotency-Key"
       in: "header"
@@ -1413,7 +1308,7 @@ components:
           schema:
             "$ref": "#/components/schemas/Problem"
     Conflict:
-      description: "Conflicto de versión, capacidad, cantidad, estado, período, stock o clave de idempotencia. No se aplican cambios parciales."
+      description: "Conflicto de versión, ocupación por otro lote, cantidad, estado, período, stock o clave de idempotencia. No se aplican cambios parciales."
       content:
         "application/problem+json":
           schema:
@@ -1461,7 +1356,8 @@ components:
           maximum: 2147483647
         current_quantity:
           type: "integer"
-          minimum: 0
+          format: "int64"
+          description: "Saldo del lote; admite valores negativos por mortalidad sin modificar su estado."
         entry_date:
           type: "string"
           format: "date"
@@ -1537,7 +1433,8 @@ components:
           maximum: 2147483647
         current_quantity:
           type: "integer"
-          minimum: 0
+          format: "int64"
+          description: "Saldo del lote; admite valores negativos por mortalidad sin modificar su estado."
         entry_date:
           type: "string"
           format: "date"
@@ -1641,7 +1538,7 @@ components:
     Mortality:
       type: "object"
       additionalProperties: false
-      required: ["id", "flock_id", "poultry_house_id", "production_unit_id", "quantity", "occurred_at", "notes", "status", "version", "created_by", "mortality_category_id", "plan_activity_id", "origin_operation_id"]
+      required: ["id", "flock_id", "poultry_house_id", "production_unit_id", "quantity", "occurred_at", "notes", "status", "version", "created_by", "plan_activity_id", "origin_operation_id"]
       properties:
         id:
           type: "string"
@@ -1678,9 +1575,6 @@ components:
           maximum: 2147483647
           description: "Versión actual obtenida al consultar el recurso."
         created_by:
-          type: "integer"
-          minimum: 1
-        mortality_category_id:
           type: "integer"
           minimum: 1
         plan_activity_id:
@@ -1821,6 +1715,7 @@ components:
     CreateFlock:
       type: "object"
       additionalProperties: false
+      description: "La fecha de ingreso debe coincidir con el día del registro en America/Montevideo; no se admiten fechas anteriores ni futuras."
       required: ["code", "breed_id", "poultry_house_id", "initial_quantity", "entry_date", "plan_template_id", "plan_template_version"]
       properties:
         id:
@@ -1855,7 +1750,7 @@ components:
         plan_template_id:
           type: "string"
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
-          description: "Plantilla publicada elegida para crear la copia propia del lote."
+          description: "Plantilla publicada con exactamente una alimentación inicial (día 1 o semana 1), receta y gramos positivos; su copia inicializa alimentación automática."
         plan_template_version:
           type: "integer"
           minimum: 1
@@ -2016,7 +1911,8 @@ components:
     RecordMortality:
       type: "object"
       additionalProperties: false
-      required: ["version", "quantity", "mortality_category_id"]
+      required: ["version", "quantity", "occurred_at", "notes"]
+      description: "Registra fecha, cantidad entera positiva y motivo obligatorio. Las bajas pueden superar el saldo del lote; conserva su estado incluso con saldo cero o negativo."
       properties:
         id:
           type: "string"
@@ -2035,21 +1931,21 @@ components:
           type: ["string", "null"]
           pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
           description: "Actividad mortality vigente del mismo lote, cuando se asocia explícitamente."
-        mortality_category_id:
-          type: "integer"
-          minimum: 1
         occurred_at:
           type: "string"
           format: "date-time"
           pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
           description: "Instante ISO 8601 con segundos y zona explícita; no admite futuro."
         notes:
-          type: ["string", "null"]
+          type: "string"
+          minLength: 1
+          description: "Motivo obligatorio de la mortalidad; no admite texto vacío ni sólo espacios."
           maxLength: 5000
     CorrectMortality:
       type: "object"
       additionalProperties: false
       required: ["version", "flock_version", "reason"]
+      description: "Corrige cantidad, fecha o motivo mediante compensación auditada. La cantidad debe seguir siendo positiva y puede dejar saldo negativo. reason justifica la corrección; notes conserva el motivo del hecho."
       properties:
         version:
           type: "integer"
@@ -2073,11 +1969,15 @@ components:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-        mortality_category_id:
-          type: "integer"
-          minimum: 1
+        occurred_at:
+          type: "string"
+          format: "date-time"
+          description: "Fecha corregida dentro del período del mismo galpón histórico; el movimiento original se conserva."
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$"
         notes:
-          type: ["string", "null"]
+          type: "string"
+          minLength: 1
+          description: "Motivo de la mortalidad; si se envía debe ser texto no vacío."
           maxLength: 5000
     CancelRecord:
       type: "object"

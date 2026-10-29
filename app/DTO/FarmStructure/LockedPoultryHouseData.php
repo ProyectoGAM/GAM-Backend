@@ -13,9 +13,4 @@ final readonly class LockedPoultryHouseData
         public bool $canReceive,
     ) {}
 
-    public function supports(int $netIncrease): bool
-    {
-        return $this->occupancy + $netIncrease >= 0
-            && $this->occupancy + $netIncrease <= $this->capacity;
-    }
 }

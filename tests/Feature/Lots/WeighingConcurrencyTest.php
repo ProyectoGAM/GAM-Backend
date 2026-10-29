@@ -16,9 +16,7 @@ use Tests\TestCase;
 
 final class WeighingConcurrencyTest extends TestCase
 {
-    use DatabaseMigrations {
-        runDatabaseMigrations as private migrateIsolatedDatabase;
-    }
+    use DatabaseMigrations;
 
     private ?string $originalAppKey = null;
 

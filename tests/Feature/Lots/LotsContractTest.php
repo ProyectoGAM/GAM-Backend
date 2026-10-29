@@ -50,7 +50,7 @@ final class LotsContractTest extends TestCase
                 }
             }
         }
-        $this->assertCount(37, $actual);
+        $this->assertCount(34, $actual);
         $this->assertEqualsCanonicalizing($expected, $actual);
         $this->assertSame([['bearerAuth' => []]], $contract['security']);
         $this->assertSame('09 — Producción y stock de huevos', $contract['info']['title']);

@@ -24,7 +24,6 @@ use Illuminate\Support\Str;
  * @property string|null $notes
  * @property CarbonImmutable $occurred_at
  * @property int $created_by
- * @property int $mortality_category_id
  * @property-read Flock $flock
  */
 class MortalityRecord extends Model

@@ -3,7 +3,9 @@
 namespace Tests;
 
 use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\PermissionRegistrar;
 
 abstract class TestCase extends BaseTestCase
@@ -35,5 +37,30 @@ abstract class TestCase extends BaseTestCase
 
         // Las pruebas usan transacciones; evita conservar permisos que una prueba anterior revirtió.
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+    }
+
+    /** Recrea y limpia la base aislada sin intentar revertir migraciones que eliminan datos. */
+    protected function migrateIsolatedDatabase(): void
+    {
+        $this->assertIsolatedTestingDatabase();
+        $this->beforeRefreshingDatabase();
+        $this->refreshTestDatabase();
+        $this->afterRefreshingDatabase();
+
+        $this->beforeApplicationDestroyed(function (): void {
+            $this->assertIsolatedTestingDatabase();
+            $this->artisan('db:wipe')->assertExitCode(0);
+            RefreshDatabaseState::$migrated = false;
+        });
+    }
+
+    /** Evita limpiar conexiones ajenas a PostgreSQL de pruebas, incluso durante el cierre. */
+    private function assertIsolatedTestingDatabase(): void
+    {
+        if (! $this->app->environment('testing')
+            || config('database.default') !== 'pgsql'
+            || ! str_ends_with(DB::connection()->getDatabaseName(), '_testing')) {
+            throw new \RuntimeException('Refusing to clean a database outside isolated PostgreSQL testing.');
+        }
     }
 }

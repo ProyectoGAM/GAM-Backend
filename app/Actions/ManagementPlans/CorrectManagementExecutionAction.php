@@ -135,8 +135,8 @@ final readonly class CorrectManagementExecutionAction
     {
         $keys = match ($executionType) {
             'vaccination' => ['public_id', 'operation_id', 'flock_id', 'plan_activity_id', 'plan_activity_title_snapshot', 'vaccine_snapshot', 'product_snapshot', 'occurred_at', 'responsible_name_snapshot', 'notes', 'inventory_quantity', 'stock_location_name_snapshot', 'inventory_movement_id'],
-            'medication' => ['public_id', 'operation_id', 'flock_id', 'plan_activity_id', 'plan_activity_title_snapshot', 'medicine_public_id_snapshot', 'medicine_name_snapshot', 'medicine_description_snapshot', 'supplier_name_snapshot', 'occurred_at', 'responsible_name_snapshot', 'quantity', 'reason', 'notes', 'stock_movement_id'],
-            'ration_change' => ['public_id', 'operation_id', 'flock_id', 'plan_activity_id', 'plan_activity_title_snapshot', 'ration_description', 'finished_feed_product_snapshot', 'occurred_at', 'responsible_name_snapshot', 'notes'],
+            'medication' => ['public_id', 'operation_id', 'flock_id', 'plan_activity_id', 'plan_activity_title_snapshot', 'medicine_public_id_snapshot', 'medicine_name_snapshot', 'medicine_description_snapshot', 'supplier_name_snapshot', 'occurred_at', 'responsible_name_snapshot', 'quantity', 'reason', 'notes', 'stock_movement_id', 'inventory_movement_id'],
+            'ration_change' => ['public_id', 'operation_id', 'flock_id', 'plan_activity_id', 'plan_activity_title_snapshot', 'ration_description', 'finished_feed_product_snapshot', 'feed_recipe_snapshot', 'daily_quantity_grams', 'occurred_at', 'responsible_name_snapshot', 'notes'],
             'manual_practice' => ['public_id', 'operation_id', 'flock_id', 'plan_activity_id', 'plan_activity_title_snapshot', 'practice_type', 'practice_title_snapshot', 'occurred_at', 'responsible_name_snapshot', 'notes'],
             default => [],
         };
@@ -162,8 +162,8 @@ final readonly class CorrectManagementExecutionAction
         $movement = InventoryMovement::query()->whereKey($movementId)->lockForUpdate()->firstOrFail();
         $reversal = $this->reverseInventoryMovement->execute($movement, [
             'operation_id' => $operationId,
-            'reason' => 'Corrección de aplicación de vacuna '.$execution->getAttribute('public_id').': '.trim($reason),
-        ], $actor, $source);
+            'reason' => 'Corrección de aplicación sanitaria '.$execution->getAttribute('public_id').': '.trim($reason),
+        ], $actor, $source, 'management-plans.execute');
 
         return [
             'kind' => 'inventory_reversal',
@@ -175,6 +175,7 @@ final readonly class CorrectManagementExecutionAction
     /** @return array<string, mixed> */
     private function restoreMedicineStock(Model $execution, string $operationId, string $idempotencyKey, string $reason, User $actor, string $source): array
     {
+        $inventoryCompensation = $this->reverseVaccinationInventory($execution, $operationId, $reason, $actor, $source);
         $medicineId = (int) $execution->getAttribute('medicine_id');
         $quantity = (int) $execution->getAttribute('quantity');
         $balance = MedicineStockBalance::query()->where('medicine_id', $medicineId)->lockForUpdate()->firstOrFail();
@@ -208,6 +209,7 @@ final readonly class CorrectManagementExecutionAction
         ])->save();
         $movementSnapshot = [
             'kind' => 'medicine_stock_replenishment',
+            'inventory_compensation' => $inventoryCompensation,
             'movement_id' => $movement->public_id,
             'operation_id' => $movement->operation_id,
             'quantity_delta' => $quantity,

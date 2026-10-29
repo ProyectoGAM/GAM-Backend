@@ -7,6 +7,7 @@ use App\Enums\SuppliersAndCatalogs\BaseUnit;
 use App\Enums\SuppliersAndCatalogs\ProductKind;
 use App\Exceptions\SuppliersAndCatalogs\SuppliersAndCatalogsConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
+use App\Models\SuppliersAndCatalogs\Medicine;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\SuppliersAndCatalogs\Vaccine;
 use App\Models\User;
@@ -33,7 +34,30 @@ final readonly class UpdateProductAction
             return DB::transaction(function () use ($product, $attributes, $actor, $auditOperationId, $source, $recordVaccineAudit): Product {
                 $locked = Product::query()->whereKey($product->getKey())->lockForUpdate()->firstOrFail();
                 Gate::forUser($actor)->authorize('update', $locked);
+                $nextKind = $attributes['kind'] ?? $locked->kind;
+                $nextKind = $nextKind instanceof ProductKind ? $nextKind : ProductKind::from($nextKind);
+                if (in_array($nextKind, [ProductKind::Medicine, ProductKind::Vaccine], true)) {
+                    if ($nextKind !== $locked->kind) {
+                        throw new SuppliersAndCatalogsConflict('Los medicamentos y vacunas se registran en sus catálogos globales, sin stock físico.');
+                    }
+                    if (! config('inventory.health_stock_enabled') && ($attributes['stock_tracked'] ?? false)) {
+                        throw new SuppliersAndCatalogsConflict('Los medicamentos y vacunas no pueden habilitar stock físico por el momento.');
+                    }
+                }
+                if (in_array($attributes['kind'] ?? null, [ProductKind::Egg, ProductKind::Egg->value], true) && $locked->kind !== ProductKind::Egg) {
+                    throw new SuppliersAndCatalogsConflict('No se puede convertir un producto a Huevo. Los huevos se gestionan como unidades en el stock de cada UP y mediante sus presentaciones.');
+                }
+                if (in_array($attributes['kind'] ?? null, [ProductKind::FinishedFeed, ProductKind::FinishedFeed->value], true) && $locked->kind !== ProductKind::FinishedFeed) {
+                    throw new SuppliersAndCatalogsConflict('No se puede convertir un producto a finished_feed. La ración se gestiona mediante recetas y saldos por unidad productiva.');
+                }
                 $vaccine = Vaccine::query()->where('product_id', $locked->getKey())->lockForUpdate()->first();
+                if (Medicine::query()->where('product_id', $locked->getKey())->exists()) {
+                    foreach (['kind' => 'medicine', 'base_unit' => 'unit', 'stock_tracked' => (bool) config('inventory.health_stock_enabled')] as $field => $required) {
+                        if (array_key_exists($field, $attributes) && $attributes[$field] !== $required) {
+                            throw new SuppliersAndCatalogsConflict('Un medicamento vinculado debe conservar su tipo, unidad y control de stock.');
+                        }
+                    }
+                }
                 if ($vaccine !== null && (! $actor->hasRole('admin') || $actor->trashed())) {
                     throw new AuthorizationException;
                 }
@@ -43,7 +67,7 @@ final readonly class UpdateProductAction
                 if ($vaccine !== null && array_key_exists('kind', $attributes) && (string) $attributes['kind'] !== 'vaccine') {
                     throw new SuppliersAndCatalogsConflict('El tipo de una vacuna vinculada debe permanecer como vaccine.');
                 }
-                if ($vaccine !== null && array_key_exists('stock_tracked', $attributes) && ! (bool) $attributes['stock_tracked']) {
+                if ($vaccine !== null && config('inventory.health_stock_enabled') && array_key_exists('stock_tracked', $attributes) && ! (bool) $attributes['stock_tracked']) {
                     throw new SuppliersAndCatalogsConflict('La vacuna vinculada debe controlar stock.');
                 }
                 if ($locked->system_key === 'generic_egg' && array_intersect(array_keys($attributes), ['sku', 'name', 'kind', 'base_unit', 'stock_tracked'])) {
@@ -141,8 +165,8 @@ final readonly class UpdateProductAction
                     ? (bool) $attributes[$attribute] !== $current
                     : (string) $attributes[$attribute] !== (string) $current;
             });
-        if ($hasHistory && $changedIngredientAttribute) {
-            throw new SuppliersAndCatalogsConflict('Una materia prima con historial no puede cambiar de tipo, unidad base ni control de stock.');
+        if ($changedIngredientAttribute && ($hasHistory || $product->recipeIngredients()->exists())) {
+            throw new SuppliersAndCatalogsConflict('Una materia prima con historial o vinculada a una receta no puede cambiar de tipo, unidad base ni control de stock.');
         }
     }
 

@@ -19,9 +19,18 @@ final class StoreMortalityRequest extends LotsRequest
             'id' => ['sometimes', 'ulid'],
             'quantity' => $this->quantityRules(),
             'plan_activity_id' => ['nullable', 'ulid'],
-            'mortality_category_id' => ['required', 'integer', 'min:1'],
-            'occurred_at' => $this->timeRules(),
-            'notes' => ['nullable', 'string', 'max:5000'],
+            'occurred_at' => ['required', ...array_slice($this->timeRules(), 1)],
+            'notes' => ['required', 'string', 'max:5000'],
+        ];
+    }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return [...parent::messages(),
+            'occurred_at.required' => 'Debes indicar la fecha de la mortalidad.',
+            'notes.required' => 'Debes indicar el motivo de la mortalidad.',
+            'notes.string' => 'El motivo de la mortalidad debe ser un texto.',
         ];
     }
 }

@@ -45,12 +45,12 @@ final class EggProductionDemoSeeder extends Seeder
         $created = $this->onceFlock($actor, 901, fn (string $key): FlockOperation => $flocks->execute([
             'code' => 'DEMO-EGG-PROD', 'breed_id' => $breed->id, 'supplier_id' => $supplier->id,
             'poultry_house_id' => $house->id, 'initial_quantity' => 120,
-            'entry_date' => now(config('lots.timezone'))->subDays(60)->toDateString(), 'idempotency_key' => $key,
+            'entry_date' => now(config('lots.timezone'))->toDateString(), 'idempotency_key' => $key,
             'plan_template_id' => $template->public_id, 'plan_template_version' => 1,
         ], $actor, 'seeder'));
         $flock = Flock::query()->where('public_id', $created->result['flock']['public_id'])->firstOrFail();
 
-        $first = $this->onceFlock($actor, 902, fn (string $key): FlockOperation => $collections->execute($flock, ['quantity' => 4000, 'occurred_at' => now(config('lots.timezone'))->subDays(20)->toIso8601String(), 'idempotency_key' => $key], $actor, 'seeder'));
+        $first = $this->onceFlock($actor, 902, fn (string $key): FlockOperation => $collections->execute($flock, ['quantity' => 4000, 'occurred_at' => now(config('lots.timezone'))->toIso8601String(), 'idempotency_key' => $key], $actor, 'seeder'));
         $collection = EggCollection::query()->where('public_id', $first->result['collection']['public_id'])->firstOrFail();
         $this->onceFlock($actor, 903, fn (string $key): FlockOperation => $corrections->execute($collection, ['version' => $collection->version, 'quantity' => 400, 'correction_reason' => 'Corrección de digitación demo.', 'idempotency_key' => $key], $actor, source: 'seeder'));
         $this->onceEggStock($actor, 904, fn (string $key): array => $manual->execute($unit, ['quantity' => 100, 'reason' => 'Ingreso manual demo.', 'idempotency_key' => $key], $actor, source: 'seeder'));

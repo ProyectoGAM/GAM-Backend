@@ -6,6 +6,7 @@ info:
     Alta y consulta de medicamentos, propiedad de Proveedores y catálogos.
     Acceso exclusivo para administradores activos. No registra aplicaciones,
     fechas operativas, dosis, planes de manejo ni movimientos de stock.
+    Las fichas son globales y no crean productos ni ubicaciones de inventario físico.
 servers:
   - url: /api/v1
 security:
@@ -111,8 +112,9 @@ components:
     Medicine:
       type: object
       additionalProperties: false
-      required: [id, name, description, supplier, created_by, created_at, operation_id]
+      required: [id, product_id, name, description, supplier, created_by, created_at, operation_id]
       properties:
+        product_id: { type: [integer, 'null'], description: Vínculo histórico de inventario físico; las nuevas fichas globales devuelven null mientras sanidad esté deshabilitada. }
         id:
           type: string
           pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'

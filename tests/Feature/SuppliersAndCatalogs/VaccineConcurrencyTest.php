@@ -10,6 +10,7 @@ use App\Enums\SuppliersAndCatalogs\ProductStatus;
 use App\Exceptions\Inventory\InventoryConflict;
 use App\Exceptions\SuppliersAndCatalogs\SuppliersAndCatalogsConflict;
 use App\Exceptions\SuppliersAndCatalogs\VaccineConflict;
+use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\StockLocation;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\SuppliersAndCatalogs\Supplier;
@@ -32,9 +33,7 @@ use Tests\TestCase;
 #[Group('vaccine-concurrency')]
 final class VaccineConcurrencyTest extends TestCase
 {
-    use DatabaseMigrations {
-        runDatabaseMigrations as private migrateIsolatedDatabase;
-    }
+    use DatabaseMigrations;
 
     private ?string $originalAppKey = null;
 
@@ -125,7 +124,7 @@ final class VaccineConcurrencyTest extends TestCase
         $actor = $this->admin();
         $supplier = Supplier::factory()->create();
         $vaccine = Vaccine::factory()->for($supplier)->create();
-        $location = StockLocation::factory()->create();
+        $location = StockLocation::factory()->create(['type' => 'health', 'production_unit_id' => ProductionUnit::factory()]);
         $vaccineId = $vaccine->id;
         $actorId = $actor->id;
         $supplierId = $supplier->id;
@@ -137,6 +136,8 @@ final class VaccineConcurrencyTest extends TestCase
             // Acción: pausa tras observar el FOR SHARE real del ingreso hasta que la baja intente el lock exclusivo.
             $movementTask = static function () use ($actorId, $supplierId, $productId, $locationId, $movementLocked, $statusReady): string {
                 self::assertTestingDatabase();
+                // Futuro: prueba la integración preservada, deshabilitada en la aplicación real.
+                config()->set('inventory.health_stock_enabled', true);
                 $assertSharedLock = self::assertRealProductSharedLock($productId, $movementLocked, $statusReady);
 
                 try {
@@ -243,7 +244,7 @@ final class VaccineConcurrencyTest extends TestCase
         $supplier = Supplier::factory()->create();
         $product = Product::factory()->vaccine()->create(['base_unit' => 'kg']);
         $vaccine = Vaccine::factory()->for($supplier)->create(['product_id' => $product->id]);
-        $location = StockLocation::factory()->create();
+        $location = StockLocation::factory()->create(['type' => 'health', 'production_unit_id' => ProductionUnit::factory()]);
         $actorId = $actor->id;
         $supplierId = $supplier->id;
         $productId = $product->id;
@@ -254,6 +255,8 @@ final class VaccineConcurrencyTest extends TestCase
             // Acción: pausa tras observar el FOR SHARE real del ingreso hasta que la unidad intente cambiarse.
             $movementTask = static function () use ($actorId, $supplierId, $productId, $locationId, $movementLocked, $unitReady): string {
                 self::assertTestingDatabase();
+                // Futuro: prueba la integración preservada, deshabilitada en la aplicación real.
+                config()->set('inventory.health_stock_enabled', true);
                 $assertSharedLock = self::assertRealProductSharedLock($productId, $movementLocked, $unitReady);
 
                 try {

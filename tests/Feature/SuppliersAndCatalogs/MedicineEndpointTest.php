@@ -66,6 +66,8 @@ final class MedicineEndpointTest extends TestCase
         $this->assertSame('Medicamento A', $audit->attribute_changes['new']['name']);
         $this->assertSame($before, [$flock->fresh()->getAttributes(), $house->fresh()->getAttributes(), $balance->fresh()->getAttributes()]);
         $this->assertDatabaseCount('products', 1);
+        $this->assertNull($medicine->product_id);
+        $response->assertJsonPath('data.product_id', null);
         foreach (['flock_movements', 'flock_operations', 'inventory_movements', 'inventory_movement_lines'] as $table) {
             $this->assertDatabaseCount($table, 0);
         }

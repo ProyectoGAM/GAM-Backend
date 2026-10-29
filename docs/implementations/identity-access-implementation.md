@@ -20,6 +20,23 @@ El registro público está retirado. Las cuentas se crean mediante POST /api/v1/
 - Las operaciones de empleado requieren X-GAM-Session y la generación actual del dispositivo.
 - El backend revoca y audita en transacciones; la expiración también se comprueba en cada request y no depende del scheduler.
 
+## Permisos completos de Admin
+
+El rol estable `admin` tiene acceso funcional a todos los módulos, incluyendo consulta, gestión y ejecución de planes de manejo, recetas, inventario, reportes y reparto. `IdentityPermissionSeeder` centraliza el catálogo completo y asigna al rol todos los permisos registrados del guard `web`, incluidos los añadidos por otros módulos. `AdminUserSeeder` reutiliza esa misma carga y sólo asigna el rol a la cuenta administradora configurada: ya no sustituye sus permisos por una segunda lista parcial. Los nuevos permisos deben registrarse en el catálogo central o antes de esta sincronización.
+
+La reparación alcanza a todos los usuarios con rol `admin`. Login web, login nativo y `GET /api/v1/me` mantienen su formato y exponen los permisos efectivos mediante `UserResource`; el frontend puede habilitar sus pantallas con esa lista. Los roles `employee` y `delivery` conservan sus permisos específicos. Se mantienen las validaciones de negocio, estados, sesiones, canales, CSRF y la prohibición de PIN operativo para administradores.
+
+Para actualizar permisos de una instalación existente sin cambiar cuentas ni contraseñas:
+
+```powershell
+docker compose -f compose.dev.yaml exec -T api php artisan db:seed --class='Database\Seeders\IdentityPermissionSeeder' --no-interaction
+docker compose -f compose.dev.yaml exec -T api php artisan permission:cache-reset
+```
+
+Si el cliente conserva una copia anterior del perfil, debe volver a consultar `/api/v1/me` o cerrar e iniciar sesión. No se requiere migración ni cambio de dependencias. Las pruebas de `AdminSeederTest` cubren ambas entradas de seed, recuperación de permisos con caché consultada previamente, permisos adicionales, múltiples administradores y exposición del catálogo en la sesión personal y el perfil.
+
+Verificación de esta corrección: **29 pruebas y 218 aserciones** aprobadas entre `AdminSeederTest`, `AuthorizationTest` y `AuthenticationTest`, incluida la prueba adicional de sesión web, usando PostgreSQL aislado `gam_admin_access_testing`. Pint y PHPStan nivel 5 aprobaron los seeders modificados. Pint usó rutas explícitas por ausencia de Git en el contenedor y `sys_temp_dir=/dev/shm` para evitar el espacio temporal limitado. La carga de permisos se aplicó en la base local sin ejecutar `AdminUserSeeder` ni cambiar credenciales; se limpió la caché y Laravel Boost confirmó **55 permisos registrados, 55 asignados a admin y 0 faltantes**. No se verificó navegación visual en un navegador ni se modificó el frontend.
+
 ## Configuración local
 
 Copiar .env.example y definir al menos:

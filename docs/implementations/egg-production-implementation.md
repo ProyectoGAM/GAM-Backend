@@ -111,7 +111,7 @@ Las cantidades aceptan sólo enteros entre 1 y `2147483647`. Las salidas requier
 
 ## Datos demo y despliegue
 
-`database/seeders/Lots/EggProductionDemoSeeder.php` está registrado en `LocalDemoDataSeeder` y sólo corre con `APP_ENV=local`. Usa las mismas Actions que la API y crea un único producto técnico `Huevo`, una cuenta por UP, recolecciones, una entrada manual, una preparación de reparto, una pérdida y una corrección. Sus claves idempotentes evitan duplicados al repetir el seeder.
+`database/seeders/Lots/EggProductionDemoSeeder.php` está registrado en `LocalDemoDataSeeder` y corre en `local`, o en `production` con `DEMO_DB_RESET_ENABLED=true`. Usa las mismas Actions que la API y crea un único producto técnico `Huevo`, una cuenta por UP, recolecciones, una entrada manual, una preparación de reparto, una pérdida y una corrección. Sus claves idempotentes evitan duplicados al repetir el seeder.
 
 Como no existen datos reales, el cambio reemplaza la estructura anterior y se valida desde cero:
 
@@ -120,6 +120,31 @@ docker compose -f compose.dev.yaml exec api php artisan migrate:fresh --seed --f
 ```
 
 No ejecutar `docker compose down -v`, porque elimina volúmenes y datos del entorno. En un ambiente con datos que deban conservarse se debe coordinar una migración específica; esta entrega no agrega compatibilidad ni migración del modelo anterior.
+
+### Fixture demo `LOT-EGG-TEST`
+
+Desde el 20 de octubre de 2026, `EggHistoryDemoSeeder` forma parte de `LocalDemoDataSeeder`, después de los demos básicos y reportes, para mostrar producción abundante y su relación con mortalidades y pesajes. Se ejecuta automáticamente en `local` y en `production` únicamente con `DEMO_DB_RESET_ENABLED=true`. Requiere administrador con permisos, una UP activa, una raza activa y un plan publicado. También puede repetirse individualmente en local con:
+
+```bash
+docker compose -f compose.dev.yaml exec -T api php artisan db:seed --class='Database\Seeders\Lots\EggHistoryDemoSeeder' --no-interaction
+```
+
+- Crea `LOT-EGG-TEST` en un `Galpón Huevos Test` propio con capacidad física de 240 aves. Ingresa 240 aves y queda con 229 después de 11 bajas repartidas en ocho registros semanales.
+- En la primera carga el lote tiene 30 semanas según el cálculo de edad del módulo. Sus ocho semanas de historial terminan el día anterior a la ejecución; las fechas quedan ancladas al ingreso para que repetir otro día conserve el mismo historial.
+- Crea 168 recolecciones: tres por día durante 56 días, a las 08:00, 13:00 y 17:00 de `LOTS_TIMEZONE`. Las cantidades diarias varían y aumentan progresivamente, sumando 9.291 huevos; cada recolección ingresa automáticamente al stock de su UP.
+- Crea ocho jornadas semanales de pesaje diario, cada una con diez ingresos individuales y dos grupos de cinco aves: 96 ingresos y muestras de veinte aves por jornada. Los pesos se expresan en gramos; se confirma expresamente cualquier valor fuera del rango configurado.
+- Usa las Actions existentes para permisos, versiones, población histórica, movimientos físicos y auditoría sincrónica. La carga completa es transaccional y restaura el reloj al finalizar, incluso si falla.
+- Sus claves de idempotencia conservan las operaciones, el stock y la auditoría al repetir. No modifica capacidad física ni borra registros. Producción sin la opción demo y los demás entornos quedan excluidos.
+
+No cambia endpoints, permisos, contratos OpenAPI, esquema ni dependencias. La cobertura está en `tests/Feature/Lots/EggHistoryDemoSeederTest.php`: carga general local, historial, fechas, cantidad viva, capacidad física, pesajes mixtos, correspondencia con ingresos a stock y auditoría, repetición otro día y exclusión de producción sin la opción demo. `AdminSeederTest` comprueba la inclusión con esa opción activa. En esta actualización no se pudieron ejecutar PHPUnit ni Pint porque Docker Desktop no estaba disponible y no hay PHP ni dependencias instaladas fuera de Docker.
+
+La prueba de exclusión en producción invoca `run` mediante el contenedor de Laravel. Así comprueba directamente la restricción de ambiente del seeder, sin pasar por la confirmación interactiva de `db:seed` que interrumpía la suite de CI al simular producción.
+
+Verificación de esa corrección: las dos pruebas del fixture aprobaron con 28 aserciones y la suite completa, ejecutada localmente con las variables del workflow de CI sobre `gam_testing`, aprobó con 454 pruebas y 3.804 aserciones. Pint sobre el archivo de prueba y `git diff --check` también aprobaron. Los mensajes de error de auditoría corresponden a fallos provocados deliberadamente por las pruebas de rollback, que aprobaron.
+
+Verificación del fixture: dos pruebas aprobadas con 28 aserciones en PostgreSQL aislado, Pint aprobado sobre los dos archivos PHP modificados y `git diff --check` sin errores. Se intentó `pint --dirty --format agent`, pero el contenedor no permite detectar Git; por eso se formatearon las rutas explícitas. El análisis completo con `.phpstan-lots.neon` queda limitado por dos errores preexistentes de `withResourceMetadata()` en `RecordInventoryMovementAction.php` (líneas 301 y 424), fuera del alcance del fixture.
+
+El 13 de octubre de 2026 se ejecutó dos veces en la base local `gam`: ingreso del lote el 24 de marzo de 2026, recolecciones desde el 18 de agosto hasta el 12 de octubre, 229 aves vivas, ocho mortalidades con once bajas, ocho jornadas con 96 ingresos de pesaje y 168 recolecciones e ingresos de stock por 9.291 huevos. La consulta posterior confirmó que la segunda ejecución conservó esos totales.
 
 ## Verificación automatizada
 
@@ -137,7 +162,7 @@ La suite específica y `migrate:fresh --seed` fueron ejecutadas durante la imple
 6. Cancelar una recolección y una operación manual. Confirmar estado `cancelled`, compensación completa, histórico intacto y bloqueo de correcciones posteriores sin nueva operación.
 7. Intentar operar las cuentas técnicas mediante endpoints genéricos de Inventario, cambiar el producto o ubicación técnica y registrar sobre una UP inactiva. Cada caso debe responder `403`, `409` o `422` sin escrituras parciales.
 8. Dividir, fusionar o finalizar un lote y consultar sus recolecciones previas. Deben conservar lote, galpón, UP, fecha y cantidad originales.
-9. Ejecutar el seeder local dos veces, comprobar idempotencia y verificar que con `APP_ENV=production` no genera datos.
+9. Ejecutar el seeder local dos veces, comprobar idempotencia y verificar que con `APP_ENV=production` sólo genera datos cuando `DEMO_DB_RESET_ENABLED=true`.
 
 Registrar ambiente, commit, zona horaria, requests anonimizados, claves de idempotencia, respuestas, saldos y evidencia de auditoría. Si algún escenario no se ejecuta, mantener Do Test pendiente.
 

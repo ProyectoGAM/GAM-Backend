@@ -135,7 +135,6 @@ final readonly class ListFlockManagementHistoryQuery
     private function mortalityStream(Flock $flock, array $scopes): Builder
     {
         $query = DB::table('mortality_records as records')
-            ->leftJoin('mortality_categories as category', 'category.id', '=', 'records.mortality_category_id')
             ->leftJoin('flock_plan_activities as plan_activity', 'plan_activity.id', '=', 'records.flock_plan_activity_id')
             ->leftJoin('users as responsible_user', 'responsible_user.id', '=', 'records.created_by')
             ->selectRaw('records.id as source_id')
@@ -148,7 +147,7 @@ final readonly class ListFlockManagementHistoryQuery
             ->selectRaw('plan_activity.title as plan_activity_title')
             ->selectRaw('records.created_by as responsible_user_id')
             ->selectRaw('responsible_user.name as responsible_name')
-            ->selectRaw("jsonb_build_object('quantity', records.quantity, 'mortality_category_id', records.mortality_category_id, 'mortality_category_name', category.name, 'poultry_house_id', records.poultry_house_id, 'production_unit_id', records.production_unit_id, 'notes', records.notes, 'status', records.status, 'version', records.version) as module_data");
+            ->selectRaw("jsonb_build_object('quantity', records.quantity, 'poultry_house_id', records.poultry_house_id, 'production_unit_id', records.production_unit_id, 'notes', records.notes, 'status', records.status, 'version', records.version) as module_data");
 
         return $this->applyScopes($query, $scopes)
             ->selectRaw($this->scopeCaseSql($scopes, false, 'provenance'), $this->scopeCaseBindings($scopes, false, includeProvenance: true))
@@ -191,7 +190,7 @@ final readonly class ListFlockManagementHistoryQuery
             ->selectRaw('records.plan_activity_title_snapshot as plan_activity_title')
             ->selectRaw('records.responsible_user_id as responsible_user_id')
             ->selectRaw('records.responsible_name_snapshot as responsible_name')
-            ->selectRaw("jsonb_build_object('medicine', jsonb_build_object('id', records.medicine_public_id_snapshot, 'name', records.medicine_name_snapshot, 'description', records.medicine_description_snapshot, 'supplier_name', records.supplier_name_snapshot), 'quantity', records.quantity, 'reason', records.reason, 'notes', records.notes, 'stock_movement', CASE WHEN stock_movement.id IS NULL THEN NULL ELSE jsonb_build_object('id', stock_movement.public_id, 'quantity_delta', stock_movement.quantity_delta, 'balance_after', stock_movement.balance_after) END) as module_data");
+            ->selectRaw("jsonb_build_object('medicine', jsonb_build_object('id', records.medicine_public_id_snapshot, 'name', records.medicine_name_snapshot, 'description', records.medicine_description_snapshot, 'supplier_name', records.supplier_name_snapshot), 'quantity', records.quantity, 'reason', records.reason, 'notes', records.notes, 'inventory_movement_id', records.inventory_movement_id, 'stock_movement', CASE WHEN stock_movement.id IS NULL THEN NULL ELSE jsonb_build_object('id', stock_movement.public_id, 'quantity_delta', stock_movement.quantity_delta, 'balance_after', stock_movement.balance_after) END) as module_data");
 
         return $this->applyScopes($query, $scopes)
             ->selectRaw($this->scopeCaseSql($scopes, false, 'provenance'), $this->scopeCaseBindings($scopes, false, includeProvenance: true))
@@ -212,7 +211,7 @@ final readonly class ListFlockManagementHistoryQuery
             ->selectRaw('records.plan_activity_title_snapshot as plan_activity_title')
             ->selectRaw('records.responsible_user_id as responsible_user_id')
             ->selectRaw('records.responsible_name_snapshot as responsible_name')
-            ->selectRaw("jsonb_build_object('ration_description', records.ration_description, 'finished_feed_product', records.finished_feed_product_snapshot, 'notes', records.notes) as module_data");
+            ->selectRaw("jsonb_build_object('ration_description', records.ration_description, 'finished_feed_product', records.finished_feed_product_snapshot, 'feed_recipe', records.feed_recipe_snapshot, 'daily_quantity_grams', records.daily_quantity_grams::text, 'notes', records.notes) as module_data");
 
         return $this->applyScopes($query, $scopes)
             ->selectRaw($this->scopeCaseSql($scopes, false, 'provenance'), $this->scopeCaseBindings($scopes, false, includeProvenance: true))

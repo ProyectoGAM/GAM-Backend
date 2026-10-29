@@ -1,0 +1,731 @@
+openapi: 3.1.0
+info:
+  title: 'API de alimentación de lotes y consumos diarios'
+  version: 1.0.0
+  description: 'Tercer bloque: etapas copiadas, automático, manual fijo, regreso explícito, consumos del cierre diario y rectificaciones compensatorias. Las etapas automáticas evalúan receta disponible a las 00:00 de su inicio en America/Montevideo; una receta ya vigente sigue consumiéndose aunque se desactive durante ese día. No registra comidas individuales, pausas, eliminación ni cancelación de consumos. Nuevos endpoints requieren sesión autenticada y contexto compartido vigente, sin permisos funcionales nuevos. El alta y las operaciones existentes de lotes y planes conservan sus permisos.'
+servers:
+  -
+    url: /api/v1
+security:
+  -
+    bearerAuth: []
+  -
+    sessionCookie: []
+tags:
+  -
+    name: 'Alimentación de lotes'
+    description: 'Configuración vigente e historia inmutable de consumo de alimento elaborado por receta y UP.'
+paths:
+  '/lotes/{flock}/alimentacion':
+    parameters:
+      -
+        $ref: '#/components/parameters/Flock'
+      -
+        $ref: '#/components/parameters/SharedDeviceToken'
+      -
+        $ref: '#/components/parameters/SharedSession'
+    get:
+      tags:
+        - 'Alimentación de lotes'
+      operationId: getFlockFeeding
+      summary: 'Consulta alimentación vigente y modo'
+      description: 'El total automático refleja la población al momento de consultar; el cierre registra el censo de toda la jornada. La receta vigente puede seguir desactivada.'
+      responses:
+        200:
+          description: 'Consulta autenticada completada.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedingEnvelope'
+        401:
+          description: 'Sesión o contexto compartido inválido.'
+        404:
+          description: 'Lote o consumo inexistente, o consumo de otro lote.'
+        409:
+          description: 'Conflicto de estado, idempotencia, receta o límite de almacenamiento.'
+        422:
+          description: 'Entrada inválida con mensajes de validación en español.'
+  '/lotes/{flock}/alimentacion/historial':
+    parameters:
+      -
+        $ref: '#/components/parameters/Flock'
+      -
+        $ref: '#/components/parameters/From'
+      -
+        $ref: '#/components/parameters/To'
+      -
+        $ref: '#/components/parameters/PerPage'
+      -
+        $ref: '#/components/parameters/Page'
+      -
+        $ref: '#/components/parameters/SharedDeviceToken'
+      -
+        $ref: '#/components/parameters/SharedSession'
+    get:
+      tags:
+        - 'Alimentación de lotes'
+      operationId: listFlockFeedingHistory
+      summary: 'Consulta cambios de configuración'
+      description: 'Configuraciones con fecha efectiva, plan y etapas copiados; orden de fecha e ID descendente.'
+      responses:
+        200:
+          description: 'Consulta autenticada completada.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedingHistoryEnvelope'
+        401:
+          description: 'Sesión o contexto compartido inválido.'
+        404:
+          description: 'Lote o consumo inexistente, o consumo de otro lote.'
+        409:
+          description: 'Conflicto de estado, idempotencia, receta o límite de almacenamiento.'
+        422:
+          description: 'Entrada inválida con mensajes de validación en español.'
+  '/lotes/{flock}/alimentacion/manual':
+    parameters:
+      -
+        $ref: '#/components/parameters/Flock'
+    post:
+      tags:
+        - 'Alimentación de lotes'
+      operationId: changeFlockFeedingManually
+      summary: 'Cambia la configuración a modo manual'
+      description: 'Receta, total diario o ambos. Toda la alimentación queda manual e indefinida. Seleccionar receta exige activa; cambiar sólo cantidad conserva la receta vigente. Sólo receta fija el total actual. El total manual es positivo y no cambia con mortalidad, fraccionamiento, agrupación o edad. Afecta el día del registro, sin modificar días pendientes anteriores. Lote finalizado devuelve 409.'
+      parameters:
+        -
+          $ref: '#/components/parameters/IdempotencyKey'
+        -
+          $ref: '#/components/parameters/SharedDeviceToken'
+        -
+          $ref: '#/components/parameters/SharedSession'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualInput'
+      responses:
+        201:
+          description: 'Configuración o rectificación registrada, o respuesta original recuperada por idempotencia.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationEnvelope'
+        401:
+          description: 'Sesión o contexto compartido inválido.'
+        404:
+          description: 'Lote o consumo inexistente, o consumo de otro lote.'
+        409:
+          description: 'Conflicto de estado, idempotencia, receta o límite de almacenamiento.'
+        422:
+          description: 'Entrada inválida con mensajes de validación en español.'
+  '/lotes/{flock}/alimentacion/automatico':
+    parameters:
+      -
+        $ref: '#/components/parameters/Flock'
+    post:
+      tags:
+        - 'Alimentación de lotes'
+      operationId: returnFlockFeedingToAutomatic
+      summary: 'Regresa explícitamente a automático'
+      description: 'Retoma el plan copiado según edad actual. Omite etapas con receta inactiva y conserva receta y gramos de la etapa anterior. Efecto desde hoy; los consumos históricos permanecen.'
+      parameters:
+        -
+          $ref: '#/components/parameters/IdempotencyKey'
+        -
+          $ref: '#/components/parameters/SharedDeviceToken'
+        -
+          $ref: '#/components/parameters/SharedSession'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutomaticInput'
+      responses:
+        201:
+          description: 'Configuración o rectificación registrada, o respuesta original recuperada por idempotencia.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationEnvelope'
+        401:
+          description: 'Sesión o contexto compartido inválido.'
+        404:
+          description: 'Lote o consumo inexistente, o consumo de otro lote.'
+        409:
+          description: 'Conflicto de estado, idempotencia, receta o límite de almacenamiento.'
+        422:
+          description: 'Entrada inválida con mensajes de validación en español.'
+  '/lotes/{flock}/consumos-alimento':
+    parameters:
+      -
+        $ref: '#/components/parameters/Flock'
+      -
+        $ref: '#/components/parameters/From'
+      -
+        $ref: '#/components/parameters/To'
+      -
+        $ref: '#/components/parameters/PerPage'
+      -
+        $ref: '#/components/parameters/Page'
+      -
+        $ref: '#/components/parameters/SharedDeviceToken'
+      -
+        $ref: '#/components/parameters/SharedSession'
+    get:
+      tags:
+        - 'Alimentación de lotes'
+      operationId: listFlockFeedConsumptions
+      summary: 'Consulta consumos diarios y acumulado efectivo'
+      description: 'Un registro lógico por lote y día. Orden de fecha e ID descendente. acumulado_g suma cantidades efectivas después de rectificaciones de todo el filtro, antes de paginar, como cadena decimal exacta.'
+      responses:
+        200:
+          description: 'Consulta autenticada completada.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsumptionListEnvelope'
+        401:
+          description: 'Sesión o contexto compartido inválido.'
+        404:
+          description: 'Lote o consumo inexistente, o consumo de otro lote.'
+        409:
+          description: 'Conflicto de estado, idempotencia, receta o límite de almacenamiento.'
+        422:
+          description: 'Entrada inválida con mensajes de validación en español.'
+  '/lotes/{flock}/consumos-alimento/{consumption}':
+    parameters:
+      -
+        $ref: '#/components/parameters/Flock'
+      -
+        $ref: '#/components/parameters/Consumption'
+      -
+        $ref: '#/components/parameters/SharedDeviceToken'
+      -
+        $ref: '#/components/parameters/SharedSession'
+    get:
+      tags:
+        - 'Alimentación de lotes'
+      operationId: getFlockFeedConsumption
+      summary: 'Consulta consumo, rectificaciones y movimientos'
+      description: 'Devuelve cantidad efectiva, original, censo, etapa, todas las rectificaciones y sus movimientos. La pertenencia al lote se comprueba y un consumo ajeno devuelve 404.'
+      responses:
+        200:
+          description: 'Consulta autenticada completada.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsumptionEnvelope'
+        401:
+          description: 'Sesión o contexto compartido inválido.'
+        404:
+          description: 'Lote o consumo inexistente, o consumo de otro lote.'
+        409:
+          description: 'Conflicto de estado, idempotencia, receta o límite de almacenamiento.'
+        422:
+          description: 'Entrada inválida con mensajes de validación en español.'
+  '/lotes/{flock}/consumos-alimento/{consumption}/rectificaciones':
+    parameters:
+      -
+        $ref: '#/components/parameters/Flock'
+      -
+        $ref: '#/components/parameters/Consumption'
+    post:
+      tags:
+        - 'Alimentación de lotes'
+      operationId: correctFlockFeedConsumption
+      summary: 'Rectifica receta o cantidad con motivo'
+      description: 'Motivo obligatorio; permite cero y recetas inactivas. Compensa el último resultado efectivo del día, en su UP histórica. Anexa historia sin modificar alimentación vigente, cantidad manual ni plan. La misma clave y contenido no duplican efectos; otros datos con esa clave devuelven 409.'
+      parameters:
+        -
+          $ref: '#/components/parameters/IdempotencyKey'
+        -
+          $ref: '#/components/parameters/SharedDeviceToken'
+        -
+          $ref: '#/components/parameters/SharedSession'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CorrectionInput'
+      responses:
+        201:
+          description: 'Configuración o rectificación registrada, o respuesta original recuperada por idempotencia.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationEnvelope'
+        401:
+          description: 'Sesión o contexto compartido inválido.'
+        404:
+          description: 'Lote o consumo inexistente, o consumo de otro lote.'
+        409:
+          description: 'Conflicto de estado, idempotencia, receta o límite de almacenamiento.'
+        422:
+          description: 'Entrada inválida con mensajes de validación en español.'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: gam_session
+      description: 'Sesión web stateful con CSRF para mutaciones. Dispositivo web usa gam_shared_device HttpOnly.'
+  parameters:
+    Flock:
+      in: path
+      name: flock
+      required: true
+      description: 'ULID público del lote, cualquiera sea su UP.'
+      schema:
+        type: string
+        pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'
+    Consumption:
+      in: path
+      name: consumption
+      required: true
+      description: 'ID numérico del consumo perteneciente al lote.'
+      schema:
+        type: integer
+        minimum: 1
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      description: 'UUID por actor y operación. Sólo se acepta en el encabezado.'
+      schema:
+        type: string
+        format: uuid
+    SharedDeviceToken:
+      in: header
+      name: X-Shared-Device-Token
+      required: false
+      description: 'Obligatorio para credenciales nativas compartidas. En web se usa la cookie gam_shared_device.'
+      schema:
+        type: string
+    SharedSession:
+      in: header
+      name: X-GAM-Session
+      required: false
+      description: 'Obligatorio en acceso compartido: sesión actual y generación vigente.'
+      schema:
+        type: string
+    From:
+      in: query
+      name: desde
+      schema:
+        type: string
+        format: date
+      description: 'Fecha local inicial inclusiva.'
+    To:
+      in: query
+      name: hasta
+      schema:
+        type: string
+        format: date
+      description: 'Fecha local final inclusiva, igual o posterior a desde cuando se indica.'
+    PerPage:
+      in: query
+      name: por_pagina
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+    Page:
+      in: query
+      name: page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 2147483647
+  schemas:
+    PositiveGrams:
+      description: 'Gramos enteros exactos. No se aceptan fracciones, valores de punto flotante ni redondeos.'
+      oneOf:
+        -
+          type: integer
+          minimum: 1
+          maximum: 999999999999
+        -
+          type: string
+          pattern: '^[1-9][0-9]{0,11}$'
+    NonnegativeGrams:
+      description: 'Gramos enteros exactos. No se aceptan fracciones, valores de punto flotante ni redondeos.'
+      oneOf:
+        -
+          type: integer
+          minimum: 0
+          maximum: 999999999999
+        -
+          type: string
+          pattern: '^(0|[1-9][0-9]{0,11})$'
+    ManualInput:
+      type: object
+      additionalProperties: false
+      properties:
+        receta_id:
+          type: integer
+          minimum: 1
+          description: 'Nueva receta activa.'
+        cantidad_diaria_g:
+          $ref: '#/components/schemas/PositiveGrams'
+      anyOf:
+        -
+          required:
+            - receta_id
+        -
+          required:
+            - cantidad_diaria_g
+    AutomaticInput:
+      type: object
+      additionalProperties: false
+    CorrectionInput:
+      type: object
+      additionalProperties: false
+      required:
+        - motivo
+      properties:
+        receta_id:
+          type: integer
+          minimum: 1
+          description: 'Receta existente; puede estar inactiva.'
+        cantidad_g:
+          $ref: '#/components/schemas/NonnegativeGrams'
+        motivo:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: 'No puede contener sólo espacios.'
+      anyOf:
+        -
+          required:
+            - receta_id
+        -
+          required:
+            - cantidad_g
+    Stage:
+      type: object
+      required:
+        - activity_id
+        - recipe_id
+        - grams_per_bird
+        - start_day
+        - title
+        - recipe_snapshot
+      properties:
+        activity_id:
+          type: string
+        recipe_id:
+          type: integer
+        grams_per_bird:
+          type: integer
+          minimum: 1
+          maximum: 999999999999
+        start_day:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+        recipe_snapshot:
+          type: object
+          additionalProperties: true
+    Feeding:
+      type: object
+      required:
+        - id
+        - lote_id
+        - modo
+        - receta_id
+        - cantidad_diaria_g
+        - cantidad_manual_g
+        - gramos_por_ave
+        - poblacion
+        - edad_dias
+        - fecha_vigencia
+        - etapa
+        - finalizado
+      properties:
+        id:
+          type: integer
+        lote_id:
+          type: string
+        modo:
+          enum:
+            - automatico
+            - manual
+        receta_id:
+          type: integer
+        cantidad_diaria_g:
+          type: string
+        cantidad_manual_g:
+          type:
+            - string
+            - 'null'
+        gramos_por_ave:
+          type: string
+        poblacion:
+          type: integer
+        edad_dias:
+          type: integer
+        fecha_vigencia:
+          type: string
+          format: date
+        etapa:
+          $ref: '#/components/schemas/Stage'
+        finalizado:
+          type: boolean
+    FeedingChange:
+      type: object
+      required:
+        - id
+        - modo
+        - receta_id
+        - cantidad_manual_g
+        - gramos_por_ave
+        - fecha_vigencia
+        - etapa
+        - etapas_copiadas
+        - revision_plan_id
+        - operation_id
+        - created_by
+        - created_at
+      properties:
+        id:
+          type: integer
+        modo:
+          enum:
+            - automatico
+            - manual
+        receta_id:
+          type: integer
+        cantidad_manual_g:
+          type:
+            - string
+            - 'null'
+        gramos_por_ave:
+          type: string
+        fecha_vigencia:
+          type: string
+          format: date
+        etapa:
+          $ref: '#/components/schemas/Stage'
+        etapas_copiadas:
+          type: array
+          items:
+            $ref: '#/components/schemas/Stage'
+        revision_plan_id:
+          type: integer
+        operation_id:
+          type: string
+          format: uuid
+        created_by:
+          type:
+            - integer
+            - 'null'
+        created_at:
+          type: string
+          format: date-time
+    Consumption:
+      type: object
+      required:
+        - id
+        - fecha
+        - up_id
+        - modo
+        - edad_dias
+        - poblacion
+        - receta_id
+        - cantidad_g
+        - original
+        - gramos_por_ave
+        - etapa
+        - censo
+        - operation_id
+        - created_at
+      properties:
+        id:
+          type: integer
+        fecha:
+          type: string
+          format: date
+        up_id:
+          type: integer
+        modo:
+          enum:
+            - automatico
+            - manual
+        edad_dias:
+          type: integer
+        poblacion:
+          type: integer
+        receta_id:
+          type: integer
+        cantidad_g:
+          type: string
+        original:
+          type: object
+          properties:
+            receta_id:
+              type: integer
+            cantidad_g:
+              type: string
+        gramos_por_ave:
+          type: string
+        etapa:
+          $ref: '#/components/schemas/Stage'
+        censo:
+          type: object
+          additionalProperties: true
+        operation_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        rectificaciones:
+          type: array
+          items:
+            $ref: '#/components/schemas/Correction'
+        movimientos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Movement'
+    Correction:
+      type: object
+      required:
+        - id
+        - receta_id
+        - cantidad_g
+        - motivo
+        - anterior
+        - operation_id
+        - created_by
+        - created_at
+      properties:
+        id:
+          type: integer
+        receta_id:
+          type: integer
+        cantidad_g:
+          type: string
+        motivo:
+          type: string
+        anterior:
+          type: object
+          properties:
+            recipe_id:
+              type: integer
+            quantity_grams:
+              type: integer
+        operation_id:
+          type: string
+          format: uuid
+        created_by:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+    Movement:
+      type: object
+      required:
+        - id
+        - receta_id
+        - delta_g
+        - saldo_anterior_g
+        - saldo_posterior_g
+        - operation_id
+        - rectificacion_id
+      properties:
+        id:
+          type: integer
+        receta_id:
+          type: integer
+        delta_g:
+          type: string
+        saldo_anterior_g:
+          type: string
+        saldo_posterior_g:
+          type: string
+        operation_id:
+          type: string
+          format: uuid
+        rectificacion_id:
+          type:
+            - integer
+            - 'null'
+    FeedingEnvelope:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          $ref: '#/components/schemas/Feeding'
+    ConsumptionEnvelope:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          $ref: '#/components/schemas/Consumption'
+    FeedingHistoryEnvelope:
+      type: object
+      required:
+        - data
+        - links
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeedingChange'
+        links:
+          type: object
+        meta:
+          type: object
+    ConsumptionListEnvelope:
+      type: object
+      required:
+        - data
+        - links
+        - meta
+        - acumulado_g
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Consumption'
+        links:
+          type: object
+        meta:
+          type: object
+        acumulado_g:
+          type: string
+          description: 'Suma decimal exacta de cantidades efectivas de todo el filtro, sin límite del entero de la aplicación.'
+    OperationEnvelope:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: object
+          required:
+            - operation_id
+          properties:
+            operation_id:
+              type: string
+              format: uuid
+            feeding:
+              type: object
+              description: 'Instantánea de configuración registrada con modo interno automatic/manual.'
+              additionalProperties: true
+            correction:
+              type: object
+              description: 'Rectificación registrada con receta, cantidad efectiva, motivo y movimientos.'
+              additionalProperties: true

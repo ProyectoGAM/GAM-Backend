@@ -550,7 +550,10 @@ components:
         name: { type: string }
         email: { type: string, format: email }
         roles: { type: array, items: { type: string } }
-        permissions: { type: array, items: { type: string } }
+        permissions:
+          type: array
+          description: Permisos efectivos del usuario. El rol admin recibe todos los permisos registrados de la aplicación; el cliente debe refrescar el perfil después de una actualización de permisos.
+          items: { type: string }
     Session:
       type: object
       required: [id, kind, auth_method, expires_at]

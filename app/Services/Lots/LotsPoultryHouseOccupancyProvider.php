@@ -10,10 +10,10 @@ final readonly class LotsPoultryHouseOccupancyProvider implements PoultryHouseOc
 {
     public function occupancyFor(int $poultryHouseId): int
     {
-        return (int) Flock::query()
+        return max(0, (int) Flock::query()
             ->where('poultry_house_id', $poultryHouseId)
             ->whereIn('status', [FlockStatus::Active, FlockStatus::Quarantined])
-            ->sum('current_quantity');
+            ->sum('current_quantity'));
     }
 
     /** @param list<int> $poultryHouseIds
@@ -31,7 +31,7 @@ final readonly class LotsPoultryHouseOccupancyProvider implements PoultryHouseOc
             ->selectRaw('poultry_house_id, SUM(current_quantity) as occupancy')
             ->groupBy('poultry_house_id')
             ->pluck('occupancy', 'poultry_house_id')
-            ->map(fn (mixed $occupancy): int => (int) $occupancy)
+            ->map(fn (mixed $occupancy): int => max(0, (int) $occupancy))
             ->all();
 
         return array_replace(array_fill_keys($poultryHouseIds, 0), $occupancies);

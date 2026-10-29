@@ -66,6 +66,7 @@ final readonly class AddDailyWeighingEntryAction
                     $selected = $this->references->forWeek($locked->breed, $settings, $week);
                     $daily = new DailyWeighing;
                     $daily->forceFill([
+                        'public_id' => (string) Str::ulid(),
                         'flock_id' => $locked->id,
                         'local_date' => $localDate,
                         'stage' => $selected['stage'] ?? null,

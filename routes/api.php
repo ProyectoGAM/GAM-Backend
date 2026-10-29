@@ -13,28 +13,38 @@ use App\Http\Controllers\IdentityAndAccess\AdminController;
 use App\Http\Controllers\IdentityAndAccess\AuthController;
 use App\Http\Controllers\IdentityAndAccess\SharedDeviceController;
 use App\Http\Controllers\IdentityAndAccess\UserManagementController;
+use App\Http\Controllers\Inventory\EggDonationController;
 use App\Http\Controllers\Inventory\EggPresentationController;
 use App\Http\Controllers\Inventory\EggStockController;
+use App\Http\Controllers\Inventory\FeedAdjustmentController;
+use App\Http\Controllers\Inventory\FeedBalanceController;
+use App\Http\Controllers\Inventory\FeedBalanceMinimumController;
+use App\Http\Controllers\Inventory\FeedConsumptionController;
+use App\Http\Controllers\Inventory\FeedManufactureController;
+use App\Http\Controllers\Inventory\FeedRecipeController;
 use App\Http\Controllers\Inventory\FeedStockController;
+use App\Http\Controllers\Inventory\FlockFeedingController;
 use App\Http\Controllers\Inventory\InventoryMovementController;
 use App\Http\Controllers\Inventory\InventoryReadController;
 use App\Http\Controllers\Inventory\StockLocationController;
 use App\Http\Controllers\Inventory\StockLocationStatusController;
+use App\Http\Controllers\Inventory\StockRegularizationController;
 use App\Http\Controllers\Lots\BreedController;
 use App\Http\Controllers\Lots\DailyWeighingController;
 use App\Http\Controllers\Lots\EggCollectionController;
 use App\Http\Controllers\Lots\FlockController;
 use App\Http\Controllers\Lots\FlockRedistributionController;
 use App\Http\Controllers\Lots\FlockStatusController;
-use App\Http\Controllers\Lots\MortalityCategoryController;
 use App\Http\Controllers\Lots\MortalityController;
 use App\Http\Controllers\Lots\WeighingController;
+use App\Http\Controllers\ManagementPlans\FeedSupplyController;
 use App\Http\Controllers\ManagementPlans\FlockManagementHistoryController;
 use App\Http\Controllers\ManagementPlans\FlockPlanController;
 use App\Http\Controllers\ManagementPlans\ManagementExecutionController;
 use App\Http\Controllers\ManagementPlans\PlanTemplateController;
 use App\Http\Controllers\ReferenceData\ReferenceOptionsController;
 use App\Http\Controllers\ReportingAndAnalytics\ReportExportController;
+use App\Http\Controllers\ReportingAndAnalytics\ReportOptionsController;
 use App\Http\Controllers\ReportingAndAnalytics\ReportPresetController;
 use App\Http\Controllers\ReportingAndAnalytics\ReportSourceController;
 use App\Http\Controllers\SuppliersAndCatalogs\MedicineController;
@@ -44,6 +54,7 @@ use App\Http\Controllers\SuppliersAndCatalogs\SupplierController;
 use App\Http\Controllers\SuppliersAndCatalogs\SupplierStatusController;
 use App\Http\Controllers\SuppliersAndCatalogs\VaccineController;
 use App\Http\Controllers\SuppliersAndCatalogs\VaccineStatusController;
+use App\Http\Middleware\ReportDownloadAccess;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.v1.')->group(function (): void {
@@ -74,6 +85,10 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::middleware(['shared.device:any', 'shared.session.conditional'])->name('management-plans.')->group(function (): void {
             Route::get('/plantillas-manejo', [PlanTemplateController::class, 'index'])->name('templates.index');
+            Route::get('/alimentacion/productos', [FeedSupplyController::class, 'products'])->name('feed.products');
+            Route::get('/flocks/{flock}/alimentacion', [FeedSupplyController::class, 'index'])->name('feed.index');
+            Route::post('/flocks/{flock}/alimentacion', [FeedSupplyController::class, 'store'])->name('feed.store');
+            Route::post('/flocks/{flock}/alimentacion/{feedSupply}/anulacion', [FeedSupplyController::class, 'cancel'])->name('feed.cancel');
             Route::post('/plantillas-manejo', [PlanTemplateController::class, 'store'])->name('templates.store');
             Route::get('/plantillas-manejo/{planTemplate}', [PlanTemplateController::class, 'show'])->name('templates.show');
             Route::patch('/plantillas-manejo/{planTemplate}', [PlanTemplateController::class, 'update'])->name('templates.update');
@@ -123,9 +138,6 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/breeds', [BreedController::class, 'index'])->name('breeds.index');
             Route::post('/breeds', [BreedController::class, 'store'])->name('breeds.store');
             Route::patch('/breeds/{breed}', [BreedController::class, 'update'])->name('breeds.update');
-            Route::get('/mortality-categories', [MortalityCategoryController::class, 'index'])->name('mortality-categories.index');
-            Route::post('/mortality-categories', [MortalityCategoryController::class, 'store'])->name('mortality-categories.store');
-            Route::patch('/mortality-categories/{mortalityCategory}', [MortalityCategoryController::class, 'update'])->name('mortality-categories.update');
             Route::get('/mortalities', [MortalityController::class, 'index'])->name('mortality.index');
             Route::get('/mortalities/{mortality}', [MortalityController::class, 'show'])->name('mortality.show');
             Route::get('/flocks/{flock}/mortalities', [MortalityController::class, 'byFlock'])->name('mortality.by-flock');
@@ -226,24 +238,41 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
 
         Route::get('/audit/entries', [AuditEntryController::class, 'index'])->name('audit.entries.index');
 
-        Route::get('/reports/sources', [ReportSourceController::class, 'index'])->name('reports.sources.index');
-        Route::post('/reports/{source}/previews', [ReportSourceController::class, 'preview'])
-            ->middleware('throttle:reporting')
-            ->name('reports.previews.store');
+        Route::middleware(['shared.device:any', 'shared.session.conditional'])->group(function (): void {
+            Route::get('/reports/sources', [ReportSourceController::class, 'index'])->name('reports.sources.index');
+            Route::get('/donaciones/unidades-productivas', [EggDonationController::class, 'units'])->middleware(['shared.device:any', 'shared.session.conditional'])->name('egg-donations.units');
+            Route::get('/reportes/fuentes', [ReportSourceController::class, 'index'])->name('reports.sources.es');
+            Route::get('/reportes/{source}/opciones', [ReportOptionsController::class, 'index'])->name('reports.options');
+            Route::post('/reportes/{source}/previsualizaciones', [ReportSourceController::class, 'preview'])->middleware('throttle:reporting')->name('reports.previews.es');
+            Route::get('/configuraciones-reportes', [ReportPresetController::class, 'index'])->name('report-presets.index.es');
+            Route::post('/configuraciones-reportes', [ReportPresetController::class, 'store'])->name('report-presets.store.es');
+            Route::get('/configuraciones-reportes/{reportPreset}', [ReportPresetController::class, 'show'])->name('report-presets.show.es');
+            Route::patch('/configuraciones-reportes/{reportPreset}', [ReportPresetController::class, 'update'])->name('report-presets.update.es');
+            Route::delete('/configuraciones-reportes/{reportPreset}', [ReportPresetController::class, 'destroy'])->name('report-presets.destroy.es');
+            Route::post('/reportes/{source}/exportaciones', [ReportExportController::class, 'store'])->middleware('throttle:reporting')->name('report-exports.store.es');
+            Route::get('/exportaciones-reportes', [ReportExportController::class, 'index'])->name('report-exports.index.es');
+            Route::get('/exportaciones-reportes/{reportExport}', [ReportExportController::class, 'show'])->name('report-exports.show.es');
+            Route::post('/exportaciones-reportes/{reportExport}/enlaces-temporales', [ReportExportController::class, 'share'])->name('report-exports.share.es');
+            Route::post('/unidades-productivas/{productionUnit}/donaciones', [EggDonationController::class, 'store'])
+                ->middleware(['shared.device:any', 'shared.session.conditional'])->name('egg-donations.store');
+            Route::post('/reports/{source}/previews', [ReportSourceController::class, 'preview'])
+                ->middleware('throttle:reporting')
+                ->name('reports.previews.store');
 
-        Route::get('/report-presets', [ReportPresetController::class, 'index'])->name('report-presets.index');
-        Route::post('/report-presets', [ReportPresetController::class, 'store'])->name('report-presets.store');
-        Route::get('/report-presets/{reportPreset}', [ReportPresetController::class, 'show'])->name('report-presets.show');
-        Route::patch('/report-presets/{reportPreset}', [ReportPresetController::class, 'update'])->name('report-presets.update');
-        Route::delete('/report-presets/{reportPreset}', [ReportPresetController::class, 'destroy'])->name('report-presets.destroy');
+            Route::get('/report-presets', [ReportPresetController::class, 'index'])->name('report-presets.index');
+            Route::post('/report-presets', [ReportPresetController::class, 'store'])->name('report-presets.store');
+            Route::get('/report-presets/{reportPreset}', [ReportPresetController::class, 'show'])->name('report-presets.show');
+            Route::patch('/report-presets/{reportPreset}', [ReportPresetController::class, 'update'])->name('report-presets.update');
+            Route::delete('/report-presets/{reportPreset}', [ReportPresetController::class, 'destroy'])->name('report-presets.destroy');
 
-        Route::post('/reports/{source}/exports', [ReportExportController::class, 'store'])
-            ->middleware('throttle:reporting')
-            ->name('report-exports.store');
-        Route::get('/report-exports', [ReportExportController::class, 'index'])->name('report-exports.index');
-        Route::get('/report-exports/{reportExport}', [ReportExportController::class, 'show'])->name('report-exports.show');
-        Route::post('/report-exports/{reportExport}/temporary-links', [ReportExportController::class, 'share'])
-            ->name('report-exports.share');
+            Route::post('/reports/{source}/exports', [ReportExportController::class, 'store'])
+                ->middleware('throttle:reporting')
+                ->name('report-exports.store');
+            Route::get('/report-exports', [ReportExportController::class, 'index'])->name('report-exports.index');
+            Route::get('/report-exports/{reportExport}', [ReportExportController::class, 'show'])->name('report-exports.show');
+            Route::post('/report-exports/{reportExport}/temporary-links', [ReportExportController::class, 'share'])
+                ->name('report-exports.share');
+        });
 
         Route::get('/departments', [DepartmentController::class, 'index'])->name('departments.index');
         Route::post('/departments', [DepartmentController::class, 'store'])->name('departments.store');
@@ -288,6 +317,34 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
 
         Route::get('/stock-alimentacion', [FeedStockController::class, 'global'])
             ->name('feed-stock.global');
+
+        Route::middleware(['shared.device:any', 'shared.session.conditional'])->name('flock-feeding.')->group(function (): void {
+            Route::get('/lotes/{flock}/alimentacion', [FlockFeedingController::class, 'show'])->name('feeding.show');
+            Route::get('/lotes/{flock}/alimentacion/historial', [FlockFeedingController::class, 'history'])->name('feeding.history');
+            Route::post('/lotes/{flock}/alimentacion/manual', [FlockFeedingController::class, 'manual'])->name('feeding.manual');
+            Route::post('/lotes/{flock}/alimentacion/automatico', [FlockFeedingController::class, 'automatic'])->name('feeding.automatic');
+            Route::get('/lotes/{flock}/consumos-alimento', [FeedConsumptionController::class, 'index'])->name('consumptions.index');
+            Route::get('/lotes/{flock}/consumos-alimento/{consumption}', [FeedConsumptionController::class, 'show'])->whereNumber('consumption')->name('consumptions.show');
+            Route::post('/lotes/{flock}/consumos-alimento/{consumption}/rectificaciones', [FeedConsumptionController::class, 'correct'])->whereNumber('consumption')->name('consumptions.correct');
+        });
+        Route::middleware(['shared.device:any', 'shared.session.conditional'])->name('feed-recipes.')->group(function (): void {
+            Route::get('/elaboraciones', [FeedManufactureController::class, 'index'])->name('manufactures.index');
+            Route::post('/elaboraciones', [FeedManufactureController::class, 'store'])->name('manufactures.store');
+            Route::get('/elaboraciones/{operation}', [FeedManufactureController::class, 'show'])->whereNumber('operation')->name('manufactures.show');
+            Route::post('/elaboraciones/{operation}/cancelacion', [FeedManufactureController::class, 'cancel'])->whereNumber('operation')->name('manufactures.cancel');
+            Route::get('/saldos-alimento', [FeedBalanceController::class, 'index'])->name('balances.index');
+            Route::get('/unidades-productivas/{productionUnit}/recetas/{recipe}/saldo', [FeedBalanceController::class, 'show'])->name('balances.show');
+            Route::patch('/unidades-productivas/{productionUnit}/recetas/{recipe}/minimo', [FeedBalanceMinimumController::class, 'update'])->name('balances.minimum');
+            Route::get('/ajustes-alimentacion', [FeedAdjustmentController::class, 'index'])->name('adjustments.index');
+            Route::post('/unidades-productivas/{productionUnit}/recetas/{recipe}/ajustes', [FeedAdjustmentController::class, 'feed'])->name('adjustments.feed');
+            Route::post('/plantas-racion/{poultryHouse}/ingredientes/{product}/ajustes', [FeedAdjustmentController::class, 'ingredient'])->name('adjustments.ingredient');
+        });
+        Route::get('/recetas', [FeedRecipeController::class, 'index'])->name('feed-recipes.index');
+        Route::post('/recetas', [FeedRecipeController::class, 'store'])->name('feed-recipes.store');
+        Route::get('/recetas/{recipe}', [FeedRecipeController::class, 'show'])->whereNumber('recipe')->name('feed-recipes.show');
+        Route::patch('/recetas/{recipe}/cantidades', [FeedRecipeController::class, 'update'])->whereNumber('recipe')->name('feed-recipes.quantities.update');
+        Route::patch('/recetas/{recipe}/estado', [FeedRecipeController::class, 'status'])->whereNumber('recipe')->name('feed-recipes.status.update');
+        Route::post('/recetas/{recipe}/calculo', [FeedRecipeController::class, 'calculate'])->whereNumber('recipe')->name('feed-recipes.calculate');
         Route::get('/unidades-productivas/{productionUnit}/stock-alimentacion', [FeedStockController::class, 'byProductionUnit'])
             ->name('feed-stock.production-units.show');
         Route::get('/plantas-racion/{poultryHouse}/stock', [FeedStockController::class, 'byHouse'])
@@ -329,6 +386,9 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::patch('/stock-locations/{stockLocation}', [StockLocationController::class, 'update'])->name('stock-locations.update');
         Route::patch('/stock-locations/{stockLocation}/status', [StockLocationStatusController::class, 'update'])->name('stock-locations.status.update');
 
+        Route::get('/inventario/productos-permitidos', [InventoryReadController::class, 'allowedProducts'])->name('inventory.allowed-products.index');
+        Route::post('/inventario/saldos/{stockBalance}/regularizaciones', [StockRegularizationController::class, 'store'])->name('inventory.regularizations.store');
+
         Route::prefix('inventory')->name('inventory.')->group(function (): void {
             Route::get('/balances', [InventoryReadController::class, 'balances'])->name('balances.index');
             Route::patch('/balances/{stockBalance}/minimum-stock', [InventoryReadController::class, 'minimum'])->name('balances.minimum');
@@ -344,5 +404,6 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
     });
 
     Route::get('/report-exports/{reportExport}/download', [ReportExportController::class, 'download'])
-        ->name('report-exports.download');
+        ->middleware(ReportDownloadAccess::class)->name('report-exports.download');
+    Route::get('/exportaciones-reportes/{reportExport}/descarga', [ReportExportController::class, 'download'])->middleware(ReportDownloadAccess::class)->name('report-exports.download.es');
 });

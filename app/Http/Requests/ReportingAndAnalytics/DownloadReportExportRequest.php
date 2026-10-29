@@ -17,6 +17,6 @@ final class DownloadReportExportRequest extends FormRequest
 
     public function rules(): array
     {
-        return [];
+        return ['page' => ['sometimes', 'integer', 'min:1', 'max:100000'], 'view' => ['sometimes', 'in:html']];
     }
 }

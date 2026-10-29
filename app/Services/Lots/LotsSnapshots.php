@@ -59,7 +59,7 @@ final readonly class LotsSnapshots
             'plan_activity_id' => $record->planActivity?->public_id,
             'origin_operation_id' => $record->operation_id,
             'poultry_house_id' => $record->poultry_house_id, 'production_unit_id' => $record->production_unit_id,
-            'mortality_category_id' => $record->mortality_category_id, 'quantity' => $record->quantity,
+            'quantity' => $record->quantity,
             'occurred_at' => $record->occurred_at->toIso8601String(), 'notes' => $record->notes,
             'status' => $record->status, 'version' => $record->version, 'created_by' => $record->created_by,
         ];

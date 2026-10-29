@@ -2,8 +2,27 @@
 
 namespace Tests\Feature\Lots;
 
+use PHPUnit\Framework\Attributes\TestWith;
+
 final class EggCollectionEndpointTest extends LotsTestCase
 {
+    #[TestWith([0])]
+    #[TestWith([-1])]
+    // Flujo: no registra producción cuando el lote abierto tiene saldo cero o negativo.
+    public function test_open_flock_without_positive_balance_cannot_record_eggs(int $currentQuantity): void
+    {
+        // Preparación: configura un lote abierto sin población física positiva.
+        $this->signIn();
+        $flock = $this->flock(10);
+        $flock->forceFill(['current_quantity' => $currentQuantity])->save();
+
+        // Request: rechaza la producción antes de crear recolecciones, stock o auditoría.
+        $this->command('POST', "/flocks/{$flock->public_id}/collections", ['quantity' => 1])->assertConflict();
+        $this->assertDatabaseCount('egg_collections', 0);
+        $this->assertDatabaseCount('egg_stock_transactions', 0);
+        $this->assertDatabaseCount('activity_log', 0);
+    }
+
     /** Flujo: registra una recolección atómica y crea una cuenta técnica por UP. */
     public function test_collection_creates_history_and_stock_without_changing_flock(): void
     {

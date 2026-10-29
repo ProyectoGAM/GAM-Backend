@@ -1,0 +1,156 @@
+openapi: 3.1.0
+info:
+  title: Catálogo de productos y tipos reservados
+  version: 1.0.0
+  description: >-
+    El alimento actual se gestiona mediante recetas y saldos por UP. finished_feed
+    se conserva sólo para compatibilidad con productos históricos, sin nuevas altas
+    ni conversiones de otro tipo. No hay conversión automática de datos ni existencias.
+    El alta genérica sólo admite Insumo, Materia prima y Otros. Huevo pertenece al
+    stock atómico por UP y sus presentaciones; medicamentos y vacunas se registran
+    en sus catálogos globales, sin stock físico por el momento.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+  - sessionCookie: []
+paths:
+  /products:
+    get:
+      operationId: listProducts
+      summary: Consulta productos, incluidos los de tipo histórico finished_feed
+      description: Requiere products.view, management-plans.manage o rol admin, según la política vigente del catálogo.
+      parameters:
+        - {name: search, in: query, schema: {type: string, maxLength: 120}}
+        - {name: kind, in: query, schema: {$ref: '#/components/schemas/ReadableKind'}}
+        - {name: status, in: query, schema: {type: string, enum: [active, inactive]}}
+        - {name: per_page, in: query, schema: {type: integer, minimum: 1, maximum: 100}}
+      responses:
+        '200':
+          description: Colección paginada con productos históricos legibles.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/Product'}}
+                  links: {type: object}
+                  meta: {type: object}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/Invalid'}
+    post:
+      operationId: createProduct
+      summary: Crea un producto de tipo operativo
+      description: >-
+        Requiere products.manage. kind egg, medicine, vaccine o finished_feed responde 422 con error en kind.
+        Las materias primas exigen base_unit g y stock_tracked verdadero.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sku, name, kind, base_unit]
+              properties:
+                sku: {type: string, maxLength: 80}
+                name: {type: string, maxLength: 160}
+                kind: {$ref: '#/components/schemas/CreatableKind'}
+                base_unit: {$ref: '#/components/schemas/BaseUnit'}
+                stock_tracked: {type: boolean}
+      responses:
+        '201': {$ref: '#/components/responses/Product'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Invalid'}
+  /products/{product}:
+    parameters:
+      - {name: product, in: path, required: true, schema: {type: integer, minimum: 1}}
+    get:
+      operationId: showProduct
+      summary: Consulta un producto sin descartar el tipo histórico
+      responses:
+        '200': {$ref: '#/components/responses/Product'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      operationId: updateProduct
+      summary: Actualiza metadata sin permitir conversiones a tipos reservados
+      description: >-
+        Requiere products.manage. egg, medicine, vaccine y finished_feed sólo se admiten cuando el producto
+        ya tiene ese tipo; otro producto recibe 422 con error en kind. Omitir kind
+        conserva la clasificación actual. Se mantienen las restricciones de
+        ingredientes, unidades históricas, vacunas y productos técnicos.
+        Medicamentos y vacunas no pueden habilitar stock físico.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sku: {type: string, maxLength: 80}
+                name: {type: string, maxLength: 160}
+                kind: {$ref: '#/components/schemas/ReadableKind'}
+                base_unit: {$ref: '#/components/schemas/BaseUnit'}
+                stock_tracked: {type: boolean}
+      responses:
+        '200': {$ref: '#/components/responses/Product'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/Invalid'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer}
+    sessionCookie: {type: apiKey, in: cookie, name: gam_session}
+  schemas:
+    CreatableKind:
+      type: string
+      enum: [supply, raw_material, other]
+      description: Insumo, Materia prima y Otros; tipos ofrecidos en types.products de las opciones de referencia.
+    ReadableKind:
+      type: string
+      enum: [raw_material, supply, finished_feed, egg, medicine, vaccine, other]
+      description: egg es técnico o histórico; medicine y vaccine pertenecen a sus catálogos globales sin stock físico; finished_feed es histórico. Ninguno admite altas ni conversiones genéricas nuevas.
+    BaseUnit:
+      type: string
+      enum: [unit, kg, g, l, ml, dose]
+    Product:
+      type: object
+      required: [id, sku, name, kind, base_unit, stock_tracked, status]
+      properties:
+        id: {type: integer}
+        sku: {type: string}
+        name: {type: string}
+        kind: {$ref: '#/components/schemas/ReadableKind'}
+        base_unit: {$ref: '#/components/schemas/BaseUnit'}
+        stock_tracked: {type: boolean}
+        status: {type: string, enum: [active, inactive]}
+        system_managed: {type: boolean}
+        specialized_owner: {type: [object, 'null']}
+        capabilities: {type: object}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+  responses:
+    Product:
+      description: Representación actual del producto; conserva la lectura de finished_feed.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: {$ref: '#/components/schemas/Product'}
+    Unauthorized:
+      description: Sesión autenticada requerida.
+    Forbidden:
+      description: Permiso funcional insuficiente.
+    NotFound:
+      description: Producto inexistente.
+    Conflict:
+      description: Restricción de negocio o historial; no se aplican cambios parciales.
+    Invalid:
+      description: Entrada inválida; kind identifica el error al crear o convertir a un tipo reservado.

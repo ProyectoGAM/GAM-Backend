@@ -21,15 +21,31 @@ Todo commit o PR que agregue, corrija o cambie código del backend debe incluir 
 
 La guía debe explicar qué cambió y por qué, el comportamiento observable y las decisiones de negocio, las rutas y contratos cuando correspondan, los cambios de datos o migraciones, permisos, auditoría e idempotencia, y la verificación ejecutada con sus límites. Si cambia una API, se actualiza además su contrato OpenAPI. El índice de implementaciones debe enlazar cualquier guía nueva. Un cambio del backend no está listo para commit o PR mientras falten estas actualizaciones.
 
+Checklist de cada entrega: guía actualizada y enlazada, contratos OpenAPI coherentes con las rutas y respuestas, migraciones/datos explicados, autorización y auditoría documentadas, idempotencia y concurrencia verificadas, pruebas y límites de verificación registrados. La [alimentación de lotes](docs/implementations/flock-feeding-implementation.md) documenta el modo automático, la configuración manual, el regreso explícito, las jornadas pendientes y sus rectificaciones compensatorias.
+
 Swagger UI (desarrollo): [http://localhost:8080/docs/](http://localhost:8080/docs/)
 
 La documentación se sirve desde el servicio `swagger-ui` de Compose y permite
 seleccionar los contratos de autenticación, Lotes/producción de huevos,
 mantenimientos, medicamentos, vacunas, pesajes, planes de manejo, plantas de
-ración y reporting. El
+ración, recetas y cálculo, y reporting. El
 botón **Authorize** usa el token Bearer emitido por el login.
 
 docker compose -f compose.dev.yaml up -d --build
+
+## URLs según el entorno
+
+`APP_ENV` define el entorno. `compose.dev.yaml` usa `local` por defecto y entrega el mismo valor al API y al gateway; `compose.prod.yaml` fija `production`.
+
+En `local`, el gateway conserva el puerto del encabezado `Host`: un enlace temporal de reportes solicitado desde `http://localhost:4200` vuelve a ese origen, y uno solicitado directamente desde `http://localhost:8080` vuelve al API. Los puertos locales no representan la configuración del sitio final.
+
+En `production` y los demás entornos, conserva el comportamiento del dominio sin puerto explícito. El proxy público debe enviar el dominio en `Host` y el protocolo externo en `X-Forwarded-Proto`; por ejemplo, `https://granja.example`. `APP_URL` debe contener la URL pública real para enlaces generados sin una petición HTTP. No usar los puertos internos de Docker como URL pública.
+
+El gateway genera su configuración desde `docker/nginx/default.conf.template` al arrancar. Sólo sustituye `APP_ENV`, conservando las variables propias de Nginx, mediante el [entrypoint de la imagen](https://github.com/nginx/docker-nginx/blob/master/mainline/alpine-slim/20-envsubst-on-templates.sh). Si cambia el entorno o la plantilla, recrear el gateway con el Compose correspondiente; no editar ni reescribir enlaces firmados después de generarlos, porque su dominio, protocolo y parámetros forman parte de la firma.
+
+```bash
+docker compose -f compose.dev.yaml up -d --no-deps --force-recreate gateway
+```
 
 ## Tests y Artisan
 
@@ -82,7 +98,7 @@ Para la comprobación adicional con un pepper temporal no persistido, reemplazá
 No ejecutes `docker compose down -v`: elimina los volúmenes y los datos existentes.
 ## Datos de prueba locales
 
-Cuando `APP_ENV=local`, `DatabaseSeeder` ejecuta también `LocalDemoDataSeeder` y carga datos ficticios pero coherentes de granjas, galpones avícolas y plantas de ración, proveedores, productos, medicamentos, inventario, reservas, reportes, una plantilla publicada de plan de manejo y lotes con redistribuciones, mortalidad, recolección y pesajes. La carga es idempotente y no se ejecuta en otros ambientes.
+Cuando `APP_ENV=local`, `DatabaseSeeder` ejecuta también `LocalDemoDataSeeder` y carga datos ficticios pero coherentes de granjas, galpones avícolas y plantas de ración, proveedores, productos, medicamentos, inventario, reservas, reportes, una plantilla publicada de plan de manejo y lotes con redistribuciones, mortalidad, recolección y pesajes. La carga es idempotente y también se habilita en `production` únicamente con `DEMO_DB_RESET_ENABLED=true`, según el procedimiento de demo descrito más abajo.
 
 Para reconstruir la base local desde cero:
 
@@ -98,7 +114,11 @@ Las decisiones para corregir, regenerar o reconstruir datos de prueba del entorn
 
 Cada módulo nuevo debe incluir su seeder de datos demo y registrarlo en `LocalDemoDataSeeder` (o en un seeder del módulo invocado por este), para que sus datos estén disponibles automáticamente cuando el ambiente sea local.
 
-Para probar la pantalla de pesajes con un lote de 60 semanas y jornadas con anomalías, ejecutá el fixture local optativo `LOT-PESAJE-TEST`. El comando y los datos que crea se encuentran desde el [índice de implementaciones](docs/implementations/README.md). Es repetible sin duplicar ingresos.
+El catálogo global de recetas incluye una combinación demo de maíz y soja. Su alta y cálculo no modifican stock. El segundo bloque agrega elaboración inmediata, cancelación compensatoria, ajustes independientes y alimento acumulado por receta y UP. La demo incluye una elaboración cancelada y un recuento independiente de alimento. El contrato y los pasos de uso están en la [guía de recetas](docs/implementations/feed-recipes-implementation.md). El tercer bloque agrega [alimentación de lotes](docs/implementations/flock-feeding-implementation.md), con etapas copiadas, modo manual fijo, consumo a medianoche de Montevideo, recuperación y rectificaciones. La demo oficial incluye tres jornadas y una rectificación auditada.
+
+La carga general incluye `LOT-EGG-TEST` con ocho semanas de postura y pesajes, y `LOT-PESAJE-TEST` con un lote de 60 semanas y jornadas con anomalías. Los datos y comandos para repetir cada seeder están en las guías de [postura](docs/implementations/egg-production-implementation.md#fixture-demo-lot-egg-test) y [pesajes diarios](docs/implementations/daily-weighing-implementation.md#fixture-demo-para-diseño-del-frontend).
+
+La carga general también incluye `LOT-FEED-TEST` con 120 aves, un plan publicado, prácticas, vacunación, siete consumos y una rectificación. El comando y su efecto en el stock están en la [guía de alimentación](docs/implementations/flock-feeding-implementation.md#fixture-demo-lot-feed-test). Repetirlo conserva los datos existentes. Los tres fixtures recientes se ejecutan después de los demos básicos y de reportes, tanto en local como en producción con la opción demo habilitada.
 
 ## Reset temporal de la demo en VPS
 

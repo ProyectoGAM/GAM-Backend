@@ -37,21 +37,33 @@ final class LotsDemoSeederTest extends LotsTestCase
         $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-E', 'current_quantity' => 40, 'status' => 'active', 'is_grouped' => true]);
         $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-F', 'current_quantity' => 0, 'status' => 'finished', 'is_grouped' => false]);
         $this->assertDatabaseHas('flocks', ['code' => 'DEMO-EGG-PROD', 'current_quantity' => 120, 'status' => 'active', 'is_grouped' => false]);
-        $this->assertDatabaseCount('flocks', 7);
+        $this->assertDatabaseHas('flocks', ['code' => 'LOT-EGG-TEST', 'current_quantity' => 229]);
+        $this->assertDatabaseHas('flocks', ['code' => 'LOT-PESAJE-TEST', 'current_quantity' => 120]);
+        $this->assertDatabaseHas('flocks', ['code' => 'LOT-FEED-TEST', 'current_quantity' => 120]);
+        $this->assertDatabaseCount('flocks', 11);
         $this->assertSame([], DB::table('flocks')->select('poultry_house_id')->whereIn('status', ['active', 'quarantined'])->groupBy('poultry_house_id')->havingRaw('COUNT(*) > 1')->pluck('poultry_house_id')->all());
-        $this->assertDatabaseCount('flock_operations', 24);
+        // Verificación: la demo conserva las operaciones actuales sin recrear suministros retirados.
+        $this->assertDatabaseCount('flock_operations', 392);
+        $this->assertSame(0, FlockOperation::query()->where('command', 'management-plans.feed.record')->count());
+        $this->assertDatabaseCount('feed_supplies', 0);
+        $this->assertDatabaseMissing('products', ['kind' => 'finished_feed']);
         $product = Product::query()->where('system_key', 'generic_egg')->firstOrFail();
         $this->assertDatabaseMissing('products', ['sku' => 'HUEVO-LOTES-DEMO']);
         $before = Flock::query()->orderBy('id')->get()->toArray();
+        $operationsBefore = FlockOperation::query()->orderBy('id')->get()->toArray();
         $auditCount = DB::table('activity_log')->where('log_name', 'lots')->count();
 
         // Mutación: repetir la carga general no reinicia los lotes ni duplica huevos.
         $this->seed(LocalDemoDataSeeder::class);
         $this->assertSame($before, Flock::query()->orderBy('id')->get()->toArray());
         $this->assertSame($auditCount, DB::table('activity_log')->where('log_name', 'lots')->count());
-        $this->assertDatabaseCount('flock_operations', 24);
+        $this->assertDatabaseCount('flock_operations', count($operationsBefore));
+        $this->assertSame($operationsBefore, FlockOperation::query()->orderBy('id')->get()->toArray());
+        $this->assertDatabaseCount('feed_supplies', 0);
+        $this->assertDatabaseMissing('products', ['kind' => 'finished_feed']);
         $this->assertSame([], DB::table('flocks')->select('poultry_house_id')->whereIn('status', ['active', 'quarantined'])->groupBy('poultry_house_id')->havingRaw('COUNT(*) > 1')->pluck('poultry_house_id')->all());
         $this->assertDatabaseHas('stock_balances', ['product_id' => $product->id, 'on_hand_quantity' => '477.000000']);
+        $this->assertDatabaseHas('stock_balances', ['product_id' => $product->id, 'on_hand_quantity' => '9279.000000']);
         $this->assertSame(0, DB::table('activity_log')->where('log_name', 'lots')->where('source', '<>', 'seeder')->count());
     }
 

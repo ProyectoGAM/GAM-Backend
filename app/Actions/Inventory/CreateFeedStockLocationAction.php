@@ -5,6 +5,7 @@ namespace App\Actions\Inventory;
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Enums\FarmStructure\PoultryHouseType;
 use App\Enums\Inventory\StockLocationStatus;
+use App\Enums\Inventory\StockLocationType;
 use App\Exceptions\Inventory\InventoryConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\FarmStructure\PoultryHouse;
@@ -61,6 +62,7 @@ final readonly class CreateFeedStockLocationAction
                 'name' => $name,
                 'status' => StockLocationStatus::Active,
                 'system_managed' => true,
+                'type' => StockLocationType::FeedPlant,
             ])->save();
         } catch (QueryException $exception) {
             if ((string) ($exception->errorInfo[0] ?? $exception->getCode()) !== '23505') {

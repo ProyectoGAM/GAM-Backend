@@ -20,6 +20,7 @@ class StockLocationFactory extends Factory
     {
         return [
             'production_unit_id' => null,
+            'type' => fn (array $attributes): string => isset($attributes['poultry_house_id']) ? 'feed_plant' : (($attributes['system_managed'] ?? false) ? 'unknown' : 'warehouse'),
             'name' => fake()->unique()->words(2, true),
             'status' => StockLocationStatus::Active,
         ];

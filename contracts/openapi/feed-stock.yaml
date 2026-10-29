@@ -9,7 +9,7 @@ info:
     defecto; las plantas de ración usan tipo feed, no admiten lotes ni
     capacidad de aves, y su tipo no puede cambiarse después del alta. Las
     plantas pueden estar operativas, en mantenimiento, fuera de servicio o
-    inactivas; los movimientos se permiten en cualquiera de esos estados y
+    inactivas; los nuevos movimientos exigen plantas operativas y
     sólo las inactivas se excluyen de los agregados.
 servers:
   - url: /api/v1
@@ -20,6 +20,87 @@ tags:
   - name: Plantas de ración
     description: Stock de materias primas por planta y por unidad productiva.
 paths:
+  /inventario/productos-permitidos:
+    get:
+      tags: [Plantas de ración]
+      operationId: listAllowedStockProducts
+      summary: Consulta productos permitidos por ubicación y operación de stock
+      description: >-
+        Requiere inventory.view o rol admin y el contexto de sesión compartida
+        cuando corresponda. Devuelve productos activos que controlan stock,
+        compatibles con el tipo explícito de ubicación. Las cámaras sólo admiten
+        supply y other; sanidad está deshabilitada y no admite productos; las cuentas de huevos
+        admiten egg y las plantas de ración sólo admiten materias primas en
+        gramos. Excluye el producto técnico Huevo y las cuentas técnicas de huevos.
+        Las ubicaciones inactivas, desconocidas, con UP inactiva o plantas no operativas
+        devuelven una colección vacía. Para loss exige saldo estrictamente positivo
+        en esa misma ubicación; las demás operaciones incluyen productos sin saldo,
+        en cero o con saldo negativo permitido. No reserva stock. Al cambiar de
+        ubicación u operación, el cliente debe volver a consultar, reiniciar la
+        paginación y descartar selecciones que dejen de ser válidas. Los movimientos
+        revalidan la compatibilidad dentro de su transacción.
+      parameters:
+        - name: stock_location_id
+          in: query
+          required: true
+          description: Identificador de la ubicación de inventario, no del galpón.
+          schema: { type: integer }
+        - name: operation
+          in: query
+          required: true
+          description: >-
+            Recepción, salida, pérdida, ajuste o transferencia. Para transferencias
+            se consulta cada ubicación y se conservan los productos compatibles
+            con ambas. Los valores son identificadores estables de operación.
+          schema:
+            type: string
+            enum: [receipt, issue, loss, adjustment, transfer]
+        - name: search
+          in: query
+          description: Búsqueda parcial por nombre, sin distinguir mayúsculas.
+          schema: { type: string, maxLength: 120 }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+      responses:
+        '200':
+          description: >-
+            Productos ordenados por nombre e identificador, con saldo local en
+            unidad base y seis decimales. Sin cuenta de stock el saldo es cero.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, links, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AllowedStockProduct' }
+                  links: { type: object }
+                  meta:
+                    type: object
+                    required: [current_page, last_page, per_page, total]
+                    properties:
+                      current_page: { type: integer }
+                      last_page: { type: integer }
+                      per_page: { type: integer }
+                      total: { type: integer }
+              example:
+                data:
+                  - id: 18
+                    sku: MAIZ-026
+                    name: Maíz partido
+                    kind: raw_material
+                    base_unit: g
+                    available_quantity: '2500.000000'
+                links: { first: null, last: null, prev: null, next: null }
+                meta: { current_page: 1, last_page: 1, per_page: 50, total: 1 }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
   /plantas-racion/{poultryHouse}/ingredientes:
     parameters:
       - $ref: '#/components/parameters/PoultryHouse'
@@ -115,6 +196,22 @@ components:
       required: true
       schema: { type: string, format: uuid }
   schemas:
+    AllowedStockProduct:
+      type: object
+      required: [id, sku, name, kind, base_unit, available_quantity]
+      properties:
+        id: { type: integer }
+        sku: { type: string }
+        name: { type: string }
+        kind:
+          type: string
+          description: Categoría compatible según las reglas de inventario de la ubicación.
+          enum: [raw_material, supply, finished_feed, egg, medicine, vaccine, other]
+        base_unit: { type: string, enum: [unit, kg, g, l, ml, dose] }
+        available_quantity:
+          type: string
+          pattern: '^-?\d+\.\d{6}$'
+          description: Saldo de la ubicación elegida; cero si no existe cuenta y mayor que cero para pérdidas.
     CreateIngredient:
       type: object
       additionalProperties: false
@@ -135,8 +232,8 @@ components:
         id: { type: integer }
         sku: { type: string }
         name: { type: string }
-        kind: { type: string, enum: [raw_material] }
-        base_unit: { type: string, enum: [g] }
+        kind: { type: string, enum: [raw_material, supply, other, egg, medicine, vaccine, finished_feed] }
+        base_unit: { type: string, enum: [g, kg, unit, dose, l, ml] }
         stock_tracked: { type: boolean }
         status: { type: string, enum: [active, inactive] }
         created_at: { type: string, format: date-time }
@@ -181,26 +278,60 @@ components:
         product: { $ref: '#/components/schemas/Product' }
         product_id: { type: integer }
         stock_location_id: { type: integer }
-        unit: { type: string, enum: [g] }
+        unit: { type: string, enum: [g, kg, unit, dose, l, ml] }
         physical_delta: { type: string, pattern: '^-?\d+(?:\.\d{1,6})?$' }
     InventoryMovement:
       type: object
-      required: [id, operation_id, type, supplier, reference_type, reference_id, reason, occurred_at, created_by, reverses_movement_id, lines, created_at]
+      required: [id, operation_id, type, supplier, reference_type, reference_id, reason, occurred_at, created_by, created_by_name, reverses_movement_id, lines, created_at]
       properties:
         id: { type: integer }
         operation_id: { type: string, format: uuid }
-        type: { type: string, enum: [opening_balance, receipt] }
-        supplier: { type: [object, 'null'] }
+        type: { type: string, enum: [opening_balance, receipt, issue, loss, adjustment, transfer, reversal] }
+        supplier:
+          type: [object, 'null']
+          properties:
+            id: { type: integer }
+            name: { type: string }
+            status: { type: string, enum: [active, inactive] }
+            is_internal: { type: boolean, description: Identidad interna estable; no depende del nombre editable. }
         reference_type: { type: [string, 'null'] }
         reference_id: { type: [string, 'null'] }
         reason: { type: [string, 'null'] }
         occurred_at: { type: string, format: date-time }
         created_by: { type: [integer, 'null'] }
+        created_by_name:
+          type: [string, 'null']
+          description: Nombre vigente del usuario responsable, incluso si fue dado de baja; null cuando no hay usuario asociado.
         reverses_movement_id: { type: [integer, 'null'] }
         lines:
           type: array
           items: { $ref: '#/components/schemas/InventoryMovementLine' }
         created_at: { type: string, format: date-time }
+    StockLocation:
+      type: object
+      description: >-
+        Ubicación de inventario expuesta en /stock-locations, su detalle y
+        stock_location de /inventory/balances o del alta de ingredientes.
+        name conserva el nombre técnico; poultry_house_name contiene el nombre
+        vigente de la planta vinculada, o null cuando no hay una planta asociada.
+      required: [id, name, type, allowed_product_kinds, status, system_managed, poultry_house_id, poultry_house_name, created_at, updated_at]
+      properties:
+        type: { type: string, enum: [warehouse, feed_plant, egg_account, health, unknown] }
+        allowed_product_kinds:
+          type: array
+          items: { type: string, enum: [raw_material, supply, other, egg, medicine, vaccine] }
+        id: { type: integer }
+        name: { type: string, description: 'Nombre de la ubicación; en plantas puede ser «Planta de ración #ID».' }
+        status: { type: string, enum: [active, inactive] }
+        system_managed: { type: boolean }
+        production_unit: { type: [object, 'null'] }
+        poultry_house_id: { type: [integer, 'null'] }
+        poultry_house_name:
+          type: [string, 'null']
+          description: Nombre actual de la planta; se resuelve al consultar y refleja sus cambios de nombre.
+          example: Planta El Ombú
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
     StockBalance:
       type: object
       required: [id, product_id, stock_location_id, product, stock_location, available_quantity, is_negative, minimum_quantity, created_at, updated_at]
@@ -209,7 +340,7 @@ components:
         product_id: { type: integer }
         stock_location_id: { type: integer }
         product: { $ref: '#/components/schemas/Product' }
-        stock_location: { type: object }
+        stock_location: { $ref: '#/components/schemas/StockLocation' }
         available_quantity: { type: string, pattern: '^-?\d+(?:\.\d{1,6})?$' }
         is_negative: { type: boolean }
         minimum_quantity: { type: string, pattern: '^\d+(?:\.\d{1,6})?$' }
@@ -227,6 +358,8 @@ components:
       description: >-
         Tipo inmutable. Un galpón poultry exige capacidad de aves positiva; una
         planta feed debe exponer bird_capacity como null y no admite lotes.
+        La capacidad es un umbral de alerta y puede ser inferior a la ocupación.
+        Las respuestas de galpones incluyen ocupación y alerta, calculadas desde Lotes.
       required: [id, production_unit_id, name, type, bird_capacity, status]
       properties:
         id: { type: integer }
@@ -234,6 +367,21 @@ components:
         name: { type: string }
         type: { type: string, enum: [poultry, feed], default: poultry }
         bird_capacity: { type: [integer, 'null'], minimum: 1 }
+        current_occupancy:
+          type: [integer, 'null']
+          minimum: 0
+          description: Aves vivas del lote abierto, incluida cuarentena; null para plantas.
+        capacity_exceeded:
+          type: boolean
+          description: Verdadero sólo cuando la ocupación supera bird_capacity; falso para plantas.
+        excess_quantity:
+          type: [integer, 'null']
+          minimum: 0
+          description: Aves por encima del umbral; cero sin exceso y null para plantas.
+        capacity_alert:
+          type: [string, 'null']
+          description: Mensaje de alerta en español; null sin exceso o para plantas.
+          example: 'La ocupación del galpón supera su capacidad máxima. Aves excedentes: 20.'
         status: { type: string, enum: [operational, maintenance, out_of_service, inactive] }
     Problem:
       type: object

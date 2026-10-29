@@ -11,6 +11,7 @@ use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\InventoryMovement;
+use App\Models\Inventory\StockBalance;
 use App\Models\Inventory\StockLocation;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\SuppliersAndCatalogs\Supplier;
@@ -53,8 +54,51 @@ final class FeedStockEndpointTest extends TestCase
         $this->assertSame($first->json('data.movement.id'), $second->json('data.movement.id'));
         $this->assertSame('g', $first->json('data.product.base_unit'));
         $this->assertSame('1500.000000', $first->json('data.stock.available_quantity'));
+        $first->assertJsonPath('data.stock.stock_location.poultry_house_name', $house->name);
+        $second->assertJsonPath('data.stock.stock_location.poultry_house_name', $house->name);
+        $first->assertJsonPath('data.movement.created_by_name', $actor->name);
+        $second->assertJsonPath('data.movement.created_by_name', $actor->name);
         $this->assertDatabaseCount('inventory_movements', 1);
         $this->assertDatabaseHas('stock_balances', ['on_hand_quantity' => '1500.000000', 'allow_negative' => true]);
+    }
+
+    // Flujo: expone el nombre vigente de la planta sin reemplazar la identidad técnica de su ubicación.
+    public function test_stock_reads_expose_the_current_plant_name_after_renaming(): void
+    {
+        // Preparación: crea una planta, su ubicación técnica y un saldo de materia prima.
+        $actor = $this->signIn(['inventory.view', 'inventory.manage', 'poultry-houses.manage']);
+        $house = PoultryHouse::factory()->feed()->create(['name' => 'Planta original']);
+        $location = app(CreateFeedStockLocationAction::class)->execute($house, $actor);
+        $product = Product::factory()->create(['kind' => 'raw_material', 'base_unit' => 'g']);
+        $balance = StockBalance::factory()->create([
+            'product_id' => $product->getKey(),
+            'stock_location_id' => $location->getKey(),
+            'on_hand_quantity' => '1500.000000',
+        ]);
+
+        // Mutación: renombra la planta desde su endpoint sin modificar la ubicación técnica.
+        $this->patchJson('/api/v1/poultry-houses/'.$house->getKey(), ['name' => 'Planta El Ombú'])
+            ->assertOk();
+
+        // Consulta: el listado y el detalle de ubicaciones incluyen el nombre actual de la planta.
+        $this->getJson('/api/v1/stock-locations')->assertOk()
+            ->assertJsonPath('data.0.id', $location->getKey())
+            ->assertJsonPath('data.0.name', $location->name)
+            ->assertJsonPath('data.0.poultry_house_id', $house->getKey())
+            ->assertJsonPath('data.0.poultry_house_name', 'Planta El Ombú');
+        $this->getJson('/api/v1/stock-locations/'.$location->getKey())->assertOk()
+            ->assertJsonPath('data.poultry_house_name', 'Planta El Ombú');
+
+        // Consulta: los saldos conservan su cantidad y agregan el nombre de la planta asociada.
+        $this->getJson('/api/v1/inventory/balances')->assertOk()
+            ->assertJsonPath('data.0.stock_location.name', $location->name)
+            ->assertJsonPath('data.0.stock_location.poultry_house_name', 'Planta El Ombú')
+            ->assertJsonPath('data.0.available_quantity', '1500.000000');
+
+        // Mutación: la respuesta del ajuste de mínimo también incluye el nombre vigente.
+        $this->patchJson('/api/v1/inventory/balances/'.$balance->getKey().'/minimum-stock', ['minimum_quantity' => '100'])
+            ->assertOk()
+            ->assertJsonPath('data.stock_location.poultry_house_name', 'Planta El Ombú');
     }
 
     // Flujo: rechaza reutilizar una clave de idempotencia con un payload diferente.
@@ -138,8 +182,8 @@ final class FeedStockEndpointTest extends TestCase
         $this->assertDatabaseHas('stock_balances', ['on_hand_quantity' => '75.000000']);
     }
 
-    // Flujo: cuenta plantas operativas y en mantenimiento, y permite movimientos en todos sus estados.
-    public function test_feed_stock_remains_movable_until_inactive_and_excludes_only_inactive_totals(): void
+    // Flujo: conserva los totales históricos y bloquea movimientos en plantas no operativas.
+    public function test_non_operational_feed_plants_reject_movements_and_preserve_historical_totals(): void
     {
         $actor = $this->signIn(['products.manage', 'inventory.move', 'inventory.view', 'inventory.manage', 'poultry-houses.manage']);
         $house = $this->feedHouse($actor);
@@ -156,19 +200,19 @@ final class FeedStockEndpointTest extends TestCase
 
         // Acción 1: cambia a mantenimiento y mueve stock; el total sigue incluido.
         $this->patchJson('/api/v1/poultry-houses/'.$house->getKey().'/status', ['status' => 'maintenance'])->assertOk();
-        $this->issueFeedGrams($product->getKey(), $location->getKey(), '10');
-        $this->getJson('/api/v1/stock-alimentacion')->assertJsonPath('data.items.0.total_g', '90.000000');
+        $this->rejectFeedGrams($product->getKey(), $location->getKey(), '10');
+        $this->getJson('/api/v1/stock-alimentacion')->assertJsonPath('data.items.0.total_g', '100.000000');
 
         // Acción 2: cambia a fuera de servicio y mueve stock; el total sigue incluido.
         $this->patchJson('/api/v1/poultry-houses/'.$house->getKey().'/status', ['status' => 'out_of_service'])->assertOk();
-        $this->issueFeedGrams($product->getKey(), $location->getKey(), '10');
-        $this->getJson('/api/v1/stock-alimentacion')->assertJsonPath('data.items.0.total_g', '80.000000');
+        $this->rejectFeedGrams($product->getKey(), $location->getKey(), '10');
+        $this->getJson('/api/v1/stock-alimentacion')->assertJsonPath('data.items.0.total_g', '100.000000');
 
         // Acción 3: cambia a inactiva, mueve stock y excluye sólo este detalle del total.
         $this->patchJson('/api/v1/poultry-houses/'.$house->getKey().'/status', ['status' => 'inactive'])->assertOk();
-        $this->issueFeedGrams($product->getKey(), $location->getKey(), '10');
+        $this->rejectFeedGrams($product->getKey(), $location->getKey(), '10');
         $this->getJson('/api/v1/plantas-racion/'.$house->getKey().'/stock')
-            ->assertJsonPath('data.items.0.details.0.stock_g', '70.000000')
+            ->assertJsonPath('data.items.0.details.0.stock_g', '100.000000')
             ->assertJsonPath('data.items.0.details.0.included_in_totals', false);
         $this->getJson('/api/v1/stock-alimentacion')->assertJsonPath('data.items.0.total_g', '0.000000');
     }
@@ -298,14 +342,14 @@ final class FeedStockEndpointTest extends TestCase
         $this->patchJson('/api/v1/poultry-houses/'.$house->getKey().'/status', ['status' => PoultryHouseStatus::Inactive->value])
             ->assertOk();
 
-        // Acción 4: mueve stock una vez más sin generar una segunda alerta.
-        $this->issueFeedGrams($product->getKey(), $location->getKey(), '100');
+        // Acción 4: rechaza otra salida sin alterar el negativo histórico ni generar alertas.
+        $this->rejectFeedGrams($product->getKey(), $location->getKey(), '100');
 
         // Consulta: verifica el saldo local y el total global excluyendo la planta inactiva.
         $this->getJson('/api/v1/plantas-racion/'.$house->getKey().'/stock')
             ->assertOk()
             ->assertJsonPath('data.items.0.total_g', '0.000000')
-            ->assertJsonPath('data.items.0.details.0.stock_g', '-350.000000')
+            ->assertJsonPath('data.items.0.details.0.stock_g', '-250.000000')
             ->assertJsonPath('data.items.0.details.0.is_negative', true)
             ->assertJsonPath('data.items.0.details.0.included_in_totals', false);
         $this->getJson('/api/v1/stock-alimentacion')
@@ -353,7 +397,9 @@ final class FeedStockEndpointTest extends TestCase
 
         // Preparación: crea una ubicación manual mediante el endpoint público.
         $manual = $this->postJson('/api/v1/stock-locations', ['name' => 'Ubicacion manual de prueba'])
-            ->assertCreated();
+            ->assertCreated()
+            ->assertJsonStructure(['data' => ['poultry_house_name']])
+            ->assertJsonPath('data.poultry_house_name', null);
         $manualLocationId = $manual->json('data.id');
 
         // Preparación: crea una planta y recupera la ubicación técnica asociada.
@@ -364,11 +410,15 @@ final class FeedStockEndpointTest extends TestCase
         $listedLocations = $this->getJson('/api/v1/stock-locations?per_page=100')->assertOk();
         $locationsById = collect($listedLocations->json('data'))->keyBy('id');
         $this->assertSame(false, data_get($locationsById->get($manualLocationId), 'system_managed'));
+        $this->assertArrayHasKey('poultry_house_name', $locationsById->get($manualLocationId));
+        $this->assertNull(data_get($locationsById->get($manualLocationId), 'poultry_house_name'));
         $this->assertSame(true, data_get($locationsById->get($feedLocation->getKey()), 'system_managed'));
 
         // Consulta: verifica el mismo campo en el detalle de cada ubicación.
         $this->getJson('/api/v1/stock-locations/'.$manualLocationId)
             ->assertOk()
+            ->assertJsonStructure(['data' => ['poultry_house_name']])
+            ->assertJsonPath('data.poultry_house_name', null)
             ->assertJsonPath('data.system_managed', false);
         $this->getJson('/api/v1/stock-locations/'.$feedLocation->getKey())
             ->assertOk()
@@ -418,6 +468,14 @@ final class FeedStockEndpointTest extends TestCase
         app(CreateFeedStockLocationAction::class)->execute($house, $actor);
 
         return $house;
+    }
+
+    /** Comprueba que una planta no operativa rechaza nuevas salidas. */
+    private function rejectFeedGrams(int|string $productId, int|string $locationId, string $quantity): void
+    {
+        $this->postJson('/api/v1/inventory/issues', [
+            'lines' => [['product_id' => $productId, 'stock_location_id' => $locationId, 'quantity' => $quantity, 'unit' => BaseUnit::Gram->value]],
+        ], ['Idempotency-Key' => (string) Str::uuid()])->assertConflict();
     }
 
     private function issueFeedGrams(int|string $productId, int|string $locationId, string $quantity): void

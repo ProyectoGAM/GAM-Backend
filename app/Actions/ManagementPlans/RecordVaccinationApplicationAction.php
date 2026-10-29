@@ -4,10 +4,12 @@ namespace App\Actions\ManagementPlans;
 
 use App\Actions\Inventory\IssueStockAction;
 use App\DTO\AuditAndTraceability\AuditEntryData;
+use App\Enums\Inventory\StockLocationType;
 use App\Enums\SuppliersAndCatalogs\ProductKind;
 use App\Enums\SuppliersAndCatalogs\ProductStatus;
 use App\Exceptions\Lots\LotsConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
+use App\Models\Inventory\StockLocation;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
 use App\Models\ManagementPlans\VaccinationApplication;
@@ -38,6 +40,10 @@ final readonly class RecordVaccinationApplicationAction
             $attributes['idempotency_key'],
             ['flock' => $flock->public_id, ...$attributes],
             function (string $operationId) use ($flock, $attributes, $actor, $source): array {
+                // Futuro: conservar el consumo físico sin admitirlo mediante llamadas internas hoy.
+                if (isset($attributes['stock_consumption']) && ! config('inventory.health_stock_enabled')) {
+                    throw new LotsConflict('El stock físico de sanidad está deshabilitado.');
+                }
                 $context = $this->contextResolver->execute($flock, $actor, $attributes, 'vaccination');
                 $candidate = Vaccine::query()->where('public_id', $attributes['vaccine_id'])->firstOrFail();
                 $product = Product::query()->whereKey($candidate->product_id)->sharedLock()->firstOrFail();
@@ -65,11 +71,14 @@ final readonly class RecordVaccinationApplicationAction
                 $application->forceFill([
                     'public_id' => (string) Str::ulid(),
                     'flock_id' => $context->flock->getKey(),
+                    'poultry_house_id' => $context->flock->poultry_house_id,
+                    'production_unit_id' => $context->flock->production_unit_id,
                     'plan_activity_id' => $context->planActivityPublicId,
                     'plan_activity_title_snapshot' => $context->planActivityTitleSnapshot,
                     'vaccine_id' => $vaccine->getKey(),
                     'product_id' => $product->getKey(),
                     'vaccine_snapshot' => $vaccineSnapshot,
+                    'vaccine_batch' => $attributes['vaccine_batch'] ?? null,
                     'product_snapshot' => $productSnapshot,
                     'occurred_at' => $context->occurredAt,
                     'responsible_user_id' => $context->responsibleUserId,
@@ -82,6 +91,10 @@ final readonly class RecordVaccinationApplicationAction
                 $inventorySnapshot = null;
                 $inventoryMovementId = null;
                 if (isset($attributes['stock_consumption'])) {
+                    if (! StockLocation::query()->whereKey($attributes['stock_consumption']['stock_location_id'])
+                        ->where('type', StockLocationType::Health)->where('production_unit_id', $context->flock->production_unit_id)->exists()) {
+                        throw new LotsConflict('El consumo sanitario debe salir de la ubicación de sanidad de la UP del lote.');
+                    }
                     if (! $product->stock_tracked) {
                         throw new LotsConflict('La vacuna seleccionada no controla stock.');
                     }
@@ -96,7 +109,7 @@ final readonly class RecordVaccinationApplicationAction
                         'reason' => 'Consumo por aplicación de vacuna '.$vaccine->public_id,
                         'reference_type' => 'vaccination_application',
                         'reference_id' => $application->public_id,
-                    ], $actor);
+                    ], $actor, 'management-plans.execute');
                     $inventoryMovement->loadMissing('lines.stockLocation', 'lines.product');
                     $line = $inventoryMovement->lines->first();
                     if ($line === null) {
@@ -124,6 +137,7 @@ final readonly class RecordVaccinationApplicationAction
                     'plan_activity_id' => $context->planActivityPublicId,
                     'plan_activity_title_at_application' => $context->planActivityTitleSnapshot,
                     'vaccine' => $vaccineSnapshot,
+                    'vaccine_batch' => $application->vaccine_batch,
                     'product' => $productSnapshot,
                     'occurred_at' => $context->occurredAt->toIso8601String(),
                     'responsible' => [

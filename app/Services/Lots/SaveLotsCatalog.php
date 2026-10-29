@@ -5,7 +5,6 @@ namespace App\Services\Lots;
 use App\Exceptions\Lots\LotsConflict;
 use App\Models\Lots\Breed;
 use App\Models\Lots\FlockOperation;
-use App\Models\Lots\MortalityCategory;
 use App\Models\User;
 
 final readonly class SaveLotsCatalog
@@ -13,12 +12,12 @@ final readonly class SaveLotsCatalog
     public function __construct(private RunLotsCommand $commands, private LotsHistory $history) {}
 
     /**
-     * Comparte el flujo transaccional de los dos catálogos propios del módulo.
+     * Conserva el flujo transaccional del catálogo de razas del módulo.
      *
-     * @param  class-string<Breed>|class-string<MortalityCategory>  $modelClass
+     * @param  class-string<Breed>  $modelClass
      * @param  array<string, mixed>  $data
      */
-    public function execute(string $modelClass, Breed|MortalityCategory|null $record, array $data, User $actor, string $permission, string $event, string $source): FlockOperation
+    public function execute(string $modelClass, ?Breed $record, array $data, User $actor, string $permission, string $event, string $source): FlockOperation
     {
         if (isset($data['name'])) {
             $data['name'] = trim($data['name']);

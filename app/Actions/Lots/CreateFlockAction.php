@@ -13,6 +13,7 @@ use App\Models\Lots\FlockOperation;
 use App\Models\User;
 use App\Queries\FarmStructure\LockPoultryHousesQuery;
 use App\Queries\SuppliersAndCatalogs\GetActiveSupplierQuery;
+use App\Services\Inventory\FlockFeedingResolver;
 use App\Services\Lots\FlockActivityJournal;
 use App\Services\Lots\FlockState;
 use App\Services\Lots\LotsHistory;
@@ -33,9 +34,9 @@ final readonly class CreateFlockAction
         return $this->commands->execute($actor, 'flocks.manage', 'flock.create', $data['idempotency_key'], $data, function (string $operationId) use ($data, $actor, $source): array {
             $quantity = (int) $data['initial_quantity'];
             $this->state->positive($quantity);
-            $entry = CarbonImmutable::createFromFormat('!Y-m-d', $data['entry_date'], config('lots.timezone'));
-            if ($entry === null || $entry->format('Y-m-d') !== $data['entry_date'] || $entry->greaterThan($this->clock->now())) {
-                throw new LotsConflict('La fecha de ingreso no es válida o es futura.');
+            $entry = CarbonImmutable::createFromFormat('!Y-m-d', $data['entry_date'], FlockFeedingResolver::TIMEZONE);
+            if ($entry === null || $entry->format('Y-m-d') !== $data['entry_date'] || $entry->toDateString() !== $this->clock->now()->setTimezone(FlockFeedingResolver::TIMEZONE)->toDateString()) {
+                throw new LotsConflict('La fecha de ingreso debe ser el día del registro en America/Montevideo.');
             }
             $breed = Breed::query()->sharedLock()->findOrFail($data['breed_id']);
             if ($breed->status !== 'active') {
@@ -46,7 +47,7 @@ final readonly class CreateFlockAction
                 throw new LotsConflict('Indica un proveedor activo o describe el origen del lote.');
             }
             $house = $this->houses->execute([(int) $data['poultry_house_id']])[(int) $data['poultry_house_id']];
-            $this->state->receive($house, $quantity, requiresEmpty: true);
+            $this->state->receive($house, requiresEmpty: true);
             $flock = new Flock;
             $flock->forceFill([
                 'public_id' => $data['public_id'] ?? (string) Str::ulid(), 'code' => $data['code'],

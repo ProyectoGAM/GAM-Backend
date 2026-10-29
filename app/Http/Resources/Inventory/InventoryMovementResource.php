@@ -23,6 +23,7 @@ final class InventoryMovementResource extends JsonResource
             'reason' => $this->reason,
             'occurred_at' => $this->occurred_at,
             'created_by' => $this->created_by,
+            'created_by_name' => $this->whenLoaded('creator', fn (): string => $this->creator->name, null),
             'reverses_movement_id' => $this->reverses_movement_id,
             'lines' => InventoryMovementLineResource::collection($this->whenLoaded('lines')),
             'created_at' => $this->created_at,

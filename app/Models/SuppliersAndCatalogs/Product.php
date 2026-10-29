@@ -5,6 +5,7 @@ namespace App\Models\SuppliersAndCatalogs;
 use App\Enums\SuppliersAndCatalogs\BaseUnit;
 use App\Enums\SuppliersAndCatalogs\ProductKind;
 use App\Enums\SuppliersAndCatalogs\ProductStatus;
+use App\Models\Inventory\FeedRecipeIngredient;
 use App\Models\Inventory\InventoryMovementLine;
 use App\Models\Inventory\StockBalance;
 use Database\Factories\SuppliersAndCatalogs\ProductFactory;
@@ -28,6 +29,8 @@ use Illuminate\Support\Str;
  * @property bool $stock_tracked
  * @property bool $has_movement_lines
  * @property bool $has_stock_balances
+ * @property bool $has_recipe_ingredients
+ * @property bool $has_medicine
  */
 #[Fillable(['sku', 'name', 'kind', 'base_unit', 'stock_tracked', 'status', 'system_key'])]
 class Product extends Model
@@ -45,6 +48,8 @@ class Product extends Model
             'status' => ProductStatus::class,
             'has_movement_lines' => 'boolean',
             'has_stock_balances' => 'boolean',
+            'has_recipe_ingredients' => 'boolean',
+            'has_medicine' => 'boolean',
         ];
     }
 
@@ -60,6 +65,8 @@ class Product extends Model
             ->withExists([
                 'movementLines as has_movement_lines',
                 'stockBalances as has_stock_balances',
+                'recipeIngredients as has_recipe_ingredients',
+                'medicine as has_medicine',
             ]);
     }
 
@@ -86,6 +93,12 @@ class Product extends Model
         return $this->hasMany(StockBalance::class);
     }
 
+    /** @return HasMany<FeedRecipeIngredient, $this> */
+    public function recipeIngredients(): HasMany
+    {
+        return $this->hasMany(FeedRecipeIngredient::class, 'product_id');
+    }
+
     /** @return HasMany<InventoryMovementLine, $this> */
     public function movementLines(): HasMany
     {
@@ -96,5 +109,11 @@ class Product extends Model
     public function vaccine(): HasOne
     {
         return $this->hasOne(Vaccine::class);
+    }
+
+    /** @return HasOne<Medicine, $this> */
+    public function medicine(): HasOne
+    {
+        return $this->hasOne(Medicine::class);
     }
 }

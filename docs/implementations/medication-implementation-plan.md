@@ -1,6 +1,6 @@
 # Catálogo de medicamentos — implementación
 
-La definición confirmada reemplaza el plan inicial de intervenciones por lote. Un medicamento es una ficha de catálogo con **nombre, descripción y proveedor**. La relación con un plan de manejo y las fechas de aplicación —pasadas o futuras— quedan diferidas hasta definir ese dominio. Las dosis son una posible ampliación futura, todavía no confirmada.
+La definición confirmada reemplaza el plan inicial de intervenciones por lote. Un medicamento es una ficha global de catálogo con **nombre, descripción y proveedor**. Las aplicaciones se implementan en Planes de manejo; el vínculo al inventario físico queda reservado y deshabilitado para una entrega futura. Las dosis son una posible ampliación futura, todavía no confirmada.
 
 **Estado funcional: catálogo de Medicamentos implementado; módulo 06 — Manejo productivo y sanidad aún incompleto.** Faltan las demás secciones del módulo. El seguimiento en [notion.md](../notion.md) registra este avance parcial y no propone mover la tarjeta del módulo completo a `Do Test`. La propiedad técnica del catálogo corresponde a `SuppliersAndCatalogs`.
 
@@ -10,8 +10,8 @@ La definición confirmada reemplaza el plan inicial de intervenciones por lote. 
 - Alta y consulta exclusivamente para usuarios activos con rol admin.
 - Nombres repetidos permitidos; cada ficha tiene ULID propio.
 - Proveedor obligatorio del catálogo existente, activo al crear. Su desactivación no oculta fichas anteriores ni impide repetir un alta ya confirmada.
-- Sin SKU, unidad base, stock, lotes, galpones, dosis, fechas operativas, edición, borrado ni estados de medicamento.
-- No se crea un Product ni una relación vacía con futuros planes.
+- El formulario de alta mantiene nombre, descripción y proveedor, sin crear producto de inventario, ubicación ni saldo físico. No incorpora dosis, edición o borrado de la ficha.
+- Las altas nuevas devuelven `product_id: null`. Se conserva cualquier vínculo anterior y su historia sin reclasificación. La integración futura de sanidad queda comentada y deshabilitada; la preparación tampoco crea vínculos. Véase la [guía de almacenamiento](inventory-storage-implementation.md). El contador clínico global sigue identificado por separado y las aplicaciones no admiten `stock_consumption` físico en esta etapa.
 - El sistema conserva la fecha automática de registro y los nombres de proveedor y administrador conocidos al crear.
 
 ## Contrato HTTP

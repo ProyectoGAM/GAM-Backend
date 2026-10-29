@@ -4,6 +4,7 @@ namespace App\Jobs\ReportingAndAnalytics;
 
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Enums\ReportingAndAnalytics\ReportExportStatus;
+use App\Exceptions\ReportingAndAnalytics\ReportConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\ReportingAndAnalytics\ReportExport;
 use App\Services\ReportingAndAnalytics\ReportExportWriter;
@@ -15,6 +16,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 final class GenerateReportExport implements ShouldBeUnique, ShouldQueue
@@ -100,14 +102,27 @@ final class GenerateReportExport implements ShouldBeUnique, ShouldQueue
         $storedQuery = $export->query;
         unset($storedQuery['source_key'], $storedQuery['definition_version']);
         $query = $normalizer->normalize($export->source_key, $storedQuery);
-        $file = $writer->write($export, $source, $query);
+        try {
+            $file = $writer->write($export, $source, $query);
+        } catch (ReportConflict $exception) {
+            // Un límite de negocio es definitivo; repetir el mismo reporte no lo corrige.
+            $this->failed($exception);
+
+            return;
+        }
 
         DB::transaction(function () use ($export, $file, $auditRecorder): void {
             $locked = ReportExport::query()->lockForUpdate()->findOrFail($export->getKey());
+            if ($locked->status === ReportExportStatus::Expired) {
+                Storage::disk($locked->disk)->deleteDirectory(dirname($file['path']));
+
+                return;
+            }
             $locked->update([
                 ...$file,
                 'status' => ReportExportStatus::Completed,
                 'completed_at' => now(),
+                'expires_at' => now()->addMinutes((int) config('reporting.file_ttl_minutes', 1440)),
             ]);
 
             $auditRecorder->record(AuditEntryData::forSubject(
@@ -130,14 +145,15 @@ final class GenerateReportExport implements ShouldBeUnique, ShouldQueue
     public function failed(?Throwable $exception): void
     {
         $export = ReportExport::query()->with('user')->find($this->reportExportId);
-        if ($export === null || $export->status === ReportExportStatus::Completed) {
+        if ($export === null || in_array($export->status, [ReportExportStatus::Completed, ReportExportStatus::Expired], true)) {
             return;
         }
 
-        $safeMessage = 'La exportación no pudo completarse. Intenta nuevamente.';
+        $safeMessage = $exception instanceof ReportConflict
+            ? $exception->getMessage() : 'La exportación no pudo completarse. Intenta nuevamente.';
         DB::transaction(function () use ($export, $safeMessage): void {
             $locked = ReportExport::query()->lockForUpdate()->find($export->getKey());
-            if ($locked === null || $locked->status === ReportExportStatus::Completed) {
+            if ($locked === null || in_array($locked->status, [ReportExportStatus::Completed, ReportExportStatus::Expired], true)) {
                 return;
             }
             $locked->update([

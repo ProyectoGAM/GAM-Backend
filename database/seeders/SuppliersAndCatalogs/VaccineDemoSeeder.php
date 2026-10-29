@@ -26,7 +26,7 @@ final class VaccineDemoSeeder extends Seeder
         app(CreateVaccineAction::class)->execute([
             'sku' => 'VAC-001',
             'name' => 'Vacuna aviar Newcastle',
-            'description' => 'Ficha ficticia de la vacuna demo ya registrada en inventario.',
+            'description' => 'Ficha global ficticia de vacuna, sin stock físico.',
             'details' => 'Datos de catálogo para el entorno local.',
             'supplier_id' => $supplier->getKey(),
             'base_unit' => 'dose',

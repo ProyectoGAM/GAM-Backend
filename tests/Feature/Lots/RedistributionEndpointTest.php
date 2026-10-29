@@ -15,6 +15,19 @@ use RuntimeException;
 
 final class RedistributionEndpointTest extends LotsTestCase
 {
+    /** @param array<string, mixed> $attributes */
+    private function house(array $attributes = []): PoultryHouse
+    {
+        $unitId = Flock::query()->orderBy('id')->value('production_unit_id') ?? PoultryHouse::query()->orderBy('id')->value('production_unit_id');
+
+        return PoultryHouse::factory()->create([...(is_int($unitId) ? ['production_unit_id' => $unitId] : []), ...$attributes]);
+    }
+
+    protected function flock(int $quantity = 100, ?Breed $breed = null, ?PoultryHouse $house = null): Flock
+    {
+        return parent::flock($quantity, $breed, $house ?? $this->house());
+    }
+
     // Flujo: traslada parcialmente a un lote nuevo sin construir una genealogía.
     public function test_partial_transfer_creates_an_independent_flock_and_preserves_total(): void
     {
@@ -24,7 +37,7 @@ final class RedistributionEndpointTest extends LotsTestCase
             ['type' => 'weighing', 'title' => 'Pesaje pasado', 'timing_kind' => 'week', 'start_week' => 1],
             ['type' => 'vaccination', 'title' => 'Vacuna futura', 'timing_kind' => 'week', 'start_week' => 10],
         ]);
-        $house = PoultryHouse::factory()->create(['bird_capacity' => 40]);
+        $house = $this->house(['bird_capacity' => 40]);
         $publicId = (string) Str::ulid();
 
         // Request: redistribuye cuarenta aves a una identidad generada offline.
@@ -74,7 +87,7 @@ final class RedistributionEndpointTest extends LotsTestCase
         // Preparación: usa un lote legado sin asignación y un galpón disponible.
         $this->signIn();
         $source = $this->flock();
-        $house = PoultryHouse::factory()->create();
+        $house = $this->house();
 
         // Request: intenta crear un lote nuevo y recibe conflicto por el plan ausente.
         $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
@@ -122,12 +135,15 @@ final class RedistributionEndpointTest extends LotsTestCase
     {
         // Preparación: ocupa exactamente toda la capacidad física.
         $this->signIn();
-        $house = PoultryHouse::factory()->create(['bird_capacity' => 100]);
+        $house = $this->house(['bird_capacity' => 100]);
         $breed = Breed::factory()->create();
         $source = $this->flock(80, $breed, $house);
         $destination = $this->flock(20, $breed);
 
-        // Request: incorpora aves y conserva la ocupación física de cada galpón.
+        // Mutación: fija un umbral que la incorporación al lote existente superará.
+        PoultryHouse::query()->whereKey($destination->poultry_house_id)->update(['bird_capacity' => 25]);
+
+        // Request: incorpora aves por encima del límite y conserva la ocupación real.
         $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
             'version' => 1, 'quantity' => 10, 'destination_flock_id' => $destination->public_id, 'destination_version' => 1,
         ])->assertCreated();
@@ -164,7 +180,7 @@ final class RedistributionEndpointTest extends LotsTestCase
         // Preparación: ocupa un galpón destino y conserva el origen en otro.
         $this->signIn();
         $source = $this->flock();
-        $occupiedHouse = PoultryHouse::factory()->create();
+        $occupiedHouse = $this->house();
         $this->flock(10, $source->breed, $occupiedHouse);
 
         // Requests: rechaza tanto el galpón ocupado como el propio galpón del origen.
@@ -180,14 +196,14 @@ final class RedistributionEndpointTest extends LotsTestCase
         $this->assertDatabaseCount('flock_movements', 0);
     }
 
-    // Flujo: traslada el lote completo entre UP conservando identidad e historial.
+    // Flujo: traslada el lote completo dentro de la UP conservando identidad e historial.
     public function test_total_transfer_moves_the_same_flock_without_deleting_it(): void
     {
-        // Preparación: configura otro galpón en una unidad distinta.
+        // Preparación: configura otro galpón de la misma unidad.
         $this->signIn();
         $flock = $this->flock(30);
         $oldHouse = $flock->poultry_house_id;
-        $house = PoultryHouse::factory()->create();
+        $house = $this->house();
 
         // Request: traslada todas las aves sin crear un lote destinatario.
         $this->command('POST', "/flocks/{$flock->public_id}/redistributions", [
@@ -245,23 +261,27 @@ final class RedistributionEndpointTest extends LotsTestCase
         $this->assertDatabaseCount('flock_movements', 0);
     }
 
-    // Flujo: evita sobregiros, sobreocupación y operaciones en cuarentena.
-    public function test_quantity_capacity_and_quarantine_are_enforced_atomically(): void
+    // Flujo: permite superar capacidad, conservando controles de cantidad y cuarentena.
+    public function test_over_capacity_transfer_preserves_quantity_and_quarantine_guards(): void
     {
         // Preparación: prepara un destino con diez plazas.
         $this->signIn();
-        $flock = $this->flock(100);
-        $house = PoultryHouse::factory()->create(['bird_capacity' => 10]);
+        $flock = $this->flockWithPlan();
+        $house = $this->house(['bird_capacity' => 10]);
         $payload = ['version' => 1, 'quantity' => 101, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'SIN-CUPO'];
         $url = "/flocks/{$flock->public_id}/redistributions";
 
-        // Requests: comprueba faltante de aves, capacidad y estado del origen.
+        // Requests: rechaza faltante de aves y admite un traslado por encima del límite.
         $this->command('POST', $url, $payload)->assertConflict();
-        $this->command('POST', $url, [...$payload, 'quantity' => 20])->assertConflict();
+        $this->command('POST', $url, [...$payload, 'quantity' => 20])->assertCreated()
+            ->assertJsonPath('data.destination_flock.current_quantity', 20);
+        $this->assertDatabaseHas('poultry_houses', ['id' => $house->id, 'bird_capacity' => 10]);
+        $this->assertDatabaseHas('activity_log', ['event' => 'flock_redistributed']);
+        // Mutación: coloca el origen en cuarentena para impedir nuevos envíos.
         $flock->forceFill(['status' => FlockStatus::Quarantined])->save();
-        $this->command('POST', $url, [...$payload, 'quantity' => 10])->assertConflict();
-        $this->assertDatabaseCount('flocks', 1);
-        $this->assertSame(100, $flock->fresh()->current_quantity);
+        $this->command('POST', $url, [...$payload, 'version' => 2, 'quantity' => 10])->assertConflict();
+        $this->assertDatabaseCount('flocks', 2);
+        $this->assertSame(80, $flock->fresh()->current_quantity);
     }
 
     // Flujo: permite evacuar un galpón en mantenimiento pero no recibir en él.
@@ -271,7 +291,7 @@ final class RedistributionEndpointTest extends LotsTestCase
         $this->signIn();
         $flock = $this->flock(20);
         PoultryHouse::query()->findOrFail($flock->poultry_house_id)->forceFill(['status' => 'maintenance'])->save();
-        $destination = PoultryHouse::factory()->create(['status' => 'maintenance']);
+        $destination = $this->house(['status' => 'maintenance']);
 
         // Requests: falla el destino cerrado y permite el traslado al habilitarlo.
         $payload = ['version' => 1, 'quantity' => 20, 'destination_poultry_house_id' => $destination->id];
@@ -286,14 +306,15 @@ final class RedistributionEndpointTest extends LotsTestCase
         // Preparación: registra una redistribución sin operaciones posteriores.
         $this->signIn();
         $flock = $this->flockWithPlan();
-        $house = PoultryHouse::factory()->create();
+        PoultryHouse::query()->whereKey($flock->poultry_house_id)->update(['bird_capacity' => 70]);
+        $house = $this->house();
         $operation = $this->command('POST', "/flocks/{$flock->public_id}/redistributions", [
             'version' => 1, 'quantity' => 40, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'A-REVERTIR',
         ])->assertCreated();
         $movement = FlockMovement::query()->firstOrFail();
         $original = $movement->getAttributes();
 
-        // Request: repone las cantidades mediante un nuevo movimiento enlazado.
+        // Request: repone las cien aves aunque el umbral de retorno sea setenta.
         $this->command('POST', '/redistributions/'.$operation->json('data.movement.id').'/reversals', [
             'version' => 2, 'destination_version' => 1, 'reason' => 'Se seleccionó un galpón equivocado',
         ])->assertOk()->assertJsonPath('data.flock.current_quantity', 100)
@@ -309,7 +330,7 @@ final class RedistributionEndpointTest extends LotsTestCase
         // Preparación: registra un traslado y después modifica el lote origen.
         $this->signIn();
         $flock = $this->flock();
-        $house = PoultryHouse::factory()->create();
+        $house = $this->house();
         $operation = $this->command('POST', "/flocks/{$flock->public_id}/redistributions", [
             'version' => 1, 'quantity' => 100, 'destination_poultry_house_id' => $house->id,
         ])->assertCreated();
@@ -329,7 +350,7 @@ final class RedistributionEndpointTest extends LotsTestCase
         // Preparación: redistribuye aves y habilita los permisos de recolección.
         $this->signIn(['flocks.view', 'flocks.manage', 'flocks.redistribute', 'flocks.finalize', 'egg-collections.view', 'egg-collections.manage', 'egg-stock.view', 'egg-stock.move', 'egg-stock.adjust']);
         $source = $this->flockWithPlan();
-        $house = PoultryHouse::factory()->create();
+        $house = $this->house();
         $operation = $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
             'version' => 1, 'quantity' => 20, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'RECEPTOR-EGG',
         ])->assertCreated();
@@ -351,7 +372,7 @@ final class RedistributionEndpointTest extends LotsTestCase
         // Preparación: crea una redistribución parcial y habilita el módulo de pesajes.
         $this->signIn(['flocks.view', 'flocks.manage', 'flocks.redistribute', 'flocks.finalize', 'weighings.view', 'weighings.manage']);
         $source = $this->flockWithPlan();
-        $house = PoultryHouse::factory()->create();
+        $house = $this->house();
         $operation = $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
             'version' => 1, 'quantity' => 20, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'RECEPTOR-PESO',
         ])->assertCreated();
@@ -405,7 +426,7 @@ final class RedistributionEndpointTest extends LotsTestCase
         $this->signIn();
         $source = $this->flock();
         $oldHouse = $source->poultry_house_id;
-        $destination = PoultryHouse::factory()->create();
+        $destination = $this->house();
         $operation = $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
             'version' => 1, 'quantity' => 100, 'destination_poultry_house_id' => $destination->id,
         ])->assertCreated();
@@ -425,7 +446,7 @@ final class RedistributionEndpointTest extends LotsTestCase
         // Preparación: crea una redistribución y la marca como historial incierto.
         $this->signIn();
         $source = $this->flockWithPlan();
-        $house = PoultryHouse::factory()->create();
+        $house = $this->house();
         $operation = $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
             'version' => 1, 'quantity' => 20, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'LEGACY-UNCERTAIN',
         ])->assertCreated();
@@ -465,7 +486,7 @@ final class RedistributionEndpointTest extends LotsTestCase
         // Preparación: fija una clave de operación para ambos envíos.
         $this->signIn();
         $flock = $this->flockWithPlan();
-        $house = PoultryHouse::factory()->create();
+        $house = $this->house();
         $payload = ['version' => 1, 'quantity' => 10, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'REPLAY'];
         $key = (string) Str::uuid();
 

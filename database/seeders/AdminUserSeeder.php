@@ -5,7 +5,6 @@ namespace Database\Seeders;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use RuntimeException;
-use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 final class AdminUserSeeder extends Seeder
@@ -34,61 +33,8 @@ final class AdminUserSeeder extends Seeder
             'email_verified_at' => now(),
         ])->save();
 
-        $permissions = [
-            Permission::findOrCreate('admin.dashboard.view', 'web'),
-            Permission::findOrCreate('audit.view', 'web'),
-            Permission::findOrCreate('flocks.view', 'web'),
-            Permission::findOrCreate('flocks.manage', 'web'),
-            Permission::findOrCreate('flocks.redistribute', 'web'),
-            Permission::findOrCreate('flocks.finalize', 'web'),
-            Permission::findOrCreate('management-plans.view', 'web'),
-            Permission::findOrCreate('management-plans.manage', 'web'),
-            Permission::findOrCreate('management-plans.execute', 'web'),
-            Permission::findOrCreate('management-plans.stock.manage', 'web'),
-            Permission::findOrCreate('breeds.view', 'web'),
-            Permission::findOrCreate('breeds.manage', 'web'),
-            Permission::findOrCreate('mortality.view', 'web'),
-            Permission::findOrCreate('mortality.manage', 'web'),
-            Permission::findOrCreate('mortality-categories.view', 'web'),
-            Permission::findOrCreate('mortality-categories.manage', 'web'),
-            Permission::findOrCreate('egg-collections.view', 'web'),
-            Permission::findOrCreate('egg-collections.manage', 'web'),
-            Permission::findOrCreate('egg-stock.view', 'web'),
-            Permission::findOrCreate('egg-stock.move', 'web'),
-            Permission::findOrCreate('egg-stock.adjust', 'web'),
-            Permission::findOrCreate('weighings.view', 'web'),
-            Permission::findOrCreate('weighings.manage', 'web'),
-            Permission::findOrCreate('weighing-settings.manage', 'web'),
-            Permission::findOrCreate('geography.view', 'web'),
-            Permission::findOrCreate('geography.manage', 'web'),
-            Permission::findOrCreate('production-units.view', 'web'),
-            Permission::findOrCreate('production-units.manage', 'web'),
-            Permission::findOrCreate('poultry-houses.view', 'web'),
-            Permission::findOrCreate('poultry-houses.manage', 'web'),
-            Permission::findOrCreate('suppliers.view', 'web'),
-            Permission::findOrCreate('suppliers.manage', 'web'),
-            Permission::findOrCreate('products.view', 'web'),
-            Permission::findOrCreate('products.manage', 'web'),
-            Permission::findOrCreate('inventory.view', 'web'),
-            Permission::findOrCreate('inventory.move', 'web'),
-            Permission::findOrCreate('inventory.adjust', 'web'),
-            Permission::findOrCreate('inventory.manage', 'web'),
-            Permission::findOrCreate('reports.view', 'web'),
-            Permission::findOrCreate('reports.export', 'web'),
-            Permission::findOrCreate('reports.presets.manage', 'web'),
-            Permission::findOrCreate('reports.share', 'web'),
-            Permission::findOrCreate('identity.personal.login', 'web'),
-            Permission::findOrCreate('identity.web.login', 'web'),
-            Permission::findOrCreate('identity.shared.login', 'web'),
-            Permission::findOrCreate('identity.users.manage', 'web'),
-            Permission::findOrCreate('identity.pins.manage', 'web'),
-            Permission::findOrCreate('identity.shared-devices.manage', 'web'),
-            Permission::findOrCreate('identity.sessions.manage', 'web'),
-            Permission::findOrCreate('delivery.monitor', 'web'),
-            Permission::findOrCreate('delivery.history', 'web'),
-        ];
-        $role = Role::findOrCreate('admin', 'web');
-        $role->syncPermissions($permissions);
+        $this->call(IdentityPermissionSeeder::class);
+        $role = Role::findByName('admin', 'web');
         $admin->syncRoles([$role]);
     }
 }

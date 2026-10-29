@@ -29,10 +29,10 @@ final readonly class BirdCapacity
 
     public function availableFor(int $occupancy): int
     {
-        if (! $this->supportsOccupancy($occupancy)) {
-            throw new InvalidArgumentException('La ocupación debe estar entre cero y la capacidad de aves.');
+        if ($occupancy < 0) {
+            throw new InvalidArgumentException('La ocupación no puede ser negativa.');
         }
 
-        return $this->value - $occupancy;
+        return max(0, $this->value - $occupancy);
     }
 }

@@ -35,6 +35,7 @@ final readonly class PoultryHouseController
         StorePoultryHouseRequest $request,
         ProductionUnit $productionUnit,
         CreatePoultryHouseAction $action,
+        GetPoultryHouseQuery $query,
     ): JsonResponse {
         /** @var User $actor */
         $actor = $request->user();
@@ -45,7 +46,7 @@ final readonly class PoultryHouseController
         }
         $poultryHouse = $action->execute($productionUnit, $data, $actor);
 
-        return (new PoultryHouseResource($poultryHouse))
+        return (new PoultryHouseResource($query->execute((int) $poultryHouse->getKey())))
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
     }
@@ -62,6 +63,7 @@ final readonly class PoultryHouseController
         UpdatePoultryHouseRequest $request,
         PoultryHouse $poultryHouse,
         UpdatePoultryHouseAction $action,
+        GetPoultryHouseQuery $query,
     ): PoultryHouseResource {
         /** @var User $actor */
         $actor = $request->user();
@@ -71,6 +73,8 @@ final readonly class PoultryHouseController
             $data['bird_capacity'] = (int) $data['bird_capacity'];
         }
 
-        return new PoultryHouseResource($action->execute($poultryHouse, $data, $actor));
+        $updatedPoultryHouse = $action->execute($poultryHouse, $data, $actor);
+
+        return new PoultryHouseResource($query->execute((int) $updatedPoultryHouse->getKey()));
     }
 }

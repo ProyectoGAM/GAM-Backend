@@ -74,7 +74,7 @@ final readonly class RecordEggStockTransactionAction
                 reason: $reason,
                 occurredAt: $transaction->occurred_at->toIso8601String(),
                 eggAccountOperation: true,
-            ), $actor, $source);
+            ), $actor, $source, requiredPermission: null);
 
             return ['transaction' => $transaction->load(['account', 'revisions']), 'movement' => $movement];
         }, 3);
@@ -100,14 +100,14 @@ final readonly class RecordEggStockTransactionAction
             reason: $reason,
             occurredAt: $occurredAt ?? $transaction->occurred_at->toIso8601String(),
             eggAccountOperation: true,
-        ), $actor, $source);
+        ), $actor, $source, requiredPermission: null);
     }
 
     private function movementType(string $logicalType, int $sign): InventoryMovementType
     {
         if ($sign < 0) {
             return match ($logicalType) {
-                'distribution_preparation' => InventoryMovementType::Issue,
+                'distribution_preparation', 'donation' => InventoryMovementType::Issue,
                 'loss' => InventoryMovementType::Loss,
                 default => InventoryMovementType::Adjustment,
             };
