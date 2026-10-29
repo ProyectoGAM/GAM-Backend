@@ -47,7 +47,7 @@ final readonly class CreateFlockAction
                 throw new LotsConflict('Indica un proveedor activo o describe el origen del lote.');
             }
             $house = $this->houses->execute([(int) $data['poultry_house_id']])[(int) $data['poultry_house_id']];
-            $this->state->receive($house, $quantity, requiresEmpty: true);
+            $this->state->receive($house, requiresEmpty: true);
             $flock = new Flock;
             $flock->forceFill([
                 'public_id' => $data['public_id'] ?? (string) Str::ulid(), 'code' => $data['code'],

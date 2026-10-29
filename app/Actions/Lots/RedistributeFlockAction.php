@@ -86,7 +86,6 @@ final readonly class RedistributeFlockAction
             }
             $this->state->receive(
                 $destinationHouse,
-                $destinationHouseId === $from->poultry_house_id ? 0 : $quantity,
                 requiresEmpty: $to === null,
                 existingReceiver: $to,
             );

@@ -68,11 +68,11 @@ final readonly class CorrectMortalityAction
                         throw new LotsConflict('Debes confirmar la reactivación del lote finalizado antes de devolverle aves.');
                     }
                     $reactivationSnapshot = $terminalSnapshot;
-                    $this->state->receive($houses[$flock->poultry_house_id], $resultingQuantity, requiresEmpty: true);
+                    $this->state->receive($houses[$flock->poultry_house_id], requiresEmpty: true);
                 }
             } elseif (max(0, $resultingQuantity) > max(0, $flock->current_quantity)) {
                 $this->state->open($flock);
-                $this->state->receive($houses[$flock->poultry_house_id], max(0, $resultingQuantity) - max(0, $flock->current_quantity), existingReceiver: $flock);
+                $this->state->receive($houses[$flock->poultry_house_id], existingReceiver: $flock);
             } elseif ($flock->status !== FlockStatus::Finished) {
                 $this->state->open($flock);
             }

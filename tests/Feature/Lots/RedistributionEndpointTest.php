@@ -140,7 +140,10 @@ final class RedistributionEndpointTest extends LotsTestCase
         $source = $this->flock(80, $breed, $house);
         $destination = $this->flock(20, $breed);
 
-        // Request: incorpora aves y conserva la ocupación física de cada galpón.
+        // Mutación: fija un umbral que la incorporación al lote existente superará.
+        PoultryHouse::query()->whereKey($destination->poultry_house_id)->update(['bird_capacity' => 25]);
+
+        // Request: incorpora aves por encima del límite y conserva la ocupación real.
         $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
             'version' => 1, 'quantity' => 10, 'destination_flock_id' => $destination->public_id, 'destination_version' => 1,
         ])->assertCreated();
@@ -258,23 +261,27 @@ final class RedistributionEndpointTest extends LotsTestCase
         $this->assertDatabaseCount('flock_movements', 0);
     }
 
-    // Flujo: evita sobregiros, sobreocupación y operaciones en cuarentena.
-    public function test_quantity_capacity_and_quarantine_are_enforced_atomically(): void
+    // Flujo: permite superar capacidad, conservando controles de cantidad y cuarentena.
+    public function test_over_capacity_transfer_preserves_quantity_and_quarantine_guards(): void
     {
         // Preparación: prepara un destino con diez plazas.
         $this->signIn();
-        $flock = $this->flock(100);
+        $flock = $this->flockWithPlan();
         $house = $this->house(['bird_capacity' => 10]);
         $payload = ['version' => 1, 'quantity' => 101, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'SIN-CUPO'];
         $url = "/flocks/{$flock->public_id}/redistributions";
 
-        // Requests: comprueba faltante de aves, capacidad y estado del origen.
+        // Requests: rechaza faltante de aves y admite un traslado por encima del límite.
         $this->command('POST', $url, $payload)->assertConflict();
-        $this->command('POST', $url, [...$payload, 'quantity' => 20])->assertConflict();
+        $this->command('POST', $url, [...$payload, 'quantity' => 20])->assertCreated()
+            ->assertJsonPath('data.destination_flock.current_quantity', 20);
+        $this->assertDatabaseHas('poultry_houses', ['id' => $house->id, 'bird_capacity' => 10]);
+        $this->assertDatabaseHas('activity_log', ['event' => 'flock_redistributed']);
+        // Mutación: coloca el origen en cuarentena para impedir nuevos envíos.
         $flock->forceFill(['status' => FlockStatus::Quarantined])->save();
-        $this->command('POST', $url, [...$payload, 'quantity' => 10])->assertConflict();
-        $this->assertDatabaseCount('flocks', 1);
-        $this->assertSame(100, $flock->fresh()->current_quantity);
+        $this->command('POST', $url, [...$payload, 'version' => 2, 'quantity' => 10])->assertConflict();
+        $this->assertDatabaseCount('flocks', 2);
+        $this->assertSame(80, $flock->fresh()->current_quantity);
     }
 
     // Flujo: permite evacuar un galpón en mantenimiento pero no recibir en él.
@@ -299,6 +306,7 @@ final class RedistributionEndpointTest extends LotsTestCase
         // Preparación: registra una redistribución sin operaciones posteriores.
         $this->signIn();
         $flock = $this->flockWithPlan();
+        PoultryHouse::query()->whereKey($flock->poultry_house_id)->update(['bird_capacity' => 70]);
         $house = $this->house();
         $operation = $this->command('POST', "/flocks/{$flock->public_id}/redistributions", [
             'version' => 1, 'quantity' => 40, 'destination_poultry_house_id' => $house->id, 'destination_code' => 'A-REVERTIR',
@@ -306,7 +314,7 @@ final class RedistributionEndpointTest extends LotsTestCase
         $movement = FlockMovement::query()->firstOrFail();
         $original = $movement->getAttributes();
 
-        // Request: repone las cantidades mediante un nuevo movimiento enlazado.
+        // Request: repone las cien aves aunque el umbral de retorno sea setenta.
         $this->command('POST', '/redistributions/'.$operation->json('data.movement.id').'/reversals', [
             'version' => 2, 'destination_version' => 1, 'reason' => 'Se seleccionó un galpón equivocado',
         ])->assertOk()->assertJsonPath('data.flock.current_quantity', 100)
