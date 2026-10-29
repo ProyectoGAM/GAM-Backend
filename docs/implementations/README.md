@@ -7,6 +7,7 @@ Cada guía describe el alcance entregado, las decisiones de negocio, el contrato
 - [Identidad y acceso](identity-access-implementation.md)
 - [Lotes y cría](lots-implementation.md)
 - [Producción y stock de huevos](egg-production-implementation.md)
+- [Catálogo de presentaciones de huevos](egg-presentations-implementation.md)
 - [Pesajes individuales y grupales](weighing-implementation.md)
 - [Pesajes diarios por lote](daily-weighing-implementation.md)
 - [Mantenimientos de galpones](maintenance-implementation.md)

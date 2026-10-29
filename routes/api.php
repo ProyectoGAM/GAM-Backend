@@ -159,6 +159,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('/inventario/presentaciones-huevos', [EggPresentationController::class, 'index'])->name('egg-presentations.index');
         Route::post('/inventario/presentaciones-huevos', [EggPresentationController::class, 'store'])->name('egg-presentations.store');
         Route::patch('/inventario/presentaciones-huevos/{presentation}', [EggPresentationController::class, 'update'])->name('egg-presentations.update');
+        Route::delete('/inventario/presentaciones-huevos/{presentation}', [EggPresentationController::class, 'destroy'])->name('egg-presentations.destroy');
 
         Route::get('/repartos/unidades', [DeliveryController::class, 'units'])
             ->name('deliveries.units');

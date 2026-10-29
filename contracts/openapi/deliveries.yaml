@@ -60,6 +60,19 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationError' }
   /api/v1/inventario/presentaciones-huevos/{presentation}:
+    delete:
+      tags: [Inventario]
+      summary: Elimina una presentación del catálogo disponible
+      description: Solo administrador. Borrado lógico con auditoría; conserva las instantáneas de repartos históricos. Bloqueado mientras haya cualquier reparto activo. Una presentación eliminada deja de estar disponible para nuevas cargas y no puede editarse.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: presentation, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Presentación eliminada del catálogo y auditada; sin cuerpo }
+        '401': { description: Autenticación requerida }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: Presentación inexistente o ya eliminada }
+        '409': { $ref: '#/components/responses/Conflict' }
     patch:
       tags: [Inventario]
       summary: Modifica nombre, equivalencia o precio de una presentación

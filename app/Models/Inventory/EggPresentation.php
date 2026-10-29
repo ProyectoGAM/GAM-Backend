@@ -6,6 +6,7 @@ use Database\Factories\Inventory\EggPresentationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 #[Fillable(['code', 'name', 'category', 'eggs_per_unit', 'default_unit_price'])]
@@ -13,6 +14,8 @@ final class EggPresentation extends Model
 {
     /** @use HasFactory<EggPresentationFactory> */
     use HasFactory;
+
+    use SoftDeletes;
 
     protected $attributes = ['category' => 'custom'];
 

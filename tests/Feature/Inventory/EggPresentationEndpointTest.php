@@ -2,10 +2,12 @@
 
 namespace Tests\Feature\Inventory;
 
+use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\Deliveries\Delivery;
 use App\Models\Inventory\EggPresentation;
 use App\Models\User;
+use App\Services\Deliveries\DeliveryLoadUnits;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Role;
@@ -23,6 +25,67 @@ final class EggPresentationEndpointTest extends TestCase
         Sanctum::actingAs($user, ['api:access']);
 
         return $user;
+    }
+
+    // Flujo: elimina del catálogo una presentación usada y conserva el reparto y su auditoría.
+    public function test_delete_hides_presentation_and_preserves_delivery_history(): void
+    {
+        // Preparación: una devolución histórica conserva su propia instantánea de presentación.
+        $this->administrator();
+        $unit = EggPresentation::factory()->create();
+        $items = [['unit' => $unit->code, 'label' => $unit->name, 'amount' => '1', 'eggs_per_unit' => $unit->eggs_per_unit, 'eggs' => $unit->eggs_per_unit]];
+        $delivery = Delivery::factory()->completed()->create(['returned_items' => $items]);
+        // Request: elimina la presentación del catálogo administrable y del catálogo de reparto.
+        $this->deleteJson('/api/v1/inventario/presentaciones-huevos/'.$unit->code)->assertNoContent();
+        $this->getJson('/api/v1/inventario/presentaciones-huevos')->assertOk()->assertJsonMissing(['id' => $unit->code]);
+        $this->assertNotContains($unit->code, array_column(app(DeliveryLoadUnits::class)->catalog(), 'id'));
+        $this->assertSoftDeleted($unit);
+        $this->assertSame($items, $delivery->fresh()->returned_items);
+        // Verificación: conserva una auditoría identificable y rechaza operaciones sobre la presentación eliminada.
+        $entry = AuditEntry::query()->where('event', 'egg_presentation_deleted')->sole();
+        $this->assertSame($unit->code, $entry->properties['subject_snapshot']['code']);
+        $this->deleteJson('/api/v1/inventario/presentaciones-huevos/'.$unit->code)->assertNotFound();
+        $this->patchJson('/api/v1/inventario/presentaciones-huevos/'.$unit->code, ['name' => 'No reaparece'])->assertNotFound();
+    }
+
+    // Flujo: puede vaciar el catálogo y volver a crear sin perder la fila de sincronización.
+    public function test_catalog_can_be_emptied_and_recreated(): void
+    {
+        $this->administrator();
+        // Requests: elimina todas las presentaciones, incluida la primera fila usada por el bloqueo.
+        foreach (EggPresentation::query()->get() as $unit) {
+            $this->deleteJson('/api/v1/inventario/presentaciones-huevos/'.$unit->code)->assertNoContent();
+        }
+        $this->getJson('/api/v1/inventario/presentaciones-huevos')->assertOk()->assertJsonCount(0, 'data');
+        // Request: comprueba que crear sigue disponible después de borrar la última presentación.
+        $this->postJson('/api/v1/inventario/presentaciones-huevos', [
+            'name' => 'Nuevo maple', 'eggs_per_unit' => 30, 'default_unit_price' => 100,
+        ])->assertCreated();
+    }
+
+    // Flujo: exige autenticación y rol administrativo antes de eliminar.
+    public function test_delete_requires_an_administrator(): void
+    {
+        // Preparación y request: una presentación existente no puede borrarse sin autenticación.
+        $unit = EggPresentation::factory()->create();
+        $url = '/api/v1/inventario/presentaciones-huevos/'.$unit->code;
+        $this->deleteJson($url)->assertUnauthorized();
+        // Request: un usuario autenticado sin rol administrativo tampoco puede borrar.
+        Sanctum::actingAs(User::factory()->create(), ['api:access']);
+        $this->deleteJson($url)->assertForbidden();
+        $this->assertNotSoftDeleted($unit);
+    }
+
+    // Flujo: una falla de auditoría revierte la eliminación en la misma transacción.
+    public function test_delete_rolls_back_when_audit_fails(): void
+    {
+        // Preparación: simula una falla del registro de auditoría, manteniendo la base real.
+        $this->administrator();
+        $unit = EggPresentation::factory()->create();
+        $this->mock(AuditRecorder::class)->shouldReceive('record')->once()->andThrow(new \RuntimeException('Auditoría no disponible'));
+        // Request y verificación: la presentación continúa disponible si la operación falla.
+        $this->deleteJson('/api/v1/inventario/presentaciones-huevos/'.$unit->code)->assertInternalServerError();
+        $this->assertNotSoftDeleted($unit);
     }
 
     // Flujo: crea y edita una presentación real, conserva su identidad y audita las escrituras.
@@ -63,6 +126,8 @@ final class EggPresentationEndpointTest extends TestCase
         $this->postJson('/api/v1/inventario/presentaciones-huevos', [
             'name' => 'No se crea', 'eggs_per_unit' => 12, 'default_unit_price' => 50,
         ])->assertConflict();
+        // Request: el borrado también respeta el bloqueo global del catálogo.
+        $this->deleteJson($url)->assertConflict();
         $this->assertSame('Presentación original', $unit->fresh()->name);
         $this->assertSame(100, $unit->fresh()->default_unit_price);
         // Mutación de fixture: finaliza el único reparto y confirma el desbloqueo.
