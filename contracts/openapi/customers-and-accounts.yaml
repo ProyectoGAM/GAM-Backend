@@ -1,0 +1,1111 @@
+openapi: 3.1.0
+info:
+  title: 'GAM — Clientes y cuenta corriente'
+  version: 1.0.0
+  description: 'Ficha central y cuenta global por cliente. Auditoría síncrona, UYU exacto, idempotencia y correcciones compensatorias. Las integraciones operativas de entrega/cobro se documentan en deliveries.yaml. La sesión web usa cookies stateful/CSRF y la nativa Bearer según authentication.yaml.'
+servers:
+  -
+    url: /
+security:
+  -
+    bearerAuth: {}
+tags:
+  -
+    name: 'Clientes y cuenta corriente'
+paths:
+  /api/v1/clientes:
+    get:
+      summary: 'Consulta clientes con paginación y búsqueda literal'
+      tags:
+        - 'Clientes y cuenta corriente'
+      parameters:
+        -
+          name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100000
+        -
+          name: per_page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        -
+          name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        -
+          name: status
+          in: query
+          required: false
+          schema:
+            enum:
+              - active
+              - inactive
+        -
+          name: account_status
+          in: query
+          required: false
+          schema:
+            enum:
+              - debt
+              - settled
+              - credit
+      responses:
+        200:
+          description: 'Consulta clientes con paginación y búsqueda literal'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerList'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        409:
+          $ref: '#/components/responses/Conflict'
+        422:
+          $ref: '#/components/responses/ValidationError'
+    post:
+      summary: 'Crea una ficha y su cuenta en cero'
+      tags:
+        - 'Clientes y cuenta corriente'
+      parameters:
+        -
+          name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: 'La misma identidad y contenido devuelve la operación original; otro contenido produce 409.'
+      responses:
+        201:
+          description: 'Crea una ficha y su cuenta en cero'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Customer'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        409:
+          $ref: '#/components/responses/Conflict'
+        422:
+          $ref: '#/components/responses/ValidationError'
+      description: 'customers.manage. Nombre y documentos son opcionales; ambas coordenadas y ambos datos de documento se informan en pareja. No hay unicidad por nombre ni documento.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerInput'
+  /api/v1/clientes/mapa:
+    get:
+      summary: 'Consulta marcadores del área visible, sin ficha ni saldo'
+      tags:
+        - 'Clientes y cuenta corriente'
+      parameters:
+        -
+          name: west
+          in: query
+          required: true
+          schema:
+            type: number
+        -
+          name: east
+          in: query
+          required: true
+          schema:
+            type: number
+        -
+          name: south
+          in: query
+          required: true
+          schema:
+            type: number
+        -
+          name: north
+          in: query
+          required: true
+          schema:
+            type: number
+        -
+          name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 200
+        -
+          name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        -
+          name: status
+          in: query
+          required: false
+          schema:
+            enum:
+              - active
+              - inactive
+        -
+          name: visit_status
+          in: query
+          required: false
+          schema:
+            enum:
+              - pending
+              - visited
+              - delivered
+              - paid
+        -
+          name: delivery_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: ulid
+      responses:
+        200:
+          description: 'Consulta marcadores del área visible, sin ficha ni saldo'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        address:
+                          type:
+                            - string
+                            - 'null'
+                        latitude:
+                          type: string
+                        longitude:
+                          type: string
+                        status:
+                          enum:
+                            - active
+                            - inactive
+                        visit_status:
+                          enum:
+                            - pending
+                            - visited
+                            - delivered
+                            - paid
+                  meta:
+                    type: object
+                    properties:
+                      has_more:
+                        type: boolean
+                      limit:
+                        type: integer
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        409:
+          $ref: '#/components/responses/Conflict'
+        422:
+          $ref: '#/components/responses/ValidationError'
+      description: 'customers.view o delivery.view-own. El contexto de reparto debe ser propio o consultable por delivery.history. Sin asignaciones implícitas; has_more exige acercar el mapa.'
+  '/api/v1/clientes/{cliente}':
+    get:
+      summary: 'Consulta ficha central y saldo autorizado'
+      tags:
+        - 'Clientes y cuenta corriente'
+      parameters:
+        -
+          name: cliente
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ulid
+      responses:
+        200:
+          description: 'Consulta ficha central y saldo autorizado'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Customer'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        409:
+          $ref: '#/components/responses/Conflict'
+        422:
+          $ref: '#/components/responses/ValidationError'
+      description: 'customers.view. account sólo se incluye con customer-accounts.view; los historiales se consultan por separado.'
+    patch:
+      summary: 'Actualiza datos sin editar saldo'
+      tags:
+        - 'Clientes y cuenta corriente'
+      parameters:
+        -
+          name: cliente
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ulid
+        -
+          name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: 'La misma identidad y contenido devuelve la operación original; otro contenido produce 409.'
+      responses:
+        200:
+          description: 'Actualiza datos sin editar saldo'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Customer'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        409:
+          $ref: '#/components/responses/Conflict'
+        422:
+          $ref: '#/components/responses/ValidationError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerInput'
+  '/api/v1/clientes/{cliente}/estado':
+    patch:
+      summary: 'Activa o desactiva conservando cuenta e historia'
+      tags:
+        - 'Clientes y cuenta corriente'
+      parameters:
+        -
+          name: cliente
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ulid
+        -
+          name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: 'La misma identidad y contenido devuelve la operación original; otro contenido produce 409.'
+      responses:
+        200:
+          description: 'Activa o desactiva conservando cuenta e historia'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Customer'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        409:
+          $ref: '#/components/responses/Conflict'
+        422:
+          $ref: '#/components/responses/ValidationError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - status
+              properties:
+                status:
+                  enum:
+                    - active
+                    - inactive
+  '/api/v1/clientes/{cliente}/cuenta-corriente':
+    get:
+      summary: 'Consulta saldo, deuda y saldo a favor vigentes'
+      tags:
+        - 'Clientes y cuenta corriente'
+      parameters:
+        -
+          name: cliente
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ulid
+      responses:
+        200:
+          description: 'Consulta saldo, deuda y saldo a favor vigentes'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Account'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        409:
+          $ref: '#/components/responses/Conflict'
+        422:
+          $ref: '#/components/responses/ValidationError'
+      description: 'customer-accounts.view. Saldo positivo es deuda; negativo es saldo a favor. Moneda fija UYU.'
+  '/api/v1/clientes/{cliente}/movimientos':
+    get:
+      summary: 'Consulta movimientos y estado de cuenta del período'
+      tags:
+        - 'Clientes y cuenta corriente'
+      parameters:
+        -
+          name: cliente
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ulid
+        -
+          name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100000
+        -
+          name: per_page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        -
+          name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        -
+          name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        -
+          name: type
+          in: query
+          required: false
+          schema:
+            enum:
+              - sale_charge
+              - payment
+              - adjustment_increase
+              - adjustment_decrease
+              - reversal
+      responses:
+        200:
+          description: 'Consulta movimientos y estado de cuenta del período'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementList'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        409:
+          $ref: '#/components/responses/Conflict'
+        422:
+          $ref: '#/components/responses/ValidationError'
+      description: 'customer-accounts.view. Períodos de fecha de registro en America/Montevideo. Los saldos del período incluyen todos los tipos, independientemente de la página y el filtro de detalle. La versión fija el estado confirmado consultado.'
+  '/api/v1/clientes/{cliente}/entregas':
+    get:
+      summary: 'Consulta historial real de visitas y entregas'
+      tags:
+        - 'Clientes y cuenta corriente'
+      parameters:
+        -
+          name: cliente
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ulid
+        -
+          name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100000
+        -
+          name: per_page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        200:
+          description: 'Consulta historial real de visitas y entregas'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                  meta:
+                    $ref: '#/components/schemas/Pagination'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        409:
+          $ref: '#/components/responses/Conflict'
+        422:
+          $ref: '#/components/responses/ValidationError'
+      description: 'customers.view. Campos de entrega definidos en deliveries.yaml; las filas anteriores siguen sin generar cargos por inferencia.'
+  '/api/v1/clientes/{cliente}/pagos':
+    post:
+      summary: 'Registra un pago administrativo'
+      tags:
+        - 'Clientes y cuenta corriente'
+      parameters:
+        -
+          name: cliente
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ulid
+        -
+          name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: 'La misma identidad y contenido devuelve la operación original; otro contenido produce 409.'
+      responses:
+        200:
+          description: 'Registra un pago administrativo'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementList'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        409:
+          $ref: '#/components/responses/Conflict'
+        422:
+          $ref: '#/components/responses/ValidationError'
+      description: 'customer-payments.record. El pago reduce la cuenta global y puede crear saldo a favor. Cliente inactivo puede pagar. No acepta reparto ni actor elegidos por el consumidor.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentInput'
+  '/api/v1/clientes/{cliente}/ajustes':
+    post:
+      summary: 'Aumenta o disminuye deuda con motivo obligatorio'
+      tags:
+        - 'Clientes y cuenta corriente'
+      parameters:
+        -
+          name: cliente
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ulid
+        -
+          name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: 'La misma identidad y contenido devuelve la operación original; otro contenido produce 409.'
+      responses:
+        200:
+          description: 'Aumenta o disminuye deuda con motivo obligatorio'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementList'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        409:
+          $ref: '#/components/responses/Conflict'
+        422:
+          $ref: '#/components/responses/ValidationError'
+      description: 'Sólo administrador activo. No es un pago ni una venta. La versión obsoleta da 409; un replay de una operación confirmada se resuelve antes de consultar la versión actual.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - direction
+                - amount
+                - reason
+                - expected_version
+              properties:
+                direction:
+                  enum:
+                    - increase
+                    - decrease
+                amount:
+                  $ref: '#/components/schemas/PositiveAmount'
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 2000
+                expected_version:
+                  type: integer
+                  minimum: 0
+  '/api/v1/clientes/{cliente}/movimientos/{movimiento}/reversion':
+    post:
+      summary: 'Revierte un pago o ajuste mediante compensación'
+      tags:
+        - 'Clientes y cuenta corriente'
+      parameters:
+        -
+          name: cliente
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ulid
+        -
+          name: movimiento
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ulid
+        -
+          name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: 'La misma identidad y contenido devuelve la operación original; otro contenido produce 409.'
+      responses:
+        200:
+          description: 'Revierte un pago o ajuste mediante compensación'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementList'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        409:
+          $ref: '#/components/responses/Conflict'
+        422:
+          $ref: '#/components/responses/ValidationError'
+      description: 'Sólo administrador activo. Conserva el original y permite una única reversión. Otro cliente da 404; un cargo de venta se corrige desde su operación de origen.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - reason
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 2000
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  responses:
+    Unauthorized:
+      description: 'Sesión ausente o inválida'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: 'Permisos insuficientes'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: 'Estado, versión o clave en conflicto'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ValidationError:
+      description: 'Datos o filtros inválidos; no se admiten campos desconocidos'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Amount:
+      type: string
+      pattern: '^-?\d{1,19}(?:\.\d{1,3})?$'
+      description: 'Importe exacto en UYU con tres decimales; se transmite como texto.'
+    PositiveAmount:
+      type: string
+      pattern: '^\d{1,19}(?:\.\d{1,3})?$'
+      description: 'Importe estrictamente positivo en UYU; hasta 19 enteros y 3 decimales, sin notación exponencial.'
+    CustomerInput:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type:
+            - string
+            - 'null'
+          maxLength: 160
+        business_name:
+          type:
+            - string
+            - 'null'
+          maxLength: 160
+        document_type:
+          type:
+            - string
+            - 'null'
+          maxLength: 40
+        document_number:
+          type:
+            - string
+            - 'null'
+          maxLength: 80
+        phone:
+          type:
+            - string
+            - 'null'
+          maxLength: 80
+        email:
+          type:
+            - string
+            - 'null'
+          maxLength: 254
+          format: email
+        address:
+          type:
+            - string
+            - 'null'
+          maxLength: 240
+        visit_frequency:
+          type:
+            - string
+            - 'null'
+          maxLength: 240
+        commercial_conditions:
+          type:
+            - string
+            - 'null'
+          maxLength: 5000
+        notes:
+          type:
+            - string
+            - 'null'
+          maxLength: 5000
+        delivery_notes:
+          type:
+            - string
+            - 'null'
+          maxLength: 5000
+        locality_id:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+        latitude:
+          type:
+            - string
+            - number
+            - 'null'
+          minimum: -90
+          maximum: 90
+        longitude:
+          type:
+            - string
+            - number
+            - 'null'
+          minimum: -180
+          maximum: 180
+    Customer:
+      type: object
+      required:
+        - id
+        - display_name
+        - status
+        - has_location
+        - ready_for_delivery
+      properties:
+        name:
+          type:
+            - string
+            - 'null'
+          maxLength: 160
+        business_name:
+          type:
+            - string
+            - 'null'
+          maxLength: 160
+        document_type:
+          type:
+            - string
+            - 'null'
+          maxLength: 40
+        document_number:
+          type:
+            - string
+            - 'null'
+          maxLength: 80
+        phone:
+          type:
+            - string
+            - 'null'
+          maxLength: 80
+        email:
+          type:
+            - string
+            - 'null'
+          maxLength: 254
+          format: email
+        address:
+          type:
+            - string
+            - 'null'
+          maxLength: 240
+        visit_frequency:
+          type:
+            - string
+            - 'null'
+          maxLength: 240
+        commercial_conditions:
+          type:
+            - string
+            - 'null'
+          maxLength: 5000
+        notes:
+          type:
+            - string
+            - 'null'
+          maxLength: 5000
+        delivery_notes:
+          type:
+            - string
+            - 'null'
+          maxLength: 5000
+        locality_id:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+        latitude:
+          type:
+            - string
+            - number
+            - 'null'
+          minimum: -90
+          maximum: 90
+        longitude:
+          type:
+            - string
+            - number
+            - 'null'
+          minimum: -180
+          maximum: 180
+        id:
+          type: string
+          format: ulid
+        display_name:
+          type: string
+        status:
+          enum:
+            - active
+            - inactive
+        has_location:
+          type: boolean
+        ready_for_delivery:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        locality:
+          type:
+            - object
+            - 'null'
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            department_id:
+              type: integer
+        account:
+          $ref: '#/components/schemas/Account'
+    CustomerList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Customer'
+        meta:
+          $ref: '#/components/schemas/Pagination'
+        links:
+          type: object
+    Pagination:
+      type: object
+      properties:
+        current_page:
+          type: integer
+        last_page:
+          type: integer
+        per_page:
+          type: integer
+        total:
+          type: integer
+    Account:
+      type: object
+      required:
+        - balance
+        - debt
+        - credit
+        - currency
+        - version
+        - as_of
+      properties:
+        balance:
+          $ref: '#/components/schemas/Amount'
+        debt:
+          $ref: '#/components/schemas/Amount'
+        credit:
+          $ref: '#/components/schemas/Amount'
+        currency:
+          const: UYU
+        version:
+          type: integer
+          minimum: 0
+        as_of:
+          type: string
+          format: date-time
+    PaymentInput:
+      type: object
+      additionalProperties: false
+      required:
+        - amount
+        - payment_method
+      properties:
+        amount:
+          $ref: '#/components/schemas/PositiveAmount'
+        payment_method:
+          enum:
+            - cash
+            - transfer
+            - other
+        payment_reference:
+          type:
+            - string
+            - 'null'
+          maxLength: 240
+        reason:
+          type:
+            - string
+            - 'null'
+          maxLength: 2000
+    Movement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: ulid
+        type:
+          enum:
+            - sale_charge
+            - payment
+            - adjustment_increase
+            - adjustment_decrease
+            - reversal
+        sequence:
+          type: integer
+        amount:
+          $ref: '#/components/schemas/Amount'
+        balance_before:
+          $ref: '#/components/schemas/Amount'
+        balance_after:
+          $ref: '#/components/schemas/Amount'
+        currency:
+          const: UYU
+        customer_id:
+          type: string
+          description: ULID del cliente.
+        customer_name:
+          type: string
+        reason:
+          type:
+            - string
+            - 'null'
+        actor:
+          type: object
+          properties:
+            name:
+              type: string
+        payment_method:
+          type:
+            - string
+            - 'null'
+          enum:
+            - cash
+            - transfer
+            - other
+            - null
+        payment_reference:
+          type:
+            - string
+            - 'null'
+        occurred_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        operation_id:
+          type: string
+          format: uuid
+        delivery_id:
+          type:
+            - string
+            - 'null'
+        delivery_stop_id:
+          type:
+            - integer
+            - 'null'
+        reversal_id:
+          type:
+            - string
+            - 'null'
+        reverses_movement_id:
+          type:
+            - string
+            - 'null'
+    MovementList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Movement'
+        meta:
+          $ref: '#/components/schemas/Pagination'
+        operation_id:
+          type: string
+          format: uuid
+        statement:
+          type: object
+          properties:
+            opening_balance:
+              $ref: '#/components/schemas/Amount'
+            closing_balance:
+              $ref: '#/components/schemas/Amount'
+            currency:
+              const: UYU
+            version:
+              type: integer
+            from:
+              type:
+                - string
+                - 'null'
+            to:
+              type:
+                - string
+                - 'null'
+    Problem:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        message:
+          type: string
+        detail:
+          type: string
+        errors:
+          type: object

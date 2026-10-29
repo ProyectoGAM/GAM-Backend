@@ -106,6 +106,7 @@ final readonly class AddDeliveryLoadAction
 
     private function load(Delivery $delivery): Delivery
     {
-        return $delivery->load(['driver:id,name', 'productionUnit:id,name,latitude,longitude', 'loads.productionUnit:id,name', 'returnProductionUnit:id,name', 'stops', 'latestLocation']);
+        return $delivery->load(['driver:id,name', 'productionUnit:id,name,latitude,longitude', 'loads.productionUnit:id,name', 'returnProductionUnit:id,name', 'stops',
+            'accountMovements.account.customer', 'accountMovements.operation', 'accountMovements.delivery', 'accountMovements.reversal', 'accountMovements.original', 'latestLocation']);
     }
 }

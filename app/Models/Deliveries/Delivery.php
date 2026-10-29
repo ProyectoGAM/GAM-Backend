@@ -3,10 +3,12 @@
 namespace App\Models\Deliveries;
 
 use App\Enums\Deliveries\DeliveryStatus;
+use App\Models\CustomersAndAccounts\CustomerAccountMovement;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
 use Database\Factories\Deliveries\DeliveryFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,6 +18,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
+ * @property Collection<int, CustomerAccountMovement> $accountMovements
  * @property int $id
  * @property string $public_id
  * @property int $driver_id
@@ -55,6 +58,8 @@ class Delivery extends Model
     }
 
     /** @return array<string, string> */
+    protected $dateFormat = 'Y-m-d H:i:sP';
+
     protected function casts(): array
     {
         return [
@@ -62,6 +67,7 @@ class Delivery extends Model
             'loaded_quantity' => 'integer',
             'returned_quantity' => 'integer',
             'returned_items' => 'array',
+            'financial_snapshot' => 'array',
             'started_at' => 'immutable_datetime',
             'closed_at' => 'immutable_datetime',
         ];
@@ -107,5 +113,11 @@ class Delivery extends Model
     public function latestLocation(): HasOne
     {
         return $this->hasOne(DeliveryLocationPoint::class)->latestOfMany('captured_at');
+    }
+
+    /** @return HasMany<CustomerAccountMovement, $this> */
+    public function accountMovements(): HasMany
+    {
+        return $this->hasMany(CustomerAccountMovement::class);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Deliveries;
 
+use App\Models\CustomersAndAccounts\Customer;
 use App\Models\Deliveries\Delivery;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\EggPresentation;
@@ -22,6 +23,13 @@ final class DeliveryEndpointTest extends TestCase
     /** @param list<string> $permissions */
     private function signIn(array $permissions): User
     {
+        // Preparación: el reparto usa fichas persistentes; estos seis clientes son sólo fixtures de prueba.
+        if (! Customer::query()->exists()) {
+            $names = ['Almacén El Puente', 'Comercio La Plaza', 'Despensa Santa Rita', 'Mercado del Barrio', 'Autoservicio Norte', 'Kiosco La Estación'];
+            foreach ($names as $index => $name) {
+                Customer::factory()->withAccount()->create(['public_id' => '01K0000000000000000000000'.($index + 1), 'name' => $name]);
+            }
+        }
         // Preparación: configura precios de prueba, sin modificar datos de desarrollo.
         EggPresentation::query()->update(['default_unit_price' => 100]);
         config(['identity.pin.pepper' => 'test-only-temporary-value']);
@@ -54,8 +62,13 @@ final class DeliveryEndpointTest extends TestCase
             $payload = ['pin' => '0007', ...$payload];
         }
 
+        $key ??= (string) Str::uuid();
+        if ($method === 'POST' && str_ends_with($path, '/entregas') && ($payload['status'] ?? '') === 'delivered') {
+            $payload = ['accounting_version' => 2, 'client_event_id' => $key, 'payment' => ['amount' => '0.000'], ...$payload];
+        }
+
         return $this->json($method, '/api/v1'.$path, $payload, [
-            'Idempotency-Key' => $key ?? (string) Str::uuid(),
+            'Idempotency-Key' => $key,
         ]);
     }
 
@@ -162,17 +175,17 @@ final class DeliveryEndpointTest extends TestCase
 
         $this->getJson('/api/v1/repartos/clientes?limit=2')->assertOk()
             ->assertJsonCount(2, 'data')
-            ->assertJsonPath('data.0.id', 'demo-001');
+            ->assertJsonPath('data.0.id', '01K00000000000000000000001');
         $this->getJson('/api/v1/repartos/clientes?search=&limit=50')->assertOk()
             ->assertJsonCount(6, 'data');
         $this->getJson('/api/v1/repartos/clientes?search=Estación')->assertOk()
             ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.id', 'demo-006');
+            ->assertJsonPath('data.0.id', '01K00000000000000000000006');
 
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-006', 'status' => 'delivered',
+            'client_reference' => '01K00000000000000000000006', 'status' => 'delivered',
             'items' => [['unit' => 'huevo', 'amount' => '40', 'eggs_per_unit' => 1]],
-        ])->assertOk()->assertJsonPath('data.client_reference', 'demo-006');
+        ])->assertOk()->assertJsonPath('data.client_reference', '01K00000000000000000000006');
 
         $key = (string) Str::uuid();
         $this->command('POST', "/repartos/{$deliveryId}/cargas", ['quantity' => 30], $key)
@@ -184,14 +197,14 @@ final class DeliveryEndpointTest extends TestCase
         $this->command('POST', "/repartos/{$deliveryId}/cargas", ['quantity' => 31], $key)->assertStatus(409);
 
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-001', 'status' => 'delivered',
+            'client_reference' => '01K00000000000000000000001', 'status' => 'delivered',
             'items' => [['unit' => 'huevo', 'amount' => '20', 'eggs_per_unit' => 1]],
         ])->assertOk();
         $this->assertDatabaseHas('delivery_stops', [
-            'client_reference' => 'demo-006', 'sequence' => 1, 'delivery_id' => Delivery::query()->where('public_id', $deliveryId)->firstOrFail()->id,
+            'client_reference' => '01K00000000000000000000006', 'sequence' => 1, 'delivery_id' => Delivery::query()->where('public_id', $deliveryId)->firstOrFail()->id,
         ]);
         $this->assertDatabaseHas('delivery_stops', [
-            'client_reference' => 'demo-001', 'sequence' => 2,
+            'client_reference' => '01K00000000000000000000001', 'sequence' => 2,
         ]);
         $this->assertDatabaseHas('delivery_loads', [
             'delivery_id' => Delivery::query()->where('public_id', $deliveryId)->firstOrFail()->id,
@@ -231,7 +244,7 @@ final class DeliveryEndpointTest extends TestCase
             'items' => [['unit' => 'huevo', 'amount' => '1', 'eggs_per_unit' => 1]],
         ])->assertStatus(409);
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-001', 'status' => 'pending',
+            'client_reference' => '01K00000000000000000000001', 'status' => 'pending',
         ])->assertUnprocessable();
 
         $other = User::factory()->create();
@@ -251,7 +264,7 @@ final class DeliveryEndpointTest extends TestCase
         ])->assertCreated()->json('data.id');
 
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-001', 'status' => 'not_delivered',
+            'client_reference' => '01K00000000000000000000001', 'status' => 'not_delivered',
             'visit_reason' => 'Negocio cerrado',
         ])->assertOk()
             ->assertJsonPath('data.delivered_quantity', 0)
@@ -353,7 +366,7 @@ final class DeliveryEndpointTest extends TestCase
             ->json('data.id');
 
         $key = (string) Str::uuid();
-        $first = ['client_reference' => 'demo-001', 'status' => 'delivered', 'items' => [
+        $first = ['client_reference' => '01K00000000000000000000001', 'status' => 'delivered', 'items' => [
             ['unit' => 'maple', 'amount' => '1', 'eggs_per_unit' => 30],
             ['unit' => 'huevo', 'amount' => '3', 'eggs_per_unit' => 1],
         ]];
@@ -361,7 +374,7 @@ final class DeliveryEndpointTest extends TestCase
             ->assertJsonPath('data.delivered_quantity', 33)
             ->assertJsonPath('data.items.0.eggs', 30);
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-002', 'status' => 'delivered', 'delivered_quantity' => 1,
+            'client_reference' => '01K00000000000000000000002', 'status' => 'delivered', 'delivered_quantity' => 1,
         ])->assertUnprocessable();
         $this->command('POST', "/repartos/{$deliveryId}/entregas", $first, $key)->assertOk();
         $this->assertDatabaseCount('delivery_stops', 1);
@@ -374,14 +387,14 @@ final class DeliveryEndpointTest extends TestCase
             ->assertJsonPath('data.unit_balances.rows.1.remaining_amount', '1');
 
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-002', 'status' => 'delivered',
+            'client_reference' => '01K00000000000000000000002', 'status' => 'delivered',
             'items' => [['unit' => 'maple', 'amount' => '2', 'eggs_per_unit' => 30]],
         ])->assertUnprocessable();
         $this->command('POST', "/repartos/{$deliveryId}/cargas", [
             'items' => [['unit' => 'maple', 'amount' => '1', 'eggs_per_unit' => 30]],
         ])->assertOk()->assertJsonPath('data.unit_balances.rows.1.remaining_amount', '2');
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-002', 'status' => 'delivered',
+            'client_reference' => '01K00000000000000000000002', 'status' => 'delivered',
             'items' => [['unit' => 'maple', 'amount' => '2', 'eggs_per_unit' => 30]],
         ])->assertOk()->assertJsonPath('data.delivered_quantity', 60);
         $this->getJson("/api/v1/repartos/{$deliveryId}")->assertOk()
@@ -400,7 +413,7 @@ final class DeliveryEndpointTest extends TestCase
         // Simula una definición histórica importada distinta para comprobar la copia de la carga.
         EggPresentation::query()->where('code', 'maple')->update(['eggs_per_unit' => 24]);
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-001', 'status' => 'delivered',
+            'client_reference' => '01K00000000000000000000001', 'status' => 'delivered',
             'items' => [['unit' => 'maple', 'amount' => '0.5', 'eggs_per_unit' => 30, 'unit_price' => 100]],
         ])->assertOk()->assertJsonPath('data.delivered_quantity', 15);
         $this->getJson("/api/v1/repartos/{$deliveryId}")->assertOk()
@@ -435,7 +448,7 @@ final class DeliveryEndpointTest extends TestCase
 
         // Request: registra la entrega de un cliente y cierra con huevos devueltos.
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-001',
+            'client_reference' => '01K00000000000000000000001',
             'status' => 'delivered',
             'items' => [['unit' => 'huevo', 'amount' => '40', 'eggs_per_unit' => 1]],
         ])->assertOk();
@@ -609,7 +622,7 @@ final class DeliveryEndpointTest extends TestCase
         $this->assertSame($secondBalance - 30, $query->execute($secondUnit)['balance']);
         // Request: entrega medio maple con precio particular; no vuelve a descontar stock central.
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-001', 'status' => 'delivered',
+            'client_reference' => '01K00000000000000000000001', 'status' => 'delivered',
             'items' => [['unit' => 'maple', 'amount' => '0.5', 'eggs_per_unit' => 30, 'unit_price' => 80]],
         ])->assertOk()->assertJsonPath('data.total_amount', '40.000');
         $this->assertSame($secondBalance - 30, $query->execute($secondUnit)['balance']);
@@ -651,7 +664,7 @@ final class DeliveryEndpointTest extends TestCase
         $item = ['unit' => $presentation->code, 'amount' => '0.125', 'eggs_per_unit' => 360, 'unit_price' => 101];
         // Request: conserva exactamente $12,625, sin modificar el precio predeterminado.
         $event = (string) Str::uuid();
-        $stop = ['client_reference' => 'demo-001', 'status' => 'delivered', 'items' => [$item]];
+        $stop = ['client_reference' => '01K00000000000000000000001', 'status' => 'delivered', 'items' => [$item]];
         $this->command('POST', "/repartos/{$deliveryId}/entregas", $stop, $event)->assertOk()
             ->assertJsonPath('data.delivered_quantity', 45)->assertJsonPath('data.total_amount', '12.625')
             ->assertJsonPath('data.items.0.unit_price', 101)->assertJsonPath('data.items.0.line_amount', '12.625');
@@ -660,7 +673,7 @@ final class DeliveryEndpointTest extends TestCase
         // Request: rechaza un precio fraccionario aun con una cantidad válida.
         $item['unit_price'] = 100.01;
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-002', 'status' => 'delivered', 'items' => [$item],
+            'client_reference' => '01K00000000000000000000002', 'status' => 'delivered', 'items' => [$item],
         ])->assertUnprocessable()->assertJsonValidationErrors('items.0.unit_price');
         // Request: devuelve la fracción restante y conserva su presentación.
         $this->command('POST', "/repartos/{$deliveryId}/cierre", [

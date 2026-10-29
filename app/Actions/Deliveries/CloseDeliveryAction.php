@@ -12,6 +12,7 @@ use App\Models\Deliveries\Delivery;
 use App\Models\Deliveries\DeliveryStop;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
+use App\Services\Deliveries\DeliveryFinancialSummary;
 use App\Services\Deliveries\DeliveryUnitBalance;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -84,7 +85,10 @@ final readonly class CloseDeliveryAction
                 );
             }
 
+            $lockedDelivery->load('accountMovements.account.customer');
+            $snapshot = app(DeliveryFinancialSummary::class)->execute($lockedDelivery);
             $lockedDelivery->forceFill([
+                'financial_snapshot' => $snapshot,
                 'status' => DeliveryStatus::Completed,
                 'returned_quantity' => $returned,
                 'returned_items' => $allocation['items'] ?? null,
@@ -124,6 +128,7 @@ final readonly class CloseDeliveryAction
             'loads.productionUnit:id,name',
             'returnProductionUnit:id,name',
             'stops',
+            'accountMovements.account.customer', 'accountMovements.operation', 'accountMovements.delivery', 'accountMovements.reversal', 'accountMovements.original',
             'latestLocation',
         ]);
     }

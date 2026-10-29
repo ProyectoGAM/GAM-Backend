@@ -13,6 +13,12 @@ final class IdentityPermissionSeeder extends Seeder
         $permissions = [
             'admin.dashboard.view',
             'audit.view',
+            'customers.view',
+            'customers.manage',
+            'customer-accounts.view',
+            'customer-payments.record',
+            'customer-accounts.adjust',
+            'customer-accounts.reverse',
             'flocks.view',
             'flocks.manage',
             'flocks.redistribute',

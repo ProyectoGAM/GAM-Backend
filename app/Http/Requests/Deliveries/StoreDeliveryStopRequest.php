@@ -24,6 +24,13 @@ final class StoreDeliveryStopRequest extends DeliveryRequest
     {
         return [
             ...$this->commandRules(),
+            'accounting_version' => ['sometimes', 'integer', 'in:2'],
+            'client_event_id' => ['sometimes', 'uuid'],
+            'payment' => ['sometimes', 'prohibited_if:status,not_delivered', 'array:amount,payment_method,payment_reference,reason'],
+            'payment.amount' => ['required_with:payment', 'string'],
+            'payment.payment_method' => ['sometimes', 'in:cash,transfer,other'],
+            'payment.payment_reference' => ['sometimes', 'nullable', 'string', 'max:240'],
+            'payment.reason' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'client_reference' => ['required', 'string', 'max:80'],
             'status' => ['required', Rule::in([DeliveryStopStatus::Delivered->value, DeliveryStopStatus::NotDelivered->value])],
             'items' => ['required_if:status,delivered', 'prohibited_if:status,not_delivered', 'array', 'min:1', 'max:20'],

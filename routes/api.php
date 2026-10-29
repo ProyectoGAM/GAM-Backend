@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\AuditAndTraceability\AuditEntryController;
+use App\Http\Controllers\CustomersAndAccounts\CustomerAccountController;
+use App\Http\Controllers\CustomersAndAccounts\CustomerController;
 use App\Http\Controllers\Deliveries\DeliveryController;
 use App\Http\Controllers\FarmStructure\MaintenanceController;
 use App\Http\Controllers\FarmStructure\PoultryHouseController;
@@ -83,6 +85,20 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         ->name('shared-device.local-revoke');
 
     Route::middleware('auth:sanctum')->group(function (): void {
+        Route::middleware(['shared.device:any', 'shared.session.conditional'])->name('customers.')->group(function (): void {
+            Route::get('/clientes', [CustomerController::class, 'index'])->name('index');
+            Route::post('/clientes', [CustomerController::class, 'store'])->name('store');
+            Route::get('/clientes/mapa', [CustomerController::class, 'map'])->name('map');
+            Route::get('/clientes/{cliente}', [CustomerController::class, 'show'])->name('show');
+            Route::patch('/clientes/{cliente}', [CustomerController::class, 'update'])->name('update');
+            Route::patch('/clientes/{cliente}/estado', [CustomerController::class, 'status'])->name('status');
+            Route::get('/clientes/{cliente}/entregas', [CustomerController::class, 'deliveries'])->name('deliveries');
+            Route::get('/clientes/{cliente}/cuenta-corriente', [CustomerAccountController::class, 'show'])->name('account');
+            Route::get('/clientes/{cliente}/movimientos', [CustomerAccountController::class, 'index'])->name('movements');
+            Route::post('/clientes/{cliente}/pagos', [CustomerAccountController::class, 'pay'])->name('payments.store');
+            Route::post('/clientes/{cliente}/ajustes', [CustomerAccountController::class, 'adjust'])->name('adjustments.store');
+            Route::post('/clientes/{cliente}/movimientos/{movimiento}/reversion', [CustomerAccountController::class, 'reverse'])->name('movements.reverse');
+        });
         Route::middleware(['shared.device:any', 'shared.session.conditional'])->name('management-plans.')->group(function (): void {
             Route::get('/plantillas-manejo', [PlanTemplateController::class, 'index'])->name('templates.index');
             Route::get('/alimentacion/productos', [FeedSupplyController::class, 'products'])->name('feed.products');
@@ -182,6 +198,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::post('/repartos/{reparto}/entregas', [DeliveryController::class, 'stop'])
             ->middleware('throttle:delivery-commands')
             ->name('deliveries.stops.store');
+        Route::post('/repartos/{reparto}/cobros', [DeliveryController::class, 'payment'])->middleware('throttle:delivery-commands')->name('deliveries.payments.store');
         Route::post('/repartos/{reparto}/cargas', [DeliveryController::class, 'load'])
             ->middleware('throttle:delivery-commands')
             ->name('deliveries.loads.store');

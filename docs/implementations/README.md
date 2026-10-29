@@ -18,6 +18,8 @@ Cada guía describe el alcance entregado, las decisiones de negocio, el contrato
 - [Retirada operativa de productos finished_feed](finished-feed-retirement.md)
 - [Recetas, elaboración inmediata, ajustes y stock de alimento](feed-recipes-implementation.md)
 - [Alimentación de lotes, consumo diario y rectificaciones](flock-feeding-implementation.md)
+- [Clientes y cuenta corriente — implementación de las cards 13 y 15](customers-and-accounts-implementation.md)
+- [Clientes y cuenta corriente — plan y decisiones de alcance](customers-and-accounts-implementation-plan.md)
 
 ## Qué registrar en cada cambio
 

@@ -15,6 +15,7 @@ final readonly class ShowDeliveryQuery
                 'loads.productionUnit:id,name',
                 'returnProductionUnit:id,name',
                 'stops',
+                'accountMovements.account.customer', 'accountMovements.operation', 'accountMovements.delivery', 'accountMovements.reversal', 'accountMovements.original',
                 'latestLocation',
                 'locations' => fn ($query) => $query->orderBy('captured_at')->limit(500),
             ])

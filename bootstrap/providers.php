@@ -2,6 +2,7 @@
 
 use App\Providers\AppServiceProvider;
 use App\Providers\AuditAndTraceabilityServiceProvider;
+use App\Providers\CustomersAndAccountsServiceProvider;
 use App\Providers\FarmStructureServiceProvider;
 use App\Providers\HorizonServiceProvider;
 use App\Providers\InventoryServiceProvider;
@@ -12,6 +13,7 @@ use App\Providers\SuppliersAndCatalogsServiceProvider;
 return [
     AppServiceProvider::class,
     AuditAndTraceabilityServiceProvider::class,
+    CustomersAndAccountsServiceProvider::class,
     FarmStructureServiceProvider::class,
     HorizonServiceProvider::class,
     InventoryServiceProvider::class,

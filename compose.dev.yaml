@@ -333,7 +333,8 @@ services:
          {"url":"/docs/openapi/reporting.yaml","name":"Reportes e indicadores"},
          {"url":"/docs/openapi/reporting-operations.yaml","name":"Alimentación y donaciones"},
          {"url":"/docs/openapi/reference-data.yaml","name":"Opciones de referencia"},
-         {"url":"/docs/openapi/deliveries.yaml","name":"Repartos"}]
+         {"url":"/docs/openapi/deliveries.yaml","name":"Repartos"},
+         {"url":"/docs/openapi/customers-and-accounts.yaml","name":"Clientes y cuenta corriente"}]
       URLS_PRIMARY_NAME: Autenticación
     volumes:
       - ./contracts/openapi:/usr/share/nginx/html/openapi:ro

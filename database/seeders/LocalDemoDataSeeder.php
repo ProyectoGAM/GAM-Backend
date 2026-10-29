@@ -29,6 +29,7 @@ use App\Models\User;
 use App\Services\ReportingAndAnalytics\ReportExportWriter;
 use App\Services\ReportingAndAnalytics\ReportQueryNormalizer;
 use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
+use Database\Seeders\CustomersAndAccounts\CustomersDemoSeeder;
 use Database\Seeders\FarmStructure\MaintenanceDemoSeeder;
 use Database\Seeders\Inventory\FeedManufactureDemoSeeder;
 use Database\Seeders\Inventory\FeedRecipeDemoSeeder;
@@ -63,6 +64,7 @@ final class LocalDemoDataSeeder extends Seeder
         $units = $this->seedProductionUnits($localities);
         $this->seedPoultryHouses($units);
         $this->call(MaintenanceDemoSeeder::class);
+        $this->call(CustomersDemoSeeder::class);
         $suppliers = $this->seedSuppliers($localities);
         $this->call(MedicineDemoSeeder::class);
         $products = $this->seedProducts();

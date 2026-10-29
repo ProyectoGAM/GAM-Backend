@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Deliveries;
 
+use App\Actions\CustomersAndAccounts\RecordCustomerPaymentAction;
 use App\Actions\Deliveries\AddDeliveryLoadAction;
 use App\Actions\Deliveries\CloseDeliveryAction;
 use App\Actions\Deliveries\PublishDeliveryLocationsAction;
@@ -20,27 +21,38 @@ use App\Http\Requests\Deliveries\ShowDeliveryRequest;
 use App\Http\Requests\Deliveries\StartDeliveryRequest;
 use App\Http\Requests\Deliveries\StoreDeliveryLoadRequest;
 use App\Http\Requests\Deliveries\StoreDeliveryLocationsRequest;
+use App\Http\Requests\Deliveries\StoreDeliveryPaymentRequest;
 use App\Http\Requests\Deliveries\StoreDeliveryStopRequest;
+use App\Http\Resources\CustomersAndAccounts\CustomerMovementResource;
+use App\Http\Resources\CustomersAndAccounts\DeliveryClientResource;
 use App\Http\Resources\Deliveries\DeliveryResource;
 use App\Http\Resources\Deliveries\DeliveryStopResource;
+use App\Models\CustomersAndAccounts\Customer;
 use App\Models\Deliveries\Delivery;
 use App\Models\FarmStructure\ProductionUnit;
+use App\Queries\CustomersAndAccounts\ListCustomersQuery;
 use App\Queries\Deliveries\ListDeliveriesQuery;
 use App\Queries\Deliveries\ShowDeliveryQuery;
 use App\Services\Deliveries\DeliveryLoadUnits;
-use App\Services\Deliveries\LocalDeliveryClientCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Symfony\Component\HttpFoundation\Response;
 
 final readonly class DeliveryController
 {
-    public function clients(ListDeliveryClientsRequest $request, LocalDeliveryClientCatalog $catalog): JsonResponse
+    public function clients(ListDeliveryClientsRequest $request, ListCustomersQuery $query): AnonymousResourceCollection
     {
-        return response()->json(['data' => $catalog->search(
-            trim((string) $request->validated('search', '')),
-            (int) $request->validated('limit', 50),
-        )]);
+        return DeliveryClientResource::collection($query->operational($request->validated()));
+    }
+
+    public function payment(StoreDeliveryPaymentRequest $request, Delivery $reparto, RecordCustomerPaymentAction $action): AnonymousResourceCollection
+    {
+        $data = $request->attributesForAction();
+        $customer = Customer::query()->where('public_id', $data['client_reference'])->firstOrFail();
+        unset($data['client_reference'], $data['idempotency_key']);
+        $operation = $action->execute($customer, $request->actor(), $data, $request->idempotencyKey(), $reparto);
+
+        return CustomerMovementResource::collection($operation->movements()->with(['account.customer', 'operation', 'delivery', 'original', 'reversal'])->get());
     }
 
     public function units(ListDeliveryClientsRequest $request, DeliveryLoadUnits $units): JsonResponse

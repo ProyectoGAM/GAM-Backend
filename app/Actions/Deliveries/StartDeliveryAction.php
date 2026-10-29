@@ -13,7 +13,7 @@ use App\Models\Deliveries\DeliveryLoad;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
 use App\Services\Deliveries\DeliveryLoadUnits;
-use App\Services\Deliveries\LocalDeliveryClientCatalog;
+use App\Services\Deliveries\LocalDeliveryVehicleReference;
 use App\Services\Inventory\EggPresentationCatalog;
 use Illuminate\Support\Facades\DB;
 
@@ -22,7 +22,7 @@ final readonly class StartDeliveryAction
     public function __construct(
         private RecordEggStockTransactionAction $stock,
         private AuditRecorder $audit,
-        private LocalDeliveryClientCatalog $clientCatalog,
+        private LocalDeliveryVehicleReference $clientCatalog,
         private DeliveryLoadUnits $units,
         private EggPresentationCatalog $catalog,
     ) {}
@@ -135,6 +135,7 @@ final readonly class StartDeliveryAction
             'loads.productionUnit:id,name',
             'returnProductionUnit:id,name',
             'stops',
+            'accountMovements.account.customer', 'accountMovements.operation', 'accountMovements.delivery', 'accountMovements.reversal', 'accountMovements.original',
             'latestLocation',
         ]);
     }
