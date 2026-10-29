@@ -21,7 +21,7 @@ final class MortalityEndpointTest extends LotsTestCase
     {
         // Preparación: configura un lote vigente.
         $this->signIn();
-        $flock = $this->flock(100);
+        $flock = $this->flock(100, house: PoultryHouse::factory()->create(['bird_capacity' => 96]));
 
         // Request: registra cinco bajas y conserva la cantidad inicial.
         $created = $this->command('POST', "/flocks/{$flock->public_id}/mortalities", [
@@ -31,7 +31,7 @@ final class MortalityEndpointTest extends LotsTestCase
         $originalMovementId = $created->json('data.movement.id');
         $original = FlockMovement::query()->where('public_id', $originalMovementId)->firstOrFail()->getAttributes();
 
-        // Request: corrige a tres bajas mediante un movimiento compensatorio de dos aves.
+        // Request: restituye dos aves aunque la ocupación resultante supere el umbral de 96.
         $this->command('PATCH', "/mortalities/{$id}", [
             'version' => 1, 'flock_version' => 2, 'quantity' => 3, 'reason' => 'Recuento verificado',
         ])->assertOk()->assertJsonPath('data.flock.current_quantity', 97)->assertJsonPath('data.mortality.quantity', 3)

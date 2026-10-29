@@ -52,7 +52,7 @@ final readonly class FlockState
         }
     }
 
-    public function receive(LockedPoultryHouseData $house, int $netIncrease, bool $requiresEmpty = false, ?Flock $existingReceiver = null): void
+    public function receive(LockedPoultryHouseData $house, bool $requiresEmpty = false, ?Flock $existingReceiver = null): void
     {
         if (! $house->canReceive) {
             throw new LotsConflict('El galpón destino y su unidad productiva deben estar operativos.');
@@ -64,9 +64,6 @@ final readonly class FlockState
             }
         } elseif ($house->openFlocksCount > 0) {
             throw new LotsConflict('El galpón destino ya está ocupado por un lote abierto.');
-        }
-        if (! $house->supports($netIncrease)) {
-            throw new LotsConflict('La redistribución supera la capacidad disponible del galpón.');
         }
     }
 

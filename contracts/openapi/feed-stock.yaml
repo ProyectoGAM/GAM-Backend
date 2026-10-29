@@ -358,6 +358,8 @@ components:
       description: >-
         Tipo inmutable. Un galpón poultry exige capacidad de aves positiva; una
         planta feed debe exponer bird_capacity como null y no admite lotes.
+        La capacidad es un umbral de alerta y puede ser inferior a la ocupación.
+        Las respuestas de galpones incluyen ocupación y alerta, calculadas desde Lotes.
       required: [id, production_unit_id, name, type, bird_capacity, status]
       properties:
         id: { type: integer }
@@ -365,6 +367,21 @@ components:
         name: { type: string }
         type: { type: string, enum: [poultry, feed], default: poultry }
         bird_capacity: { type: [integer, 'null'], minimum: 1 }
+        current_occupancy:
+          type: [integer, 'null']
+          minimum: 0
+          description: Aves vivas del lote abierto, incluida cuarentena; null para plantas.
+        capacity_exceeded:
+          type: boolean
+          description: Verdadero sólo cuando la ocupación supera bird_capacity; falso para plantas.
+        excess_quantity:
+          type: [integer, 'null']
+          minimum: 0
+          description: Aves por encima del umbral; cero sin exceso y null para plantas.
+        capacity_alert:
+          type: [string, 'null']
+          description: Mensaje de alerta en español; null sin exceso o para plantas.
+          example: 'La ocupación del galpón supera su capacidad máxima. Aves excedentes: 20.'
         status: { type: string, enum: [operational, maintenance, out_of_service, inactive] }
     Problem:
       type: object

@@ -75,7 +75,6 @@ final readonly class ReverseRedistributionAction
                 $current = $flocks->first(fn ($flock): bool => $flock->poultry_house_id === (int) $houseId);
                 $this->state->receive(
                     $houses[$houseId],
-                    $delta,
                     requiresEmpty: $current?->status === FlockStatus::Finished || $current === null,
                     existingReceiver: $current !== null && $current->status !== FlockStatus::Finished ? $current : null,
                 );

@@ -5,9 +5,12 @@ namespace Tests\Feature\FarmStructure;
 use App\Interfaces\FarmStructure\PoultryHouseOccupancyProvider;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
+use App\Models\Lots\Flock;
 use App\Models\User;
+use App\Queries\FarmStructure\GetOperationalPoultryHouseQuery;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\TestWith;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
@@ -60,7 +63,10 @@ final class PoultryHouseEndpointTest extends TestCase
         )->assertCreated()
             ->assertJsonPath('data.type', 'feed')
             ->assertJsonPath('data.bird_capacity', null)
-            ->assertJsonPath('data.current_occupancy', null);
+            ->assertJsonPath('data.current_occupancy', null)
+            ->assertJsonPath('data.capacity_exceeded', false)
+            ->assertJsonPath('data.excess_quantity', null)
+            ->assertJsonPath('data.capacity_alert', null);
 
         // Verificación: confirma el tipo feed y la ausencia de capacidad física.
         $this->assertDatabaseHas('poultry_houses', [
@@ -172,8 +178,8 @@ final class PoultryHouseEndpointTest extends TestCase
         ]);
     }
 
-    // Flujo: reduce capacidad por debajo de la ocupación y verifica conflicto sin cambios.
-    public function test_returns_409_and_preserves_capacity_when_current_occupancy_is_higher(): void
+    // Flujo: reduce el umbral bajo la ocupación actual y devuelve una alerta con auditoría.
+    public function test_capacity_below_current_occupancy_is_saved_with_warning(): void
     {
         // Preparación: crea el galpón, autentica al gestor y fija una ocupación actual.
         $poultryHouse = PoultryHouse::factory()->create(['bird_capacity' => 100]);
@@ -200,18 +206,22 @@ final class PoultryHouseEndpointTest extends TestCase
             }
         });
 
-        // Acción: intenta reducir la capacidad por debajo de la ocupación.
+        // Acción: reduce la capacidad por debajo de la ocupación.
         $this->patchJson("/api/v1/poultry-houses/{$poultryHouse->getKey()}", [
             'bird_capacity' => 79,
-        ])->assertConflict()
-            ->assertJsonPath('message', 'La capacidad de aves no puede ser menor que la ocupación actual.');
+        ])->assertOk()
+            ->assertJsonPath('data.bird_capacity', 79)
+            ->assertJsonPath('data.current_occupancy', 80)
+            ->assertJsonPath('data.capacity_exceeded', true)
+            ->assertJsonPath('data.excess_quantity', 1)
+            ->assertJsonPath('data.capacity_alert', 'La ocupación del galpón supera su capacidad máxima. Aves excedentes: 1.');
 
-        // Verificación: confirma capacidad original y ausencia de auditoría.
+        // Verificación: confirma el nuevo límite y la auditoría de la modificación.
         $this->assertDatabaseHas('poultry_houses', [
             'id' => $poultryHouse->getKey(),
-            'bird_capacity' => 100,
+            'bird_capacity' => 79,
         ]);
-        $this->assertDatabaseMissing('activity_log', [
+        $this->assertDatabaseHas('activity_log', [
             'event' => 'poultry_house_updated',
             'subject_id' => $poultryHouse->getKey(),
         ]);
@@ -250,8 +260,8 @@ final class PoultryHouseEndpointTest extends TestCase
     {
         // Preparación: crea dos galpones y configura un proveedor que sólo resuelve lotes de IDs.
         $productionUnit = ProductionUnit::factory()->create();
-        $firstHouse = PoultryHouse::factory()->for($productionUnit)->create(['name' => 'House A']);
-        $secondHouse = PoultryHouse::factory()->for($productionUnit)->create(['name' => 'House B']);
+        $firstHouse = PoultryHouse::factory()->for($productionUnit)->create(['name' => 'House A', 'bird_capacity' => 10]);
+        $secondHouse = PoultryHouse::factory()->for($productionUnit)->create(['name' => 'House B', 'bird_capacity' => 10]);
         $provider = new class implements PoultryHouseOccupancyProvider
         {
             /** @var list<list<int>> */
@@ -288,18 +298,51 @@ final class PoultryHouseEndpointTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.0.id', $firstHouse->getKey())
             ->assertJsonPath('data.0.current_occupancy', 10)
+            ->assertJsonPath('data.0.capacity_exceeded', false)
+            ->assertJsonPath('data.0.excess_quantity', 0)
+            ->assertJsonPath('data.0.capacity_alert', null)
             ->assertJsonPath('data.1.id', $secondHouse->getKey())
-            ->assertJsonPath('data.1.current_occupancy', 20);
+            ->assertJsonPath('data.1.current_occupancy', 20)
+            ->assertJsonPath('data.1.capacity_exceeded', true)
+            ->assertJsonPath('data.1.excess_quantity', 10);
 
         $this->getJson("/api/v1/poultry-houses/{$secondHouse->getKey()}")
             ->assertOk()
-            ->assertJsonPath('data.current_occupancy', 20);
+            ->assertJsonPath('data.current_occupancy', 20)
+            ->assertJsonPath('data.capacity_alert', 'La ocupación del galpón supera su capacidad máxima. Aves excedentes: 10.');
 
         // Verificación: prueba una llamada por colección y una llamada batch para el detalle.
         $this->assertSame([
             [(int) $firstHouse->getKey(), (int) $secondHouse->getKey()],
             [(int) $secondHouse->getKey()],
         ], $provider->requestedBatches);
+    }
+
+    // Flujo: la alerta depende de la ocupación real y sólo aparece al superar el umbral.
+    #[TestWith([99, false, 0, 1])]
+    #[TestWith([100, false, 0, 0])]
+    #[TestWith([101, true, 1, 0])]
+    public function test_capacity_warning_uses_live_occupancy(int $quantity, bool $exceeded, int $excess, int $available): void
+    {
+        // Preparación: crea un lote en cuarentena y un umbral de cien aves.
+        $house = PoultryHouse::factory()->create(['bird_capacity' => 100]);
+        Flock::factory()->quarantined()->create([
+            'poultry_house_id' => $house->id, 'production_unit_id' => $house->production_unit_id,
+            'initial_quantity' => $quantity, 'current_quantity' => $quantity,
+        ]);
+        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.view']), ['*']);
+
+        // Consulta: verifica el detalle y el listado con el proveedor real de Lotes.
+        $this->getJson("/api/v1/poultry-houses/{$house->id}")
+            ->assertOk()->assertJsonPath('data.capacity_exceeded', $exceeded)
+            ->assertJsonPath('data.excess_quantity', $excess)
+            ->assertJsonPath('data.capacity_alert', $exceeded ? 'La ocupación del galpón supera su capacidad máxima. Aves excedentes: 1.' : null);
+        $this->getJson("/api/v1/production-units/{$house->production_unit_id}/poultry-houses")
+            ->assertOk()->assertJsonPath('data.0.capacity_exceeded', $exceeded);
+
+        // Consulta: la disponibilidad informativa nunca es negativa ni provoca una excepción.
+        $operationalHouse = $this->app->make(GetOperationalPoultryHouseQuery::class)->execute($house->id);
+        $this->assertSame($available, $operationalHouse->availableCapacity);
     }
 
     /** @param list<string> $permissions */

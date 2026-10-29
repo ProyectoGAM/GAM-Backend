@@ -31,14 +31,26 @@ final class BirdCapacityTest extends TestCase
         BirdCapacity::fromInt(0);
     }
 
-    // Flujo: evalúa una ocupación superior a la capacidad y verifica el rechazo.
-    public function test_rejects_occupancy_higher_than_capacity(): void
+    // Flujo: admite sobreocupación y muestra disponibilidad cero sin alterar el límite.
+    public function test_over_capacity_occupancy_has_zero_availability(): void
+    {
+        // Acción: evalúa un galpón con una ave de exceso.
+        $capacity = BirdCapacity::fromInt(100);
+
+        // Verificación: conserva el umbral y evita disponibilidad negativa.
+        $this->assertSame(0, $capacity->availableFor(101));
+        $this->assertFalse($capacity->supportsOccupancy(101));
+        $this->assertSame(100, $capacity->value());
+    }
+
+    // Flujo: sigue rechazando una ocupación física negativa.
+    public function test_rejects_negative_occupancy(): void
     {
         // Preparación: declara la excepción esperada.
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('La ocupación debe estar entre cero y la capacidad de aves.');
+        $this->expectExceptionMessage('La ocupación no puede ser negativa.');
 
-        // Acción: calcula disponibilidad con una ocupación excedida.
-        BirdCapacity::fromInt(100)->availableFor(101);
+        // Acción: calcula disponibilidad con una ocupación inválida.
+        BirdCapacity::fromInt(100)->availableFor(-1);
     }
 }

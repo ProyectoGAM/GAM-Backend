@@ -202,18 +202,21 @@ final class FlockEndpointTest extends LotsTestCase
         $this->assertSame(100, $flock->fresh()->current_quantity);
     }
 
-    // Flujo: bloquea altas en instalaciones no operativas o llenas.
-    public function test_inactive_and_over_capacity_admissions_are_rejected(): void
+    // Flujo: admite aves por encima del límite conservando el estado operativo como requisito.
+    public function test_over_capacity_admission_is_allowed_but_inactive_house_is_rejected(): void
     {
         // Preparación: crea un galpón con capacidad insuficiente.
         $this->signIn();
         $payload = $this->payload();
-        $this->command('POST', '/flocks', [...$payload, 'initial_quantity' => 101])->assertConflict();
+        $this->command('POST', '/flocks', [...$payload, 'initial_quantity' => 101])->assertCreated()
+            ->assertJsonPath('data.flock.current_quantity', 101);
+        $this->assertDatabaseHas('poultry_houses', ['id' => $payload['poultry_house_id'], 'bird_capacity' => 100]);
+        $this->assertDatabaseHas('activity_log', ['event' => 'flock_created']);
 
         // Mutación: retira el galpón de operación.
-        PoultryHouse::query()->whereKey($payload['poultry_house_id'])->update(['status' => 'maintenance']);
-        $this->command('POST', '/flocks', $payload)->assertConflict();
-        $this->assertDatabaseCount('flocks', 0);
+        $inactiveHouse = PoultryHouse::factory()->create(['status' => 'maintenance']);
+        $this->command('POST', '/flocks', [...$payload, 'code' => 'INACTIVE', 'poultry_house_id' => $inactiveHouse->id])->assertConflict();
+        $this->assertDatabaseCount('flocks', 1);
     }
 
     // Flujo: impide un segundo lote abierto aunque el galpón conserve capacidad física.
