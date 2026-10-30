@@ -4,7 +4,6 @@ namespace Database\Factories\ManagementPlans;
 
 use App\Models\Lots\Flock;
 use App\Models\ManagementPlans\MedicineApplication;
-use App\Models\ManagementPlans\MedicineStockMovement;
 use App\Models\SuppliersAndCatalogs\Medicine;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -39,18 +38,10 @@ class MedicineApplicationFactory extends Factory
             'occurred_at' => now(),
             'responsible_user_id' => User::factory(),
             'responsible_name_snapshot' => fn (array $attributes): string => User::query()->findOrFail($attributes['responsible_user_id'])->name,
-            'quantity' => 1,
+            'quantity' => null,
             'reason' => 'Tratamiento de prueba.',
             'notes' => null,
-            'stock_movement_id' => fn (array $attributes): int => MedicineStockMovement::factory()->create([
-                'medicine_id' => $attributes['medicine_id'],
-                'medicine_application_public_id' => $attributes['public_id'],
-                'movement_type' => 'application',
-                'quantity_delta' => -$attributes['quantity'],
-                'balance_after' => -$attributes['quantity'],
-                'operation_id' => $operationId,
-                'created_by' => $attributes['created_by'] ?? $createdBy,
-            ])->getKey(),
+            'stock_movement_id' => null,
             'created_by' => $createdBy,
             'operation_id' => $operationId,
         ];

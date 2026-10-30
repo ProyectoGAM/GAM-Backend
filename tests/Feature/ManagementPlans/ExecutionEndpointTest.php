@@ -3,17 +3,16 @@
 namespace Tests\Feature\ManagementPlans;
 
 use App\Enums\SuppliersAndCatalogs\ProductStatus;
-use App\Models\Inventory\StockBalance;
-use App\Models\Inventory\StockLocation;
 use App\Models\ManagementPlans\FlockPlanActivity;
+use App\Models\ManagementPlans\MedicineStockBalance;
 use App\Models\SuppliersAndCatalogs\Medicine;
 use App\Models\SuppliersAndCatalogs\Vaccine;
-use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\TestWith;
 use Tests\Feature\Lots\LotsTestCase;
 
 final class ExecutionEndpointTest extends LotsTestCase
 {
-    // Flujo: registra una vacuna prevista y una medicación fuera de plan con saldo negativo visible.
+    // Flujo: registra una vacuna prevista y una medicación fuera de plan sin cantidad ni control de stock.
     public function test_planned_vaccination_and_unplanned_medication_remain_independent(): void
     {
         // Preparación: crea el lote con vacuna prevista y referencias reales de catálogo.
@@ -26,7 +25,7 @@ final class ExecutionEndpointTest extends LotsTestCase
         $medicine = Medicine::factory()->create();
         $occurredAt = now()->subMinute()->toIso8601String();
 
-        // Request: vincula solamente la vacunación y descuenta dos unidades de medicamento.
+        // Request: vincula solamente la vacunación y registra el medicamento sin cantidad.
         $vaccination = $this->command('POST', '/flocks/'.$flock->public_id.'/vacunaciones', [
             'vaccine_id' => $vaccine->public_id,
             'plan_activity_id' => $activity->public_id,
@@ -34,13 +33,12 @@ final class ExecutionEndpointTest extends LotsTestCase
         ])->assertCreated()->assertJsonPath('data.vaccination_application.plan_activity_id', $activity->public_id);
         $medication = $this->command('POST', '/flocks/'.$flock->public_id.'/medicaciones', [
             'medicine_id' => $medicine->public_id,
-            'quantity' => 2,
             'reason' => 'Tratamiento indicado',
             'notes' => 'Detalle libre de dosis.',
             'occurred_at' => $occurredAt,
         ])->assertCreated()->assertJsonPath('data.medicine_application.plan_activity_id', null)
-            ->assertJsonPath('data.stock_balance.quantity', -2)
-            ->assertJsonPath('data.warnings.0.code', 'MEDICINE_STOCK_NEGATIVE');
+            ->assertJsonMissingPath('data.stock_balance')
+            ->assertJsonPath('data.warnings', []);
 
         // Mutación: cambia las fichas de catálogo después de las aplicaciones.
         $medicineName = $medicine->name;
@@ -62,31 +60,36 @@ final class ExecutionEndpointTest extends LotsTestCase
         $this->assertSame('Detalle libre de dosis.', $unplanned['module_data']['notes']);
         $this->assertSame($medicineName, $unplanned['module_data']['medicine']['name']);
         $this->assertSame($vaccineDescription, $planned['module_data']['vaccine']['description']);
-        $this->assertDatabaseCount('medicine_stock_movements', 1);
+        $this->assertDatabaseCount('medicine_stock_movements', 0);
     }
 
-    // Flujo: una corrección conserva el registro original y compensa el conteo de medicamento.
-    public function test_medication_correction_is_append_only_and_restores_stock(): void
+    // Flujo: una corrección conserva el registro original y su motivo sin generar stock.
+    #[TestWith(['medicine', 'medication', 'medicaciones'])]
+    #[TestWith(['vaccine', 'vaccination', 'vacunaciones'])]
+    public function test_application_correction_is_append_only_without_stock(string $kind, string $type, string $path): void
     {
         // Preparación: registra la aplicación efectiva.
         $this->signIn(['management-plans.view', 'management-plans.execute']);
         $flock = $this->flockWithPlan();
-        $medicine = Medicine::factory()->create();
-        $created = $this->command('POST', '/flocks/'.$flock->public_id.'/medicaciones', [
-            'medicine_id' => $medicine->public_id,
-            'quantity' => 3,
+        $catalog = $kind === 'medicine' ? Medicine::factory()->create() : Vaccine::factory()->create();
+        $root = $kind === 'medicine' ? 'medicine_application' : 'vaccination_application';
+        $created = $this->command('POST', '/flocks/'.$flock->public_id.'/'.$path, [
+            $kind.'_id' => $catalog->public_id,
             'reason' => 'Error de carga',
             'occurred_at' => now()->subMinute()->toIso8601String(),
         ])->assertCreated();
-        $applicationId = $created->json('data.medicine_application.id');
+        $applicationId = $created->json('data.'.$root.'.id');
 
         // Request: registra la corrección y conserva la aplicación anterior.
-        $this->command('POST', '/flocks/'.$flock->public_id.'/manejos/medication/'.$applicationId.'/correcciones', [
-            'reason' => 'Cantidad registrada por error.',
-        ])->assertCreated()->assertJsonPath('data.management_execution_correction.original_public_id', $applicationId);
-        $this->assertDatabaseHas('medicine_applications', ['public_id' => $applicationId, 'quantity' => 3]);
-        $this->assertDatabaseHas('medicine_stock_balances', ['medicine_id' => $medicine->id, 'on_hand_quantity' => 0]);
-        $this->assertDatabaseCount('medicine_stock_movements', 2);
+        $this->command('POST', '/flocks/'.$flock->public_id.'/manejos/'.$type.'/'.$applicationId.'/correcciones', [
+            'reason' => 'Aplicación registrada por error.',
+        ])->assertCreated()->assertJsonPath('data.management_execution_correction.original_public_id', $applicationId)
+            ->assertJsonPath('data.management_execution_correction.original_snapshot.reason', 'Error de carga')
+            ->assertJsonPath('data.management_execution_correction.compensation', null);
+        $this->assertDatabaseHas($root.'s', ['public_id' => $applicationId, 'reason' => 'Error de carga']);
+        $this->assertDatabaseCount('medicine_stock_balances', 0);
+        $this->assertDatabaseCount('medicine_stock_movements', 0);
+        $this->assertDatabaseCount('inventory_movements', 0);
         $this->assertDatabaseCount('management_execution_corrections', 1);
 
         // Consulta: ambos hechos operativos figuran en la cronología.
@@ -95,66 +98,22 @@ final class ExecutionEndpointTest extends LotsTestCase
         $this->assertNotNull($entries->firstWhere('type', 'management_correction'));
     }
 
-    // Flujo: el saldo es consultable, protegido e idempotente al ajustarse.
-    public function test_medicine_stock_read_and_adjustment_expose_persistent_warning(): void
+    // Flujo: retira los ajustes de saldo y mantiene consultable el saldo histórico.
+    public function test_medicine_stock_adjustment_is_retired_and_history_remains_readable(): void
     {
-        // Preparación: concede únicamente gestión de stock al actor.
+        // Preparación: concede gestión de stock y conserva un saldo previo a la retirada.
         $this->signIn(['management-plans.stock.manage']);
         $medicine = Medicine::factory()->create();
-        $key = (string) Str::uuid();
-        $payload = ['quantity_delta' => -1, 'reason' => 'Conteo físico incorrecto.'];
+        MedicineStockBalance::factory()->create(['medicine_id' => $medicine->id, 'on_hand_quantity' => -1]);
 
-        // Request: repite el ajuste sin duplicar movimiento ni auditoría.
-        $first = $this->command('POST', '/medicines/'.$medicine->public_id.'/ajustes-stock', $payload, $key)->assertCreated()
-            ->assertJsonPath('data.is_negative', true);
-        $second = $this->command('POST', '/medicines/'.$medicine->public_id.'/ajustes-stock', $payload, $key)->assertCreated();
-        $this->assertEquals($first->json(), $second->json());
-        $this->assertDatabaseCount('medicine_stock_movements', 1);
-        $this->getJson('/api/v1/medicines/'.$medicine->public_id.'/stock')->assertOk()
-            ->assertJsonPath('data.quantity', -1)
-            ->assertJsonPath('data.is_negative', true);
-    }
+        // Request: no permite un ajuste nuevo ni modifica el saldo existente.
+        $this->command('POST', '/medicines/'.$medicine->public_id.'/ajustes-stock', [
+            'quantity_delta' => 2, 'reason' => 'Conteo físico',
+        ])->assertConflict()->assertJsonPath('detail', 'El control de stock de medicamentos está retirado. Registra las aplicaciones sin cantidad ni ajustes de saldo.');
+        $this->assertDatabaseCount('medicine_stock_movements', 0);
+        $this->assertDatabaseHas('medicine_stock_balances', ['medicine_id' => $medicine->id, 'on_hand_quantity' => -1]);
 
-    // Flujo: una vacunación que no puede descontar inventario revierte también la aplicación.
-    public function test_vaccination_and_inventory_issue_commit_together(): void
-    {
-        // Futuro: verifica la integración conservada sin activar sanidad en la configuración real.
-        config()->set('inventory.health_stock_enabled', true);
-        // Preparación: crea una vacuna controlada sin existencias en la ubicación.
-        $this->signIn(['management-plans.execute']);
-        $flock = $this->flockWithPlan();
-        $vaccine = Vaccine::factory()->create();
-        $location = StockLocation::factory()->create(['type' => 'health', 'production_unit_id' => $flock->production_unit_id, 'system_managed' => true]);
-
-        // Request: solicita consumo superior a lo disponible y obtiene conflicto.
-        $this->command('POST', '/flocks/'.$flock->public_id.'/vacunaciones', [
-            'vaccine_id' => $vaccine->public_id,
-            'occurred_at' => now()->subMinute()->toIso8601String(),
-            'stock_consumption' => ['quantity' => '1', 'stock_location_id' => $location->id],
-        ])->assertConflict();
-        $this->assertDatabaseCount('vaccination_applications', 0);
-        $this->assertDatabaseCount('inventory_movements', 0);
-
-        // Mutación: repone dos unidades y confirma aplicación más descuento juntos.
-        StockBalance::factory()->create([
-            'product_id' => $vaccine->product_id,
-            'stock_location_id' => $location->id,
-            'on_hand_quantity' => '2.000000',
-        ]);
-        $created = $this->command('POST', '/flocks/'.$flock->public_id.'/vacunaciones', [
-            'vaccine_id' => $vaccine->public_id,
-            'occurred_at' => now()->subMinute()->toIso8601String(),
-            'stock_consumption' => ['quantity' => '1', 'stock_location_id' => $location->id],
-        ])->assertCreated();
-        $this->assertDatabaseHas('vaccination_applications', [
-            'public_id' => $created->json('data.vaccination_application.id'),
-            'operation_id' => $created->json('data.operation_id'),
-        ]);
-        $this->assertDatabaseHas('stock_balances', [
-            'product_id' => $vaccine->product_id,
-            'stock_location_id' => $location->id,
-            'on_hand_quantity' => '1.000000',
-        ]);
-        $this->assertDatabaseCount('inventory_movements', 1);
+        // Consulta: permite leer la existencia histórica sin crear movimientos.
+        $this->getJson('/api/v1/medicines/'.$medicine->public_id.'/stock')->assertOk()->assertJsonPath('data.quantity', -1);
     }
 }

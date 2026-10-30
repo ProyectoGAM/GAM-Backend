@@ -256,7 +256,7 @@ paths:
     post:
       tags: [Ejecuciones]
       summary: Registra una aplicación de vacuna
-      description: Requiere management-plans.execute. El vínculo plan_activity_id es explícito y opcional. Un consumo de inventario informado se confirma junto con la aplicación.
+      description: Requiere management-plans.execute. Registra la aplicación sin cantidad ni consumo de stock. Sin plan_activity_id se exige reason; con una actividad válida del plan vigente el motivo es opcional. Si la actividad identifica una vacuna, debe coincidir con vaccine_id. No se infiere el vínculo por fecha ni catálogo.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -272,7 +272,7 @@ paths:
     post:
       tags: [Ejecuciones]
       summary: Registra una aplicación de medicamento
-      description: Requiere management-plans.execute. quantity es un entero de unidades atómicas del medicamento; no se estructura dosis ni unidad. Se descuenta un saldo propio del medicamento, que puede quedar negativo y se señala en la respuesta.
+      description: Requiere management-plans.execute. Registra la aplicación sin cantidad, saldo clínico ni consumo de inventario. Sin plan_activity_id se exige reason; con una actividad válida del plan vigente el motivo es opcional. Si la actividad identifica un medicamento, debe coincidir con medicine_id. No se infiere el vínculo por fecha ni catálogo.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -346,8 +346,9 @@ paths:
     parameters: [{ $ref: '#/components/parameters/Medicine' }]
     post:
       tags: [Stock de medicamentos]
-      summary: Ajusta el saldo entero de un medicamento
-      description: Requiere management-plans.stock.manage. El movimiento es auditado e idempotente; un saldo negativo queda visible.
+      summary: Ajuste de stock de medicamentos retirado
+      deprecated: true
+      description: Requiere management-plans.stock.manage. Un pedido válido devuelve 409 sin modificar saldos ni generar auditoría. Se conserva la ruta por compatibilidad; las aplicaciones nuevas no controlan stock.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -361,21 +362,18 @@ paths:
                 quantity_delta: { type: integer, minimum: -2147483647, maximum: 2147483647 }
                 reason: { type: string, maxLength: 500 }
       responses:
-        '201':
-          description: Ajuste registrado.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/StockMovementEnvelope' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Validation' }
   /medicines/{medicine}/stock:
     parameters: [{ $ref: '#/components/parameters/Medicine' }]
     get:
       tags: [Stock de medicamentos]
-      summary: Consulta el saldo y advertencia de un medicamento
-      description: Requiere management-plans.view o management-plans.stock.manage.
+      summary: Consulta el saldo histórico de un medicamento
+      deprecated: true
+      description: Requiere management-plans.view o management-plans.stock.manage. Lectura de compatibilidad del contador previo; las aplicaciones nuevas no lo usan ni lo modifican. Sólo las correcciones de aplicaciones históricas pueden compensarlo.
       responses:
         '200':
-          description: Saldo actual del medicamento.
+          description: Saldo histórico del medicamento; cero si nunca tuvo contador.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/StockBalanceEnvelope' }
@@ -686,26 +684,34 @@ components:
     VaccinationInput:
       allOf:
         - $ref: '#/components/schemas/ExecutionBase'
+        - $ref: '#/components/schemas/HealthApplicationInput'
         - type: object
           required: [vaccine_id, occurred_at]
           properties:
             vaccine_id: { $ref: '#/components/schemas/Ulid' }
             vaccine_batch: { type: [string, 'null'], maxLength: 160, description: Partida del producto de vacuna aplicado; independiente del lote de gallinas. }
             notes: { type: [string, 'null'], maxLength: 5000 }
-            # Futuro: sanidad física está deshabilitada; enviar consumo devuelve 422.
-            stock_consumption: false
     MedicationInput:
       allOf:
         - $ref: '#/components/schemas/ExecutionBase'
+        - $ref: '#/components/schemas/HealthApplicationInput'
         - type: object
-          required: [medicine_id, quantity, reason, occurred_at]
+          required: [medicine_id, occurred_at]
           properties:
             medicine_id: { $ref: '#/components/schemas/Ulid' }
-            quantity: { type: integer, minimum: 1, maximum: 2147483647 }
-            reason: { type: string, maxLength: 500 }
             notes: { type: [string, 'null'], maxLength: 5000, description: Puede describir la dosis libremente. }
-            # Futuro: sanidad física está deshabilitada; enviar consumo devuelve 422.
-            stock_consumption: false
+    HealthApplicationInput:
+      type: object
+      description: Registro sanitario sin cantidad ni stock. La actividad debe pertenecer al plan vigente del lote y al tipo de aplicación. El motivo se conserva en auditoría e historial y es obligatorio fuera del plan.
+      properties:
+        reason: { type: [string, 'null'], minLength: 1, maxLength: 500, description: Obligatorio sin plan_activity_id. Debe contener texto después de recortar espacios. }
+        quantity: false
+        stock_consumption: false
+      anyOf:
+        - required: [plan_activity_id]
+        - required: [reason]
+          properties:
+            reason: { type: string, minLength: 1, maxLength: 500, pattern: '\S' }
     RationInput:
       description: Cambia configuración de alimentación del día y conserva el permiso management-plans.execute. Receta, total diario o ambos; todos los valores quedan manuales. No registra comidas ni descuenta alimento inmediatamente. No admite fecha anterior al día del registro.
       anyOf:
