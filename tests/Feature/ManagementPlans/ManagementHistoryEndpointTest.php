@@ -52,11 +52,11 @@ final class ManagementHistoryEndpointTest extends LotsTestCase
         $source = $this->flockWithPlan();
         $medicine = Medicine::factory()->create();
         $first = $this->command('POST', '/flocks/'.$source->public_id.'/medicaciones', [
-            'medicine_id' => $medicine->public_id, 'quantity' => 1, 'reason' => 'Primer manejo',
+            'medicine_id' => $medicine->public_id, 'reason' => 'Primer manejo',
             'occurred_at' => now()->subMinutes(3)->toIso8601String(),
         ])->assertCreated();
         $second = $this->command('POST', '/flocks/'.$source->public_id.'/medicaciones', [
-            'medicine_id' => $medicine->public_id, 'quantity' => 1, 'reason' => 'Segundo manejo',
+            'medicine_id' => $medicine->public_id, 'reason' => 'Segundo manejo',
             'occurred_at' => now()->subMinutes(2)->toIso8601String(),
         ])->assertCreated();
         $house = PoultryHouse::factory()->create(['bird_capacity' => 50, 'production_unit_id' => $source->production_unit_id]);

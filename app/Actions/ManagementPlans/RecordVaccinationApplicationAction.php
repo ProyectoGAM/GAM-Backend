@@ -2,14 +2,11 @@
 
 namespace App\Actions\ManagementPlans;
 
-use App\Actions\Inventory\IssueStockAction;
 use App\DTO\AuditAndTraceability\AuditEntryData;
-use App\Enums\Inventory\StockLocationType;
 use App\Enums\SuppliersAndCatalogs\ProductKind;
 use App\Enums\SuppliersAndCatalogs\ProductStatus;
 use App\Exceptions\Lots\LotsConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
-use App\Models\Inventory\StockLocation;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
 use App\Models\ManagementPlans\VaccinationApplication;
@@ -27,7 +24,6 @@ final readonly class RecordVaccinationApplicationAction
         private ResolveManagementExecutionContext $contextResolver,
         private FlockActivityJournal $activities,
         private AuditRecorder $auditRecorder,
-        private IssueStockAction $issueStock,
     ) {}
 
     /** @param array<string, mixed> $attributes */
@@ -40,10 +36,6 @@ final readonly class RecordVaccinationApplicationAction
             $attributes['idempotency_key'],
             ['flock' => $flock->public_id, ...$attributes],
             function (string $operationId) use ($flock, $attributes, $actor, $source): array {
-                // Futuro: conservar el consumo físico sin admitirlo mediante llamadas internas hoy.
-                if (isset($attributes['stock_consumption']) && ! config('inventory.health_stock_enabled')) {
-                    throw new LotsConflict('El stock físico de sanidad está deshabilitado.');
-                }
                 $context = $this->contextResolver->execute($flock, $actor, $attributes, 'vaccination');
                 $candidate = Vaccine::query()->where('public_id', $attributes['vaccine_id'])->firstOrFail();
                 $product = Product::query()->whereKey($candidate->product_id)->sharedLock()->firstOrFail();
@@ -83,53 +75,11 @@ final readonly class RecordVaccinationApplicationAction
                     'occurred_at' => $context->occurredAt,
                     'responsible_user_id' => $context->responsibleUserId,
                     'responsible_name_snapshot' => $context->responsibleNameSnapshot,
+                    'reason' => trim($attributes['reason'] ?? '') === '' ? null : trim($attributes['reason']),
                     'notes' => $attributes['notes'] ?? null,
                     'created_by' => $actor->getKey(),
                     'operation_id' => $operationId,
                 ])->save();
-
-                $inventorySnapshot = null;
-                $inventoryMovementId = null;
-                if (isset($attributes['stock_consumption'])) {
-                    if (! StockLocation::query()->whereKey($attributes['stock_consumption']['stock_location_id'])
-                        ->where('type', StockLocationType::Health)->where('production_unit_id', $context->flock->production_unit_id)->exists()) {
-                        throw new LotsConflict('El consumo sanitario debe salir de la ubicación de sanidad de la UP del lote.');
-                    }
-                    if (! $product->stock_tracked) {
-                        throw new LotsConflict('La vacuna seleccionada no controla stock.');
-                    }
-                    $inventoryMovement = $this->issueStock->execute([
-                        'idempotency_key' => $operationId,
-                        'lines' => [[
-                            'product_id' => (int) $product->getKey(),
-                            'stock_location_id' => (int) $attributes['stock_consumption']['stock_location_id'],
-                            'quantity' => (string) $attributes['stock_consumption']['quantity'],
-                        ]],
-                        'occurred_at' => $context->occurredAt->toIso8601String(),
-                        'reason' => 'Consumo por aplicación de vacuna '.$vaccine->public_id,
-                        'reference_type' => 'vaccination_application',
-                        'reference_id' => $application->public_id,
-                    ], $actor, 'management-plans.execute');
-                    $inventoryMovement->loadMissing('lines.stockLocation', 'lines.product');
-                    $line = $inventoryMovement->lines->first();
-                    if ($line === null) {
-                        throw new LotsConflict('El movimiento de stock de la vacunación no contiene su línea de consumo.');
-                    }
-                    $inventoryMovementId = (int) $inventoryMovement->getKey();
-                    $application->forceFill([
-                        'inventory_quantity' => ltrim((string) $line->on_hand_delta, '-'),
-                        'stock_location_id' => $line->stock_location_id,
-                        'stock_location_name_snapshot' => (string) $line->stockLocation->getAttribute('name'),
-                        'inventory_movement_id' => $inventoryMovementId,
-                    ])->save();
-                    $inventorySnapshot = [
-                        'quantity' => ltrim((string) $line->on_hand_delta, '-'),
-                        'unit' => $line->unit,
-                        'stock_location_id' => (int) $line->stock_location_id,
-                        'stock_location_name_at_application' => (string) $line->stockLocation->getAttribute('name'),
-                        'movement_operation_id' => $inventoryMovement->operation_id,
-                    ];
-                }
 
                 $snapshot = [
                     'id' => $application->public_id,
@@ -144,9 +94,8 @@ final readonly class RecordVaccinationApplicationAction
                         'id' => $context->responsibleUserId,
                         'name_at_application' => $context->responsibleNameSnapshot,
                     ],
+                    'reason' => $application->reason,
                     'notes' => $application->notes,
-                    'inventory_consumption' => $inventorySnapshot,
-                    'inventory_movement_id' => $inventoryMovementId,
                     'created_by' => (int) $actor->getKey(),
                 ];
                 $this->auditRecorder->record(AuditEntryData::forSubject(
