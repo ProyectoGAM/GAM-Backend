@@ -5,6 +5,8 @@ Cada guía describe el alcance entregado, las decisiones de negocio, el contrato
 ## Guías
 
 - [Identidad y acceso](identity-access-implementation.md)
+- [Auditoría: resumen y detalle bajo demanda](audit-presentation-implementation.md)
+- [Informe de integración de auditoría para frontend](audit-frontend-integration.md)
 - [Lotes y cría](lots-implementation.md)
 - [Producción y stock de huevos](egg-production-implementation.md)
 - [Catálogo de presentaciones de huevos](egg-presentations-implementation.md)

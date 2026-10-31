@@ -21,10 +21,13 @@ use App\Models\Inventory\StockLocation;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\SuppliersAndCatalogs\Supplier;
 use App\Models\User;
+use App\Services\AuditAndTraceability\AuditEventCatalog;
 use BackedEnum;
 
 final readonly class ListReferenceOptionsQuery
 {
+    public function __construct(private AuditEventCatalog $auditEvents) {}
+
     /** @return array<string, mixed> */
     public function execute(User $actor): array
     {
@@ -127,7 +130,9 @@ final readonly class ListReferenceOptionsQuery
 
         if ($this->allowed($actor, 'audit.view')) {
             $options['audit'] = [
-                'events' => $this->distinctAuditOptions('event'),
+                'events' => AuditEntry::query()->whereNotNull('event')->select('event')->selectRaw('MAX(description) AS description')
+                    ->groupBy('event')->orderBy('event')->get()
+                    ->map(fn (AuditEntry $entry): array => $this->option($entry->event, $this->auditEvents->label($entry->event, $entry->description)))->all(),
                 'sources' => $this->distinctAuditOptions('source'),
             ];
         }
