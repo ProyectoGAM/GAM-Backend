@@ -56,10 +56,14 @@ use App\Http\Controllers\SuppliersAndCatalogs\SupplierController;
 use App\Http\Controllers\SuppliersAndCatalogs\SupplierStatusController;
 use App\Http\Controllers\SuppliersAndCatalogs\VaccineController;
 use App\Http\Controllers\SuppliersAndCatalogs\VaccineStatusController;
+use App\Http\Controllers\Vehicles\VehicleController;
 use App\Http\Middleware\ReportDownloadAccess;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.v1.')->group(function (): void {
+    Route::get('/health', fn (): JsonResponse => response()->json(['status' => 'ok']))->name('health');
+
     Route::prefix('auth')->name('auth.')->middleware(['throttle:auth', 'throttle:auth-account'])->group(function (): void {
         Route::post('/login', [AuthController::class, 'login'])->name('login');
     });
@@ -85,6 +89,34 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         ->name('shared-device.local-revoke');
 
     Route::middleware('auth:sanctum')->group(function (): void {
+        Route::get('/vehiculos/conductores', [VehicleController::class, 'drivers'])->name('vehicles.drivers');
+        Route::get('/vehiculos/disponibles', [VehicleController::class, 'available'])->name('vehicles.available');
+        Route::get('/vehiculos', [VehicleController::class, 'index'])->name('vehicles.index');
+        Route::post('/vehiculos', [VehicleController::class, 'store'])->name('vehicles.store');
+        Route::get('/vehiculos/{vehiculo}', [VehicleController::class, 'show'])->name('vehicles.show');
+        Route::patch('/vehiculos/{vehiculo}', [VehicleController::class, 'update'])->name('vehicles.update');
+        Route::patch('/vehiculos/{vehiculo}/estado', [VehicleController::class, 'status'])->name('vehicles.status');
+        Route::get('/vehiculos/{vehiculo}/lecturas', [VehicleController::class, 'readings'])->name('vehicles.readings.index');
+        Route::post('/vehiculos/{vehiculo}/lecturas', [VehicleController::class, 'recordReading'])->name('vehicles.readings.store');
+        Route::get('/vehiculos/{vehiculo}/usos', [VehicleController::class, 'usages'])->name('vehicles.usages.index');
+        Route::post('/vehiculos/{vehiculo}/usos', [VehicleController::class, 'startUsage'])->name('vehicles.usages.store')->middleware('throttle:delivery-commands');
+        Route::post('/vehiculos/usos/{uso}/cierre', [VehicleController::class, 'closeUsage'])->name('vehicles.usages.close')->middleware('throttle:delivery-commands');
+        Route::get('/vehiculos/{vehiculo}/combustible', [VehicleController::class, 'fuel'])->name('vehicles.fuel.index');
+        Route::post('/vehiculos/{vehiculo}/combustible', [VehicleController::class, 'recordFuel'])->name('vehicles.fuel.store')->middleware('throttle:delivery-commands');
+        Route::get('/vehiculos/{vehiculo}/combustible/{combustible}/comprobante', [VehicleController::class, 'downloadFuelReceipt'])->name('vehicles.fuel.receipt');
+        Route::get('/vehiculos/{vehiculo}/planes-mantenimiento', [VehicleController::class, 'plans'])->name('vehicles.plans.index');
+        Route::post('/vehiculos/{vehiculo}/planes-mantenimiento', [VehicleController::class, 'createPlan'])->name('vehicles.plans.store');
+        Route::patch('/vehiculos/{vehiculo}/planes-mantenimiento/{plan}', [VehicleController::class, 'updatePlan'])->name('vehicles.plans.update');
+        Route::get('/vehiculos/{vehiculo}/mantenimientos', [VehicleController::class, 'maintenances'])->name('vehicles.maintenances.index');
+        Route::post('/vehiculos/{vehiculo}/mantenimientos', [VehicleController::class, 'createMaintenance'])->name('vehicles.maintenances.store');
+        Route::post('/vehiculos/mantenimientos/{mantenimiento}/inicio', [VehicleController::class, 'startMaintenance'])->name('vehicles.maintenances.start');
+        Route::post('/vehiculos/mantenimientos/{mantenimiento}/finalizacion', [VehicleController::class, 'completeMaintenance'])->name('vehicles.maintenances.complete');
+        Route::post('/vehiculos/mantenimientos/{mantenimiento}/anulacion', [VehicleController::class, 'cancelMaintenance'])->name('vehicles.maintenances.cancel');
+        Route::post('/vehiculos/{vehiculo}/mantenimientos/{mantenimiento}/documentos', [VehicleController::class, 'uploadMaintenanceDocument'])->name('vehicles.maintenances.documents.store');
+        Route::get('/vehiculos/{vehiculo}/mantenimientos/{mantenimiento}/documentos/{documento}', [VehicleController::class, 'downloadMaintenanceDocument'])->name('vehicles.maintenances.documents.download');
+        Route::post('/vehiculos/{vehiculo}/documentos', [VehicleController::class, 'uploadDocument'])->name('vehicles.documents.store');
+        Route::get('/vehiculos/{vehiculo}/documentos/{document}', [VehicleController::class, 'downloadDocument'])->name('vehicles.documents.download');
+
         Route::middleware(['shared.device:any', 'shared.session.conditional'])->name('customers.')->group(function (): void {
             Route::get('/clientes', [CustomerController::class, 'index'])->name('index');
             Route::post('/clientes', [CustomerController::class, 'store'])->name('store');

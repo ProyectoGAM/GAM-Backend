@@ -12,6 +12,7 @@ use App\Models\Deliveries\Delivery;
 use App\Models\Deliveries\DeliveryStop;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
+use App\Actions\Vehicles\CloseVehicleUsageAction;
 use App\Services\Deliveries\DeliveryFinancialSummary;
 use App\Services\Deliveries\DeliveryUnitBalance;
 use Illuminate\Support\Facades\DB;
@@ -23,9 +24,10 @@ final readonly class CloseDeliveryAction
         private RecordEggStockTransactionAction $stock,
         private AuditRecorder $audit,
         private DeliveryUnitBalance $balances,
+        private CloseVehicleUsageAction $closeVehicleUsage,
     ) {}
 
-    /** @param array{returned_quantity?:int,returned_items?:list<array<string,mixed>>,return_production_unit_id?:int|null,notes?:string|null} $data */
+    /** @param array{returned_quantity?:int,returned_items?:list<array<string,mixed>>,return_production_unit_id?:int|null,notes?:string|null,odometer_km?:string|null} $data */
     public function execute(Delivery $delivery, User $actor, array $data, string $idempotencyKey): Delivery
     {
         $requestHash = hash('sha256', json_encode($data, JSON_THROW_ON_ERROR));
@@ -50,7 +52,7 @@ final readonly class CloseDeliveryAction
                 ->where('delivery_id', $lockedDelivery->getKey())
                 ->where('status', DeliveryStopStatus::Delivered)
                 ->sum('delivered_quantity');
-            $lockedDelivery->load(['loads.productionUnit:id,name', 'returnProductionUnit:id,name', 'stops']);
+            $lockedDelivery->load(['loads.productionUnit:id,name,latitude,longitude', 'returnProductionUnit:id,name,latitude,longitude', 'stops']);
             $allocation = isset($data['returned_items'])
                 ? ($data['returned_items'] === [] ? ['quantity' => 0, 'items' => []] : $this->balances->allocate($lockedDelivery, $data['returned_items']))
                 : null;
@@ -99,6 +101,12 @@ final readonly class CloseDeliveryAction
                 'close_notes' => $data['notes'] ?? null,
             ])->save();
 
+            if ($lockedDelivery->vehicle_usage_id !== null) {
+                $this->closeVehicleUsage->execute($lockedDelivery->vehicleUsage, [
+                    'odometer_km' => $data['odometer_km'] ?? null,
+                ], $actor);
+            }
+
             $this->audit->record(AuditEntryData::forSubject(
                 subject: $lockedDelivery,
                 actor: $actor,
@@ -125,11 +133,12 @@ final readonly class CloseDeliveryAction
         return $delivery->load([
             'driver:id,name',
             'productionUnit:id,name,latitude,longitude',
-            'loads.productionUnit:id,name',
-            'returnProductionUnit:id,name',
+            'loads.productionUnit:id,name,latitude,longitude',
+            'returnProductionUnit:id,name,latitude,longitude',
             'stops',
             'accountMovements.account.customer', 'accountMovements.operation', 'accountMovements.delivery', 'accountMovements.reversal', 'accountMovements.original',
             'latestLocation',
+            'vehicleUsage',
         ]);
     }
 }

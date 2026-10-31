@@ -67,11 +67,22 @@ final class IdentityPermissionSeeder extends Seeder
             'identity.shared-devices.manage',
             'identity.sessions.manage',
             'delivery.start',
+            'delivery.fuel.record',
             'delivery.view-own',
             'delivery.update-own',
             'delivery.location.publish',
             'delivery.monitor',
             'delivery.history',
+            'vehicles.view',
+            'vehicles.manage',
+            'vehicles.use',
+            'vehicles.readings.manage',
+            'vehicles.fuel.view',
+            'vehicles.fuel.manage',
+            'vehicles.maintenance.view',
+            'vehicles.maintenance.manage',
+            'vehicles.documents.view',
+            'vehicles.documents.manage',
         ];
 
         foreach ($permissions as $permission) {
@@ -88,6 +99,7 @@ final class IdentityPermissionSeeder extends Seeder
             Permission::findByName('delivery.view-own', 'web'),
             Permission::findByName('delivery.update-own', 'web'),
             Permission::findByName('delivery.location.publish', 'web'),
+            Permission::findByName('delivery.fuel.record', 'web'),
         ]);
         Role::findOrCreate('employee', 'web')->syncPermissions([
             Permission::findByName('identity.shared.login', 'web'),

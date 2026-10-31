@@ -29,6 +29,7 @@ final class StoreDeliveryLoadRequest extends DeliveryRequest
     {
         return [
             ...$this->commandRules(),
+            'occurred_at' => ['sometimes', 'date'],
             'production_unit_id' => ['required', 'integer', 'exists:production_units,id'],
             'quantity' => ['required_without:items', 'prohibits:items', 'integer', 'min:1', 'max:2147483647'],
             'items' => ['required_without:quantity', 'prohibits:quantity', 'array', 'min:1', 'max:20'],

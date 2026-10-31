@@ -31,6 +31,7 @@ final class DeliveryStopResource extends JsonResource
             'visit_reason' => $this->visit_reason,
             'notes' => $this->notes,
             'visited_at' => $this->visited_at,
+            'created_at' => $this->created_at,
         ];
     }
 }

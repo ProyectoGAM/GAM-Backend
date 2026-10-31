@@ -10,6 +10,21 @@ tags:
   - name: Administración
   - name: Dispositivos compartidos
 paths:
+  /api/v1/health:
+    get:
+      tags: [Autenticación]
+      summary: Comprueba la disponibilidad de la API
+      security: []
+      responses:
+        '200':
+          description: La API está disponible
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [ok] }
   /sanctum/csrf-cookie:
     get:
       tags: [Autenticación]

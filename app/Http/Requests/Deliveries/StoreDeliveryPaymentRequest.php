@@ -13,6 +13,7 @@ final class StoreDeliveryPaymentRequest extends DeliveryRequest
     {
         return [...$this->commandRules(), 'client_reference' => ['required', 'ulid'], 'client_event_id' => ['required', 'uuid'],
             'amount' => ['required', 'string'], 'payment_method' => ['required', 'in:cash,transfer,other'],
+            'occurred_at' => ['sometimes', 'date'],
             'payment_reference' => ['sometimes', 'nullable', 'string', 'max:240'], 'reason' => ['sometimes', 'nullable', 'string', 'max:2000']];
     }
 }

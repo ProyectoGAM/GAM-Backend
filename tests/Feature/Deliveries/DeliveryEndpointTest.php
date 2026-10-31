@@ -7,6 +7,7 @@ use App\Models\Deliveries\Delivery;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\EggPresentation;
 use App\Models\User;
+use App\Models\Vehicles\Vehicle;
 use App\Queries\Inventory\GetEggStockBalanceQuery;
 use App\Services\IdentityAndAccess\PinHasher;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -19,6 +20,9 @@ use Tests\TestCase;
 final class DeliveryEndpointTest extends TestCase
 {
     use LazilyRefreshDatabase;
+
+    /** @var array<string, string> */
+    private array $vehiclesByCommand = [];
 
     /** @param list<string> $permissions */
     private function signIn(array $permissions): User
@@ -50,6 +54,11 @@ final class DeliveryEndpointTest extends TestCase
     /** @param array<string, mixed> $payload */
     private function command(string $method, string $path, array $payload, ?string $key = null): TestResponse
     {
+        $key ??= (string) Str::uuid();
+        if ($method === 'POST' && $path === '/repartos' && ! isset($payload['vehicle_id'])) {
+            $this->vehiclesByCommand[$key] ??= Vehicle::factory()->create()->public_id;
+            $payload['vehicle_id'] = $this->vehiclesByCommand[$key];
+        }
         if ($method === 'POST' && ! isset($payload['production_unit_id'])) {
             if ($path === '/repartos') {
                 $payload['production_unit_id'] = ProductionUnit::query()->value('id') ?? ProductionUnit::factory()->create()->id;
@@ -62,7 +71,6 @@ final class DeliveryEndpointTest extends TestCase
             $payload = ['pin' => '0007', ...$payload];
         }
 
-        $key ??= (string) Str::uuid();
         if ($method === 'POST' && str_ends_with($path, '/entregas') && ($payload['status'] ?? '') === 'delivered') {
             $payload = ['accounting_version' => 2, 'client_event_id' => $key, 'payment' => ['amount' => '0.000'], ...$payload];
         }
@@ -163,6 +171,41 @@ final class DeliveryEndpointTest extends TestCase
         $this->assertDatabaseCount('delivery_loads', 1);
         $this->assertDatabaseCount('delivery_stops', 0);
         $this->assertDatabaseCount('egg_stock_transactions', 1);
+    }
+
+    // Verifica que el reparto exponga únicamente las cargas asociadas al uso de su vehículo.
+    public function test_delivery_responses_include_fuel_entries_from_the_current_vehicle_usage(): void
+    {
+        // Preparación: autentica un repartidor con permiso para registrar combustible.
+        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own', 'delivery.fuel.record']);
+        // Request: inicia un reparto y obtiene sus referencias de vehículo y uso.
+        $created = $this->command('POST', '/repartos', ['quantity' => 60])->assertCreated();
+        $deliveryId = $created->json('data.id');
+        $vehicleId = $created->json('data.vehicle.id');
+        $usageId = $created->json('data.vehicle_usage.id');
+        $key = (string) Str::uuid();
+
+        // Mutación: registra una carga de combustible vinculada al uso activo.
+        $this->json('POST', "/api/v1/vehiculos/{$vehicleId}/combustible", [
+            'usage_id' => $usageId,
+            'liters' => '32.5',
+            'fuel_type' => 'Nafta',
+            'amount' => '1789.500',
+            'occurred_at' => now()->toIso8601String(),
+            'supplier' => 'Estación de prueba',
+        ], ['Idempotency-Key' => $key])->assertCreated();
+
+        // Consulta: comprueba que el detalle devuelve los datos monetarios y de litros.
+        $this->getJson("/api/v1/repartos/{$deliveryId}")
+            ->assertOk()
+            ->assertJsonPath('data.vehicle_usage.fuel_entries.0.liters', '32.500')
+            ->assertJsonPath('data.vehicle_usage.fuel_entries.0.amount', '1789.500')
+            ->assertJsonPath('data.vehicle_usage.fuel_entries.0.supplier', 'Estación de prueba');
+
+        // Consulta: comprueba que el listado usado por la app también incluye la carga.
+        $this->getJson('/api/v1/repartos/actuales')
+            ->assertOk()
+            ->assertJsonPath('data.0.vehicle_usage.fuel_entries.0.fuel_type', 'Nafta');
     }
 
     public function test_driver_chooses_clients_in_any_order_and_can_add_an_idempotent_mid_route_load(): void
@@ -695,7 +738,7 @@ final class DeliveryEndpointTest extends TestCase
         $first = ProductionUnit::factory()->create();
         $second = ProductionUnit::factory()->create();
         // Request: no selecciona automáticamente la primera UP ni siquiera en desarrollo.
-        $this->postJson('/api/v1/repartos', ['pin' => '0007', 'quantity' => 1], ['Idempotency-Key' => (string) Str::uuid()])
+        $this->postJson('/api/v1/repartos', ['pin' => '0007', 'quantity' => 1, 'vehicle_id' => Vehicle::factory()->create()->public_id], ['Idempotency-Key' => (string) Str::uuid()])
             ->assertUnprocessable()->assertJsonValidationErrors('production_unit_id');
         $this->getJson('/api/v1/repartos/unidades-productivas')->assertOk()->assertJsonCount(2, 'data');
         $deliveryId = $this->command('POST', '/repartos', ['production_unit_id' => $first->id, 'quantity' => 1])

@@ -6,6 +6,8 @@ use App\Enums\Deliveries\DeliveryStatus;
 use App\Models\CustomersAndAccounts\CustomerAccountMovement;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
+use App\Models\Vehicles\Vehicle;
+use App\Models\Vehicles\VehicleUsage;
 use Database\Factories\Deliveries\DeliveryFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Collection;
@@ -22,8 +24,11 @@ use Illuminate\Support\Str;
  * @property int $id
  * @property string $public_id
  * @property int $driver_id
- * @property int $production_unit_id
+ * @property int|null $production_unit_id
+ * @property bool $started_without_load
  * @property string|null $vehicle_reference
+ * @property int|null $vehicle_id
+ * @property int|null $vehicle_usage_id
  * @property DeliveryStatus $status
  * @property int $loaded_quantity
  * @property int $returned_quantity
@@ -36,7 +41,7 @@ use Illuminate\Support\Str;
  * @property string|null $close_notes
  */
 #[Fillable([
-    'public_id', 'driver_id', 'production_unit_id', 'vehicle_reference', 'status',
+    'public_id', 'driver_id', 'vehicle_id', 'vehicle_usage_id', 'vehicle_snapshot', 'production_unit_id', 'started_without_load', 'vehicle_reference', 'status',
     'loaded_quantity', 'returned_quantity', 'returned_items', 'return_production_unit_id', 'start_idempotency_key', 'start_request_hash',
     'close_idempotency_key', 'close_request_hash', 'started_at', 'closed_at', 'close_notes',
 ])]
@@ -64,10 +69,12 @@ class Delivery extends Model
     {
         return [
             'status' => DeliveryStatus::class,
+            'started_without_load' => 'boolean',
             'loaded_quantity' => 'integer',
             'returned_quantity' => 'integer',
             'returned_items' => 'array',
             'financial_snapshot' => 'array',
+            'vehicle_snapshot' => 'array',
             'started_at' => 'immutable_datetime',
             'closed_at' => 'immutable_datetime',
         ];
@@ -77,6 +84,18 @@ class Delivery extends Model
     public function driver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'driver_id');
+    }
+
+    /** @return BelongsTo<Vehicle, $this> */
+    public function vehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class);
+    }
+
+    /** @return BelongsTo<VehicleUsage, $this> */
+    public function vehicleUsage(): BelongsTo
+    {
+        return $this->belongsTo(VehicleUsage::class, 'vehicle_usage_id');
     }
 
     /** @return BelongsTo<ProductionUnit, $this> */

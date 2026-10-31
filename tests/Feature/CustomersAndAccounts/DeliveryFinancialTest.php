@@ -9,6 +9,7 @@ use App\Models\Deliveries\DeliveryStop;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\EggPresentation;
 use App\Models\User;
+use App\Models\Vehicles\Vehicle;
 use App\Services\IdentityAndAccess\PinHasher;
 use Database\Seeders\IdentityPermissionSeeder;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -35,7 +36,7 @@ final class DeliveryFinancialTest extends TestCase
     {
         $presentation = EggPresentation::factory()->create(['eggs_per_unit' => 24, 'default_unit_price' => 101]);
         $unit = ProductionUnit::factory()->create();
-        $id = $this->postJson('/api/v1/repartos', ['pin' => '0007', 'production_unit_id' => $unit->id,
+        $id = $this->postJson('/api/v1/repartos', ['pin' => '0007', 'vehicle_id' => Vehicle::factory()->create()->public_id, 'production_unit_id' => $unit->id,
             'items' => [['unit' => $presentation->code, 'amount' => '1', 'eggs_per_unit' => 24]]],
             ['Idempotency-Key' => (string) Str::uuid()])->assertCreated()->json('data.id');
 
