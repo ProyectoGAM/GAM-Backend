@@ -24,6 +24,12 @@ paths:
         backend. Las listas que el usuario no puede consultar se devuelven
         vacías. Los valores de las opciones deben enviarse en los comandos,
         nunca las etiquetas mostradas.
+        audit.events conserva value como código estable y entrega label en español.
+        Los eventos sin presentación específica usan su descripción legible o
+        Actividad registrada. Los responsables de auditoría se buscan de forma
+        paginada en /auditoria/responsables; no se agrega una lista ilimitada
+        audit.actors a esta respuesta. Ambas lecturas requieren audit.view
+        para acceder a los datos de auditoría.
         Para plantas de ración, las etiquetas de stock_locations e
         inventory_balances usan el nombre vigente de la planta vinculada,
         en lugar del nombre técnico de la ubicación. Los valores siguen siendo

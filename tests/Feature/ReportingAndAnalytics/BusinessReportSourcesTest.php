@@ -35,10 +35,22 @@ final class BusinessReportSourcesTest extends TestCase
     // Flujo: todas las fuentes de negocio ejecutan detalle y consultas estándar con el contrato público.
     public function test_catalog_and_queries_are_executable(): void
     {
-        // Preparación: habilita consulta de todos los módulos requeridos.
-        Sanctum::actingAs($this->actor(['reports.view', 'inventory.view', 'flocks.view', 'weighings.view', 'egg-collections.view', 'management-plans.view', 'delivery.history', 'egg-stock.view']));
-        // Acción: consulta el catálogo autorizado y ejecuta cada fuente.
+        // Preparación: habilita los módulos previos a la incorporación de vehículos.
+        $actor = $this->actor(['reports.view', 'inventory.view', 'flocks.view', 'weighings.view', 'egg-collections.view', 'management-plans.view', 'delivery.history', 'egg-stock.view']);
+        Sanctum::actingAs($actor);
+        // Consulta: conserva las diez fuentes previas y rechaza las fuentes de vehículos sin permiso.
         $this->getJson('/api/v1/reportes/fuentes')->assertOk()->assertJsonCount(10, 'data');
+        foreach (['vehicles.usage', 'vehicles.fuel', 'vehicles.maintenance'] as $sourceKey) {
+            $this->postJson('/api/v1/reportes/'.$sourceKey.'/previsualizaciones')->assertForbidden();
+        }
+
+        // Preparación: concede los permisos funcionales de las tres fuentes nuevas.
+        foreach (['vehicles.view', 'vehicles.fuel.view', 'vehicles.maintenance.view'] as $permission) {
+            $actor->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+        }
+
+        // Acción: consulta las trece fuentes autorizadas y ejecuta todas sus consultas estándar.
+        $this->getJson('/api/v1/reportes/fuentes')->assertOk()->assertJsonCount(13, 'data');
         foreach (app(ReportSourceRegistry::class)->all() as $source) {
             $this->postJson('/api/v1/reportes/'.$source->definition()->key.'/previsualizaciones')->assertOk();
             foreach ($source->definition()->standardQueries as $standard) {

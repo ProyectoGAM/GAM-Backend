@@ -24,6 +24,7 @@ final class VehicleEndpointTest extends TestCase
         $admin = User::factory()->create();
         $admin->assignRole('admin');
         Sanctum::actingAs($admin, ['api:access']);
+
         return $admin;
     }
 
@@ -35,6 +36,7 @@ final class VehicleEndpointTest extends TestCase
         $driver = User::factory()->create(['pin_hash' => app(PinHasher::class)->hash('0007'), 'pin_enabled' => true]);
         $driver->assignRole('delivery');
         Sanctum::actingAs($driver, ['api:access']);
+
         return $driver;
     }
 
@@ -46,8 +48,14 @@ final class VehicleEndpointTest extends TestCase
 
         // Acción: registra una ficha con matrícula que contiene separadores.
         $vehicle = $this->postJson('/api/v1/vehiculos', ['plate' => 'ab-123 cd', 'make' => 'Fiat', 'model' => 'Fiorino', 'capacity_kg' => '600.00'])
-            ->assertCreated()->assertJsonPath('data.plate', 'AB-123 CD')->json('data.id');
+            ->assertCreated()->assertJsonPath('data.plate', 'AB-123 CD')->assertJsonPath('data.status', 'active')->json('data.id');
         $this->assertDatabaseHas('vehicles', ['public_id' => $vehicle, 'plate_normalized' => 'AB123CD']);
+        // Comprobación: el historial inicial conserva el estado asignado por defecto.
+        $this->assertDatabaseHas('vehicle_status_changes', [
+            'vehicle_id' => Vehicle::query()->where('public_id', $vehicle)->sole()->getKey(),
+            'from_status' => null,
+            'to_status' => 'active',
+        ]);
 
         // Preparación: agrega una unidad fuera de servicio que no debe entrar al selector.
         $unavailable = Vehicle::factory()->create(['status' => 'out_of_service', 'status_reason' => 'Reparación']);

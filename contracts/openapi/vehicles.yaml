@@ -33,7 +33,7 @@ paths:
     post:
       operationId: createVehicle
       summary: Registrar vehículo
-      description: Requiere vehicles.manage. La matrícula se normaliza y debe ser única.
+      description: Requiere vehicles.manage. La matrícula se normaliza y debe ser única. Si no se indica estado, el vehículo se crea activo y su historial inicial conserva ese estado.
       requestBody:
         required: true
         content:

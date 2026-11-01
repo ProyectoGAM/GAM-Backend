@@ -5,6 +5,7 @@ namespace App\Infrastructure\AuditAndTraceability;
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\AuditAndTraceability\AuditEntry;
+use App\Models\FarmStructure\ProductionUnit;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Str;
 
@@ -15,6 +16,10 @@ final class SpatieAuditRecorder implements AuditRecorder
         $traceId = $entry->traceId ?? Context::get('trace_id');
         $subjectId = $entry->subjectId;
         $properties = $entry->properties;
+        if ($entry->upId !== null) {
+            $unit = ProductionUnit::query()->find($entry->upId, ['id', 'name']);
+            $properties['production_unit_snapshot'] = $unit === null ? null : ['id' => $unit->id, 'name' => $unit->name];
+        }
 
         // activity_log conserva subject_id como bigint por compatibilidad con el histórico.
         // Los nuevos sujetos UUID se mantienen trazables dentro de properties sin truncarlos.

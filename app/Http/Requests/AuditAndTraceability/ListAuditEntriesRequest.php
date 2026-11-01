@@ -24,12 +24,14 @@ final class ListAuditEntriesRequest extends FormRequest
             'source' => ['sometimes', 'string', 'max:50'],
             'actor_type' => ['sometimes', 'string', 'max:255'],
             'actor_id' => ['sometimes', 'integer'],
+            'actor_kind' => ['sometimes', 'in:person,system,unavailable'],
             'subject_type' => ['sometimes', 'string', 'max:255'],
             'subject_id' => ['sometimes', 'integer'],
             'up_id' => ['sometimes', 'integer'],
             'from' => ['sometimes', 'date_format:Y-m-d'],
             'to' => ['sometimes', 'date_format:Y-m-d', 'after_or_equal:from'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'page' => ['sometimes', 'integer', 'min:1', 'max:1000000'],
         ];
     }
 }

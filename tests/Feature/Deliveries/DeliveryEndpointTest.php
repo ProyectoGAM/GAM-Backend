@@ -80,19 +80,23 @@ final class DeliveryEndpointTest extends TestCase
         ]);
     }
 
+    // Verifica el PIN de inicio y cierre sin persistirlo en el comando del reparto.
     public function test_start_and_close_require_the_drivers_valid_pin_without_persisting_it(): void
     {
+        // Preparación: declara la unidad y el vehículo que forman parte del comando.
         $actor = $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
         $unit = ProductionUnit::factory()->create();
-        $start = ['production_unit_id' => $unit->id, 'quantity' => 10];
+        $start = ['production_unit_id' => $unit->id, 'quantity' => 10, 'vehicle_id' => Vehicle::factory()->create()->public_id];
         $headers = ['Idempotency-Key' => (string) Str::uuid()];
 
+        // Request: rechaza el PIN ausente o inválido sin iniciar un reparto.
         $this->postJson('/api/v1/repartos', $start, $headers)->assertUnprocessable();
         $this->command('POST', '/repartos', [...$start, 'pin' => '9999'])->assertUnauthorized()
             ->assertJsonPath('code', 'INVALID_PIN');
         $this->assertDatabaseCount('deliveries', 0);
         $this->assertDatabaseHas('users', ['id' => $actor->id, 'pin_failed_attempts' => 1]);
 
+        // Request: inicia con PIN válido y verifica que el hash no lo incluya.
         $key = (string) Str::uuid();
         $deliveryId = $this->command('POST', '/repartos', $start, $key)->assertCreated()->json('data.id');
         $this->assertDatabaseHas('users', ['id' => $actor->id, 'pin_failed_attempts' => 0]);
@@ -101,11 +105,13 @@ final class DeliveryEndpointTest extends TestCase
             'start_request_hash' => hash('sha256', json_encode(['idempotency_key' => $key, ...$start])),
         ]);
 
+        // Request: el cierre también exige PIN sin alterar el reparto ante un rechazo.
         $close = ['returned_quantity' => 10];
         $this->postJson("/api/v1/repartos/{$deliveryId}/cierre", $close, $headers)->assertUnprocessable();
         $this->command('POST', "/repartos/{$deliveryId}/cierre", [...$close, 'pin' => '9999'])
             ->assertUnauthorized()->assertJsonPath('code', 'INVALID_PIN');
         $this->assertDatabaseHas('deliveries', ['public_id' => $deliveryId, 'status' => 'active']);
+        // Request: cierra con PIN válido y conserva el estado final esperado.
         $this->command('POST', "/repartos/{$deliveryId}/cierre", $close)->assertOk();
         $this->assertDatabaseHas('deliveries', ['public_id' => $deliveryId, 'status' => 'completed']);
     }

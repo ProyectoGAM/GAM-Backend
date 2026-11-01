@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AuditAndTraceability\AuditActorController;
 use App\Http\Controllers\AuditAndTraceability\AuditEntryController;
 use App\Http\Controllers\CustomersAndAccounts\CustomerAccountController;
 use App\Http\Controllers\CustomersAndAccounts\CustomerController;
@@ -286,6 +287,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('/reference/options', ReferenceOptionsController::class)->name('reference-options.index');
 
         Route::get('/audit/entries', [AuditEntryController::class, 'index'])->name('audit.entries.index');
+        Route::get('/auditoria/entradas/{auditEntry}', [AuditEntryController::class, 'show'])->whereNumber('auditEntry')->name('audit.entries.show');
+        Route::get('/auditoria/responsables', [AuditActorController::class, 'index'])->name('audit.actors.index');
 
         Route::middleware(['shared.device:any', 'shared.session.conditional'])->group(function (): void {
             Route::get('/reports/sources', [ReportSourceController::class, 'index'])->name('reports.sources.index');

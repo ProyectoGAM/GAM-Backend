@@ -334,7 +334,7 @@ components:
       properties:
         pin: { type: string, pattern: '^[0-9]{4}$', description: PIN personal del repartidor; se valida en el servidor y no se guarda en el reparto }
         vehicle_id: { type: string, format: ulid, description: Vehículo disponible elegido por el repartidor; se vuelve a validar al confirmar el inicio }
-        odometer_km: { type: [number, 'null'], minimum: 0, description: Lectura opcional al inicio, sin requisito de frecuencia }
+        odometer_km: { type: [number, 'null'], minimum: 0, description: 'Lectura opcional al inicio, sin requisito de frecuencia' }
         start_without_load: { type: boolean, default: false, description: Iniciar con cero huevos; se permite agregar cargas y registrar entregas luego }
         production_unit_id: { type: integer, nullable: true, minimum: 1, description: UP operativa de la carga inicial; omitida cuando start_without_load es true }
         quantity: { type: integer, minimum: 1, description: 'Formato anterior: huevos sueltos' }

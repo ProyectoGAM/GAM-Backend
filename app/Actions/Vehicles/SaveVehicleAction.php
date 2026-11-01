@@ -26,7 +26,7 @@ final readonly class SaveVehicleAction
             if (isset($data['version']) && $vehicle !== null && (int) $data['version'] !== $locked->version) {
                 throw ValidationException::withMessages(['version' => 'El vehículo cambió desde que abriste el formulario. Actualizá la ficha.']);
             }
-            if (isset($data['habitual_driver_id']) && $data['habitual_driver_id'] !== null) {
+            if (isset($data['habitual_driver_id'])) {
                 $driver = User::query()->whereKey($data['habitual_driver_id'])->first();
                 if ($driver === null || ! $driver->hasRole('delivery')) {
                     throw ValidationException::withMessages(['habitual_driver_id' => 'Elegí una cuenta activa con rol de repartidor.']);
@@ -36,6 +36,7 @@ final readonly class SaveVehicleAction
             $locked->fill([...$data, 'plate' => $plate, 'plate_normalized' => $normalized]);
             $locked->version = $locked->exists ? $locked->version + 1 : 1;
             $locked->save();
+            $locked->refresh();
             $after = $locked->snapshot();
             if ($vehicle === null) {
                 $locked->statusChanges()->create([

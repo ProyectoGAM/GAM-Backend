@@ -150,4 +150,62 @@ final class AuditEntryTest extends TestCase
         // Verificación: confirma que el usuario no se persistió.
         $this->assertDatabaseMissing('users', ['email' => 'rolled.back@example.test']);
     }
+
+    // Flujo: clasifica planes antiguos sin alterar la historia y conserva filtros, totales y paginación.
+    public function test_management_plan_history_belongs_to_management_and_not_lots(): void
+    {
+        // Preparación: crea un lector y eventos de planes antiguos, actuales y de otros módulos.
+        $user = User::factory()->create();
+        $user->givePermissionTo(Permission::findOrCreate('audit.view', 'web'));
+        $planEvents = ['plan_template_created', 'plan_template_revised', 'plan_template_published',
+            'plan_template_retired', 'plan_template_activated', 'flock_plan_assigned',
+            'flock_plan_inherited', 'flock_plan_revised'];
+        $records = [];
+        foreach ($planEvents as $event) {
+            $records[] = ['lots', $event];
+        }
+        $records = [...$records, ['management_plans', 'medicine_application_recorded'],
+            ['lots', 'flock_created'], ['lots', 'eggs_collected'], ['lots', null],
+            ['lots', 'future_plan_event'], ['inventory', 'flock_feeding_plan_revised']];
+        $entries = [];
+        foreach ($records as [$module, $event]) {
+            $entries[] = AuditEntry::query()->create([
+                'log_name' => $module, 'event' => $event, 'description' => 'Actividad de prueba',
+                'operation_id' => Str::uuid()->toString(), 'source' => 'test',
+                'causer_type' => User::class, 'causer_id' => $user->getKey(), 'properties' => [],
+            ]);
+        }
+        Sanctum::actingAs($user, ['*']);
+
+        // Consulta: Lotes conserva sus eventos, incluidos los desconocidos y los que no tienen código.
+        $lots = $this->getJson('/api/v1/audit/entries?log_name=lots&per_page=2')
+            ->assertOk()->assertJsonPath('meta.total', 4)->assertJsonPath('meta.last_page', 2)
+            ->assertJsonCount(2, 'data');
+        $this->assertSame(['lots'], array_values(array_unique(array_column($lots->json('data'), 'log_name'))));
+
+        // Consulta: Manejo incorpora los ocho eventos antiguos y conserva su paginación real.
+        $management = $this->getJson('/api/v1/audit/entries?log_name=management_plans&per_page=3&page=2')
+            ->assertOk()->assertJsonPath('meta.total', 9)->assertJsonPath('meta.current_page', 2)
+            ->assertJsonPath('meta.last_page', 3)->assertJsonCount(3, 'data');
+        $this->assertSame(['management_plans'], array_values(array_unique(array_column($management->json('data'), 'log_name'))));
+
+        // Consulta: otros filtros siguen acotando los eventos reclasificados y no incluyen alimentación.
+        $this->getJson('/api/v1/audit/entries?log_name=management_plans&event=flock_plan_assigned')
+            ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.event', 'flock_plan_assigned');
+        $this->getJson('/api/v1/audit/entries?log_name=lots&event=plan_template_published')
+            ->assertOk()->assertJsonPath('meta.total', 0);
+        $this->getJson('/api/v1/audit/entries?log_name=inventory')
+            ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.log_name', 'inventory');
+        $this->getJson('/api/v1/audit/entries?log_name=management_plans&source=other')
+            ->assertOk()->assertJsonPath('meta.total', 0);
+
+        // Consulta: Todo el sistema presenta el mismo módulo sin duplicar registros.
+        $all = $this->getJson('/api/v1/audit/entries?per_page=100')
+            ->assertOk()->assertJsonPath('meta.total', 14)->assertJsonCount(14, 'data');
+        $byId = array_column($all->json('data'), null, 'id');
+        foreach (array_slice($entries, 0, 8) as $entry) {
+            $this->assertSame('management_plans', $byId[$entry->getKey()]['log_name']);
+            $this->assertDatabaseHas('activity_log', ['id' => $entry->getKey(), 'log_name' => 'lots']);
+        }
+    }
 }

@@ -3,8 +3,11 @@
 namespace App\Queries\AuditAndTraceability;
 
 use App\Models\AuditAndTraceability\AuditEntry;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use App\Models\User;
+use App\Services\AuditAndTraceability\AuditActorPresenter;
+use App\Services\AuditAndTraceability\AuditEventCatalog;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 final class ListAuditEntriesQuery
 {
@@ -15,7 +18,21 @@ final class ListAuditEntriesQuery
     {
         return AuditEntry::query()
             ->when($filters['log_name'] ?? null, function (Builder $query, mixed $logName): void {
-                $query->where('log_name', $logName);
+                if ($logName === 'management_plans') {
+                    $query->where(function (Builder $modules): void {
+                        $modules->where('log_name', 'management_plans')
+                            ->orWhere(function (Builder $legacy): void {
+                                $legacy->where('log_name', 'lots')
+                                    ->whereIn('event', AuditEventCatalog::MANAGEMENT_PLAN_EVENTS);
+                            });
+                    });
+                } elseif ($logName === 'lots') {
+                    $query->where('log_name', 'lots')->where(function (Builder $events): void {
+                        $events->whereNull('event')->orWhereNotIn('event', AuditEventCatalog::MANAGEMENT_PLAN_EVENTS);
+                    });
+                } else {
+                    $query->where('log_name', $logName);
+                }
             })
             ->when($filters['event'] ?? null, function (Builder $query, mixed $event): void {
                 $query->where('event', $event);
@@ -35,6 +52,9 @@ final class ListAuditEntriesQuery
             ->when($filters['actor_id'] ?? null, function (Builder $query, mixed $actorId): void {
                 $query->where('causer_id', $actorId);
             })
+            ->when($filters['actor_kind'] ?? null, function (Builder $query, mixed $kind): void {
+                $query->whereRaw("CASE WHEN causer_id IS NOT NULL AND causer_type IN (?, ?) THEN 'person' WHEN causer_id IS NULL AND ".AuditActorPresenter::SYSTEM_EVIDENCE." THEN 'system' ELSE 'unavailable' END = ?", [User::class, (new User)->getMorphClass(), $kind]);
+            })
             ->when($filters['subject_type'] ?? null, function (Builder $query, mixed $subjectType): void {
                 $query->where('subject_type', $subjectType);
             })
@@ -52,6 +72,6 @@ final class ListAuditEntriesQuery
             })
             ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->paginate((int) ($filters['per_page'] ?? 50));
+            ->paginate((int) ($filters['per_page'] ?? 50))->withQueryString();
     }
 }
