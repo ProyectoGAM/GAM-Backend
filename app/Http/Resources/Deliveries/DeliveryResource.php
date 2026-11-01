@@ -27,19 +27,44 @@ final class DeliveryResource extends JsonResource
                 'id' => $this->driver->id,
                 'name' => $this->driver->name,
             ]),
-            'production_unit' => $this->when($this->relationLoaded('productionUnit'), fn (): array => [
+            'production_unit' => $this->when($this->relationLoaded('productionUnit'), fn () => $this->productionUnit === null ? null : [
                 'id' => $this->productionUnit->id,
                 'name' => $this->productionUnit->name,
                 'latitude' => $this->productionUnit->latitude,
                 'longitude' => $this->productionUnit->longitude,
             ]),
+            'started_without_load' => (bool) $this->started_without_load,
             'vehicle_reference' => $this->vehicle_reference,
+            'vehicle' => $this->when($this->vehicle_snapshot !== null, fn (): array => $this->vehicle_snapshot),
+            'vehicle_usage' => $this->when($this->relationLoaded('vehicleUsage') && $this->vehicleUsage !== null, fn (): array => [
+                'id' => $this->vehicleUsage->public_id,
+                'started_at' => $this->vehicleUsage->started_at,
+                'ended_at' => $this->vehicleUsage->ended_at,
+                'start_odometer_km' => $this->vehicleUsage->start_odometer_km,
+                'end_odometer_km' => $this->vehicleUsage->end_odometer_km,
+                'distance_km' => $this->vehicleUsage->start_odometer_km !== null && $this->vehicleUsage->end_odometer_km !== null && (float) $this->vehicleUsage->end_odometer_km >= (float) $this->vehicleUsage->start_odometer_km
+                    ? number_format((float) $this->vehicleUsage->end_odometer_km - (float) $this->vehicleUsage->start_odometer_km, 1, '.', '') : null,
+                'fuel_entries' => $this->vehicleUsage->relationLoaded('fuelEntries')
+                    ? $this->vehicleUsage->fuelEntries->map(fn ($entry): array => [
+                        'id' => $entry->public_id,
+                        'occurred_at' => $entry->occurred_at,
+                        'liters' => $entry->liters,
+                        'fuel_type' => $entry->fuel_type,
+                        'amount' => $entry->amount,
+                        'currency' => $entry->currency,
+                        'supplier' => $entry->supplier,
+                        'odometer_km' => $entry->odometer_km,
+                        'notes' => $entry->notes,
+                    ])->values()
+                    : [],
+            ]),
             'loaded_quantity' => (int) $this->loaded_quantity,
             'delivered_quantity' => $deliveredQuantity,
             'returned_quantity' => (int) $this->returned_quantity,
             'returned_items' => $this->returned_items,
             'return_production_unit' => $this->when($this->relationLoaded('returnProductionUnit'), fn () => $this->returnProductionUnit === null ? null : [
                 'id' => $this->returnProductionUnit->id, 'name' => $this->returnProductionUnit->name,
+                'latitude' => $this->returnProductionUnit->latitude, 'longitude' => $this->returnProductionUnit->longitude,
             ]),
             'delivered_amount' => $this->relationLoaded('stops') ? app(DeliveryPricing::class)->total($this->stops)
                 : (($this->unpriced_stops_count ?? 0) > 0 ? null : ($this->delivered_amount ?? '0.000')),

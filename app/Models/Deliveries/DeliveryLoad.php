@@ -8,13 +8,13 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['delivery_id', 'production_unit_id', 'idempotency_key', 'quantity', 'items', 'request_hash', 'type', 'created_by'])]
+#[Fillable(['delivery_id', 'production_unit_id', 'idempotency_key', 'quantity', 'items', 'request_hash', 'type', 'occurred_at', 'created_by'])]
 class DeliveryLoad extends Model
 {
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['quantity' => 'integer', 'items' => 'array'];
+        return ['quantity' => 'integer', 'items' => 'array', 'occurred_at' => 'immutable_datetime'];
     }
 
     /** @return BelongsTo<Delivery, $this> */

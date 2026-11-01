@@ -25,6 +25,7 @@ final readonly class RecordCustomerPaymentAction
             'payment_reference' => ['sometimes', 'nullable', 'string', 'max:240'],
             'reason' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'client_event_id' => ['sometimes', 'uuid'],
+            'occurred_at' => ['sometimes', 'date'],
         ])->validate();
         $data['amount'] = CustomerAmounts::decimal(CustomerAmounts::parse($data['amount']));
         if ($delivery !== null && strtolower($data['client_event_id'] ?? '') !== strtolower($key)) {
@@ -49,6 +50,7 @@ final readonly class RecordCustomerPaymentAction
                 $movement = $this->ledger->post($current, $operation, $actor, 'payment', '-'.$data['amount'], [
                     'reason' => $data['reason'] ?? null, 'payment_method' => $data['payment_method'],
                     'payment_reference' => $data['payment_reference'] ?? null,
+                    'occurred_at' => $data['occurred_at'] ?? now(),
                 ]);
 
                 return ['movement_ids' => [$movement->id]];

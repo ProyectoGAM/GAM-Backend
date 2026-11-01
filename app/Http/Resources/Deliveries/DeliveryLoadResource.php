@@ -16,6 +16,7 @@ final class DeliveryLoadResource extends JsonResource
             'quantity' => (int) $this->quantity,
             'production_unit' => $this->when($this->relationLoaded('productionUnit'), fn () => $this->productionUnit === null ? null : [
                 'id' => $this->productionUnit->id, 'name' => $this->productionUnit->name,
+                'latitude' => $this->productionUnit->latitude, 'longitude' => $this->productionUnit->longitude,
             ]),
             // Las cargas anteriores a la migración siguen representando huevos sueltos.
             'items' => $this->items ?? [[
@@ -24,6 +25,7 @@ final class DeliveryLoadResource extends JsonResource
             ]],
             'type' => $this->type,
             'created_at' => $this->created_at,
+            'occurred_at' => $this->occurred_at ?? $this->created_at,
         ];
     }
 }

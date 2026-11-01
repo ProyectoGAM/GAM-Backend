@@ -21,12 +21,27 @@ final class CustomersDemoSeeder extends Seeder
             return;
         }
         $names = ['Almacén El Puente', 'Comercio La Plaza', 'Despensa Santa Rita', 'Mercado del Barrio', 'Autoservicio Norte', 'Kiosco La Estación'];
+        $locations = [
+            ['latitude' => '-34.7301000', 'longitude' => '-56.2181000'],
+            ['latitude' => '-34.7242000', 'longitude' => '-56.2194000'],
+            ['latitude' => '-34.7338000', 'longitude' => '-56.2115000'],
+            ['latitude' => '-34.7371000', 'longitude' => '-56.2246000'],
+            ['latitude' => '-34.7216000', 'longitude' => '-56.2293000'],
+            ['latitude' => '-34.7159000', 'longitude' => '-56.2139000'],
+        ];
         foreach ($names as $index => $name) {
-            $operation = app(SaveCustomerAction::class)->execute(null, $admin, ['name' => $name,
-                'address' => 'Dirección de demostración '.($index + 1), 'latitude' => '-34.7301000', 'longitude' => '-56.2181000',
-                'visit_frequency' => 'Semanal', 'delivery_notes' => 'Cliente ficticio para desarrollo.'],
-                'b6c9548b-7b4c-4f65-8e21-'.str_pad((string) ($index + 1), 12, '0', STR_PAD_LEFT));
-            $customer = Customer::query()->findOrFail($operation->customer_id);
+            $address = 'Dirección de demostración '.($index + 1);
+            $data = ['name' => $name, 'address' => $address, ...$locations[$index],
+                'visit_frequency' => 'Semanal', 'delivery_notes' => 'Cliente ficticio para desarrollo.'];
+            $customer = Customer::query()->where('name', $name)->where('address', $address)->first();
+            if ($customer === null) {
+                $operation = app(SaveCustomerAction::class)->execute(null, $admin, $data,
+                    'b6c9548b-7b4c-4f65-8e21-'.str_pad((string) ($index + 1), 12, '0', STR_PAD_LEFT));
+                $customer = Customer::query()->findOrFail($operation->customer_id);
+            } elseif ($customer->latitude !== $locations[$index]['latitude'] || $customer->longitude !== $locations[$index]['longitude']) {
+                app(SaveCustomerAction::class)->execute($customer, $admin, $data,
+                    'b6c9548b-7b4c-4f65-8e23-'.str_pad((string) ($index + 1), 12, '0', STR_PAD_LEFT));
+            }
             if ($index === 0) {
                 app(AdjustCustomerAccountAction::class)->execute($customer, $admin, ['direction' => 'increase',
                     'amount' => '1000.000', 'reason' => 'Saldo inicial ficticio de demostración', 'expected_version' => 0],

@@ -262,3 +262,35 @@ reason (máximo 500), además de confirm_reactivation cuando corresponda.
 El comando continúa validando concurrencia, ocupación y reactivación del lote;
 no se duplican esas reglas ni se modifica el historial append-only.
 Verificación de mortalidad: 68 pruebas de auditoría/mortalidad aprobadas (575 aserciones) en la base aislada; los dos casos nuevos se repitieron después del ajuste final (37 aserciones). PHPStan sin errores y Pint aprobado con rutas explícitas, al no disponer el contenedor del modo Git --dirty. Navegador local: enlace al lote, Deshacer, apertura del registro correcto con motivo obligatorio y cancelación sin modificar datos reales; escritorio y teléfono claro/oscuro.
+
+## Integración con develop del 01/11/2026
+
+Se integró develop (c8843e9) en historyDetails, conservando sus cambios de
+vehículos, repartos y autenticación junto con la presentación de auditoría.
+El único conflicto estaba en el selector de contratos de Swagger en
+compose.dev.yaml: se conservaron Auditoría e historial y Vehículos.
+Las rutas de ambos módulos se integraron sin conflictos. Esta resolución no
+agrega cambios al contrato de auditoría, permisos ni persistencia.
+
+La verificación detectó dos fallos en el código recibido de develop. El alta de
+vehículos ahora recarga los valores persistidos antes de registrar el historial
+inicial: el estado predeterminado active queda disponible y se evita un error
+500 por to_status nulo. Se conserva la transacción con auditoría síncrona y no
+se agregan migraciones ni cambios de permisos. El contrato de vehículos aclara
+el estado inicial. La prueba de repartos ahora declara el vehículo enviado para
+que su hash esperado incluya todos los datos del comando; no cambia el cálculo
+de idempotencia del backend ni se incorpora el PIN al hash.
+PHPStan también detectó una comparación redundante después de isset en la
+validación del conductor habitual; se simplificó sin cambiar su comportamiento.
+
+Verificación de la integración: Compose válido, JSON del selector de Swagger
+válido y todos sus contratos presentes; las tres rutas de auditoría están
+registradas. La ejecución conjunta de auditoría, vehículos, repartos, finanzas
+de reparto y salud tuvo 72 casos aprobados y los dos fallos descritos (712
+aserciones). Tras los ajustes, los dos casos afectados pasaron con 23 aserciones,
+incluida la comprobación del estado active en la respuesta y el historial inicial.
+Pint aprobó los PHP ajustados con rutas explícitas, porque el contenedor no
+dispone del modo Git --dirty. No se repitió toda la selección ni la suite completa
+después de esas dos correcciones.
+La repetición final de los dos casos volvió a pasar (23 aserciones), Pint pasó
+y PHPStan no encontró errores en SaveVehicleAction con nivel 5.

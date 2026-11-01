@@ -84,6 +84,7 @@ final readonly class AddDeliveryLoadAction
                 'items' => $load['items'],
                 'request_hash' => $requestHash,
                 'type' => 'additional',
+                'occurred_at' => $data['occurred_at'] ?? now(),
                 'created_by' => $actor->getKey(),
             ]);
             $locked->forceFill(['loaded_quantity' => $locked->loaded_quantity + $quantity])->save();
@@ -106,7 +107,7 @@ final readonly class AddDeliveryLoadAction
 
     private function load(Delivery $delivery): Delivery
     {
-        return $delivery->load(['driver:id,name', 'productionUnit:id,name,latitude,longitude', 'loads.productionUnit:id,name', 'returnProductionUnit:id,name', 'stops',
+        return $delivery->load(['driver:id,name', 'productionUnit:id,name,latitude,longitude', 'loads.productionUnit:id,name,latitude,longitude', 'returnProductionUnit:id,name,latitude,longitude', 'stops',
             'accountMovements.account.customer', 'accountMovements.operation', 'accountMovements.delivery', 'accountMovements.reversal', 'accountMovements.original', 'latestLocation']);
     }
 }

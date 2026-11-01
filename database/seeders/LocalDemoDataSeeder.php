@@ -46,6 +46,7 @@ use Database\Seeders\ManagementPlans\ManagementPlanDemoSeeder;
 use Database\Seeders\ReportingAndAnalytics\ReportingDemoSeeder;
 use Database\Seeders\SuppliersAndCatalogs\MedicineDemoSeeder;
 use Database\Seeders\SuppliersAndCatalogs\VaccineDemoSeeder;
+use Database\Seeders\Vehicles\VehiclesDemoSeeder;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -88,6 +89,7 @@ final class LocalDemoDataSeeder extends Seeder
         $this->call(FlockFeedingDesignDemoSeeder::class);
         app(PrepareStockStorageAction::class)->execute($admin);
         $this->call(HealthStockDemoSeeder::class);
+        $this->call(VehiclesDemoSeeder::class);
     }
 
     /** @return array<string, Locality> */

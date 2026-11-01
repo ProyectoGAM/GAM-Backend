@@ -223,6 +223,7 @@ paths:
                 payment_method: { type: string, enum: [cash, transfer, other] }
                 payment_reference: { type: [string, 'null'], maxLength: 240 }
                 reason: { type: [string, 'null'], maxLength: 2000 }
+                occurred_at: { type: string, format: date-time, description: Hora de cobro capturada en el dispositivo; created_at conserva la hora de recepción del servidor }
       responses:
         '200':
           description: Movimiento de pago confirmado
@@ -312,20 +313,39 @@ components:
   schemas:
     StartDelivery:
       type: object
-      required: [pin, production_unit_id]
-      description: Enviar items para cargas con presentaciones; quantity se conserva para clientes anteriores. No enviar ambos.
+      required: [pin, vehicle_id]
+      description: Iniciar con carga requiere production_unit_id y exactamente uno de items o quantity. Para iniciar sin carga, enviar start_without_load=true sin items ni quantity; se pueden agregar cargas y entregar huevos durante el reparto.
+      oneOf:
+        - required: [start_without_load, vehicle_id]
+          properties:
+            start_without_load: { const: true }
+          not:
+            anyOf:
+              - required: [items]
+              - required: [quantity]
+        - required: [production_unit_id, vehicle_id]
+          oneOf:
+            - required: [items]
+            - required: [quantity]
+          not:
+            required: [start_without_load]
+            properties:
+              start_without_load: { const: true }
       properties:
         pin: { type: string, pattern: '^[0-9]{4}$', description: PIN personal del repartidor; se valida en el servidor y no se guarda en el reparto }
-        production_unit_id: { type: integer, minimum: 1, description: UP operativa de la carga inicial; obligatoria también en desarrollo }
+        vehicle_id: { type: string, format: ulid, description: Vehículo disponible elegido por el repartidor; se vuelve a validar al confirmar el inicio }
+        odometer_km: { type: [number, 'null'], minimum: 0, description: Lectura opcional al inicio, sin requisito de frecuencia }
+        start_without_load: { type: boolean, default: false, description: Iniciar con cero huevos; se permite agregar cargas y registrar entregas luego }
+        production_unit_id: { type: integer, nullable: true, minimum: 1, description: UP operativa de la carga inicial; omitida cuando start_without_load es true }
         quantity: { type: integer, minimum: 1, description: 'Formato anterior: huevos sueltos' }
         items: { type: array, minItems: 1, maxItems: 20, items: { $ref: '#/components/schemas/DeliveryLoadItemInput' } }
-        vehicle_reference: { type: string, maxLength: 120 }
     AddDeliveryLoad:
       type: object
       required: [production_unit_id]
       description: Enviar items o quantity, nunca ambos.
       properties:
         production_unit_id: { type: integer, minimum: 1, description: UP de esta recarga; puede diferir del origen inicial }
+        occurred_at: { type: string, format: date-time, description: Hora de carga capturada en el dispositivo; created_at conserva la hora de recepción del servidor }
         quantity: { type: integer, minimum: 1, description: 'Formato anterior: huevos sueltos' }
         items: { type: array, minItems: 1, maxItems: 20, items: { $ref: '#/components/schemas/DeliveryLoadItemInput' } }
     DeliveryUnit:
@@ -344,6 +364,8 @@ components:
       properties:
         id: { type: integer }
         name: { type: string }
+        latitude: { type: [number, string, 'null'] }
+        longitude: { type: [number, string, 'null'] }
     EggPresentationInput:
       type: object
       required: [name, eggs_per_unit, default_unit_price]
@@ -457,6 +479,7 @@ components:
             payment_method: { type: string, enum: [cash, transfer, other], description: Obligatorio cuando amount es positivo }
             payment_reference: { type: [string, 'null'], maxLength: 240 }
             reason: { type: [string, 'null'], maxLength: 2000 }
+        occurred_at: { type: string, format: date-time, description: Hora de visita capturada en el dispositivo; created_at conserva la hora de recepción del servidor }
         status: { type: string, enum: [delivered, not_delivered] }
         items: { type: array, minItems: 1, maxItems: 20, items: { $ref: '#/components/schemas/DeliveryStopItemInput' }, description: 'Obligatorio para delivered y prohibido para not_delivered. El servidor calcula los huevos desde la equivalencia registrada en la carga.' }
         visit_reason: { type: string, nullable: true, maxLength: 240 }
@@ -484,15 +507,43 @@ components:
         returned_items: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/DeliveryLoadItemInput' }, description: Cantidades de las presentaciones cargadas; acepta fracciones que equivalen a huevos enteros. Lista vacía si no hay devolución. }
         return_production_unit_id: { type: integer, nullable: true, description: Destino único de todos los sobrantes; debe pertenecer a las UP de las cargas. Obligatorio para una devolución cuando hay varias UP de origen. }
         notes: { type: string, nullable: true, maxLength: 2000 }
+        odometer_km: { type: [number, 'null'], minimum: 0, description: Lectura opcional al cierre }
     Delivery:
       type: object
       required: [id, status, loaded_quantity, delivered_quantity, returned_quantity, remaining_quantity, stops_summary]
       properties:
         id: { type: string }
         status: { type: string, enum: [active, completed, cancelled] }
+        started_without_load: { type: boolean, description: true cuando el reparto se inició sin carga; no impide agregar cargas ni entregar después }
         driver: { type: object, nullable: true }
         production_unit: { type: object, nullable: true, description: UP inicial conservada para compatibilidad; cada carga expone su propio origen }
         vehicle_reference: { type: string, nullable: true }
+        vehicle: { type: [object, 'null'], description: Instantánea histórica del vehículo seleccionado }
+        vehicle_usage:
+          type: [object, 'null']
+          properties:
+            id: { type: string, format: ulid }
+            started_at: { type: string, format: date-time }
+            ended_at: { type: [string, 'null'], format: date-time }
+            start_odometer_km: { type: [string, 'null'] }
+            end_odometer_km: { type: [string, 'null'] }
+            distance_km: { type: [string, 'null'] }
+            fuel_entries:
+              type: array
+              description: Cargas de combustible asociadas al uso de vehículo de este reparto.
+              items:
+                type: object
+                required: [id, occurred_at, liters, fuel_type, amount, currency]
+                properties:
+                  id: { type: string, format: ulid }
+                  occurred_at: { type: string, format: date-time }
+                  liters: { type: string }
+                  fuel_type: { type: string }
+                  amount: { type: string }
+                  currency: { type: string, enum: [UYU] }
+                  supplier: { type: [string, 'null'] }
+                  odometer_km: { type: [string, 'null'] }
+                  notes: { type: [string, 'null'] }
         loaded_quantity: { type: integer }
         delivered_quantity: { type: integer }
         returned_quantity: { type: integer }
@@ -532,6 +583,7 @@ components:
         longitude: { type: number }
         sequence: { type: integer }
         visited_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time, description: Hora de recepción del evento en el servidor }
     DeliveryLoad:
       type: object
       properties:
@@ -542,6 +594,7 @@ components:
         items: { type: array, items: { $ref: '#/components/schemas/DeliveryLoadItem' } }
         type: { type: string }
         created_at: { type: string, format: date-time }
+        occurred_at: { type: string, format: date-time, description: Hora de carga capturada en el dispositivo }
     DeliveryLocation:
       allOf:
         - $ref: '#/components/schemas/DeliveryLocationInput'

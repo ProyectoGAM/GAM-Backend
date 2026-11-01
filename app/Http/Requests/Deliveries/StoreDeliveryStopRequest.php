@@ -26,6 +26,7 @@ final class StoreDeliveryStopRequest extends DeliveryRequest
             ...$this->commandRules(),
             'accounting_version' => ['sometimes', 'integer', 'in:2'],
             'client_event_id' => ['sometimes', 'uuid'],
+            'occurred_at' => ['sometimes', 'date'],
             'payment' => ['sometimes', 'prohibited_if:status,not_delivered', 'array:amount,payment_method,payment_reference,reason'],
             'payment.amount' => ['required_with:payment', 'string'],
             'payment.payment_method' => ['sometimes', 'in:cash,transfer,other'],

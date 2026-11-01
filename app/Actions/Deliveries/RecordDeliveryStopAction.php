@@ -102,10 +102,12 @@ final readonly class RecordDeliveryStopAction
                         throw new DeliveryConflict('La cantidad entregada debe ser positiva y no superar la carga disponible.');
                     }
                     $priced = $allocated === null ? ['items' => [], 'total_amount' => '0.000'] : $this->pricing->calculate($allocated['items'], $data['items']);
+                    $occurredAt = $data['occurred_at'] ?? now();
                     $attributes = ['status' => $data['status'], 'customer_id' => $customer->id,
                         'accounting_status' => $isDelivered ? 'posted' : 'not_applicable', 'delivered_quantity' => $quantity,
                         'items' => $priced['items'], 'total_amount' => $priced['total_amount'], 'visit_reason' => $data['visit_reason'] ?? null,
-                        'notes' => $data['notes'] ?? null, 'idempotency_key' => $idempotencyKey, 'request_hash' => $requestHash, 'visited_at' => now()];
+                        'notes' => $data['notes'] ?? null, 'idempotency_key' => $idempotencyKey, 'request_hash' => $requestHash,
+                        'visited_at' => $occurredAt];
                     if ($stop === null) {
                         $stop = DeliveryStop::query()->create(['delivery_id' => $lockedDelivery->id,
                             'client_reference' => $customer->public_id, 'client_name' => $customer->displayName(), 'address' => $customer->address,
@@ -118,14 +120,17 @@ final readonly class RecordDeliveryStopAction
                     $operation->delivery_id = $lockedDelivery->id;
                     if ($isDelivered) {
                         if (! CustomerAmounts::parse($priced['total_amount'], allowZero: true)->isZero()) {
-                            $this->ledger->post($customer, $operation, $actor, 'sale_charge', $priced['total_amount'], ['delivery_stop_id' => $stop->id]);
+                            $this->ledger->post($customer, $operation, $actor, 'sale_charge', $priced['total_amount'], [
+                                'delivery_stop_id' => $stop->id, 'occurred_at' => $occurredAt,
+                            ]);
                         }
                         $payment = $data['payment'];
                         $amount = CustomerAmounts::parse($payment['amount'], allowZero: true);
                         if (! $amount->isZero()) {
                             $this->ledger->post($customer, $operation, $actor, 'payment', CustomerAmounts::decimal($amount->negated()),
                                 ['delivery_stop_id' => $stop->id, 'payment_method' => $payment['payment_method'],
-                                    'payment_reference' => $payment['payment_reference'] ?? null, 'reason' => $payment['reason'] ?? null]);
+                                    'payment_reference' => $payment['payment_reference'] ?? null, 'reason' => $payment['reason'] ?? null,
+                                    'occurred_at' => $occurredAt]);
                         }
                     }
                     $this->audit->record(AuditEntryData::forSubject(subject: $stop, actor: $actor, logName: 'deliveries',
