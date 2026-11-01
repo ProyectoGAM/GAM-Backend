@@ -294,3 +294,37 @@ dispone del modo Git --dirty. No se repitió toda la selección ni la suite comp
 después de esas dos correcciones.
 La repetición final de los dos casos volvió a pasar (23 aserciones), Pint pasó
 y PHPStan no encontró errores en SaveVehicleAction con nivel 5.
+
+## Regresiones detectadas por CI tras la integración
+
+La suite completa de CI del 01/11/2026 detectó tres problemas fuera del
+formateador de auditoría. La descripción de odometer_km en el contrato de
+repartos ahora lleva comillas: su coma invalidaba el YAML y la resolución de
+referencias desde el contrato de clientes. El texto y el esquema no cambian.
+
+La prueba web de pesajes utiliza http://localhost:4200 desde el login hasta
+las consultas, como las demás pruebas web y la configuración de Sanctum.
+localhost sin puerto quedó reservado para el origen nativo de Capacitor.
+Se conserva la comprobación de rechazo de credenciales nativas en una sesión
+web, sin ampliar orígenes confiables ni modificar middleware o autenticación.
+
+La prueba de reportes conserva diez fuentes cuando faltan los permisos de
+vehículos y comprueba 403 para esas tres fuentes. Después concede vehicles.view,
+vehicles.fuel.view y vehicles.maintenance.view y ejecuta las trece fuentes y
+sus consultas estándar. La guía de reportes incorpora esas fuentes existentes.
+No se cambian permisos de producción, reglas de negocio, datos ni migraciones.
+
+La verificación completa también agotó el tmpfs de /tmp (64 MB) al generar la
+caché de PHPStan. CI utiliza ahora .phpstan-ci.neon para guardar esa caché en
+storage/framework/cache/phpstan-ci, conservando el nivel 0 y el alcance app del
+comando anterior. No se amplían recursos de los servicios ni se cambian paquetes.
+
+Los tres casos originales se reprodujeron antes del ajuste y pasaron después
+con 524 aserciones en gam_testing. Pint aprobó los dos archivos PHP modificados
+y PHPStan aprobó los 785 archivos de app con la configuración de CI corregida.
+La suite completa pasó con las variables de CI y LOG_CHANNEL=null para omitir
+los mensajes esperados de fallos simulados de auditoría: 875 pruebas y 8295
+aserciones, sin errores ni fallos. Se ejecutó en el contenedor local con PHP
+8.5.10, PHPUnit 12.5.34 y PostgreSQL aislado gam_testing. La ejecución de GitHub
+adjunta utilizaba PHP 8.5.12; esta comprobación local no sustituye su nueva
+ejecución remota.

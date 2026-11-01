@@ -683,6 +683,7 @@ final class WeighingEndpointTest extends LotsTestCase
 
         // Request: inicia una sesión web real y conserva la cookie de sesión emitida.
         $login = $this->withCookie('gam_shared_device', $credential)
+            ->withHeader('Origin', 'http://localhost:4200')
             ->withCredentials()
             ->postJson('/api/v1/shared-device/web/login-pin', [
                 'user_id' => $employee->getKey(),
@@ -702,7 +703,7 @@ final class WeighingEndpointTest extends LotsTestCase
         $this->withUnencryptedCookie(config('session.cookie'), $sessionCookie->getValue())
             ->withCookie('gam_shared_device', $credential)
             ->withHeaders([
-                'Origin' => 'http://localhost',
+                'Origin' => 'http://localhost:4200',
                 'X-GAM-Session' => $session->getKey(),
             ])
             ->getJson('/api/v1/pesajes')
@@ -711,7 +712,7 @@ final class WeighingEndpointTest extends LotsTestCase
         // Request: rechaza la mezcla de cookie web y credencial nativa.
         $this->clearSharedRequestContext();
         $this->withHeaders([
-            'Origin' => 'http://localhost',
+            'Origin' => 'http://localhost:4200',
             'X-GAM-Session' => $session->getKey(),
             'X-Shared-Device-Token' => $credential,
         ])

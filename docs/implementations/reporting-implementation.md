@@ -15,6 +15,9 @@ La implementación reutiliza el motor ReportingAndAnalytics y agrega una pantall
 | `management.executions` | Manejos realizados y programación de la revisión aplicable | `management-plans.view` |
 | `management.feed-supply` | Ración registrada y pauta estimada separadas | `management-plans.view` |
 | `deliveries.deliveries` | Una fila por entrega confirmada, cantidades, presentaciones, valor y notas | `delivery.history` |
+| `vehicles.usage` | Usos, responsables y kilometraje registrado | `vehicles.view` |
+| `vehicles.fuel` | Cargas de combustible, litros e importe en UYU | `vehicles.fuel.view` |
+| `vehicles.maintenance` | Intervenciones, estado y costos | `vehicles.maintenance.view` |
 | `commerce.egg-outflow` | Vendidos, donados y total, excluyendo cargas/ajustes/pérdidas | `delivery.history` y `egg-stock.view` |
 
 El servidor define filtros, columnas, ordenamientos, dimensiones, métricas, opciones, consultas estándar y capacidades. La UI ofrece las consultas estándar antes de las opciones avanzadas. Las nuevas fuentes admiten todo el historial registrado (`max_range_days=0`), con 100 filas por página y 50.000 por XLSX. PDF se limita a 2.000 filas. No se recortan archivos silenciosamente: superar el límite produce un fallo accionable.
