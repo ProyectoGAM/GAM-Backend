@@ -86,7 +86,7 @@ final class ReportExportWriterTest extends TestCase
                     definitionVersion: '1.0',
                     label: 'Fuente de prueba',
                     description: 'Fuente usada por las pruebas del escritor.',
-                    permission: 'reports.view',
+                    permission: 'can_view_reports',
                     columns: [
                         'name' => ['label' => 'Nombre', 'type' => 'string'],
                         'value' => ['label' => 'Valor', 'type' => 'string'],

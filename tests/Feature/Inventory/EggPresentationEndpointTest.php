@@ -5,12 +5,12 @@ namespace Tests\Feature\Inventory;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\Deliveries\Delivery;
+use App\Models\IdentityAndAccess\Role;
 use App\Models\Inventory\EggPresentation;
 use App\Models\User;
 use App\Services\Deliveries\DeliveryLoadUnits;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Laravel\Sanctum\Sanctum;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 final class EggPresentationEndpointTest extends TestCase
@@ -21,7 +21,7 @@ final class EggPresentationEndpointTest extends TestCase
     {
         // Preparación: autentica al administrador del catálogo global.
         $user = User::factory()->create();
-        $user->assignRole(Role::findOrCreate('admin', 'web'));
+        $user->syncRoles([Role::findOrCreate('admin', 'web')]);
         Sanctum::actingAs($user, ['api:access']);
 
         return $user;

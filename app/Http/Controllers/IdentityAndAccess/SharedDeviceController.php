@@ -9,6 +9,7 @@ use App\Actions\IdentityAndAccess\RevokeSharedDeviceAction;
 use App\Exceptions\IdentityAndAccess\IdentityException;
 use App\Http\Requests\IdentityAndAccess\FinalizeSharedSessionRequest;
 use App\Http\Requests\IdentityAndAccess\GeneratePairingCodeRequest;
+use App\Http\Requests\IdentityAndAccess\ListSharedUsersRequest;
 use App\Http\Requests\IdentityAndAccess\RedeemPairingCodeRequest;
 use App\Http\Requests\IdentityAndAccess\RevokeSharedDeviceRequest;
 use App\Http\Requests\IdentityAndAccess\SharedPinLoginRequest;
@@ -142,7 +143,7 @@ final class SharedDeviceController
 
         if (! $actor instanceof User
             || ! Hash::check($data['password'], $actor->password)
-            || ! $actor->can('identity.shared-devices.manage')) {
+            || ! $actor->can('can_manage_shared_devices')) {
             throw new IdentityException(401, 'INVALID_CREDENTIALS', 'Las credenciales proporcionadas no son correctas.');
         }
 
@@ -156,15 +157,15 @@ final class SharedDeviceController
         return $response;
     }
 
-    public function users(Request $request): JsonResponse
+    public function users(ListSharedUsersRequest $request): JsonResponse
     {
         $users = User::query()
             ->where('pin_enabled', true)
             ->whereNull('deleted_at')
             ->whereDoesntHave('roles', fn ($query) => $query->where('name', 'admin'))
-            ->whereHas('roles', fn ($query) => $query->where('name', 'employee'))
+            ->permission('can_login_shared')
             ->orderBy('name')
-            ->paginate(min($request->integer('per_page', 50), 100));
+            ->paginate((int) $request->validated('per_page', 50));
 
         return response()->json([
             'data' => SharedUserResource::collection($users)->resolve($request),

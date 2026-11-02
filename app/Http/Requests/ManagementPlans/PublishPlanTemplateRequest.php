@@ -9,7 +9,7 @@ final class PublishPlanTemplateRequest extends ManagementPlanRequest
      */
     public function authorize(): bool
     {
-        return $this->allowed('management-plans.manage');
+        return $this->allowed('can_manage_management_plans');
     }
 
     /**

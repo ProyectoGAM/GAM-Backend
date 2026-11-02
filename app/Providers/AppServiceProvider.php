@@ -2,8 +2,15 @@
 
 namespace App\Providers;
 
+use App\Models\IdentityAndAccess\Role;
+use App\Models\Inventory\FeedStockOperation;
+use App\Models\User;
+use App\Policies\IdentityAndAccess\RolePolicy;
+use App\Policies\IdentityAndAccess\UserPolicy;
+use App\Policies\Inventory\FeedStockOperationPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -23,6 +30,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Gate::policy(Role::class, RolePolicy::class);
+        Gate::policy(User::class, UserPolicy::class);
+        Gate::policy(FeedStockOperation::class, FeedStockOperationPolicy::class);
+
         RateLimiter::for('auth', function (Request $request): Limit {
             $email = Str::lower($request->string('email')->toString());
 

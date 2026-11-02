@@ -28,7 +28,7 @@ final readonly class RecordVehicleFuelAction
                 $occurredAtMatches = ! isset($data['occurred_at'])
                     || $existing->occurred_at?->equalTo(Carbon::parse($data['occurred_at'])) === true;
                 if ($existing->vehicle_id !== $vehicle->getKey()
-                    || ($existing->created_by !== $actor->getKey() && ! $actor->can('vehicles.manage'))
+                    || ($existing->created_by !== $actor->getKey() && ! $actor->can('can_manage_vehicles'))
                     || $this->normalizeDecimal($existing->liters) !== $this->normalizeDecimal($data['liters'])
                     || $this->normalizeDecimal($existing->amount) !== $this->normalizeDecimal($data['amount'])
                     || $existing->fuel_type !== $data['fuel_type']
@@ -48,11 +48,11 @@ final readonly class RecordVehicleFuelAction
                 if ($usage === null) {
                     throw ValidationException::withMessages(['usage_id' => 'El uso indicado no está abierto para este vehículo.']);
                 }
-                if ($usage->driver_id !== $actor->getKey() && ! $actor->can('vehicles.manage')) {
+                if ($usage->driver_id !== $actor->getKey() && ! $actor->can('can_manage_vehicles')) {
                     throw ValidationException::withMessages(['usage_id' => 'Solo podés registrar combustible en tu propio uso activo.']);
                 }
                 $data['usage_id'] = $usage->getKey();
-            } elseif ($actor->hasRole('delivery') && ! $actor->can('vehicles.manage')) {
+            } elseif ($actor->can('can_record_delivery_fuel') && ! $actor->can('can_manage_vehicle_fuel') && ! $actor->can('can_manage_vehicles')) {
                 throw ValidationException::withMessages(['usage_id' => 'El registro móvil debe asociarse a tu reparto activo.']);
             }
             $data['occurred_at'] ??= now();

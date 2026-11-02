@@ -5,15 +5,20 @@ namespace App\Actions\IdentityAndAccess;
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\User;
+use App\Services\IdentityAndAccess\AccessControl;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 final class RevokeUserSessionsAction
 {
-    public function __construct(private AuditRecorder $auditRecorder) {}
+    public function __construct(private AuditRecorder $auditRecorder, private AccessControl $access) {}
 
     public function execute(User $actor, User $user, string $reason = 'admin_revoked'): void
     {
         DB::transaction(function () use ($actor, $user, $reason): void {
+            $actor = $this->access->lockActor($actor);
+            $user = User::withTrashed()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            Gate::forUser($actor)->authorize('revokeSessions', $user);
             $user->authSessions()->whereNull('revoked_at')->update([
                 'revoked_at' => now(),
                 'revoked_reason' => $reason,

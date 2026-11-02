@@ -53,7 +53,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_unknown_events_have_server_labels_and_keep_pagination(): void
     {
         // Preparación: registra un evento nuevo para el cliente y otro sin descripción útil.
-        $this->signIn(['audit.view']);
+        $this->signIn(['can_view_audit']);
         $first = $this->entry(['event' => 'future_event', 'description' => 'Actividad futura registrada']);
         $this->entry(['event' => 'opaque_event', 'description' => 'opaque_event']);
 
@@ -78,7 +78,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_actor_snapshot_survives_rename_disable_and_permanent_removal(): void
     {
         // Preparación: registra la operación mediante el grabador compartido.
-        $this->signIn(['audit.view']);
+        $this->signIn(['can_view_audit']);
         $actor = User::factory()->create(['name' => 'Ana Original']);
         $subject = User::factory()->create();
         DB::transaction(fn () => $this->app->make(AuditRecorder::class)->record(AuditEntryData::forSubject(
@@ -108,7 +108,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_legacy_actors_use_current_name_only_in_its_explicit_field(): void
     {
         // Preparación: registra el formato anterior sin instantánea del responsable.
-        $this->signIn(['audit.view', 'identity.users.manage']);
+        $this->signIn(['can_view_audit', 'can_manage_users']);
         $actor = User::factory()->create(['name' => 'Nombre vigente']);
         $entry = $this->entry(['causer_type' => User::class, 'causer_id' => $actor->id]);
 
@@ -121,7 +121,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_actor_search_is_minimal_paginated_and_deduplicated(): void
     {
         // Preparación: registra dos hechos del mismo responsable y un usuario sin actividad.
-        $this->signIn(['audit.view']);
+        $this->signIn(['can_view_audit']);
         $actor = User::factory()->create(['name' => 'Ana%Segura']);
         User::factory()->create(['name' => 'AnaXSegura']);
         $this->entry(['causer_type' => User::class, 'causer_id' => $actor->id, 'properties' => ['actor_snapshot' => ['name' => 'Ana Histórica']]]);
@@ -148,7 +148,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_invalid_filters_are_rejected_and_missing_details_return_not_found(): void
     {
         // Preparación: autentica un auditor.
-        $this->signIn(['audit.view']);
+        $this->signIn(['can_view_audit']);
 
         // Request: rechaza filtros fuera de contrato antes de ejecutar consultas.
         $this->getJson('/api/v1/auditoria/responsables?por_pagina=101')->assertUnprocessable()->assertJsonValidationErrors('por_pagina');
@@ -162,7 +162,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_actor_kind_filters_require_explicit_automatic_evidence(): void
     {
         // Preparación: conserva una entrada sin actor con una marca de tipo incorrecto.
-        $this->signIn(['audit.view']);
+        $this->signIn(['can_view_audit']);
         $this->entry(['properties' => ['automatic_process' => 'true']]);
 
         // Consulta: el filtro del servidor coincide con la identidad presentada.
@@ -176,7 +176,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_detail_does_not_expose_nested_implementation_data_or_secrets(): void
     {
         // Preparación: simula una entrada histórica con campos anidados y técnicos.
-        $this->signIn(['audit.view']);
+        $this->signIn(['can_view_audit']);
         $entry = $this->entry([
             'properties' => [
                 'subject_snapshot' => ['stage_snapshot' => ['grams_per_bird' => '60', 'hash' => 'nested-secret'], 'password' => 'secret-value'],
@@ -213,7 +213,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_feed_quantities_and_business_dates_keep_precision(string $grams, string $display): void
     {
         // Preparación: conserva los datos originales de una jornada.
-        $this->signIn(['audit.view']);
+        $this->signIn(['can_view_audit']);
         $entry = $this->entry(['event' => 'feed_consumption_recorded', 'properties' => [
             'subject_snapshot' => ['quantity_grams' => $grams, 'consumption_date' => '2026-10-30', 'mode' => 'automatic', 'population' => 600, 'age_days' => 30],
             'presentation_snapshot' => ['subject' => ['label' => 'Inicial', 'resource' => 'flock', 'id' => (string) Str::ulid()], 'recipe_name' => 'Ración inicial'],
@@ -233,7 +233,7 @@ final class AuditPresentationTest extends LotsTestCase
     {
         // Preparación: admite un lote con 600 aves y una etapa de 60 gramos.
         $this->travelTo(CarbonImmutable::parse('2026-10-29 12:00', 'America/Montevideo'));
-        $actor = $this->signIn(['audit.view', 'flocks.manage']);
+        $actor = $this->signIn(['can_view_audit', 'can_manage_flocks', 'can_correct_feed_consumption']);
         $recipe = FeedRecipe::factory()->create(['name' => 'Ración inicial']);
         $selection = $this->createPublishedPlanSelection($actor, [[
             'type' => 'ration_change', 'title' => 'Etapa inicial', 'timing_kind' => 'day', 'start_day' => 1,
@@ -269,6 +269,11 @@ final class AuditPresentationTest extends LotsTestCase
             ->assertJsonPath('data.presentation.actions.0.available', true);
         $this->assertContains(['label' => 'Receta', 'value' => 'Ración inicial'], $response->json('data.presentation.facts'));
 
+        // Consulta: retirar el permiso oculta la rectificación aunque la lectura siga autorizada.
+        $actor->roles()->firstOrFail()->revokePermissionTo('can_correct_feed_consumption');
+        $this->getJson($this->detailUrl($entry))->assertOk()->assertJsonPath('data.presentation.actions.0.available', false);
+        $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_correct_feed_consumption', 'web'));
+
         // Mutación: agrega una compensación sin alterar el consumo original.
         $original = $entry->getRawOriginal('properties');
         $this->app->make(CorrectFeedConsumptionAction::class)->execute($consumption, [
@@ -290,7 +295,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_inventory_actions_follow_current_stock_permissions_and_reversal_state(): void
     {
         // Preparación: registra un ingreso real con producto y ubicación compatibles.
-        $actor = $this->signIn(['audit.view', 'inventory.move', 'inventory.adjust']);
+        $actor = $this->signIn(['can_view_audit', 'can_move_inventory', 'can_adjust_inventory']);
         $product = Product::factory()->create();
         $location = StockLocation::factory()->create();
         $supplier = Supplier::factory()->create();
@@ -324,7 +329,7 @@ final class AuditPresentationTest extends LotsTestCase
         $this->getJson($this->detailUrl($entry))->assertOk()->assertJsonPath('data.presentation.actions.0.reason', 'El movimiento ya fue revertido.');
 
         // Consulta: un auditor sin gestión recibe una explicación de permisos.
-        $this->signIn(['audit.view']);
+        $this->signIn(['can_view_audit']);
         $this->getJson($this->detailUrl($entry))->assertOk()->assertJsonPath('data.presentation.actions.0.reason', 'No tienes permiso para revertir movimientos de inventario.');
     }
 
@@ -332,7 +337,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_list_actor_resolution_is_batched(): void
     {
         // Preparación: crea entradas con responsables distintos y mide sólo la lectura HTTP.
-        $this->signIn(['audit.view']);
+        $this->signIn(['can_view_audit']);
         foreach (User::factory()->count(12)->create() as $actor) {
             $this->entry(['causer_type' => User::class, 'causer_id' => $actor->id]);
         }
@@ -363,7 +368,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_specialized_movements_explain_the_current_restriction(string $reference, string $reason): void
     {
         // Preparación: conserva un movimiento histórico cuya operación tiene corrección especializada.
-        $this->signIn(['audit.view', 'inventory.adjust']);
+        $this->signIn(['can_view_audit', 'can_adjust_inventory']);
         $movement = InventoryMovement::factory()->create(['reference_type' => $reference]);
         $entry = $this->entry(['event' => 'inventory_movement_recorded', 'subject_type' => $movement->getMorphClass(), 'subject_id' => $movement->id]);
 
@@ -388,7 +393,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_weighing_records_expose_the_flock_link(string $mode, array $measurements, array $dailyPayload): void
     {
         // Preparación: crea un lote con admisión y un usuario que puede pesarlo y consultar su auditoría.
-        $this->signIn(['audit.view', 'weighings.manage', 'flocks.view']);
+        $this->signIn(['can_view_audit', 'can_manage_weighings', 'can_view_flocks']);
         $flock = $this->flockWithHistory(20);
 
         // Request: registra ambas APIs de pesaje mediante sus comandos reales.
@@ -431,7 +436,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_weighing_presentation_describes_the_sample_and_expected_range(string $event, string $mode, string $title): void
     {
         // Preparación: conserva una muestra histórica de cinco aves dentro de su rango original.
-        $this->signIn(['audit.view']);
+        $this->signIn(['can_view_audit']);
         $snapshot = [
             'flock_id' => (string) Str::ulid(), 'mode' => $mode, 'represented_bird_count' => 5,
             'total_weight_g' => '2500.0', 'average_weight_g' => '500.000000', 'outside_expected_range' => false,
@@ -464,7 +469,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_weighing_without_reference_preserves_fractional_grams_and_explains_the_limit(): void
     {
         // Preparación: simula un pesaje antiguo registrado sin configuración de rangos.
-        $this->signIn(['audit.view']);
+        $this->signIn(['can_view_audit']);
         $snapshot = ['mode' => 'group', 'represented_bird_count' => 3, 'total_weight_g' => '500.0', 'average_weight_g' => '166.666667', 'expected_range' => null, 'outside_expected_range' => false];
         $entry = $this->entry(['event' => 'weighing_recorded', 'properties' => ['subject_snapshot' => $snapshot]]);
 
@@ -481,7 +486,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_weighing_range_result_does_not_hide_outliers_behind_the_average(): void
     {
         // Preparación: dos pesos fuera del rango tienen un promedio que sí caería dentro.
-        $this->signIn(['audit.view']);
+        $this->signIn(['can_view_audit']);
         $snapshot = ['mode' => 'individual', 'represented_bird_count' => 2, 'total_weight_g' => '1000.0',
             'average_weight_g' => '500.000000', 'outside_expected_range' => true,
             'expected_range' => ['min_weight_g' => '400.0', 'max_weight_g' => '600.0'],
@@ -501,7 +506,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_daily_weighing_audit_shows_sample_totals_before_and_after_each_operation(): void
     {
         // Preparación: crea una jornada real con un ingreso individual y otro grupal.
-        $this->signIn(['audit.view', 'weighings.manage']);
+        $this->signIn(['can_view_audit', 'can_manage_weighings']);
         $flock = $this->flockWithHistory(20);
         $first = $this->command('POST', '/lotes/'.$flock->public_id.'/pesajes-diarios/ingresos', ['mode' => 'individual', 'weight' => '20.0', 'confirm_out_of_range' => true])->assertCreated();
         $second = $this->command('POST', '/lotes/'.$flock->public_id.'/pesajes-diarios/ingresos', ['mode' => 'group', 'bird_count' => 3, 'total_weight' => '90.0', 'confirm_out_of_range' => true])->assertCreated();
@@ -554,7 +559,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_historical_weighing_relations_use_the_captured_public_id(string $event, bool $nested): void
     {
         // Preparación: conserva el formato histórico y una relación anterior distinta para detectar confusiones.
-        $this->signIn(['audit.view']);
+        $this->signIn(['can_view_audit']);
         $publicId = (string) Str::ulid();
         $snapshot = $nested ? ['daily_weighing' => ['flock_id' => $publicId]] : ['flock_id' => $publicId];
         $entry = $this->entry([
@@ -580,7 +585,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_invalid_weighing_relations_do_not_become_navigation_targets(mixed $flockId): void
     {
         // Preparación: representa datos antiguos que no contienen un identificador público utilizable.
-        $this->signIn(['audit.view']);
+        $this->signIn(['can_view_audit']);
         $entry = $this->entry(['event' => 'weighing_recorded', 'properties' => ['subject_snapshot' => ['flock_id' => $flockId]]]);
 
         // Consulta: conserva la entrada con relación desconocida sin exponer contenido opaco.
@@ -594,7 +599,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_openapi_matches_the_delivered_response_shapes(): void
     {
         // Preparación: carga el contrato que consumirá el frontend.
-        $this->signIn(['audit.view']);
+        $this->signIn(['can_view_audit']);
         $entry = $this->entry();
         $contract = Yaml::parseFile(base_path('contracts/openapi/audit.yaml'));
 
@@ -611,7 +616,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_mortality_history_links_its_flock_and_exposes_current_undo_confirmation(): void
     {
         // Preparación: registra cinco bajas mediante el flujo de negocio.
-        $this->signIn(['audit.view', 'flocks.view', 'mortality.view', 'mortality.manage']);
+        $this->signIn(['can_view_audit', 'can_view_flocks', 'can_view_mortality', 'can_manage_mortality']);
         $flock = $this->flock();
         $created = $this->command('POST', "/flocks/{$flock->public_id}/mortalities", [
             'version' => 1, 'quantity' => 5, 'notes' => 'Recuento de prueba', 'occurred_at' => now()->startOfSecond()->toIso8601String(),
@@ -651,7 +656,7 @@ final class AuditPresentationTest extends LotsTestCase
     public function test_mortality_undo_revalidates_permission_version_and_existence(): void
     {
         // Preparación: conserva una referencia histórica y un registro vigente.
-        $user = $this->signIn(['audit.view']);
+        $user = $this->signIn(['can_view_audit']);
         $flock = $this->flock();
         $record = MortalityRecord::factory()->create(['flock_id' => $flock->id]);
         $entry = $this->entry(['event' => 'mortality_recorded', 'log_name' => 'lots',
@@ -660,8 +665,8 @@ final class AuditPresentationTest extends LotsTestCase
 
         // Consulta: un lector puede consultar el contexto, pero no deshacer.
         $this->getJson($this->detailUrl($entry))->assertOk()->assertJsonPath('data.presentation.actions.0.available', false);
-        foreach (['flocks.view', 'mortality.view', 'mortality.manage'] as $permission) {
-            $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+        foreach (['can_view_flocks', 'can_view_mortality', 'can_manage_mortality'] as $permission) {
+            $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
         $this->getJson($this->detailUrl($entry))->assertOk()->assertJsonPath('data.presentation.actions.0.available', true);
 

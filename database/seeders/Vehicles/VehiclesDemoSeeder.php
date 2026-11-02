@@ -3,6 +3,7 @@
 namespace Database\Seeders\Vehicles;
 
 use App\Actions\IdentityAndAccess\SetUserPinAction;
+use App\Models\IdentityAndAccess\Role;
 use App\Models\User;
 use App\Models\Vehicles\Vehicle;
 use App\Models\Vehicles\VehicleFuelEntry;
@@ -14,7 +15,6 @@ use App\Models\Vehicles\VehicleUsage;
 use DateTimeInterface;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
-use Spatie\Permission\Models\Role;
 
 final class VehiclesDemoSeeder extends Seeder
 {

@@ -27,7 +27,7 @@ final class EggCollectionEndpointTest extends LotsTestCase
     public function test_collection_creates_history_and_stock_without_changing_flock(): void
     {
         // Preparación: autentica al usuario con permisos de producción y stock.
-        $this->signIn(['egg-collections.view', 'egg-collections.manage', 'egg-stock.view', 'egg-stock.move', 'egg-stock.adjust']);
+        $this->signIn(['can_view_egg_collections', 'can_manage_egg_collections', 'can_view_egg_stock', 'can_move_egg_stock', 'can_adjust_egg_stock']);
         $flock = $this->flock();
         $version = $flock->version;
 
@@ -45,7 +45,7 @@ final class EggCollectionEndpointTest extends LotsTestCase
     public function test_collection_correction_applies_only_the_difference(): void
     {
         // Preparación: registra la captura inicial y conserva su versión.
-        $this->signIn(['egg-collections.view', 'egg-collections.manage', 'egg-stock.view', 'egg-stock.move', 'egg-stock.adjust']);
+        $this->signIn(['can_view_egg_collections', 'can_manage_egg_collections', 'can_view_egg_stock', 'can_move_egg_stock', 'can_adjust_egg_stock']);
         $flock = $this->flock();
         $created = $this->command('POST', "/flocks/{$flock->public_id}/collections", ['quantity' => 4000])->assertCreated();
         $collectionId = $created->json('data.collection.id');
@@ -64,7 +64,7 @@ final class EggCollectionEndpointTest extends LotsTestCase
     public function test_collection_cancellation_keeps_history_and_can_make_balance_negative(): void
     {
         // Preparación: registra una recolección en un lote válido.
-        $this->signIn(['egg-collections.view', 'egg-collections.manage', 'egg-stock.view', 'egg-stock.move', 'egg-stock.adjust']);
+        $this->signIn(['can_view_egg_collections', 'can_manage_egg_collections', 'can_view_egg_stock', 'can_move_egg_stock', 'can_adjust_egg_stock']);
         $flock = $this->flock();
         $created = $this->command('POST', "/flocks/{$flock->public_id}/collections", ['quantity' => 12])->assertCreated();
         $collectionId = $created->json('data.collection.id');
@@ -83,7 +83,7 @@ final class EggCollectionEndpointTest extends LotsTestCase
     public function test_metrics_ignore_manual_stock_movements(): void
     {
         // Preparación: registra una única recolección.
-        $this->signIn(['egg-collections.view', 'egg-collections.manage']);
+        $this->signIn(['can_view_egg_collections', 'can_manage_egg_collections']);
         $flock = $this->flock();
         $this->command('POST', "/flocks/{$flock->public_id}/collections", ['quantity' => 9])->assertCreated();
 

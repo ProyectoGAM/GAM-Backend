@@ -8,6 +8,7 @@ use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\FarmStructure\Maintenance;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
+use App\Models\IdentityAndAccess\Role;
 use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -18,7 +19,6 @@ use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 final class MaintenanceEndpointTest extends TestCase
@@ -31,7 +31,7 @@ final class MaintenanceEndpointTest extends TestCase
         // Preparación: fija fecha y crea un galpón y un responsable autorizado.
         $this->travelTo(now()->setDate(2026, 8, 30)->startOfDay());
         $house = PoultryHouse::factory()->maintenance()->create();
-        $actor = $this->userWithPermissions(['poultry-houses.manage']);
+        $actor = $this->userWithPermissions(['can_manage_poultry_houses']);
         Sanctum::actingAs($actor, ['*']);
         $before = $house->refresh()->getAttributes();
         $payload = $this->payload($actor);
@@ -68,7 +68,7 @@ final class MaintenanceEndpointTest extends TestCase
     {
         // Preparación: crea contexto y una clave de reintento estable.
         $house = PoultryHouse::factory()->create();
-        $actor = $this->userWithPermissions(['poultry-houses.manage']);
+        $actor = $this->userWithPermissions(['can_manage_poultry_houses']);
         Sanctum::actingAs($actor, ['*']);
         $payload = $this->payload($actor);
         $this->withHeader('Idempotency-Key', Str::uuid()->toString());
@@ -91,7 +91,7 @@ final class MaintenanceEndpointTest extends TestCase
         // Preparación: construye un alta válida y sustituye el campo bajo prueba.
         $this->travelTo(now()->setDate(2026, 8, 30)->startOfDay());
         $house = PoultryHouse::factory()->create();
-        $actor = $this->userWithPermissions(['poultry-houses.manage']);
+        $actor = $this->userWithPermissions(['can_manage_poultry_houses']);
         Sanctum::actingAs($actor, ['*']);
 
         // Acción: intenta registrar el dato inválido.
@@ -132,7 +132,7 @@ final class MaintenanceEndpointTest extends TestCase
     {
         // Preparación: crea contexto autorizado.
         $house = PoultryHouse::factory()->create();
-        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_poultry_houses']), ['*']);
 
         // Acción: envía una solicitud vacía.
         $this->postJson($this->collectionUrl($house), [])
@@ -151,7 +151,7 @@ final class MaintenanceEndpointTest extends TestCase
         $first = Maintenance::factory()->for($house)->create(['maintenance_date' => '2026-08-01']);
         $last = Maintenance::factory()->for($house)->cancelled()->create(['maintenance_date' => '2026-08-01']);
         Maintenance::factory()->create(['maintenance_date' => '2026-08-29']);
-        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.view']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_view_poultry_houses']), ['*']);
 
         // Acción: consulta páginas sucesivas y filtros individuales.
         $response = $this->getJson($this->collectionUrl($house).'?per_page=2&date_from=2026-01-01')->assertOk()
@@ -173,7 +173,7 @@ final class MaintenanceEndpointTest extends TestCase
     {
         // Preparación: crea un galpón vacío y autoriza lectura.
         $house = PoultryHouse::factory()->create();
-        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.view']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_view_poultry_houses']), ['*']);
 
         // Acción: consulta vacío, agrega dos hechos y consulta el último no cancelado.
         $this->getJson($this->collectionUrl($house).'/latest')->assertOk()->assertExactJson(['data' => null]);
@@ -187,7 +187,7 @@ final class MaintenanceEndpointTest extends TestCase
     {
         // Preparación: registra un mantenimiento mediante su endpoint.
         $house = PoultryHouse::factory()->create();
-        $actor = $this->userWithPermissions(['poultry-houses.manage']);
+        $actor = $this->userWithPermissions(['can_manage_poultry_houses']);
         Sanctum::actingAs($actor, ['*']);
         $id = $this->withHeader('Idempotency-Key', Str::uuid()->toString())
             ->postJson($this->collectionUrl($house), $this->payload($actor))->assertCreated()->json('data.id');
@@ -216,7 +216,7 @@ final class MaintenanceEndpointTest extends TestCase
     {
         // Preparación: crea un mantenimiento y autentica al gestor.
         $maintenance = Maintenance::factory()->create();
-        $actor = $this->userWithPermissions(['poultry-houses.manage', 'poultry-houses.view']);
+        $actor = $this->userWithPermissions(['can_manage_poultry_houses', 'can_view_poultry_houses']);
         Sanctum::actingAs($actor, ['*']);
         $url = "/api/v1/maintenances/{$maintenance->id}";
 
@@ -241,7 +241,7 @@ final class MaintenanceEndpointTest extends TestCase
     {
         // Preparación: crea un registro cuya versión ya cambió.
         $maintenance = Maintenance::factory()->create(['version' => 3]);
-        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_poultry_houses']), ['*']);
         $url = "/api/v1/maintenances/{$maintenance->id}";
 
         // Acción: intenta cancelar una versión anterior o corregir sin cambios.
@@ -261,7 +261,7 @@ final class MaintenanceEndpointTest extends TestCase
         $unit = ProductionUnit::factory()->inactive()->create();
         $house = PoultryHouse::factory()->for($unit)->create();
         $responsible = User::factory()->create(['name' => 'Responsable original']);
-        $actor = $this->userWithPermissions(['poultry-houses.manage', 'poultry-houses.view']);
+        $actor = $this->userWithPermissions(['can_manage_poultry_houses', 'can_view_poultry_houses']);
         Sanctum::actingAs($actor, ['*']);
 
         // Acción: registra el mantenimiento y después modifica al usuario responsable.
@@ -305,7 +305,7 @@ final class MaintenanceEndpointTest extends TestCase
         $this->getJson($collection)->assertForbidden();
         $this->getJson($collection.'/latest')->assertForbidden();
         $this->getJson($url)->assertForbidden();
-        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.view']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_view_poultry_houses']), ['*']);
         $this->postJson($collection, [])->assertForbidden();
         $this->patchJson($url, [])->assertForbidden();
         $this->postJson($url.'/cancellation', [])->assertForbidden();
@@ -319,7 +319,7 @@ final class MaintenanceEndpointTest extends TestCase
         $actor = $this->userWithPermissions($permissions);
         $maintenance = Maintenance::factory()->create();
         if ($admin) {
-            $actor->assignRole(Role::findOrCreate('admin', 'web'));
+            $actor->syncRoles([Role::findOrCreate('admin', 'web')]);
         }
 
         // Acción: consulta cada operación autorizable.
@@ -341,8 +341,8 @@ final class MaintenanceEndpointTest extends TestCase
     {
         return [
             'sin permisos' => [[], false, false, false],
-            'lectura' => [['poultry-houses.view'], false, true, false],
-            'gestión' => [['poultry-houses.manage'], false, false, true],
+            'lectura' => [['can_view_poultry_houses'], false, true, false],
+            'gestión' => [['can_manage_poultry_houses'], false, false, true],
             'administrador' => [[], true, true, true],
         ];
     }
@@ -353,7 +353,7 @@ final class MaintenanceEndpointTest extends TestCase
     {
         // Preparación: crea el contexto y simula una falla del almacenamiento de auditoría.
         $maintenance = Maintenance::factory()->create();
-        $actor = $this->userWithPermissions(['poultry-houses.manage']);
+        $actor = $this->userWithPermissions(['can_manage_poultry_houses']);
         Sanctum::actingAs($actor, ['*']);
         $before = $maintenance->refresh()->getAttributes();
         $this->app->instance(AuditRecorder::class, new class implements AuditRecorder
@@ -394,7 +394,7 @@ final class MaintenanceEndpointTest extends TestCase
     {
         // Preparación: autentica un usuario con lectura y gestión.
         $maintenance = Maintenance::factory()->create();
-        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.view', 'poultry-houses.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_view_poultry_houses', 'can_manage_poultry_houses']), ['*']);
 
         // Acción: consulta recursos inexistentes y envía una modificación del propietario.
         $this->getJson('/api/v1/poultry-houses/999999/maintenances')->assertNotFound();
@@ -459,7 +459,7 @@ final class MaintenanceEndpointTest extends TestCase
     {
         $user = User::factory()->create();
         foreach ($permissions as $permission) {
-            $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+            $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
 
         return $user;

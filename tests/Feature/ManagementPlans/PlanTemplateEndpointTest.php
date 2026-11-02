@@ -33,7 +33,7 @@ final class PlanTemplateEndpointTest extends LotsTestCase
     public function test_published_versions_do_not_mutate_existing_flock_copies(): void
     {
         // Preparación: autentica a un gestor y crea la primera versión.
-        $actor = $this->signIn(['management-plans.view', 'management-plans.manage']);
+        $actor = $this->signIn(['can_view_management_plans', 'can_manage_management_plans']);
         $created = $this->command('POST', '/plantillas-manejo', $this->templatePayload())->assertCreated();
         $templateId = $created->json('data.id');
         $this->command('POST', '/plantillas-manejo/'.$templateId.'/publicacion', ['expected_version' => 1])->assertOk();
@@ -71,7 +71,7 @@ final class PlanTemplateEndpointTest extends LotsTestCase
     public function test_flock_plan_revision_is_append_only_and_versioned(): void
     {
         // Preparación: crea un lote con plan y captura el identificador de actividad.
-        $actor = $this->signIn(['management-plans.view', 'management-plans.manage']);
+        $actor = $this->signIn(['can_view_management_plans', 'can_manage_management_plans']);
         $template = PlanTemplate::factory()->published()->create(['created_by' => $actor->id]);
         $flock = $this->flock();
         app(AssignFlockPlanAction::class)->assignPublished($flock, $template->public_id, 1, $actor, (string) Str::uuid());
@@ -94,7 +94,7 @@ final class PlanTemplateEndpointTest extends LotsTestCase
     public function test_legacy_flock_assignment_is_explicit_and_idempotent(): void
     {
         // Preparación: crea un lote anterior sin plan.
-        $actor = $this->signIn(['management-plans.view', 'management-plans.manage']);
+        $actor = $this->signIn(['can_view_management_plans', 'can_manage_management_plans']);
         $template = PlanTemplate::factory()->published()->create(['created_by' => $actor->id]);
         $flock = $this->flock();
         $key = (string) Str::uuid();
@@ -121,7 +121,7 @@ final class PlanTemplateEndpointTest extends LotsTestCase
         $this->command('POST', '/plantillas-manejo', $this->templatePayload())->assertForbidden();
 
         // Mutación: concede solo consulta y mantiene protegida la escritura.
-        $this->signIn(['management-plans.view']);
+        $this->signIn(['can_view_management_plans']);
         $this->getJson('/api/v1/plantillas-manejo/'.$template->public_id)->assertOk();
         $this->command('POST', '/plantillas-manejo', $this->templatePayload())->assertForbidden();
     }
@@ -130,33 +130,33 @@ final class PlanTemplateEndpointTest extends LotsTestCase
     public function test_view_only_user_cannot_read_unpublished_template_versions(): void
     {
         // Preparación: un gestor crea la primera versión en borrador.
-        $this->signIn(['management-plans.manage']);
+        $this->signIn(['can_manage_management_plans']);
         $created = $this->command('POST', '/plantillas-manejo', $this->templatePayload())->assertCreated();
         $templateId = $created->json('data.id');
         $url = '/api/v1/plantillas-manejo/'.$templateId;
         $this->getJson($url)->assertOk()->assertJsonPath('data.version_status', 'draft');
 
         // Consulta: el lector no puede abrir la plantilla inédita, aunque conozca su ID.
-        $this->signIn(['management-plans.view']);
+        $this->signIn(['can_view_management_plans']);
         $this->getJson('/api/v1/plantillas-manejo')->assertOk()->assertJsonCount(0, 'data');
         $this->getJson($url)->assertForbidden();
         $this->getJson($url.'?version=1')->assertForbidden();
 
         // Mutación: se publica la primera versión y se crea una segunda en borrador.
-        $this->signIn(['management-plans.manage']);
+        $this->signIn(['can_manage_management_plans']);
         $this->command('POST', '/plantillas-manejo/'.$templateId.'/publicacion', ['expected_version' => 1])->assertOk();
         $this->command('PATCH', '/plantillas-manejo/'.$templateId, [
             'expected_version' => 1, 'activities' => $this->templatePayload('Pesaje pendiente')['activities'],
         ])->assertOk();
 
         // Consulta: el lector ve la publicada, pero no la revisión pendiente.
-        $this->signIn(['management-plans.view']);
+        $this->signIn(['can_view_management_plans']);
         $this->getJson($url)->assertOk()->assertJsonPath('data.version_status', 'published');
         $this->getJson($url.'?version=2')->assertForbidden();
         $this->json('GET', $url, ['version' => 2])->assertForbidden();
 
         // Mutación: el gestor descarta el segundo borrador y publica la tercera versión.
-        $this->signIn(['management-plans.manage']);
+        $this->signIn(['can_manage_management_plans']);
         $this->command('PATCH', '/plantillas-manejo/'.$templateId, [
             'expected_version' => 2, 'activities' => $this->templatePayload('Pesaje definitivo')['activities'],
         ])->assertOk();
@@ -164,7 +164,7 @@ final class PlanTemplateEndpointTest extends LotsTestCase
         $this->command('POST', '/plantillas-manejo/'.$templateId.'/publicacion', ['expected_version' => 3])->assertOk();
 
         // Consulta: el lector conserva acceso a versiones publicadas, pero no al borrador descartado.
-        $this->signIn(['management-plans.view']);
+        $this->signIn(['can_view_management_plans']);
         $this->getJson($url.'?version=1')->assertOk()->assertJsonPath('data.version_status', 'retired');
         $this->getJson($url.'?version=2')->assertForbidden();
         $this->getJson($url)->assertOk()->assertJsonPath('data.version_status', 'published');
@@ -174,7 +174,7 @@ final class PlanTemplateEndpointTest extends LotsTestCase
     public function test_draft_filter_combines_with_status_and_paginates_the_filtered_set(): void
     {
         // Preparación: crea una publicada, una inédita, una publicada con revisión y una retirada inédita.
-        $this->signIn(['management-plans.manage']);
+        $this->signIn(['can_manage_management_plans']);
         $published = $this->command('POST', '/plantillas-manejo', [...$this->templatePayload(), 'name' => 'Publicada'])->assertCreated()->json('data.id');
         $this->command('POST', '/plantillas-manejo/'.$published.'/publicacion', ['expected_version' => 1])->assertOk();
         $draft = $this->command('POST', '/plantillas-manejo', [...$this->templatePayload(), 'name' => 'Inédita'])->assertCreated()->json('data.id');
@@ -200,7 +200,7 @@ final class PlanTemplateEndpointTest extends LotsTestCase
         $this->getJson('/api/v1/plantillas-manejo?has_draft=0')->assertUnprocessable();
 
         // Consulta: un lector ve publicadas, pero no puede pedir el filtro ni por cuerpo JSON.
-        $this->signIn(['management-plans.view']);
+        $this->signIn(['can_view_management_plans']);
         $this->getJson('/api/v1/plantillas-manejo')->assertOk()->assertJsonPath('meta.total', 2);
         $this->getJson('/api/v1/plantillas-manejo?has_draft=1')->assertForbidden();
         $this->json('GET', '/api/v1/plantillas-manejo', ['has_draft' => 1])->assertForbidden();
@@ -210,7 +210,7 @@ final class PlanTemplateEndpointTest extends LotsTestCase
     public function test_activation_preserves_unpublished_template_and_requires_a_new_state(): void
     {
         // Preparación: crea y retira una plantilla aún no publicada.
-        $this->signIn(['management-plans.manage']);
+        $this->signIn(['can_manage_management_plans']);
         $created = $this->command('POST', '/plantillas-manejo', $this->templatePayload())->assertCreated();
         $templateId = $created->json('data.id');
         $activityId = $created->json('data.activities.0.id');
@@ -248,7 +248,7 @@ final class PlanTemplateEndpointTest extends LotsTestCase
     public function test_activation_preserves_published_version_and_existing_flock_copy(): void
     {
         // Preparación: publica una plantilla, la asigna y la retira con una revisión pendiente.
-        $actor = $this->signIn(['management-plans.manage']);
+        $actor = $this->signIn(['can_manage_management_plans']);
         $created = $this->command('POST', '/plantillas-manejo', $this->templatePayload())->assertCreated();
         $templateId = $created->json('data.id');
         $this->command('POST', '/plantillas-manejo/'.$templateId.'/publicacion', ['expected_version' => 1])->assertOk();
@@ -261,9 +261,9 @@ final class PlanTemplateEndpointTest extends LotsTestCase
         $this->command('POST', '/plantillas-manejo/'.$templateId.'/retiro', ['expected_version' => 2])->assertOk();
 
         // Request: el lector no reactiva; el gestor recupera la misma versión publicada.
-        $this->signIn(['management-plans.view']);
+        $this->signIn(['can_view_management_plans']);
         $this->command('POST', '/plantillas-manejo/'.$templateId.'/activacion', ['expected_version' => 2])->assertForbidden();
-        $this->signIn(['management-plans.manage']);
+        $this->signIn(['can_manage_management_plans']);
         $this->command('POST', '/plantillas-manejo/'.$templateId.'/activacion', ['expected_version' => 2])->assertOk()
             ->assertJsonPath('data.current_version', 2)
             ->assertJsonPath('data.published_version', 1)
@@ -281,7 +281,7 @@ final class PlanTemplateEndpointTest extends LotsTestCase
     public function test_temporal_contract_keeps_parallel_week_nine_and_open_ranges(): void
     {
         // Preparación: configura actividades sin imponer un calendario clínico.
-        $this->signIn(['management-plans.manage']);
+        $this->signIn(['can_manage_management_plans']);
         $activities = [
             ['type' => 'ration_change', 'title' => 'Recría', 'timing_kind' => 'week_range', 'start_week' => 6, 'end_week' => 9],
             ['type' => 'ration_change', 'title' => 'Desarrollo', 'timing_kind' => 'week_range', 'start_week' => 9, 'end_week' => 18],
@@ -324,7 +324,7 @@ final class PlanTemplateEndpointTest extends LotsTestCase
     public function test_revision_preserves_prior_execution_link_and_activity(): void
     {
         // Preparación: asigna una práctica prevista y registra su ejecución explícita.
-        $this->signIn(['management-plans.view', 'management-plans.manage', 'management-plans.execute']);
+        $this->signIn(['can_view_management_plans', 'can_manage_management_plans', 'can_execute_management_plans']);
         $flock = $this->flockWithPlan(100, activities: [[
             'type' => 'manual_practice', 'title' => 'Despique previsto', 'timing_kind' => 'week', 'start_week' => 12,
         ]]);

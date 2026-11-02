@@ -31,7 +31,7 @@ final readonly class CreateFlockAction
     {
         $data['code'] = Str::upper(trim($data['code']));
 
-        return $this->commands->execute($actor, 'flocks.manage', 'flock.create', $data['idempotency_key'], $data, function (string $operationId) use ($data, $actor, $source): array {
+        return $this->commands->execute($actor, 'can_manage_flocks', 'flock.create', $data['idempotency_key'], $data, function (string $operationId) use ($data, $actor, $source): array {
             $quantity = (int) $data['initial_quantity'];
             $this->state->positive($quantity);
             $entry = CarbonImmutable::createFromFormat('!Y-m-d', $data['entry_date'], FlockFeedingResolver::TIMEZONE);

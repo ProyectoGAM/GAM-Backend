@@ -9,7 +9,7 @@ final class ListFlockManagementHistoryRequest extends ManagementPlanRequest
      */
     public function authorize(): bool
     {
-        return $this->allowed('management-plans.view');
+        return $this->allowed('can_view_management_plans');
     }
 
     /**

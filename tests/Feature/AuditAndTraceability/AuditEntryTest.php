@@ -6,7 +6,9 @@ use App\Actions\IdentityAndAccess\RegisterUserAction;
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\AuditAndTraceability\AuditEntry;
+use App\Models\IdentityAndAccess\Role;
 use App\Models\User;
+use Database\Seeders\IdentityPermissionSeeder;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -23,14 +25,15 @@ final class AuditEntryTest extends TestCase
     {
         // Acción 1: crea un administrador de prueba y registra el usuario mediante la API administrativa.
         $admin = User::factory()->create();
-        $admin->givePermissionTo(Permission::findOrCreate('identity.users.manage', 'web'));
+        $this->seed(IdentityPermissionSeeder::class);
+        $admin->syncRoles([Role::findByName('admin', 'web')]);
         Sanctum::actingAs($admin, ['api:access']);
         $response = $this->postJson('/api/v1/users', [
             'name' => 'Audited User',
             'email' => 'audited.user@example.test',
             'password' => 'correct-password',
             'password_confirmation' => 'correct-password',
-            'role' => 'employee',
+            'rol_id' => Role::findByName('employee', 'web')->id,
         ]);
 
         // Verificación: confirma respuesta, usuario creado y entrada de auditoría.
@@ -52,6 +55,7 @@ final class AuditEntryTest extends TestCase
         $this->assertSame([
             'name' => 'Audited User',
             'email' => 'audited.user@example.test',
+            'role' => 'employee',
         ], $entry->properties->get('subject_snapshot'));
         $this->assertArrayNotHasKey('password', $entry->properties->toArray());
     }
@@ -84,8 +88,8 @@ final class AuditEntryTest extends TestCase
     {
         // Preparación: crea el usuario autorizado, el sujeto y una entrada de auditoría.
         $user = User::factory()->create();
-        $permission = Permission::findOrCreate('audit.view', 'web');
-        $user->givePermissionTo($permission);
+        $permission = Permission::findOrCreate('can_view_audit', 'web');
+        $user->roles()->firstOrFail()->givePermissionTo($permission);
         $subject = User::factory()->create();
 
         AuditEntry::query()->create([
@@ -125,7 +129,10 @@ final class AuditEntryTest extends TestCase
     // Flujo: fuerza un fallo de auditoría; verifica que la operación de negocio se revierte.
     public function test_failed_audit_rolls_back_the_business_operation(): void
     {
-        // Preparación: sustituye el grabador por uno que falla.
+        // Preparación: autoriza el alta y sustituye el grabador por uno que falla.
+        $this->seed(IdentityPermissionSeeder::class);
+        $admin = User::factory()->create();
+        $admin->syncRoles(['admin']);
         $this->app->instance(AuditRecorder::class, new class implements AuditRecorder
         {
             public function record(AuditEntryData $entry): void
@@ -140,7 +147,8 @@ final class AuditEntryTest extends TestCase
                 'name' => 'Rolled Back User',
                 'email' => 'rolled.back@example.test',
                 'password' => 'correct-password',
-            ]);
+                'rol_id' => Role::findByName('employee', 'web')->id,
+            ], $admin);
 
             $this->fail('The registration should fail when audit storage fails.');
         } catch (RuntimeException $exception) {
@@ -156,7 +164,7 @@ final class AuditEntryTest extends TestCase
     {
         // Preparación: crea un lector y eventos de planes antiguos, actuales y de otros módulos.
         $user = User::factory()->create();
-        $user->givePermissionTo(Permission::findOrCreate('audit.view', 'web'));
+        $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_view_audit', 'web'));
         $planEvents = ['plan_template_created', 'plan_template_revised', 'plan_template_published',
             'plan_template_retired', 'plan_template_activated', 'flock_plan_assigned',
             'flock_plan_inherited', 'flock_plan_revised'];

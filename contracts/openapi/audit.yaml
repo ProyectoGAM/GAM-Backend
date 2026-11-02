@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: |
     Opción 2: listado compatible con resumen y detalle bajo demanda.
-    Todas las lecturas requieren audit.view. La presentación usa texto plano
+    Todas las lecturas requieren can_view_audit. La presentación usa texto plano
     y datos históricos permitidos; las acciones se evalúan al consultar.
     No se modifican entradas anteriores ni se conceden permisos de negocio.
 servers:
@@ -102,7 +102,7 @@ paths:
         y distingue sistema de responsable no disponible. Deduplica por tipo e
         identificador, separando sistema de desconocido cuando no hay ID.
         Ordena por la fecha y el ID de la entrada representativa más reciente.
-        No requiere identity.users.manage ni devuelve correos, roles o permisos.
+        No requiere can_manage_users ni devuelve correos, roles o permisos.
         Para filtrar personas usar actor_kind=person, actor_type y actor_id;
         para sistema o desconocido usar actor_kind. No enviar IDs nulos.
       parameters:
@@ -138,7 +138,7 @@ components:
       schema: { type: integer, minimum: 1, maximum: 1000000, default: 1 }
   responses:
     Unauthenticated: { description: Debes iniciar sesión. }
-    Forbidden: { description: No tienes el permiso audit.view. }
+    Forbidden: { description: No tienes el permiso can_view_audit. }
     Invalid: { description: Los filtros no cumplen los límites permitidos; devuelve message y errors en español. }
   schemas:
     Identifier:
@@ -157,7 +157,7 @@ components:
         current_name: { type: [string, 'null'], description: 'Nombre actual, separado del histórico.' }
         exists: { type: boolean, description: 'La fila de usuario existe, incluso si está deshabilitada lógicamente.' }
         status: { type: string, enum: [active, disabled, system, unavailable] }
-        can_manage: { type: boolean, description: La cuenta existe y quien consulta tiene identity.users.manage; no concede autorización. }
+        can_manage: { type: boolean, description: La cuenta existe y quien consulta tiene can_manage_users; no concede autorización. }
     ActorOption:
       type: object
       required: [value, label, type, kind, status, can_manage, exists, name, current_name]

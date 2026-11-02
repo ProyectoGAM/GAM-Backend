@@ -40,7 +40,7 @@ final readonly class CorrectManagementExecutionAction
 
         return $this->commands->execute(
             $actor,
-            'management-plans.execute',
+            'can_execute_management_plans',
             'management-plans.execution.correct',
             $attributes['idempotency_key'],
             [
@@ -163,7 +163,7 @@ final readonly class CorrectManagementExecutionAction
         $reversal = $this->reverseInventoryMovement->execute($movement, [
             'operation_id' => $operationId,
             'reason' => 'Corrección de aplicación sanitaria '.$execution->getAttribute('public_id').': '.trim($reason),
-        ], $actor, $source, 'management-plans.execute');
+        ], $actor, $source, 'can_execute_management_plans');
 
         return [
             'kind' => 'inventory_reversal',

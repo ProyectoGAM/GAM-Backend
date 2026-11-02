@@ -23,7 +23,7 @@ final class EggStockEndpointTest extends TestCase
     {
         $user = User::factory()->create();
         foreach ($permissions as $permission) {
-            $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+            $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
         Sanctum::actingAs($user, ['api:access']);
 
@@ -40,7 +40,7 @@ final class EggStockEndpointTest extends TestCase
     public function test_manual_receipt_issue_and_loss_update_integer_balance(): void
     {
         // Preparación: autentica al administrador y selecciona una UP activa.
-        $this->signIn(['egg-stock.view', 'egg-stock.move', 'egg-stock.adjust']);
+        $this->signIn(['can_view_egg_stock', 'can_move_egg_stock', 'can_adjust_egg_stock']);
         $unit = ProductionUnit::factory()->create();
 
         // Requests: registra ingreso manual y dos egresos especializados.
@@ -56,7 +56,7 @@ final class EggStockEndpointTest extends TestCase
     public function test_generic_inventory_cannot_move_egg_account(): void
     {
         // Preparación: crea una cuenta técnica mediante un ingreso especializado.
-        $this->signIn(['egg-stock.view', 'egg-stock.move', 'inventory.move']);
+        $this->signIn(['can_view_egg_stock', 'can_move_egg_stock', 'can_move_inventory']);
         $unit = ProductionUnit::factory()->create();
         $this->command('POST', "/production-units/{$unit->id}/egg-stock/receipts", ['quantity' => 2, 'reason' => 'Carga'])->assertCreated();
         $product = Product::query()->where('system_key', 'generic_egg')->firstOrFail();
@@ -71,7 +71,7 @@ final class EggStockEndpointTest extends TestCase
     public function test_manual_correction_preserves_date_when_omitted_and_rebases_when_explicit(): void
     {
         // Preparación: registra un ingreso manual con una fecha efectiva conocida.
-        $this->signIn(['egg-stock.view', 'egg-stock.move', 'egg-stock.adjust']);
+        $this->signIn(['can_view_egg_stock', 'can_move_egg_stock', 'can_adjust_egg_stock']);
         $unit = ProductionUnit::factory()->create();
         $created = $this->command('POST', "/production-units/{$unit->id}/egg-stock/receipts", [
             'quantity' => 10,

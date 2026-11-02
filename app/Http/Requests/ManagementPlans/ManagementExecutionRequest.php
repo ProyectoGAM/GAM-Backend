@@ -16,7 +16,7 @@ abstract class ManagementExecutionRequest extends LotsRequest
 
         return $flock instanceof Flock
             && ($this->user() instanceof User)
-            && LotsAuthorization::allows($this->user(), 'management-plans.execute');
+            && LotsAuthorization::allows($this->user(), 'can_execute_management_plans');
     }
 
     protected function authorizeMedicineStockManagement(): bool
@@ -25,7 +25,7 @@ abstract class ManagementExecutionRequest extends LotsRequest
 
         return $medicine instanceof Medicine
             && ($this->user() instanceof User)
-            && LotsAuthorization::allows($this->user(), 'management-plans.stock.manage');
+            && LotsAuthorization::allows($this->user(), 'can_manage_medicine_stock');
     }
 
     protected function authorizeMedicineStockRead(): bool
@@ -35,8 +35,8 @@ abstract class ManagementExecutionRequest extends LotsRequest
 
         return $medicine instanceof Medicine
             && $user instanceof User
-            && (LotsAuthorization::allows($user, 'management-plans.view')
-                || LotsAuthorization::allows($user, 'management-plans.stock.manage'));
+            && (LotsAuthorization::allows($user, 'can_view_management_plans')
+                || LotsAuthorization::allows($user, 'can_manage_medicine_stock'));
     }
 
     /** @return array<string, mixed> */

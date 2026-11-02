@@ -92,14 +92,14 @@ La fuente ejecutable es [weighings.yaml](../../contracts/openapi/weighings.yaml)
 
 | Método y ruta | Permiso | Comportamiento |
 | --- | --- | --- |
-| `GET /pesajes` | `weighings.view` | Lista paginada por lote, modo y fechas; orden descendente estable. |
-| `POST /pesajes` | `weighings.manage` | Registra un pesaje individual o grupal. |
-| `GET /pesajes/evolucion` | `weighings.view` | Devuelve un punto por pesaje para un lote. |
-| `GET /pesajes/{pesaje}` | `weighings.view` | Consulta el detalle y sus mediciones. |
-| `PATCH /pesajes/{pesaje}` | `weighings.manage` | Corrige el estado vigente y conserva el anterior en auditoría. |
-| `GET /pesajes/{pesaje}/distribucion` | `weighings.view` | Devuelve histograma y campana sólo para modo individual. |
-| `GET /configuracion-pesajes` | `weighing-settings.manage` | Consulta el singleton o `null`. |
-| `PUT /configuracion-pesajes` | `weighing-settings.manage` | Crea o actualiza rangos globales. |
+| `GET /pesajes` | `can_view_weighings` | Lista paginada por lote, modo y fechas; orden descendente estable. |
+| `POST /pesajes` | `can_manage_weighings` | Registra un pesaje individual o grupal. |
+| `GET /pesajes/evolucion` | `can_view_weighings` | Devuelve un punto por pesaje para un lote. |
+| `GET /pesajes/{pesaje}` | `can_view_weighings` | Consulta el detalle y sus mediciones. |
+| `PATCH /pesajes/{pesaje}` | `can_manage_weighings` | Corrige el estado vigente y conserva el anterior en auditoría. |
+| `GET /pesajes/{pesaje}/distribucion` | `can_view_weighings` | Devuelve histograma y campana sólo para modo individual. |
+| `GET /configuracion-pesajes` | `can_manage_weighing_settings` | Consulta el singleton o `null`. |
+| `PUT /configuracion-pesajes` | `can_manage_weighing_settings` | Crea o actualiza rangos globales. |
 
 `POST`, `PATCH` y `PUT` requieren `Idempotency-Key` con UUID. El contrato documenta las alternativas personales Bearer/cookie y las sesiones compartidas nativa/web. Las mutaciones con cookie incluyen `X-XSRF-TOKEN`; las sesiones compartidas incluyen `X-GAM-Session` y la credencial de dispositivo correspondiente al transporte.
 
@@ -210,9 +210,9 @@ No agrega por día, no suaviza, no interpola ni muestra una curva teórica. Las 
 
 Los permisos son company-wide y no crean asignaciones por unidad productiva:
 
-- `weighings.view` para listado, detalle, distribución y evolución;
-- `weighings.manage` para alta y corrección;
-- `weighing-settings.manage` para lectura y escritura de configuración.
+- `can_view_weighings` para listado, detalle, distribución y evolución;
+- `can_manage_weighings` para alta y corrección;
+- `can_manage_weighing_settings` para lectura y escritura de configuración.
 
 El administrador inicial recibe los tres permisos. Las Policies se vuelven a comprobar dentro de las Actions críticas. En sesiones compartidas, web acepta únicamente `gam_shared_device` y nativo únicamente `X-Shared-Device-Token`; ambos exigen la sesión de empleado vigente, `X-GAM-Session`, generación del dispositivo y permiso funcional. No se usa el rol ni el modo local del frontend como evidencia de autorización.
 

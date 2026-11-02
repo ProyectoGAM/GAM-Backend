@@ -40,7 +40,7 @@ final readonly class CustomerAccountLedger
         }
         if (in_array($type, ['sale_charge', 'payment'], true) && $operation->delivery_id !== null) {
             $delivery = Delivery::query()->whereKey($operation->delivery_id)->lockForUpdate()->firstOrFail();
-            if ($delivery->driver_id !== $actor->id || ! $actor->can('delivery.update-own')) {
+            if ($delivery->driver_id !== $actor->id || ! $actor->can('can_update_own_deliveries')) {
                 throw new AuthorizationException;
             }
             if ($delivery->status !== DeliveryStatus::Active) {

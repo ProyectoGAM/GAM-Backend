@@ -42,7 +42,7 @@ final readonly class AddDailyWeighingEntryAction
     {
         return $this->commands->execute(
             $actor,
-            'weighings.manage',
+            'can_manage_weighings',
             'daily-weighing.entry.add',
             $data['idempotency_key'],
             ['flock' => $flock->public_id, ...$data],

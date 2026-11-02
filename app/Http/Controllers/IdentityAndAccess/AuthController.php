@@ -5,16 +5,13 @@ namespace App\Http\Controllers\IdentityAndAccess;
 use App\Actions\IdentityAndAccess\IssueAccessTokenAction;
 use App\Actions\IdentityAndAccess\LoginUserAction;
 use App\Actions\IdentityAndAccess\LogoutUserAction;
-use App\Actions\IdentityAndAccess\RegisterUserAction;
 use App\Exceptions\IdentityAndAccess\IdentityException;
 use App\Http\Requests\IdentityAndAccess\ConfirmPasswordRequest;
 use App\Http\Requests\IdentityAndAccess\LoginRequest;
 use App\Http\Requests\IdentityAndAccess\LogoutRequest;
 use App\Http\Requests\IdentityAndAccess\MeRequest;
-use App\Http\Requests\IdentityAndAccess\RegisterRequest;
 use App\Http\Requests\IdentityAndAccess\WebLoginRequest;
 use App\Http\Resources\IdentityAndAccess\AccessTokenResource;
-use App\Http\Resources\IdentityAndAccess\AuthResponseResource;
 use App\Http\Resources\IdentityAndAccess\AuthSessionResource;
 use App\Http\Resources\IdentityAndAccess\UserResource;
 use App\Models\IdentityAndAccess\AuthSession;
@@ -29,20 +26,6 @@ use Illuminate\Support\Facades\Hash;
 
 final class AuthController
 {
-    public function register(
-        RegisterRequest $request,
-        RegisterUserAction $registerUser,
-        IssueAccessTokenAction $issueToken,
-    ): JsonResponse {
-        $data = $request->validated();
-        $user = $registerUser->execute($data);
-        $token = $issueToken->execute($user, $data['device_name'] ?? 'registration');
-
-        return AuthResponseResource::fromTokenAndUser($token, $user)
-            ->response()
-            ->setStatusCode(Response::HTTP_CREATED);
-    }
-
     public function login(
         LoginRequest $request,
         LoginUserAction $loginUser,
@@ -55,7 +38,7 @@ final class AuthController
             'password' => $data['password'],
         ]);
 
-        if (! $result->isSuccessful() || ! $result->user()->can('identity.personal.login')) {
+        if (! $result->isSuccessful() || ! $result->user()->can('can_login_native')) {
             return response()->json([
                 'code' => 'INVALID_CREDENTIALS',
                 'message' => 'Las credenciales proporcionadas no son correctas.',
@@ -85,7 +68,7 @@ final class AuthController
         $data = $request->validated();
         $result = $loginUser->execute(['email' => $data['email'], 'password' => $data['password']]);
 
-        if (! $result->isSuccessful() || ! $result->user()->can('identity.web.login')) {
+        if (! $result->isSuccessful() || ! $result->user()->can('can_login_web')) {
             return response()->json([
                 'code' => 'INVALID_CREDENTIALS',
                 'message' => 'Las credenciales proporcionadas no son correctas.',

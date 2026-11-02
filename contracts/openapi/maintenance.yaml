@@ -26,7 +26,7 @@ paths:
       operationId: listPoultryHouseMaintenances
       summary: Consulta el histórico del galpón
       description: |
-        Requiere poultry-houses.view. Incluye cancelados salvo filtro de estado.
+        Requiere can_view_poultry_houses. Incluye cancelados salvo filtro de estado.
         Orden por maintenance_date DESC e id DESC. No filtra por usuario ni UP.
       parameters:
         - name: status
@@ -68,7 +68,7 @@ paths:
       operationId: createMaintenance
       summary: Registra un mantenimiento realizado
       description: |
-        Requiere poultry-houses.manage. Permite registrar hechos pasados incluso
+        Requiere can_manage_poultry_houses. Permite registrar hechos pasados incluso
         si el galpón o su UP están inactivos. El responsable debe estar activo.
         Idempotency-Key se limita al actor autenticado: misma clave y contenido
         normalizado devuelven el registro existente, sin nueva auditoría.
@@ -110,7 +110,7 @@ paths:
       operationId: getLatestPoultryHouseMaintenance
       summary: Consulta el último mantenimiento vigente
       description: |
-        Requiere poultry-houses.view. Excluye cancelados; ordena por fecha e id descendentes.
+        Requiere can_view_poultry_houses. Excluye cancelados; ordena por fecha e id descendentes.
         Si no existe uno vigente, devuelve 200 con data null.
       responses:
         '200':
@@ -135,7 +135,7 @@ paths:
       tags: [Mantenimientos]
       operationId: getMaintenance
       summary: Consulta el detalle, incluso si está cancelado
-      description: Requiere poultry-houses.view.
+      description: Requiere can_view_poultry_houses.
       responses:
         '200': { $ref: '#/components/responses/Success' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
@@ -146,7 +146,7 @@ paths:
       operationId: correctMaintenance
       summary: Corrige un mantenimiento con motivo y control de versión
       description: |
-        Requiere poultry-houses.manage. Sólo admite registros completed.
+        Requiere can_manage_poultry_houses. Sólo admite registros completed.
         La versión debe coincidir con la persistida; aumenta en uno al corregir.
         Exige al menos un campo modificable. El galpón y el estado no pueden cambiarse.
         La auditoría conserva valores anteriores y nuevos sin alterar entradas anteriores.
@@ -171,7 +171,7 @@ paths:
       operationId: cancelMaintenance
       summary: Anula un registro conservando el histórico
       description: |
-        Requiere poultry-houses.manage. Única transición permitida completed -> cancelled.
+        Requiere can_manage_poultry_houses. Única transición permitida completed -> cancelled.
         Exige versión actual y motivo. No se permite una segunda cancelación ni reactivación.
         No elimina el mantenimiento y no existe endpoint DELETE.
       requestBody:

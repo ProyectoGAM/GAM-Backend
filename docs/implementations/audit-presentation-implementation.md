@@ -20,7 +20,7 @@ No se ejecutaron migraciones ni seeders sobre datos de trabajo.
 | GET | /auditoria/responsables | Selector paginado, con buscar, por_pagina y page. |
 | GET | /reference/options | Catálogo existente con etiquetas de eventos legibles. |
 
-Cada endpoint nuevo tiene su FormRequest y exige audit.view. El catálogo existente
+Cada endpoint nuevo tiene su FormRequest y exige can_view_audit. El catálogo existente
 sigue siendo accesible por usuarios autenticados, pero su bloque audit sólo se
 completa para quienes pueden leer auditoría. No se agrega audit.actors ilimitado.
 
@@ -58,7 +58,7 @@ no promete reconstruir el nombre que tenía una entidad en la fecha de negocio.
 Los nombres que el histórico anterior no conservó siguen siendo desconocidos.
 El nombre actual del usuario se expone separadamente como current_name.
 exists significa que existe su fila, incluso si tiene deleted_at; status=disabled
-identifica ese caso. can_manage exige fila existente e identity.users.manage.
+identifica ese caso. can_manage exige fila existente e can_manage_users.
 Una eliminación física conserva el nombre histórico y elimina la posibilidad de
 gestión. No se devuelve el resto del directorio, correos, roles ni permisos.
 
@@ -309,8 +309,8 @@ Se conserva la comprobación de rechazo de credenciales nativas en una sesión
 web, sin ampliar orígenes confiables ni modificar middleware o autenticación.
 
 La prueba de reportes conserva diez fuentes cuando faltan los permisos de
-vehículos y comprueba 403 para esas tres fuentes. Después concede vehicles.view,
-vehicles.fuel.view y vehicles.maintenance.view y ejecuta las trece fuentes y
+vehículos y comprueba 403 para esas tres fuentes. Después concede can_view_vehicles,
+can_view_vehicle_fuel y can_view_vehicle_maintenance y ejecuta las trece fuentes y
 sus consultas estándar. La guía de reportes incorpora esas fuentes existentes.
 No se cambian permisos de producción, reglas de negocio, datos ni migraciones.
 

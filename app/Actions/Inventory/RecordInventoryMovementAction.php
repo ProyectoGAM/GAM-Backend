@@ -42,7 +42,7 @@ final readonly class RecordInventoryMovementAction
         private StockLocationLocks $locationLocks,
     ) {}
 
-    public function execute(InventoryMovementCommand $command, User $actor, string $source = 'api', ?FeedStockOperation $feedCompensation = null, ?StockBalance $regularization = null, ?string $requiredPermission = 'inventory.move', ?InventoryMovement $healthCompensation = null): InventoryMovement
+    public function execute(InventoryMovementCommand $command, User $actor, string $source = 'api', ?FeedStockOperation $feedCompensation = null, ?StockBalance $regularization = null, ?string $requiredPermission = 'can_move_inventory', ?InventoryMovement $healthCompensation = null): InventoryMovement
     {
         return DB::transaction(function () use ($command, $actor, $source, $feedCompensation, $regularization, $requiredPermission, $healthCompensation): InventoryMovement {
             $currentActor = User::query()->whereKey($actor->getKey())->lockForUpdate()->firstOrFail();
@@ -50,7 +50,7 @@ final readonly class RecordInventoryMovementAction
                 LotsAuthorization::ensure($currentActor, $requiredPermission);
             }
             if ($healthCompensation !== null) {
-                LotsAuthorization::ensure($currentActor, 'management-plans.execute');
+                LotsAuthorization::ensure($currentActor, 'can_execute_management_plans');
             }
             $existing = $this->existingMovement($command->operationId);
             if ($existing !== null && (int) $existing->created_by !== (int) $currentActor->getKey()) {

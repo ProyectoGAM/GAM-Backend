@@ -36,7 +36,7 @@ El contador global anterior de medicamentos de Planes de manejo queda sólo como
 
 Aplicaciones de medicamentos y vacunas conservan únicamente el registro, sin cantidad ni descuento físico o clínico. El motivo es obligatorio fuera del plan y opcional con una actividad válida del plan vigente. Enviar `quantity` o `stock_consumption` con contenido devuelve 422; las Actions bloquean también llamadas internas, incluso con la bandera futura habilitada. Las correcciones de aplicaciones históricas conservan sus compensaciones y no borran movimientos ni auditoría. La migración y las pruebas actuales se detallan en [aplicaciones sanitarias](medication-implementation-plan.md#aplicaciones-sanitarias-sin-cantidad-ni-stock).
 
-La compensación histórica exige `management-plans.execute`, una aplicación real vinculada al movimiento y la inversa completa de sus líneas, con idénticos productos y ubicaciones. Rechaza cantidades superiores o parciales y reversiones repetidas. Puede restaurar el consumo original aunque el producto ya no controle stock, sin reactivarlo ni habilitar nuevos movimientos sanitarios; la corrección y su auditoría siguen siendo transaccionales e idempotentes.
+La compensación histórica exige `can_execute_management_plans`, una aplicación real vinculada al movimiento y la inversa completa de sus líneas, con idénticos productos y ubicaciones. Rechaza cantidades superiores o parciales y reversiones repetidas. Puede restaurar el consumo original aunque el producto ya no controle stock, sin reactivarlo ni habilitar nuevos movimientos sanitarios; la corrección y su auditoría siguen siendo transaccionales e idempotentes.
 
 ## Proveedor interno
 
@@ -58,11 +58,11 @@ docker compose -f compose.dev.yaml exec -T api php artisan inventario:preparar-a
 docker compose -f compose.dev.yaml exec -T api php artisan inventario:preparar-almacenamiento --revisar --no-interaction
 ```
 
-Sustituir Compose por el del ambiente correspondiente. El actor debe tener `inventory.manage` o ser admin. El modo `--revisar` es de sólo lectura. La preparación es reiniciable, con transacciones por registro; un error posterior no deshace registros preparados previamente y un reintento no los duplica. Clasifica plantas por relación real, huevos por `egg_stock_accounts` y cámaras manuales sin galpón; una ubicación gestionada huérfana permanece `unknown` y bloqueada. Revisar el informe de incompatibilidades antes de reabrir las escrituras.
+Sustituir Compose por el del ambiente correspondiente. El actor debe tener `can_manage_inventory` o ser admin. El modo `--revisar` es de sólo lectura. La preparación es reiniciable, con transacciones por registro; un error posterior no deshace registros preparados previamente y un reintento no los duplica. Clasifica plantas por relación real, huevos por `egg_stock_accounts` y cámaras manuales sin galpón; una ubicación gestionada huérfana permanece `unknown` y bloqueada. Revisar el informe de incompatibilidades antes de reabrir las escrituras.
 
 `GET /api/v1/inventory/balances?incompatible_only=1` ofrece esa revisión paginada y combinable con filtros por producto y ubicación. No confunde inactividad con incompatibilidad estructural. No borra ni oculta saldos históricos de las consultas generales.
 
-`POST /api/v1/inventario/saldos/{stockBalance}/regularizaciones`, con `Idempotency-Key` UUID y permiso `inventory.adjust`, tiene dos modos:
+`POST /api/v1/inventario/saldos/{stockBalance}/regularizaciones`, con `Idempotency-Key` UUID y permiso `can_adjust_inventory`, tiene dos modos:
 
 ```json
 {"mode":"trasladar","to_stock_location_id":23,"quantity":"8","reason":"Traslado revisado de materia prima desde el depósito histórico a una planta"}

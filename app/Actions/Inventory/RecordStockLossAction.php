@@ -29,6 +29,6 @@ final readonly class RecordStockLossAction
             referenceId: $attributes['reference_id'] ?? null,
             reason: (string) $attributes['reason'],
             occurredAt: $attributes['occurred_at'] ?? null,
-        ), $actor, $source, requiredPermission: 'inventory.adjust');
+        ), $actor, $source, requiredPermission: 'can_adjust_inventory');
     }
 }

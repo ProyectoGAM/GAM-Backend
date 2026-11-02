@@ -43,7 +43,7 @@ Disponible en código:
 - Registro individual y grupal de pesajes mediante `/api/v1/pesajes`, con gramos normalizados, confirmación explícita de valores fuera de rango, proyección histórica del lote y correcciones auditadas.
 - Jornadas diarias por lote y fecha local mediante `/api/v1/pesajes-diarios`, con ingresos individuales y grupales, eliminación auditada de una fila, distribución individual y rangos versionados. La guía de [pesajes diarios](implementations/daily-weighing-implementation.md) documenta el contrato y las decisiones confirmadas.
 - Listado, detalle, evolución por lote y distribución individual consumible por el frontend externo, con salida en gramos o kilogramos y límite de 1000 puntos de evolución.
-- Permisos `weighings.view`, `weighings.manage` y `weighing-settings.manage`, idempotencia, control optimista, locks transaccionales y soporte para autenticación personal o compartida.
+- Permisos `can_view_weighings`, `can_manage_weighings` y `can_manage_weighing_settings`, idempotencia, control optimista, locks transaccionales y soporte para autenticación personal o compartida.
 - Plantillas de manejo versionadas: alta en borrador, revisión, publicación, retiro y reactivación auditados. Los gestores pueden filtrar borradores antes de paginar; quienes solo consultan ven versiones publicadas.
 - El alta de un lote exige una plantilla publicada y copia sus actividades dentro de la misma operación. Los lotes anteriores pueden recibir un plan mediante asignación explícita; cada lote conserva sus revisiones y actividades propias.
 - Aplicaciones de vacunas y medicamentos por lote con fecha efectiva, responsable, vínculo opcional con una actividad del plan, idempotencia y auditoría. Se registran también cambios de ración y prácticas manuales.

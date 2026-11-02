@@ -26,7 +26,7 @@ final readonly class ChangeFlockFeedingAction
     /** @param array<string, mixed> $data */
     public function execute(Flock $flock, array $data, User $actor, string $source = 'api'): FlockOperation
     {
-        return $this->commands->execute($actor, null, 'flock.feeding.manual', $data['idempotency_key'], ['flock' => $flock->public_id, ...$data],
+        return $this->commands->execute($actor, 'can_manage_flock_feeding', 'flock.feeding.manual', $data['idempotency_key'], ['flock' => $flock->public_id, ...$data],
             function (string $operationId) use ($flock, $data, $actor, $source): array {
                 $locked = Flock::query()->whereKey($flock->id)->lockForUpdate()->firstOrFail();
                 $snapshot = $this->apply($locked, $data, $actor, $operationId, $source);

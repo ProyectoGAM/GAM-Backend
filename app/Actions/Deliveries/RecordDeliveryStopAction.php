@@ -43,7 +43,7 @@ final readonly class RecordDeliveryStopAction
 
         return DB::transaction(function () use ($delivery, $actor, $data, $idempotencyKey, $requestHash, $fingerprint): DeliveryStop {
             $actor = User::query()->whereKey($actor->id)->lockForUpdate()->first();
-            if ($actor === null || ! $actor->can('delivery.update-own')) {
+            if ($actor === null || ! $actor->can('can_update_own_deliveries')) {
                 throw new AuthorizationException;
             }
             $lockedDelivery = Delivery::query()->whereKey($delivery->id)->lockForUpdate()->firstOrFail();
@@ -58,7 +58,7 @@ final readonly class RecordDeliveryStopAction
 
                 if ($replayed->accounting_status !== 'legacy_unreconciled') {
                     $this->operations->run('delivery_stop', $idempotencyKey,
-                        ['delivery' => $lockedDelivery->public_id, 'data' => $fingerprint], $actor, 'delivery.update-own',
+                        ['delivery' => $lockedDelivery->public_id, 'data' => $fingerprint], $actor, 'can_update_own_deliveries',
                         fn () => throw new CustomerAccountConflict('No se encontró la operación contable original de esta entrega.'));
                 }
 
@@ -80,7 +80,7 @@ final readonly class RecordDeliveryStopAction
                 }
             }
             $operation = $this->operations->run('delivery_stop', $idempotencyKey,
-                ['delivery' => $lockedDelivery->public_id, 'data' => $fingerprint], $actor, 'delivery.update-own',
+                ['delivery' => $lockedDelivery->public_id, 'data' => $fingerprint], $actor, 'can_update_own_deliveries',
                 function (CustomerOperation $operation, User $actor) use ($lockedDelivery, $data, $requestHash, $idempotencyKey, $isDelivered): array {
                     $customer = Customer::query()->where('public_id', $data['client_reference'])->lockForUpdate()->first();
                     if ($customer === null) {

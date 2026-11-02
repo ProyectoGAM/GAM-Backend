@@ -21,7 +21,7 @@ final class SuppliersAndCatalogsEndpointTest extends TestCase
     public function test_valid_supplier_payload_creates_supplier_and_audit_entry(): void
     {
         // Preparación: autentica al usuario con permiso de gestión.
-        $actor = $this->userWithPermissions(['suppliers.manage']);
+        $actor = $this->userWithPermissions(['can_manage_suppliers']);
         Sanctum::actingAs($actor, ['*']);
 
         // Acción: registra el proveedor mediante la API.
@@ -42,7 +42,7 @@ final class SuppliersAndCatalogsEndpointTest extends TestCase
     public function test_valid_product_payload_creates_flexible_catalog_item(string $kind, string $unit): void
     {
         // Preparación: autentica al usuario con permiso de gestión de products.
-        Sanctum::actingAs($this->userWithPermissions(['products.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_products']), ['*']);
 
         // Acción: registra el producto del catálogo.
         $this->postJson('/api/v1/products', [
@@ -81,7 +81,7 @@ final class SuppliersAndCatalogsEndpointTest extends TestCase
     {
         // Preparación: persiste el proveedor original y autentica al gestor.
         Supplier::factory()->create(['name' => 'Supplier Único']);
-        Sanctum::actingAs($this->userWithPermissions(['suppliers.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_suppliers']), ['*']);
 
         // Acción: intenta repetir el nombre con distinta capitalización.
         $this->postJson('/api/v1/suppliers', ['name' => ' supplier único ', 'address' => 'Otra dirección'])
@@ -94,7 +94,7 @@ final class SuppliersAndCatalogsEndpointTest extends TestCase
     {
         // Preparación: persiste el SKU original y autentica al gestor.
         Product::factory()->create(['sku' => 'SKU-1']);
-        Sanctum::actingAs($this->userWithPermissions(['products.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_products']), ['*']);
 
         // Acción: intenta crear otro producto con el mismo SKU.
         $this->postJson('/api/v1/products', ['sku' => 'SKU-1', 'name' => 'Otro', 'kind' => 'supply', 'base_unit' => 'unit'])
@@ -106,7 +106,7 @@ final class SuppliersAndCatalogsEndpointTest extends TestCase
     public function test_product_unit_can_change_before_first_movement_but_not_afterwards(): void
     {
         // Preparación: crea un producto en kilogramos y autentica los permisos requeridos.
-        $actor = $this->userWithPermissions(['products.manage', 'inventory.move']);
+        $actor = $this->userWithPermissions(['can_manage_products', 'can_move_inventory']);
         Sanctum::actingAs($actor, ['*']);
         $producto = Product::factory()->create(['base_unit' => 'kg']);
 
@@ -131,7 +131,7 @@ final class SuppliersAndCatalogsEndpointTest extends TestCase
     {
         $user = User::factory()->create();
         foreach ($permissions as $permission) {
-            $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+            $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
 
         return $user;

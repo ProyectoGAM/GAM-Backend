@@ -44,7 +44,7 @@ final class DeliveryEndpointTest extends TestCase
             'pin_daily_window_started_at' => now(),
         ]);
         foreach ($permissions as $permission) {
-            $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+            $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
         Sanctum::actingAs($user, ['api:access']);
 
@@ -84,7 +84,7 @@ final class DeliveryEndpointTest extends TestCase
     public function test_start_and_close_require_the_drivers_valid_pin_without_persisting_it(): void
     {
         // Preparación: declara la unidad y el vehículo que forman parte del comando.
-        $actor = $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $actor = $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $start = ['production_unit_id' => $unit->id, 'quantity' => 10, 'vehicle_id' => Vehicle::factory()->create()->public_id];
         $headers = ['Idempotency-Key' => (string) Str::uuid()];
@@ -118,7 +118,7 @@ final class DeliveryEndpointTest extends TestCase
 
     public function test_delivery_pin_must_be_configured_and_is_locked_after_repeated_failures(): void
     {
-        $actor = $this->signIn(['delivery.start']);
+        $actor = $this->signIn(['can_start_deliveries']);
         $actor->forceFill(['pin_enabled' => false, 'pin_hash' => null])->save();
         $this->command('POST', '/repartos', ['quantity' => 10])->assertStatus(422)
             ->assertJsonPath('code', 'PIN_NOT_CONFIGURED');
@@ -141,7 +141,7 @@ final class DeliveryEndpointTest extends TestCase
     public function test_delivery_role_can_start_without_preassigned_clients_and_replay_without_duplicate_load(): void
     {
         // Preparación: autentica un repartidor y crea una unidad productiva operativa.
-        $actor = $this->signIn(['delivery.start', 'delivery.view-own']);
+        $actor = $this->signIn(['can_start_deliveries', 'can_view_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $key = (string) Str::uuid();
         $payload = ['production_unit_id' => $unit->id, 'quantity' => 120];
@@ -183,7 +183,7 @@ final class DeliveryEndpointTest extends TestCase
     public function test_delivery_responses_include_fuel_entries_from_the_current_vehicle_usage(): void
     {
         // Preparación: autentica un repartidor con permiso para registrar combustible.
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own', 'delivery.fuel.record']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries', 'can_record_delivery_fuel']);
         // Request: inicia un reparto y obtiene sus referencias de vehículo y uso.
         $created = $this->command('POST', '/repartos', ['quantity' => 60])->assertCreated();
         $deliveryId = $created->json('data.id');
@@ -216,7 +216,7 @@ final class DeliveryEndpointTest extends TestCase
 
     public function test_driver_chooses_clients_in_any_order_and_can_add_an_idempotent_mid_route_load(): void
     {
-        $actor = $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $actor = $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $deliveryId = $this->command('POST', '/repartos', [
             'production_unit_id' => $unit->id, 'quantity' => 60,
@@ -282,7 +282,7 @@ final class DeliveryEndpointTest extends TestCase
 
     public function test_unknown_client_and_foreign_driver_cannot_modify_a_delivery(): void
     {
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $deliveryId = $this->command('POST', '/repartos', [
             'production_unit_id' => $unit->id, 'quantity' => 10,
@@ -297,7 +297,7 @@ final class DeliveryEndpointTest extends TestCase
         ])->assertUnprocessable();
 
         $other = User::factory()->create();
-        $other->givePermissionTo(Permission::findOrCreate('delivery.update-own', 'web'));
+        $other->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_update_own_deliveries', 'web'));
         Sanctum::actingAs($other, ['api:access']);
         $this->command('POST', "/repartos/{$deliveryId}/cargas", ['quantity' => 10])->assertForbidden();
         $this->assertDatabaseCount('delivery_stops', 0);
@@ -306,7 +306,7 @@ final class DeliveryEndpointTest extends TestCase
 
     public function test_visit_without_delivery_records_zero_eggs_without_items(): void
     {
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $deliveryId = $this->command('POST', '/repartos', [
             'production_unit_id' => $unit->id, 'quantity' => 10,
@@ -325,7 +325,7 @@ final class DeliveryEndpointTest extends TestCase
 
     public function test_mixed_and_fractional_loads_keep_their_conversion_snapshot(): void
     {
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $this->getJson('/api/v1/repartos/unidades')->assertOk()
             ->assertJsonPath('data.1.id', 'maple')
@@ -385,7 +385,7 @@ final class DeliveryEndpointTest extends TestCase
 
     public function test_loads_created_before_the_items_migration_still_read_as_eggs(): void
     {
-        $this->signIn(['delivery.start', 'delivery.view-own']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $deliveryId = $this->command('POST', '/repartos', [
             'production_unit_id' => $unit->id, 'quantity' => 12,
@@ -401,7 +401,7 @@ final class DeliveryEndpointTest extends TestCase
 
     public function test_delivery_items_decrement_only_their_real_loaded_presentation_and_replay_safely(): void
     {
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $deliveryId = $this->command('POST', '/repartos', [
             'production_unit_id' => $unit->id,
@@ -452,7 +452,7 @@ final class DeliveryEndpointTest extends TestCase
 
     public function test_fractional_delivery_uses_the_load_conversion_snapshot(): void
     {
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $deliveryId = $this->command('POST', '/repartos', [
             'production_unit_id' => $unit->id,
@@ -473,7 +473,7 @@ final class DeliveryEndpointTest extends TestCase
     public function test_driver_can_record_location_and_delivery_then_close_and_return_stock(): void
     {
         // Preparación: inicia un reparto activo con permisos operativos.
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own', 'delivery.location.publish']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries', 'can_publish_delivery_location']);
         $unit = ProductionUnit::factory()->create();
         $start = $this->command('POST', '/repartos', ['production_unit_id' => $unit->id, 'quantity' => 120]);
         $start->assertCreated();
@@ -523,7 +523,7 @@ final class DeliveryEndpointTest extends TestCase
     public function test_driver_can_query_only_their_active_delivery(): void
     {
         // Preparación: registra repartos activos de dos usuarios en unidades diferentes.
-        $firstDriver = $this->signIn(['delivery.start', 'delivery.view-own']);
+        $firstDriver = $this->signIn(['can_start_deliveries', 'can_view_own_deliveries']);
         $firstUnit = ProductionUnit::factory()->create([
             'latitude' => '-34.901100',
             'longitude' => '-56.164500',
@@ -543,9 +543,9 @@ final class DeliveryEndpointTest extends TestCase
             'pin_pepper_version' => config('identity.pin.pepper_version'),
             'pin_daily_window_started_at' => now(),
         ]);
-        $secondDriver->givePermissionTo([
-            Permission::findOrCreate('delivery.start', 'web'),
-            Permission::findOrCreate('delivery.view-own', 'web'),
+        $secondDriver->roles()->firstOrFail()->givePermissionTo([
+            Permission::findOrCreate('can_start_deliveries', 'web'),
+            Permission::findOrCreate('can_view_own_deliveries', 'web'),
         ]);
         Sanctum::actingAs($secondDriver, ['api:access']);
         $secondDelivery = $this->command('POST', '/repartos', [
@@ -586,7 +586,7 @@ final class DeliveryEndpointTest extends TestCase
         ]);
         $firstDelivery = Delivery::factory()->create(['production_unit_id' => $firstUnit->id]);
         Delivery::factory()->create(['production_unit_id' => $secondUnit->id]);
-        $this->signIn(['delivery.monitor', 'delivery.history']);
+        $this->signIn(['can_monitor_deliveries', 'can_view_delivery_history']);
 
         // Acción: obtiene repartos históricos filtrados y comprueba la ubicación de su unidad.
         $this->getJson("/api/v1/repartos?production_unit_id={$firstUnit->id}")
@@ -615,7 +615,7 @@ final class DeliveryEndpointTest extends TestCase
     public function test_user_without_delivery_permission_is_forbidden_from_starting_a_delivery(): void
     {
         // Preparación: autentica un usuario que sólo posee un permiso de lectura no relacionado.
-        $this->signIn(['identity.personal.login']);
+        $this->signIn(['can_login_native']);
 
         // Request: intenta iniciar un reparto sin permiso de operación.
         $response = $this->command('POST', '/repartos', ['quantity' => 10]);
@@ -629,14 +629,14 @@ final class DeliveryEndpointTest extends TestCase
     public function test_driver_cannot_read_another_drivers_delivery_without_monitor_permission(): void
     {
         // Preparación: crea un reparto con un primer repartidor.
-        $firstDriver = $this->signIn(['delivery.start', 'delivery.view-own']);
+        $firstDriver = $this->signIn(['can_start_deliveries', 'can_view_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $created = $this->command('POST', '/repartos', ['production_unit_id' => $unit->id, 'quantity' => 10])->assertCreated();
         $deliveryId = $created->json('data.id');
 
         // Preparación: cambia la sesión a otro repartidor sin permiso de monitoreo.
         $secondDriver = User::factory()->create();
-        $secondDriver->givePermissionTo(Permission::findOrCreate('delivery.view-own', 'web'));
+        $secondDriver->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_view_own_deliveries', 'web'));
         Sanctum::actingAs($secondDriver, ['api:access']);
 
         // Request: intenta consultar el reparto ajeno.
@@ -651,7 +651,7 @@ final class DeliveryEndpointTest extends TestCase
     // Flujo: cada carga descuenta su UP; la descarga final concentra sobrantes en el destino elegido.
     public function test_multiple_load_origins_and_itemized_return_move_stock_once(): void
     {
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $firstUnit = ProductionUnit::factory()->create();
         $secondUnit = ProductionUnit::factory()->create();
         $query = app(GetEggStockBalanceQuery::class);
@@ -702,7 +702,7 @@ final class DeliveryEndpointTest extends TestCase
     // Flujo: conserva milésimos exactos, admite precio personalizado entero y protege el historial.
     public function test_integer_unit_price_and_fractional_quantity_preserve_exact_total(): void
     {
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $presentation = EggPresentation::factory()->create(['eggs_per_unit' => 360, 'default_unit_price' => 200]);
         // Request: registra la carga con una presentación creada por administración.
@@ -740,7 +740,7 @@ final class DeliveryEndpointTest extends TestCase
     // Flujo: el contrato exige origen explícito y permite consultar todas las UP operativas.
     public function test_new_load_commands_require_an_explicit_operating_unit(): void
     {
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $first = ProductionUnit::factory()->create();
         $second = ProductionUnit::factory()->create();
         // Request: no selecciona automáticamente la primera UP ni siquiera en desarrollo.

@@ -6,8 +6,15 @@ use App\Models\IdentityAndAccess\AuthSession;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
+/**
+ * @property Carbon|null $credential_expires_at
+ * @property Carbon|null $enrolled_at
+ * @property Carbon|null $revoked_at
+ * @property Carbon|null $last_seen_at
+ */
 final class SharedDevice extends Model
 {
     public $incrementing = false;
@@ -36,11 +43,13 @@ final class SharedDevice extends Model
         ];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function enrolledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'enrolled_by');
     }
 
+    /** @return HasMany<AuthSession, $this> */
     public function sessions(): HasMany
     {
         return $this->hasMany(AuthSession::class);

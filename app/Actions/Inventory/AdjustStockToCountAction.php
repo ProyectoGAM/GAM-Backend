@@ -26,7 +26,7 @@ final readonly class AdjustStockToCountAction
     {
         return DB::transaction(function () use ($attributes, $actor): InventoryMovement {
             $currentActor = User::query()->whereKey($actor->getKey())->lockForUpdate()->firstOrFail();
-            LotsAuthorization::ensure($currentActor, 'inventory.adjust');
+            LotsAuthorization::ensure($currentActor, 'can_adjust_inventory');
 
             return $this->executeWithinTransaction($attributes, $currentActor);
         }, 3);
@@ -111,7 +111,7 @@ final readonly class AdjustStockToCountAction
                 reason: (string) $attributes['reason'],
                 occurredAt: $attributes['occurred_at'] ?? null,
                 idempotencyPayload: $payload,
-            ), $actor, requiredPermission: 'inventory.adjust');
+            ), $actor, requiredPermission: 'can_adjust_inventory');
         }, 3);
     }
 

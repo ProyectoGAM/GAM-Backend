@@ -29,7 +29,7 @@ final readonly class ReverseRedistributionAction
     /** @param array<string, mixed> $data */
     public function execute(FlockMovement $movement, array $data, User $actor, string $source = 'api'): FlockOperation
     {
-        return $this->commands->execute($actor, 'flocks.redistribute', 'flock.redistribution.reverse', $data['idempotency_key'], ['movement' => $movement->public_id, ...$data], function (string $operationId) use ($movement, $data, $actor, $source): array {
+        return $this->commands->execute($actor, 'can_redistribute_flocks', 'flock.redistribution.reverse', $data['idempotency_key'], ['movement' => $movement->public_id, ...$data], function (string $operationId) use ($movement, $data, $actor, $source): array {
             if (! in_array($movement->type, ['partial_new', 'partial_existing', 'total', 'total_existing'], true)) {
                 throw new LotsConflict('Sólo se pueden revertir redistribuciones originales.');
             }

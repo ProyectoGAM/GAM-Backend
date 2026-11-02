@@ -29,7 +29,7 @@ Las Actions `CreateProductAction` y `UpdateProductAction` también bloquean nuev
 
 ## Permisos, historia y auditoría
 
-Se mantienen las políticas existentes de productos y los permisos de Manejo. El alta y edición de productos requieren `products.manage` o rol admin; las lecturas respetan `products.view`, `management-plans.manage` o admin. Las operaciones de suministro y anulación conservan `management-plans.execute`; la lectura conserva sus permisos actuales. No hay asignaciones por UP ni permisos por registro.
+Se mantienen las políticas existentes de productos y los permisos de Manejo. El alta y edición de productos requieren `can_manage_products` o rol admin; las lecturas respetan `can_view_products`, `can_manage_management_plans` o admin. Las operaciones de suministro y anulación conservan `can_execute_management_plans`; la lectura conserva sus permisos actuales. No hay asignaciones por UP ni permisos por registro.
 
 Los intentos rechazados no guardan producto, movimiento, suministro, operación ni auditoría de éxito. Las ediciones válidas del catálogo mantienen su auditoría transaccional. Las anulaciones históricas conservan `feed_supply_cancelled` con actor, operación, motivo y cambio de estado en la misma transacción. No se modifican ni eliminan entradas anteriores de auditoría.
 

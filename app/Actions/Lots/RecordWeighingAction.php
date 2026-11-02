@@ -44,7 +44,7 @@ final readonly class RecordWeighingAction
     {
         return $this->commands->execute(
             $actor,
-            'weighings.manage',
+            'can_manage_weighings',
             'weighing.record',
             $data['idempotency_key'],
             ['flock' => $flock->public_id, ...$data],

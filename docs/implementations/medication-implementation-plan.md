@@ -169,7 +169,7 @@ Una corrección de una aplicación nueva agrega su registro compensatorio sin cr
 
 ### Autorización, auditoría e idempotencia
 
-Se mantiene `management-plans.execute` tanto en los FormRequests dedicados como en los comandos transaccionales. La consulta del historial exige `management-plans.view`. No se introducen asignaciones de usuarios por UP: el acceso sigue siendo funcional y global.
+Se mantiene `can_execute_management_plans` tanto en los FormRequests dedicados como en los comandos transaccionales. La consulta del historial exige `can_view_management_plans`. No se introducen asignaciones de usuarios por UP: el acceso sigue siendo funcional y global.
 
 La aplicación, su instantánea permitida en auditoría (`medicine_application_recorded` o `vaccination_application_recorded`), el asiento en la cronología del lote y el resultado idempotente se confirman sincrónicamente en la misma transacción. La instantánea guarda el motivo y los nombres históricos, operación, actor, responsable y UP. Un fallo de auditoría revierte el registro y permite reintentar la clave. Misma clave y mismo contenido reproducen la respuesta; otro contenido devuelve 409. Se conserva la serialización por actor y el bloqueo del lote para no competir con cambios de su plan.
 

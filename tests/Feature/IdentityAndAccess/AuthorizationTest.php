@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\IdentityAndAccess;
 
+use App\Models\IdentityAndAccess\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class AuthorizationTest extends TestCase
@@ -65,9 +65,9 @@ class AuthorizationTest extends TestCase
         // Preparación: crea usuario, rol y permiso, y los relaciona.
         $user = User::factory()->create();
         $role = Role::create(['name' => 'operations-manager', 'guard_name' => 'web']);
-        $permission = Permission::create(['name' => 'admin.dashboard.view', 'guard_name' => 'web']);
+        $permission = Permission::create(['name' => 'can_view_admin_dashboard', 'guard_name' => 'web']);
         $role->givePermissionTo($permission);
-        $user->assignRole($role);
+        $user->syncRoles([$role]);
         Sanctum::actingAs($user, ['*']);
 
         // Acción: accede al endpoint usando el permiso heredado.
@@ -94,9 +94,9 @@ class AuthorizationTest extends TestCase
     {
         $user = User::factory()->create();
         $role = Role::create(['name' => 'admin', 'guard_name' => 'web']);
-        $permission = Permission::create(['name' => 'admin.dashboard.view', 'guard_name' => 'web']);
+        $permission = Permission::create(['name' => 'can_view_admin_dashboard', 'guard_name' => 'web']);
         $role->givePermissionTo($permission);
-        $user->assignRole($role);
+        $user->syncRoles([$role]);
 
         return $user;
     }

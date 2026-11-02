@@ -38,7 +38,7 @@ final readonly class RedistributeFlockAction
             $data['destination_code'] = Str::upper(trim($data['destination_code']));
         }
 
-        return $this->commands->execute($actor, 'flocks.redistribute', 'flock.redistribute', $data['idempotency_key'], ['flock' => $flock->public_id, ...$data], function (string $operationId) use ($flock, $data, $actor, $source): array {
+        return $this->commands->execute($actor, 'can_redistribute_flocks', 'flock.redistribute', $data['idempotency_key'], ['flock' => $flock->public_id, ...$data], function (string $operationId) use ($flock, $data, $actor, $source): array {
             $receiverId = $data['destination_flock_id'] ?? null;
             if ($receiverId === $flock->public_id) {
                 throw new LotsConflict('El lote receptor debe ser diferente del origen.');

@@ -39,7 +39,7 @@ En `GET /api/v1/reference/options`, las etiquetas de `stock_locations` usan el n
 
 Las consultas específicas de alimentación conservan `items[].details[].plant_name`. Las relaciones de plantas se cargan anticipadamente para evitar consultas por cada fila. No cambia el orden de los listados ni los filtros por nombre técnico de ubicación.
 
-Se conservan los permisos de cada operación: `inventory.view` para consultar stock y las autorizaciones existentes para administrar ubicaciones y mínimos. Las referencias de Inventario no requieren permisos de estructura de granjas para mostrar el nombre. Esta ampliación de lectura no agrega mutaciones, auditorías ni cambios de idempotencia, concurrencia o cantidades.
+Se conservan los permisos de cada operación: `can_view_inventory` para consultar stock y las autorizaciones existentes para administrar ubicaciones y mínimos. Las referencias de Inventario no requieren permisos de estructura de granjas para mostrar el nombre. Esta ampliación de lectura no agrega mutaciones, auditorías ni cambios de idempotencia, concurrencia o cantidades.
 
 La verificación automatizada cubre el nombre actual tras renombrar una planta, ubicaciones sin planta, listado y detalle de ubicaciones, saldos, ajuste de mínimo, alta y repetición de ingredientes, y etiquetas de referencia. Ejecutar:
 
@@ -138,9 +138,9 @@ Integración del formulario:
 La limpieza del selector corresponde al frontend. Esta entrega implementa el contrato
 backend y rechaza selecciones incompatibles al guardar, sin modificar una interfaz web.
 La consulta requiere sesión autenticada, contexto compartido vigente cuando corresponde
-y `inventory.view` o rol `admin`, igual que la lectura de movimientos. El acceso sigue
+y `can_view_inventory` o rol `admin`, igual que la lectura de movimientos. El acceso sigue
 siendo global para todas las UP, sin asignaciones por usuario. Las escrituras conservan
-sus permisos específicos (`inventory.move` o `inventory.adjust`).
+sus permisos específicos (`can_move_inventory` o `can_adjust_inventory`).
 
 Es una lectura sin caché de aplicación, reservas, saldos nuevos, auditorías ni claves de
 idempotencia. No requiere migraciones, seeders, cambios de datos ni dependencias.

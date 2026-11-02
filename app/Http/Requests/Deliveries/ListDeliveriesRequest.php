@@ -9,7 +9,7 @@ final class ListDeliveriesRequest extends DeliveryRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('delivery.history') || $this->user()?->can('delivery.monitor')
+        return $this->user()?->can('can_view_delivery_history') || $this->user()?->can('can_monitor_deliveries')
             ? true
             : false;
     }

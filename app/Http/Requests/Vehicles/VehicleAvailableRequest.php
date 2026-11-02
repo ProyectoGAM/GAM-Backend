@@ -8,7 +8,7 @@ final class VehicleAvailableRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('delivery.start') ?? false;
+        return $this->user()?->can('can_start_deliveries') ?? false;
     }
 
     /** @return array<string, list<string>> */

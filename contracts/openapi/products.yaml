@@ -19,7 +19,7 @@ paths:
     get:
       operationId: listProducts
       summary: Consulta productos, incluidos los de tipo histórico finished_feed
-      description: Requiere products.view, management-plans.manage o rol admin, según la política vigente del catálogo.
+      description: Requiere can_view_products, can_manage_management_plans o rol admin, según la política vigente del catálogo.
       parameters:
         - {name: search, in: query, schema: {type: string, maxLength: 120}}
         - {name: kind, in: query, schema: {$ref: '#/components/schemas/ReadableKind'}}
@@ -43,7 +43,7 @@ paths:
       operationId: createProduct
       summary: Crea un producto de tipo operativo
       description: >-
-        Requiere products.manage. kind egg, medicine, vaccine o finished_feed responde 422 con error en kind.
+        Requiere can_manage_products. kind egg, medicine, vaccine o finished_feed responde 422 con error en kind.
         Las materias primas exigen base_unit g y stock_tracked verdadero.
       requestBody:
         required: true
@@ -79,7 +79,7 @@ paths:
       operationId: updateProduct
       summary: Actualiza metadata sin permitir conversiones a tipos reservados
       description: >-
-        Requiere products.manage. egg, medicine, vaccine y finished_feed sólo se admiten cuando el producto
+        Requiere can_manage_products. egg, medicine, vaccine y finished_feed sólo se admiten cuando el producto
         ya tiene ese tipo; otro producto recibe 422 con error en kind. Omitir kind
         conserva la clasificación actual. Se mantienen las restricciones de
         ingredientes, unidades históricas, vacunas y productos técnicos.

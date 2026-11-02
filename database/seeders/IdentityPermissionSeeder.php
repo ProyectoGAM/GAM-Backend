@@ -2,107 +2,41 @@
 
 namespace Database\Seeders;
 
+use App\Models\IdentityAndAccess\Role;
+use App\Services\IdentityAndAccess\PermissionCatalog;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 final class IdentityPermissionSeeder extends Seeder
 {
-    public function run(): void
+    public function run(PermissionCatalog $catalog): void
     {
-        $permissions = [
-            'admin.dashboard.view',
-            'audit.view',
-            'customers.view',
-            'customers.manage',
-            'customer-accounts.view',
-            'customer-payments.record',
-            'customer-accounts.adjust',
-            'customer-accounts.reverse',
-            'flocks.view',
-            'flocks.manage',
-            'flocks.redistribute',
-            'flocks.finalize',
-            'management-plans.view',
-            'management-plans.manage',
-            'management-plans.execute',
-            'management-plans.stock.manage',
-            'breeds.view',
-            'breeds.manage',
-            'mortality.view',
-            'mortality.manage',
-            'egg-collections.view',
-            'egg-collections.manage',
-            'egg-stock.view',
-            'egg-stock.move',
-            'egg-stock.adjust',
-            'weighings.view',
-            'weighings.manage',
-            'weighing-settings.manage',
-            'geography.view',
-            'geography.manage',
-            'production-units.view',
-            'production-units.manage',
-            'poultry-houses.view',
-            'poultry-houses.manage',
-            'suppliers.view',
-            'suppliers.manage',
-            'products.view',
-            'products.manage',
-            'inventory.view',
-            'inventory.move',
-            'inventory.adjust',
-            'inventory.manage',
-            'reports.view',
-            'reports.export',
-            'reports.presets.manage',
-            'reports.share',
-            'feed-recipes.view',
-            'feed-recipes.manage',
-            'identity.personal.login',
-            'identity.web.login',
-            'identity.shared.login',
-            'identity.users.manage',
-            'identity.pins.manage',
-            'identity.shared-devices.manage',
-            'identity.sessions.manage',
-            'delivery.start',
-            'delivery.fuel.record',
-            'delivery.view-own',
-            'delivery.update-own',
-            'delivery.location.publish',
-            'delivery.monitor',
-            'delivery.history',
-            'vehicles.view',
-            'vehicles.manage',
-            'vehicles.use',
-            'vehicles.readings.manage',
-            'vehicles.fuel.view',
-            'vehicles.fuel.manage',
-            'vehicles.maintenance.view',
-            'vehicles.maintenance.manage',
-            'vehicles.documents.view',
-            'vehicles.documents.manage',
-        ];
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        foreach ($permissions as $permission) {
-            Permission::findOrCreate($permission, 'web');
-        }
-
-        Role::findOrCreate('admin', 'web')->syncPermissions(
-            Permission::query()->where('guard_name', 'web')->get(),
-        );
-        Role::findOrCreate('delivery', 'web')->syncPermissions([
-            Permission::findByName('identity.personal.login', 'web'),
-            Permission::findByName('identity.web.login', 'web'),
-            Permission::findByName('delivery.start', 'web'),
-            Permission::findByName('delivery.view-own', 'web'),
-            Permission::findByName('delivery.update-own', 'web'),
-            Permission::findByName('delivery.location.publish', 'web'),
-            Permission::findByName('delivery.fuel.record', 'web'),
-        ]);
-        Role::findOrCreate('employee', 'web')->syncPermissions([
-            Permission::findByName('identity.shared.login', 'web'),
-        ]);
+        DB::transaction(function () use ($catalog): void {
+            foreach (array_keys($catalog->permissions()) as $name) {
+                Permission::findOrCreate($name, 'web');
+            }
+            $admin = Role::findOrCreate('admin', 'web');
+            $admin->forceFill(['label' => 'Administrador'])->save();
+            $admin->syncPermissions(Permission::query()->where('guard_name', 'web')->get());
+            $defaults = [
+                'delivery' => ['label' => 'Repartidor', 'permissions' => [
+                    'can_login_native', 'can_login_web', 'can_start_deliveries', 'can_view_own_deliveries',
+                    'can_update_own_deliveries', 'can_publish_delivery_location', 'can_record_delivery_fuel',
+                ]],
+                'employee' => ['label' => 'Empleado', 'permissions' => ['can_login_shared']],
+            ];
+            foreach ($defaults as $name => $data) {
+                $role = Role::query()->firstOrCreate(['name' => $name, 'guard_name' => 'web'], ['label' => $data['label']]);
+                if ($role->wasRecentlyCreated || $role->label === null) {
+                    $role->forceFill(['label' => $data['label']])->save();
+                    $role->syncPermissions($data['permissions']);
+                }
+            }
+        });
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 }

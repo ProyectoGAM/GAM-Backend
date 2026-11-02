@@ -147,7 +147,7 @@ paths:
         - { name: status, in: query, schema: { type: string, enum: [active, inactive] } }
       responses:
         '200':
-          description: Proyección mínima operativa con permisos delivery.view-own y paginación real
+          description: Proyección mínima operativa con permisos can_view_own_deliveries y paginación real
           content:
             application/json:
               schema:

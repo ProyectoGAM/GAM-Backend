@@ -31,7 +31,7 @@ final class AuthenticateSharedPinAction
             throw $this->invalidPin();
         }
 
-        if (! $user->can('identity.shared.login')) {
+        if (! $user->can('can_login_shared')) {
             throw new IdentityException(403, 'SHARED_LOGIN_FORBIDDEN', 'El usuario no tiene habilitado el acceso compartido.');
         }
 
@@ -78,7 +78,7 @@ final class AuthenticateSharedPinAction
             throw $this->invalidPin();
         }
 
-        if (! $user->can('identity.shared.login')) {
+        if (! $user->can('can_login_shared')) {
             throw new IdentityException(403, 'SHARED_LOGIN_FORBIDDEN', 'El usuario no tiene habilitado el acceso compartido.');
         }
 
@@ -188,7 +188,7 @@ final class AuthenticateSharedPinAction
             $windowStarted = $windowExpired ? $now : $locked->pin_failed_window_started_at;
             $dailyStarted = $dailyExpired ? $now : $locked->pin_daily_window_started_at;
             $blockedUntil = $failed >= (int) config('identity.pin.max_attempts', 5)
-                ? $windowStarted?->copy()->addMinutes((int) config('identity.pin.window_minutes', 15))
+                ? $windowStarted->copy()->addMinutes((int) config('identity.pin.window_minutes', 15))
                 : null;
 
             $locked->forceFill([

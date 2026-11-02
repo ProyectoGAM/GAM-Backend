@@ -10,12 +10,16 @@ GAM tiene dos transportes y tres contextos de sesión:
 
 El registro público está retirado. Las cuentas se crean mediante POST /api/v1/users y no se emite un token para la persona creada.
 
+## Roles configurables
+
+Cada usuario tiene un único rol, sin permisos directos. Admin activa o desactiva permisos del rol sin cambiar sus asignaciones. El catálogo se consulta en `/api/v1/permisos`; la gestión de roles y la asignación de usuarios son exclusivas de Admin mediante Policies. Login y `/me` exponen `rol` singular y `permissions` con claves `can_*`. El alta administrativa recibe `rol_id`. Los seeders conservan los permisos configurados de los roles operativos. Ver la [guía de integración](roles-and-permissions-implementation.md).
+
 ## Invariantes
 
 - IDENTITY_PIN_PEPPER es obligatorio en ambientes reales y nunca se entrega al cliente.
 - El PIN es un string exacto de cuatro dígitos. Se conserva 0007, se hashea con Argon2id sobre un HMAC-SHA256 con pepper y se guarda separado de password.
 - Administradores no pueden tener PIN operativo.
-- El listado compartido sólo devuelve usuarios activos con rol employee, PIN habilitado y permiso identity.shared.login.
+- El listado compartido devuelve usuarios activos no administradores con PIN habilitado y permiso `can_login_shared` en su único rol; no exige un nombre de rol operativo específico.
 - El dispositivo se identifica con X-Shared-Device-Token en nativo o cookie gam_shared_device en web. Nunca se sustituye por un PAT personal.
 - Las operaciones de empleado requieren X-GAM-Session y la generación actual del dispositivo.
 - El backend revoca y audita en transacciones; la expiración también se comprueba en cada request y no depende del scheduler.
@@ -33,7 +37,7 @@ docker compose -f compose.dev.yaml exec -T api php artisan db:seed --class='Data
 docker compose -f compose.dev.yaml exec -T api php artisan permission:cache-reset
 ```
 
-Si el cliente conserva una copia anterior del perfil, debe volver a consultar `/api/v1/me` o cerrar e iniciar sesión. No se requiere migración ni cambio de dependencias. Las pruebas de `AdminSeederTest` cubren ambas entradas de seed, recuperación de permisos con caché consultada previamente, permisos adicionales, múltiples administradores y exposición del catálogo en la sesión personal y el perfil.
+Si el cliente conserva una copia anterior del perfil, debe volver a consultar `/api/v1/me` o cerrar e iniciar sesión. La entrega inicial no necesitó migración. La entrega de roles configurables requiere la migración y actualización de contrato descritas en [roles y permisos](roles-and-permissions-implementation.md), sin dependencias nuevas. Las pruebas de `AdminSeederTest` cubren ambas entradas de seed, recuperación de permisos con caché consultada previamente, permisos adicionales, múltiples administradores y exposición del catálogo en la sesión personal y el perfil.
 
 Verificación de esta corrección: **29 pruebas y 218 aserciones** aprobadas entre `AdminSeederTest`, `AuthorizationTest` y `AuthenticationTest`, incluida la prueba adicional de sesión web, usando PostgreSQL aislado `gam_admin_access_testing`. Pint y PHPStan nivel 5 aprobaron los seeders modificados. Pint usó rutas explícitas por ausencia de Git en el contenedor y `sys_temp_dir=/dev/shm` para evitar el espacio temporal limitado. La carga de permisos se aplicó en la base local sin ejecutar `AdminUserSeeder` ni cambiar credenciales; se limpió la caché y Laravel Boost confirmó **55 permisos registrados, 55 asignados a admin y 0 faltantes**. No se verificó navegación visual en un navegador ni se modificó el frontend.
 

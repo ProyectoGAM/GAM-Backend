@@ -49,7 +49,7 @@ final class AuditActorPresenter
             'name' => $name, 'current_name' => $user instanceof User ? $user->name : null,
             'exists' => $user instanceof User,
             'status' => $kind === 'system' ? 'system' : ($user instanceof User ? ($user->trashed() ? 'disabled' : 'active') : 'unavailable'),
-            'can_manage' => $user instanceof User && $viewer->can('identity.users.manage'),
+            'can_manage' => $user instanceof User && $viewer->can('can_manage_users'),
         ];
     }
 }

@@ -28,7 +28,7 @@ paths:
         Los eventos sin presentación específica usan su descripción legible o
         Actividad registrada. Los responsables de auditoría se buscan de forma
         paginada en /auditoria/responsables; no se agrega una lista ilimitada
-        audit.actors a esta respuesta. Ambas lecturas requieren audit.view
+        audit.actors a esta respuesta. Ambas lecturas requieren can_view_audit
         para acceder a los datos de auditoría.
         Para plantas de ración, las etiquetas de stock_locations e
         inventory_balances usan el nombre vigente de la planta vinculada,

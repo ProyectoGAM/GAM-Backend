@@ -6,6 +6,8 @@ use Illuminate\Validation\Rule;
 
 final class ListFlockFeedingRequest extends FeedOperationRequest
 {
+    protected string $permissionAbility = 'viewFeeding';
+
     /** @return array<string, list<mixed>> */
     public function rules(): array
     {

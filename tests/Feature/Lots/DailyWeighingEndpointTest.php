@@ -12,7 +12,7 @@ final class DailyWeighingEndpointTest extends LotsTestCase
     public function test_mixed_entries_are_aggregated_and_retried_once(): void
     {
         // Preparación: crea un lote con historia y permisos de lectura y registro.
-        $this->signIn(['weighings.view', 'weighings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings']);
         $flock = $this->flockWithHistory(20);
         $key = (string) Str::uuid();
 
@@ -38,7 +38,7 @@ final class DailyWeighingEndpointTest extends LotsTestCase
     {
         // Preparación: crea usuario y lote antes de silenciar los eventos del registro.
         $this->travelTo(CarbonImmutable::parse('2026-10-20 12:00:00', 'America/Montevideo'));
-        $this->signIn(['weighings.view', 'weighings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings']);
         $flock = $this->flockWithHistory(20);
 
         // Request: reproduce la supresión de eventos que heredan los seeders del DatabaseSeeder.
@@ -60,7 +60,7 @@ final class DailyWeighingEndpointTest extends LotsTestCase
     public function test_out_of_range_conflict_has_no_effect_until_confirmed(): void
     {
         // Preparación: fija el rango esperado y crea un lote vigente.
-        $this->signIn(['weighings.view', 'weighings.manage', 'weighing-settings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings', 'can_manage_weighing_settings']);
         $this->settings('10.0', '20.0');
         $flock = $this->flockWithHistory(20);
         $key = (string) Str::uuid();
@@ -84,7 +84,7 @@ final class DailyWeighingEndpointTest extends LotsTestCase
     public function test_deleting_closed_entry_recalculates_totals_and_keeps_audit(): void
     {
         // Preparación: crea dos ingresos en una jornada que luego queda cerrada.
-        $this->signIn(['weighings.view', 'weighings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings']);
         $flock = $this->flockWithHistory(20);
         $first = $this->command('POST', '/lotes/'.$flock->public_id.'/pesajes-diarios/ingresos', ['mode' => 'individual', 'weight' => '20.0'])->assertCreated();
         $second = $this->command('POST', '/lotes/'.$flock->public_id.'/pesajes-diarios/ingresos', ['mode' => 'group', 'bird_count' => 2, 'total_weight' => '60.0'])->assertCreated();
@@ -111,7 +111,7 @@ final class DailyWeighingEndpointTest extends LotsTestCase
     {
         // Preparación: fija la hora local justo antes de medianoche.
         $this->travelTo(CarbonImmutable::parse('2026-10-07 23:59:59', 'America/Montevideo'));
-        $this->signIn(['weighings.view', 'weighings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings']);
         $flock = $this->flockWithHistory(20);
 
         // Request: registra un ingreso antes y otro después de medianoche.
@@ -134,7 +134,7 @@ final class DailyWeighingEndpointTest extends LotsTestCase
     public function test_distribution_excludes_groups_and_reports_insufficient_sample(): void
     {
         // Preparación: registra un grupo y un peso individual.
-        $this->signIn(['weighings.view', 'weighings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings']);
         $flock = $this->flockWithHistory(20);
         $group = $this->command('POST', '/lotes/'.$flock->public_id.'/pesajes-diarios/ingresos', ['mode' => 'group', 'bird_count' => 3, 'total_weight' => '90.0'])->assertCreated();
         $this->command('POST', '/lotes/'.$flock->public_id.'/pesajes-diarios/ingresos', ['mode' => 'individual', 'weight' => '20.0'])->assertCreated();
@@ -151,7 +151,7 @@ final class DailyWeighingEndpointTest extends LotsTestCase
     public function test_deleting_anomalous_group_recalculates_sample(): void
     {
         // Preparación: crea un ingreso individual normal y un grupo fuera de rango confirmado.
-        $this->signIn(['weighings.view', 'weighings.manage', 'weighing-settings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings', 'can_manage_weighing_settings']);
         $this->settings('10.0', '20.0');
         $flock = $this->flockWithHistory(20);
         $first = $this->command('POST', '/lotes/'.$flock->public_id.'/pesajes-diarios/ingresos', ['mode' => 'individual', 'weight' => '15.0'])->assertCreated();
@@ -175,7 +175,7 @@ final class DailyWeighingEndpointTest extends LotsTestCase
     public function test_distribution_reports_zero_variance(): void
     {
         // Preparación: registra dos pesos individuales iguales.
-        $this->signIn(['weighings.view', 'weighings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings']);
         $flock = $this->flockWithHistory(20);
         $first = $this->command('POST', '/lotes/'.$flock->public_id.'/pesajes-diarios/ingresos', ['mode' => 'individual', 'weight' => '20.0'])->assertCreated();
         $this->command('POST', '/lotes/'.$flock->public_id.'/pesajes-diarios/ingresos', ['mode' => 'individual', 'weight' => '20.0'])->assertCreated();
@@ -192,7 +192,7 @@ final class DailyWeighingEndpointTest extends LotsTestCase
     public function test_settings_update_reclassifies_open_daily_weighings(): void
     {
         // Preparación: guarda un rango inicial y registra un ingreso normal.
-        $this->signIn(['weighings.view', 'weighings.manage', 'weighing-settings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings', 'can_manage_weighing_settings']);
         $this->settings('10.0', '30.0');
         $flock = $this->flockWithHistory(20);
         $created = $this->command('POST', '/lotes/'.$flock->public_id.'/pesajes-diarios/ingresos', ['mode' => 'individual', 'weight' => '25.0'])->assertCreated();
@@ -215,7 +215,7 @@ final class DailyWeighingEndpointTest extends LotsTestCase
     public function test_delete_rejects_stale_version(): void
     {
         // Preparación: registra un ingreso y conserva una versión anterior de la jornada.
-        $this->signIn(['weighings.view', 'weighings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings']);
         $flock = $this->flockWithHistory(20);
         $first = $this->command('POST', '/lotes/'.$flock->public_id.'/pesajes-diarios/ingresos', ['mode' => 'individual', 'weight' => '20.0'])->assertCreated();
         $second = $this->command('POST', '/lotes/'.$flock->public_id.'/pesajes-diarios/ingresos', ['mode' => 'individual', 'weight' => '30.0'])->assertCreated();
@@ -235,7 +235,7 @@ final class DailyWeighingEndpointTest extends LotsTestCase
     public function test_cursor_pages_do_not_skip_entries_or_daily_weighings(): void
     {
         // Preparación: crea dos ingresos y dos fechas de pesaje para el mismo lote.
-        $this->signIn(['weighings.view', 'weighings.manage', 'weighing-settings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings', 'can_manage_weighing_settings']);
         $this->settings('10.0', '30.0');
         $flock = $this->flockWithHistory(20);
         $first = $this->command('POST', '/lotes/'.$flock->public_id.'/pesajes-diarios/ingresos', ['mode' => 'individual', 'weight' => '20.0'])->assertCreated();
@@ -275,17 +275,17 @@ final class DailyWeighingEndpointTest extends LotsTestCase
     public function test_read_and_write_permissions_are_distinct(): void
     {
         // Preparación: crea una jornada como usuario con permisos completos.
-        $this->signIn(['weighings.view', 'weighings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings']);
         $flock = $this->flockWithHistory(20);
         $created = $this->command('POST', '/lotes/'.$flock->public_id.'/pesajes-diarios/ingresos', ['mode' => 'individual', 'weight' => '20.0'])->assertCreated();
 
         // Request: un usuario de sólo lectura consulta pero no registra.
-        $this->signIn(['weighings.view']);
+        $this->signIn(['can_view_weighings']);
         $this->getJson('/api/v1/pesajes-diarios/'.$created->json('data.daily_weighing.id'))->assertOk();
         $this->command('POST', '/lotes/'.$flock->public_id.'/pesajes-diarios/ingresos', ['mode' => 'individual', 'weight' => '21.0'])->assertForbidden();
 
         // Verificación: un usuario sin lectura no obtiene la jornada.
-        $this->signIn(['weighings.manage']);
+        $this->signIn(['can_manage_weighings']);
         $this->getJson('/api/v1/pesajes-diarios/'.$created->json('data.daily_weighing.id'))->assertForbidden();
     }
 

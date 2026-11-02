@@ -8,7 +8,7 @@ final class ListFeedSuppliesRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return ($this->user()?->can('management-plans.view') ?? false) || ($this->user()?->can('management-plans.execute') ?? false);
+        return ($this->user()?->can('can_view_management_plans') ?? false) || ($this->user()?->can('can_execute_management_plans') ?? false);
     }
 
     public function rules(): array

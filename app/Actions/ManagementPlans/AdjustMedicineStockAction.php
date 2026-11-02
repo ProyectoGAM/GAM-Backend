@@ -12,7 +12,7 @@ final readonly class AdjustMedicineStockAction
     /** @param array{quantity_delta: int, reason: string, idempotency_key: string} $attributes */
     public function execute(Medicine $medicine, array $attributes, User $actor, string $source = 'api'): never
     {
-        LotsAuthorization::ensure($actor, 'management-plans.stock.manage');
+        LotsAuthorization::ensure($actor, 'can_manage_medicine_stock');
 
         throw new LotsConflict('El control de stock de medicamentos está retirado. Registra las aplicaciones sin cantidad ni ajustes de saldo.');
     }

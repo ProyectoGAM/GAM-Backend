@@ -8,7 +8,7 @@ final class GeneratePairingCodeRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('identity.shared-devices.manage') ?? false;
+        return $this->user()?->can('can_manage_shared_devices') ?? false;
     }
 
     public function rules(): array

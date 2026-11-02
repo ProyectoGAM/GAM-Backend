@@ -32,7 +32,7 @@ final class HealthStockConsumptionTest extends LotsTestCase
         // Preparación: recrea aplicaciones anteriores a la retirada del control de stock.
         config()->set('inventory.health_stock_enabled', true);
         // Preparación: usa sólo permiso de ejecución y stock sanitario de la UP del lote.
-        $actor = $this->signIn(['management-plans.execute']);
+        $actor = $this->signIn(['can_execute_management_plans']);
         $flock = $this->flockWithPlan();
         $catalog = $type === 'medication'
             ? Medicine::factory()->create(['product_id' => Product::factory()->create(['kind' => 'medicine', 'base_unit' => 'unit'])->id])
@@ -72,7 +72,7 @@ final class HealthStockConsumptionTest extends LotsTestCase
                 lines: [['product_id' => (int) $catalog->product_id, 'stock_location_id' => $location->id, 'on_hand_delta' => '4']],
                 operationId: (string) Str::uuid(), referenceType: 'inventory_movement', referenceId: (string) $original->id,
                 reversesMovementId: $original->id,
-            ), $actor, requiredPermission: 'management-plans.execute', healthCompensation: $original);
+            ), $actor, requiredPermission: 'can_execute_management_plans', healthCompensation: $original);
             $this->fail('La compensación debía limitarse al consumo original.');
         } catch (InventoryConflict $exception) {
             $this->assertSame('Debes devolver exactamente el consumo sanitario original.', $exception->getMessage());
@@ -104,7 +104,7 @@ final class HealthStockConsumptionTest extends LotsTestCase
         // Preparación: la bandera de inventario no vuelve a habilitar consumos desde aplicaciones.
         config()->set('inventory.health_stock_enabled', true);
         // Preparación: la ubicación correcta para el producto pertenece a otra UP.
-        $this->signIn(['management-plans.execute']);
+        $this->signIn(['can_execute_management_plans']);
         $flock = $this->flockWithPlan();
         $product = Product::factory()->create(['kind' => $kind, 'base_unit' => 'unit']);
         $catalog = $kind === 'medicine' ? Medicine::factory()->create(['product_id' => $product->id]) : Vaccine::factory()->create(['product_id' => $product->id]);
@@ -127,7 +127,7 @@ final class HealthStockConsumptionTest extends LotsTestCase
     public function test_disabled_physical_consumption_returns_422_but_global_application_succeeds(string $kind, string $path): void
     {
         // Preparación: usa el catálogo global sin saldos ni ubicaciones sanitarias.
-        $this->signIn(['management-plans.execute']);
+        $this->signIn(['can_execute_management_plans']);
         $flock = $this->flockWithPlan();
         $catalog = $kind === 'medicine' ? Medicine::factory()->create()
             : Vaccine::factory()->create(['product_id' => Product::factory()->vaccine()->create(['stock_tracked' => false])->id]);

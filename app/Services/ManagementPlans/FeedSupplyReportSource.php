@@ -12,7 +12,7 @@ final class FeedSupplyReportSource extends SqlReportSource
 {
     public function definition(): ReportSourceDefinition
     {
-        return $this->describe('management.feed-supply', 'Alimentación', 'Ración registrada y pauta estimada separadas. En días sin carga se repite la última cantidad diaria, sin extenderla antes del primer dato, después del cierre o fuera del alojamiento del lote.', 'management-plans.view', [
+        return $this->describe('management.feed-supply', 'Alimentación', 'Ración registrada y pauta estimada separadas. En días sin carga se repite la última cantidad diaria, sin extenderla antes del primer dato, después del cierre o fuera del alojamiento del lote.', 'can_view_management_plans', [
             'date' => ['label' => 'Fecha', 'type' => 'datetime'], 'production_unit_id' => ['label' => 'Unidad productiva', 'type' => 'integer'],
             'production_unit' => ['label' => 'Unidad productiva', 'type' => 'string'], 'poultry_house_id' => ['label' => 'Galpón', 'type' => 'integer'],
             'poultry_house' => ['label' => 'Galpón', 'type' => 'string'], 'flock_id' => ['label' => 'Lote', 'type' => 'string'], 'flock' => ['label' => 'Lote', 'type' => 'string'],

@@ -7,12 +7,14 @@ use App\Models\IdentityAndAccess\AuthSession;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -23,6 +25,10 @@ use Spatie\Permission\Traits\HasRoles;
  * @property string $password
  * @property string|null $pin_hash
  * @property bool $pin_enabled
+ * @property Carbon|null $pin_changed_at
+ * @property Carbon|null $pin_locked_until
+ * @property Carbon|null $pin_failed_window_started_at
+ * @property Carbon|null $pin_daily_window_started_at
  * @property Carbon|null $deleted_at
  */
 #[Fillable(['name', 'email', 'password'])]
@@ -51,8 +57,37 @@ class User extends Authenticatable
         ];
     }
 
+    /** @return HasMany<AuthSession, $this> */
     public function authSessions(): HasMany
     {
         return $this->hasMany(AuthSession::class);
+    }
+
+    /** Los permisos efectivos proceden exclusivamente del único rol y se consultan sin caché compartida. */
+    public function hasPermissionTo(mixed $permission, ?string $guardName = null): bool
+    {
+        if ($this->trashed()) {
+            return false;
+        }
+        $permission = $this->filterPermission($permission, $guardName);
+
+        return $this->roles()->where('guard_name', $guardName ?? 'web')
+            ->whereHas('permissions', fn ($query) => $query->whereKey($permission->getKey()))->exists();
+    }
+
+    public function getAllPermissions(): Collection
+    {
+        return $this->roles()->with('permissions')->get()->pluck('permissions')->flatten()
+            ->unique('id')->sortBy('name')->values()->pipe(fn ($permissions): Collection => new Collection($permissions->all()));
+    }
+
+    public function givePermissionTo(mixed ...$permissions): static
+    {
+        throw ValidationException::withMessages(['permisos' => 'Los permisos se configuran en el rol, no en el usuario.']);
+    }
+
+    public function syncPermissions(mixed ...$permissions): static
+    {
+        throw ValidationException::withMessages(['permisos' => 'Los permisos se configuran en el rol, no en el usuario.']);
     }
 }

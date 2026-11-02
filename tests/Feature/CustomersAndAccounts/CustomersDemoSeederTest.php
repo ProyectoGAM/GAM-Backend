@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\CustomersAndAccounts;
 
+use App\Models\IdentityAndAccess\Role;
 use App\Models\User;
 use Database\Seeders\CustomersAndAccounts\CustomersDemoSeeder;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 final class CustomersDemoSeederTest extends TestCase
@@ -17,7 +17,7 @@ final class CustomersDemoSeederTest extends TestCase
     {
         // Administrador dueño de las operaciones de demostración.
         $admin = User::factory()->create();
-        $admin->assignRole(Role::findOrCreate('admin', 'web'));
+        $admin->syncRoles([Role::findOrCreate('admin', 'web')]);
         $this->app->call([new CustomersDemoSeeder, 'run']);
         $this->app->call([new CustomersDemoSeeder, 'run']);
         $this->assertDatabaseCount('customers', 6);

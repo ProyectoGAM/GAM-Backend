@@ -10,6 +10,7 @@ use App\Models\Inventory\FeedBalance;
 use App\Models\User;
 use App\Services\Inventory\FeedBalanceEvaluator;
 use App\Services\Inventory\FeedOperationRunner;
+use App\Services\Lots\LotsAuthorization;
 use App\ValueObjects\Inventory\FeedStockGrams;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -35,6 +36,7 @@ final readonly class SetFeedBalanceMinimumAction
         }
 
         return DB::transaction(function () use ($recipeId, $unitId, $minimum, $actor): FeedBalance {
+            LotsAuthorization::ensure($actor->fresh(), 'can_manage_feed_minimums');
             $recipe = $this->operations->recipe($recipeId, false);
             $unit = ProductionUnit::query()->whereKey($unitId)->sharedLock()->firstOrFail();
             $balance = $this->operations->balance($recipeId, $unitId);

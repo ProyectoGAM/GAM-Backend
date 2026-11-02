@@ -11,14 +11,14 @@ final class VehicleUsageReportSource extends SqlReportSource
 {
     public function definition(): ReportSourceDefinition
     {
-        return $this->describe('vehicles.usage', 'Uso de vehículos', 'Usos registrados con responsable, reparto y kilometraje de tablero disponible.', 'vehicles.view', [
+        return $this->describe('vehicles.usage', 'Uso de vehículos', 'Usos registrados con responsable, reparto y kilometraje de tablero disponible.', 'can_view_vehicles', [
             'date' => ['label' => 'Inicio', 'type' => 'datetime'], 'vehicle_id' => ['label' => 'Vehículo', 'type' => 'string'],
             'vehicle' => ['label' => 'Matrícula', 'type' => 'string'], 'driver_id' => ['label' => 'Conductor', 'type' => 'string'],
             'driver' => ['label' => 'Conductor', 'type' => 'string'], 'purpose' => ['label' => 'Tipo de uso', 'type' => 'string'],
             'delivery_id' => ['label' => 'Reparto', 'type' => 'string'], 'started_at' => ['label' => 'Inicio', 'type' => 'datetime'],
             'ended_at' => ['label' => 'Fin', 'type' => 'datetime'], 'start_odometer_km' => ['label' => 'Km de salida', 'type' => 'number'],
             'end_odometer_km' => ['label' => 'Km de cierre', 'type' => 'number'], 'distance_km' => ['label' => 'Distancia registrada', 'type' => 'quantity', 'unit' => 'km'],
-        ], ['use_count' => ['label' => 'Usos', 'type' => 'quantity', 'unit' => 'usos'], 'distance_total_km' => ['label' => 'Distancia registrada', 'type' => 'quantity', 'unit' => 'km']], additionalPermissions: ['vehicles.view']);
+        ], ['use_count' => ['label' => 'Usos', 'type' => 'quantity', 'unit' => 'usos'], 'distance_total_km' => ['label' => 'Distancia registrada', 'type' => 'quantity', 'unit' => 'km']], additionalPermissions: ['can_view_vehicles']);
     }
 
     protected function dimensionKeys(): array

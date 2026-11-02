@@ -9,7 +9,7 @@ final readonly class InventoryMovementPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $this->allowed($user, 'inventory.view');
+        return $this->allowed($user, 'can_view_inventory');
     }
 
     public function view(User $user, InventoryMovement $inventoryMovement): bool
@@ -19,17 +19,17 @@ final readonly class InventoryMovementPolicy
 
     public function create(User $user): bool
     {
-        return $this->allowed($user, 'inventory.move');
+        return $this->allowed($user, 'can_move_inventory');
     }
 
     public function adjust(User $user): bool
     {
-        return $this->allowed($user, 'inventory.adjust');
+        return $this->allowed($user, 'can_adjust_inventory');
     }
 
     public function reverse(User $user, InventoryMovement $inventoryMovement): bool
     {
-        return $this->allowed($user, 'inventory.adjust');
+        return $this->allowed($user, 'can_adjust_inventory');
     }
 
     private function allowed(User $user, string $permission): bool

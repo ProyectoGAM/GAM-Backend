@@ -5,6 +5,8 @@ Cada guía describe el alcance entregado, las decisiones de negocio, el contrato
 ## Guías
 
 - [Identidad y acceso](identity-access-implementation.md)
+- [Roles y permisos — plan de implementación](roles-and-permissions-implementation-plan.md)
+- [Roles y permisos configurables — API e integración](roles-and-permissions-implementation.md)
 - [Auditoría: resumen y detalle bajo demanda](audit-presentation-implementation.md)
 - [Informe de integración de auditoría para frontend](audit-frontend-integration.md)
 - [Lotes y cría](lots-implementation.md)

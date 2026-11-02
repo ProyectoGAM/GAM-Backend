@@ -25,7 +25,7 @@ final readonly class TransferStockAction
     {
         return DB::transaction(function () use ($attributes, $actor): InventoryMovement {
             $currentActor = User::query()->whereKey($actor->getKey())->lockForUpdate()->firstOrFail();
-            LotsAuthorization::ensure($currentActor, 'inventory.move');
+            LotsAuthorization::ensure($currentActor, 'can_move_inventory');
 
             return $this->executeWithinTransaction($attributes, $currentActor);
         }, 3);
@@ -98,7 +98,7 @@ final readonly class TransferStockAction
             operationId: (string) $attributes['idempotency_key'],
             reason: $attributes['reason'] ?? null,
             occurredAt: $attributes['occurred_at'] ?? null,
-        ), $actor, requiredPermission: 'inventory.move');
+        ), $actor, requiredPermission: 'can_move_inventory');
     }
 
     /** @param list<array{product_id:int, stock_location_id:int, on_hand_delta:string}> $lines */

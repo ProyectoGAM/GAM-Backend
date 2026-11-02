@@ -12,7 +12,7 @@ final class ListReportExportsRequest extends FormRequest
     {
         $user = $this->user();
 
-        return $user !== null && ($user->hasRole('admin') || $user->can('reports.view'));
+        return $user !== null && ($user->hasRole('admin') || $user->can('can_view_reports'));
     }
 
     /** @return array<string, array<int, mixed>> */

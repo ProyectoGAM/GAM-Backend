@@ -9,7 +9,7 @@ final class StoreDeliveryLoadRequest extends DeliveryRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('delivery.update-own')
+        return $this->user()?->can('can_update_own_deliveries')
             && $this->delivery()->driver_id === $this->user()?->getKey();
     }
 

@@ -106,7 +106,7 @@ paths:
           $ref: '#/components/responses/Conflict'
         422:
           $ref: '#/components/responses/ValidationError'
-      description: 'customers.manage. Nombre y documentos son opcionales; ambas coordenadas y ambos datos de documento se informan en pareja. No hay unicidad por nombre ni documento.'
+      description: 'can_manage_customers. Nombre y documentos son opcionales; ambas coordenadas y ambos datos de documento se informan en pareja. No hay unicidad por nombre ni documento.'
       requestBody:
         required: true
         content:
@@ -234,7 +234,7 @@ paths:
           $ref: '#/components/responses/Conflict'
         422:
           $ref: '#/components/responses/ValidationError'
-      description: 'customers.view o delivery.view-own. El contexto de reparto debe ser propio o consultable por delivery.history. Sin asignaciones implícitas; has_more exige acercar el mapa.'
+      description: 'can_view_customers o can_view_own_deliveries. El contexto de reparto debe ser propio o consultable por can_view_delivery_history. Sin asignaciones implícitas; has_more exige acercar el mapa.'
   '/api/v1/clientes/{cliente}':
     get:
       summary: 'Consulta ficha central y saldo autorizado'
@@ -266,7 +266,7 @@ paths:
           $ref: '#/components/responses/Conflict'
         422:
           $ref: '#/components/responses/ValidationError'
-      description: 'customers.view. account sólo se incluye con customer-accounts.view; los historiales se consultan por separado.'
+      description: 'can_view_customers. account sólo se incluye con can_view_customer_accounts; los historiales se consultan por separado.'
     patch:
       summary: 'Actualiza datos sin editar saldo'
       tags:
@@ -395,7 +395,7 @@ paths:
           $ref: '#/components/responses/Conflict'
         422:
           $ref: '#/components/responses/ValidationError'
-      description: 'customer-accounts.view. Saldo positivo es deuda; negativo es saldo a favor. Moneda fija UYU.'
+      description: 'can_view_customer_accounts. Saldo positivo es deuda; negativo es saldo a favor. Moneda fija UYU.'
   '/api/v1/clientes/{cliente}/movimientos':
     get:
       summary: 'Consulta movimientos y estado de cuenta del período'
@@ -466,7 +466,7 @@ paths:
           $ref: '#/components/responses/Conflict'
         422:
           $ref: '#/components/responses/ValidationError'
-      description: 'customer-accounts.view. Períodos de fecha de registro en America/Montevideo. Los saldos del período incluyen todos los tipos, independientemente de la página y el filtro de detalle. La versión fija el estado confirmado consultado.'
+      description: 'can_view_customer_accounts. Períodos de fecha de registro en America/Montevideo. Los saldos del período incluyen todos los tipos, independientemente de la página y el filtro de detalle. La versión fija el estado confirmado consultado.'
   '/api/v1/clientes/{cliente}/entregas':
     get:
       summary: 'Consulta historial real de visitas y entregas'
@@ -519,7 +519,7 @@ paths:
           $ref: '#/components/responses/Conflict'
         422:
           $ref: '#/components/responses/ValidationError'
-      description: 'customers.view. Campos de entrega definidos en deliveries.yaml; las filas anteriores siguen sin generar cargos por inferencia.'
+      description: 'can_view_customers. Campos de entrega definidos en deliveries.yaml; las filas anteriores siguen sin generar cargos por inferencia.'
   '/api/v1/clientes/{cliente}/pagos':
     post:
       summary: 'Registra un pago administrativo'
@@ -556,7 +556,7 @@ paths:
           $ref: '#/components/responses/Conflict'
         422:
           $ref: '#/components/responses/ValidationError'
-      description: 'customer-payments.record. El pago reduce la cuenta global y puede crear saldo a favor. Cliente inactivo puede pagar. No acepta reparto ni actor elegidos por el consumidor.'
+      description: 'can_record_customer_payments. El pago reduce la cuenta global y puede crear saldo a favor. Cliente inactivo puede pagar. No acepta reparto ni actor elegidos por el consumidor.'
       requestBody:
         required: true
         content:

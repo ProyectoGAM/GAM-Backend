@@ -6,7 +6,7 @@ final class StoreDeliveryLocationsRequest extends DeliveryRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('delivery.location.publish')
+        return $this->user()?->can('can_publish_delivery_location')
             && $this->delivery()->driver_id === $this->user()?->getKey();
     }
 

@@ -6,7 +6,7 @@ Este documento registra las librerías aprobadas para el backend Laravel de GAM,
 
 Las librerías complementan la arquitectura, pero no reemplazan las reglas del dominio:
 
-- los permisos también deben validar el alcance por Unidad Productiva mediante Policies;
+- las Policies validan permisos y reglas del dominio; el acceso funcional alcanza todas las unidades productivas de la empresa, sin asignaciones por usuario;
 - Activitylog no reemplaza los movimientos de inventario o cuenta corriente;
 - Horizon y Pulse no reemplazan logs, health checks ni manejo correcto de errores;
 - Brick Money será utilizado detrás del Value Object `Money` propio de GAM;

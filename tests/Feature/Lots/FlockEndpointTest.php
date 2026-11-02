@@ -374,7 +374,7 @@ final class FlockEndpointTest extends LotsTestCase
     public function test_listing_filters_and_pagination_do_not_scope_by_user(): void
     {
         // Preparación: crea lotes en diferentes galpones.
-        $this->signIn(['flocks.view']);
+        $this->signIn(['can_view_flocks']);
         $a = $this->flock();
         $b = $this->flock();
 

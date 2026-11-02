@@ -9,7 +9,7 @@ final readonly class MaintenancePolicy
 {
     public function viewAny(User $user): bool
     {
-        return $this->hasPermission($user, 'poultry-houses.view');
+        return $this->hasPermission($user, 'can_view_poultry_houses');
     }
 
     public function view(User $user, Maintenance $maintenance): bool
@@ -19,7 +19,7 @@ final readonly class MaintenancePolicy
 
     public function create(User $user): bool
     {
-        return $this->hasPermission($user, 'poultry-houses.manage');
+        return $this->hasPermission($user, 'can_manage_poultry_houses');
     }
 
     public function update(User $user, Maintenance $maintenance): bool

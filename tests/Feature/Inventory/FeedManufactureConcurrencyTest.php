@@ -19,6 +19,7 @@ use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\Concurrency;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 final class FeedManufactureConcurrencyTest extends TestCase
@@ -112,6 +113,7 @@ final class FeedManufactureConcurrencyTest extends TestCase
         $data = $this->fixture();
         $firstRecipeId = $data['recipe']->id;
         $otherActor = User::factory()->create();
+        $otherActor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_manufacture_feed', 'web'));
         $secondRecipe = FeedRecipe::factory()->create(['created_by' => $otherActor->id, 'yield_grams' => 150]);
         FeedRecipeIngredient::factory()->create(['feed_recipe_id' => $secondRecipe->id, 'product_id' => $data['product']->id, 'quantity_grams' => 150]);
         $firstActorId = $data['actor']->id;
@@ -156,7 +158,11 @@ final class FeedManufactureConcurrencyTest extends TestCase
         $original = app(ManufactureFeedAction::class)->execute($data['recipe']->id, $data['plants'][0]->id, 150, (string) Str::uuid(), $data['actor']);
         $id = $original->id;
         $firstActorId = $data['actor']->id;
-        $secondActorId = User::factory()->create()->id;
+        $secondActor = User::factory()->create();
+        foreach (['can_cancel_feed_manufacturing', 'can_adjust_feed_stock'] as $permission) {
+            $secondActor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+        }
+        $secondActorId = $secondActor->id;
 
         // Mutación: los dos operadores intentan cancelar la misma elaboración.
         $first = static function () use ($id, $firstActorId): string {
@@ -194,7 +200,11 @@ final class FeedManufactureConcurrencyTest extends TestCase
         $recipeId = $data['recipe']->id;
         $unitId = $data['plants'][0]->production_unit_id;
         $firstActorId = $data['actor']->id;
-        $secondActorId = User::factory()->create()->id;
+        $secondActor = User::factory()->create();
+        foreach (['can_cancel_feed_manufacturing', 'can_adjust_feed_stock'] as $permission) {
+            $secondActor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+        }
+        $secondActorId = $secondActor->id;
 
         // Mutación: registra dos créditos independientes.
         $first = static fn (): int => (int) app(AdjustFeedBalanceAction::class)->execute($recipeId, $unitId, 'sumar', 10, 'Recuento', (string) Str::uuid(), User::query()->findOrFail($firstActorId))->id;
@@ -235,6 +245,9 @@ final class FeedManufactureConcurrencyTest extends TestCase
     private function fixture(): array
     {
         $actor = User::factory()->create();
+        foreach (['can_view_feed_stock', 'can_manufacture_feed', 'can_cancel_feed_manufacturing', 'can_adjust_feed_stock', 'can_adjust_feed_ingredients', 'can_manage_feed_minimums'] as $permission) {
+            $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+        }
         $recipe = FeedRecipe::factory()->create(['created_by' => $actor->id, 'yield_grams' => 150]);
         $product = Product::factory()->rawMaterial()->create();
         FeedRecipeIngredient::factory()->create(['feed_recipe_id' => $recipe->id, 'product_id' => $product->id, 'quantity_grams' => 150]);

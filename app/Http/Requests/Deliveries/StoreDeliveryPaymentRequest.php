@@ -6,7 +6,7 @@ final class StoreDeliveryPaymentRequest extends DeliveryRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('delivery.update-own') && $this->delivery()->driver_id === $this->user()?->id;
+        return $this->user()?->can('can_update_own_deliveries') && $this->delivery()->driver_id === $this->user()?->id;
     }
 
     public function rules(): array

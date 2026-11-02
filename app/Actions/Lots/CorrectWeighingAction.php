@@ -42,7 +42,7 @@ final readonly class CorrectWeighingAction
     {
         return $this->commands->execute(
             $actor,
-            'weighings.manage',
+            'can_manage_weighings',
             'weighing.correct',
             $data['idempotency_key'],
             ['weighing' => $weighing->public_id, ...$data],

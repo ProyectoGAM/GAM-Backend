@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Inventory;
 
+use App\Models\Inventory\FeedStockOperation;
 use App\ValueObjects\Inventory\FeedStockGrams;
 use Closure;
 use InvalidArgumentException;
@@ -12,7 +13,7 @@ final class SetFeedBalanceMinimumRequest extends FeedRecipeRequest
     {
         $actor = $this->user();
 
-        return $actor !== null && ($actor->hasRole('admin') || $actor->can('inventory.manage'));
+        return $actor?->can('manageMinimums', FeedStockOperation::class) ?? false;
     }
 
     /** @return array<string, list<mixed>> */

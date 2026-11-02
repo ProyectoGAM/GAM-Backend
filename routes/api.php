@@ -14,6 +14,7 @@ use App\Http\Controllers\Geography\DepartmentController;
 use App\Http\Controllers\Geography\LocalityController;
 use App\Http\Controllers\IdentityAndAccess\AdminController;
 use App\Http\Controllers\IdentityAndAccess\AuthController;
+use App\Http\Controllers\IdentityAndAccess\RoleController;
 use App\Http\Controllers\IdentityAndAccess\SharedDeviceController;
 use App\Http\Controllers\IdentityAndAccess\UserManagementController;
 use App\Http\Controllers\Inventory\EggDonationController;
@@ -59,6 +60,7 @@ use App\Http\Controllers\SuppliersAndCatalogs\VaccineController;
 use App\Http\Controllers\SuppliersAndCatalogs\VaccineStatusController;
 use App\Http\Controllers\Vehicles\VehicleController;
 use App\Http\Middleware\ReportDownloadAccess;
+use App\Http\Middleware\ValidateCurrentAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Route;
 
@@ -89,7 +91,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         ->middleware('shared.device:native')
         ->name('shared-device.local-revoke');
 
-    Route::middleware('auth:sanctum')->group(function (): void {
+    Route::middleware(['auth:sanctum', ValidateCurrentAccess::class])->group(function (): void {
         Route::get('/vehiculos/conductores', [VehicleController::class, 'drivers'])->name('vehicles.drivers');
         Route::get('/vehiculos/disponibles', [VehicleController::class, 'available'])->name('vehicles.available');
         Route::get('/vehiculos', [VehicleController::class, 'index'])->name('vehicles.index');
@@ -242,43 +244,52 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             ->middleware('throttle:delivery-commands')
             ->name('deliveries.close');
 
+        Route::get('/permisos', [RoleController::class, 'permissions'])->name('permissions.index');
+        Route::get('/roles', [RoleController::class, 'index'])->name('roles.index');
+        Route::post('/roles', [RoleController::class, 'store'])->name('roles.store');
+        Route::get('/roles/{role}', [RoleController::class, 'show'])->whereNumber('role')->name('roles.show');
+        Route::patch('/roles/{role}', [RoleController::class, 'update'])->whereNumber('role')->name('roles.update');
+        Route::put('/roles/{role}/permisos', [RoleController::class, 'updatePermissions'])->whereNumber('role')->name('roles.permissions.update');
+        Route::delete('/roles/{role}', [RoleController::class, 'destroy'])->whereNumber('role')->name('roles.destroy');
+        Route::put('/usuarios/{user}/rol', [UserManagementController::class, 'roles'])->whereNumber('user')->withTrashed()->name('users.role.update');
+
         Route::get('/users', [UserManagementController::class, 'index'])
-            ->middleware('permission:identity.users.manage')
+            ->middleware('permission:can_manage_users')
             ->name('users.index');
         Route::post('/users', [UserManagementController::class, 'store'])
-            ->middleware('permission:identity.users.manage')
+            ->middleware('permission:can_manage_users')
             ->name('users.store');
         Route::patch('/users/{user}/status', [UserManagementController::class, 'status'])
-            ->middleware('permission:identity.users.manage')
+            ->middleware('permission:can_manage_users')
             ->withTrashed()
             ->name('users.status');
         Route::put('/users/{user}/roles', [UserManagementController::class, 'roles'])
-            ->middleware('permission:identity.users.manage')
+            ->middleware('permission:can_manage_users')
             ->name('users.roles');
         Route::put('/users/{user}/pin', [UserManagementController::class, 'setPin'])
-            ->middleware('permission:identity.pins.manage')
+            ->middleware('permission:can_manage_user_pins')
             ->name('users.pin.update');
         Route::delete('/users/{user}/pin', [UserManagementController::class, 'deletePin'])
-            ->middleware('permission:identity.pins.manage')
+            ->middleware('permission:can_manage_user_pins')
             ->name('users.pin.destroy');
         Route::post('/users/{user}/pin/unlock', [UserManagementController::class, 'unlockPin'])
-            ->middleware('permission:identity.pins.manage')
+            ->middleware('permission:can_manage_user_pins')
             ->name('users.pin.unlock');
         Route::put('/users/{user}/password', [UserManagementController::class, 'password'])
-            ->middleware('permission:identity.users.manage')
+            ->middleware('permission:can_manage_users')
             ->name('users.password');
         Route::delete('/users/{user}/sessions', [UserManagementController::class, 'sessions'])
-            ->middleware('permission:identity.sessions.manage')
+            ->middleware('permission:can_manage_user_sessions')
             ->name('users.sessions.revoke');
 
         Route::post('/shared-devices/codes', [SharedDeviceController::class, 'generateCode'])
-            ->middleware('permission:identity.shared-devices.manage')
+            ->middleware('permission:can_manage_shared_devices')
             ->name('shared-devices.codes.store');
         Route::get('/shared-devices', [SharedDeviceController::class, 'managedIndex'])
-            ->middleware('permission:identity.shared-devices.manage')
+            ->middleware('permission:can_manage_shared_devices')
             ->name('shared-devices.index');
         Route::delete('/shared-devices/{sharedDevice}/pairing', [SharedDeviceController::class, 'revokeDevice'])
-            ->middleware('permission:identity.shared-devices.manage')
+            ->middleware('permission:can_manage_shared_devices')
             ->name('shared-devices.revoke');
 
         Route::post('/shared-device/activity', [SharedDeviceController::class, 'activity'])

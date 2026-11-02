@@ -91,7 +91,7 @@ El orden de locks es usuario, reparto cuando corresponda, cliente y cuenta. `Cus
 
 Las Actions registran auditoría síncrona mediante `AuditRecorder` en la misma transacción. Si la auditoría falla se revierte la operación completa, incluida la entrega. Los snapshots financieros conservan nombre del cliente y actor sin copiar documentos, credenciales ni PIN. No se reescribe la auditoría para corregir operaciones.
 
-Permisos registrados centralmente: `customers.view`, `customers.manage`, `customer-accounts.view`, `customer-payments.record`, `customer-accounts.adjust`, `customer-accounts.reverse`. Ajustes/reversiones exigen además rol admin. Repartos conserva sus permisos existentes, reparto propio, sesión válida y PIN de inicio/cierre. Las sesiones compartidas siguen los middleware actuales.
+Permisos registrados centralmente: `can_view_customers`, `can_manage_customers`, `can_view_customer_accounts`, `can_record_customer_payments`, `can_adjust_customer_accounts`, `can_reverse_customer_accounts`. Ajustes/reversiones exigen además rol admin. Repartos conserva sus permisos existentes, reparto propio, sesión válida y PIN de inicio/cierre. Las sesiones compartidas siguen los middleware actuales.
 
 ## Offline y compatibilidad
 

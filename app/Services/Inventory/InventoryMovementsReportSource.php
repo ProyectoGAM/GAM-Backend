@@ -21,7 +21,7 @@ final class InventoryMovementsReportSource implements ReportSource
             definitionVersion: '1.1',
             label: 'Movimientos de inventario',
             description: 'Ingresos, salidas, pérdidas, ajustes y transferencias por fecha y unidad base.',
-            permission: 'inventory.view',
+            permission: 'can_view_inventory',
             columns: [
                 'date' => ['label' => 'Fecha', 'type' => 'datetime'],
                 'type' => ['label' => 'Tipo', 'type' => 'string'],

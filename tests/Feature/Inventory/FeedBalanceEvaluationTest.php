@@ -20,6 +20,7 @@ use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 final class FeedBalanceEvaluationTest extends TestCase
@@ -31,6 +32,9 @@ final class FeedBalanceEvaluationTest extends TestCase
     {
         // Preparación: crea una receta de cien gramos con ingrediente suficiente y mínimo ya configurado.
         $actor = User::factory()->create();
+        foreach (['can_manufacture_feed', 'can_adjust_feed_stock', 'can_cancel_feed_manufacturing'] as $permission) {
+            $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+        }
         $recipe = FeedRecipe::factory()->create(['yield_grams' => 100]);
         $product = Product::factory()->rawMaterial()->create();
         FeedRecipeIngredient::factory()->create(['feed_recipe_id' => $recipe->id, 'product_id' => $product->id, 'quantity_grams' => 100]);

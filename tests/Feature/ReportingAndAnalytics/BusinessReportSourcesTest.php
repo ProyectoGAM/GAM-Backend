@@ -36,7 +36,7 @@ final class BusinessReportSourcesTest extends TestCase
     public function test_catalog_and_queries_are_executable(): void
     {
         // Preparación: habilita los módulos previos a la incorporación de vehículos.
-        $actor = $this->actor(['reports.view', 'inventory.view', 'flocks.view', 'weighings.view', 'egg-collections.view', 'management-plans.view', 'delivery.history', 'egg-stock.view']);
+        $actor = $this->actor(['can_view_reports', 'can_view_inventory', 'can_view_flocks', 'can_view_weighings', 'can_view_egg_collections', 'can_view_management_plans', 'can_view_delivery_history', 'can_view_egg_stock']);
         Sanctum::actingAs($actor);
         // Consulta: conserva las diez fuentes previas y rechaza las fuentes de vehículos sin permiso.
         $this->getJson('/api/v1/reportes/fuentes')->assertOk()->assertJsonCount(10, 'data');
@@ -45,8 +45,8 @@ final class BusinessReportSourcesTest extends TestCase
         }
 
         // Preparación: concede los permisos funcionales de las tres fuentes nuevas.
-        foreach (['vehicles.view', 'vehicles.fuel.view', 'vehicles.maintenance.view'] as $permission) {
-            $actor->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+        foreach (['can_view_vehicles', 'can_view_vehicle_fuel', 'can_view_vehicle_maintenance'] as $permission) {
+            $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
 
         // Acción: consulta las trece fuentes autorizadas y ejecuta todas sus consultas estándar.
@@ -67,7 +67,7 @@ final class BusinessReportSourcesTest extends TestCase
         EggCollection::factory()->for($flock)->create(['quantity' => 120]);
         EggCollection::factory()->for($flock)->create(['quantity' => 30]);
         EggCollection::factory()->for($flock)->create(['quantity' => 900, 'status' => 'cancelled']);
-        Sanctum::actingAs($this->actor(['reports.view', 'egg-collections.view']));
+        Sanctum::actingAs($this->actor(['can_view_reports', 'can_view_egg_collections']));
         // Acción: consulta todo el período agrupando por el galpón histórico.
         $response = $this->postJson('/api/v1/reportes/lots.egg-production/previsualizaciones', [
             'from' => '2020-01-01', 'to' => now()->toDateString(), 'groupings' => ['poultry_house'], 'metrics' => ['egg_count'],
@@ -86,7 +86,7 @@ final class BusinessReportSourcesTest extends TestCase
         FeedSupply::factory()->for($flock)->create(['product_id' => $product->id, 'quantity' => '1.250000', 'unit' => 'kg']);
         FeedSupply::factory()->for($flock)->create(['product_id' => $product->id, 'quantity' => '750.000000', 'unit' => 'g']);
         FeedSupply::factory()->for($flock)->create(['product_id' => $product->id, 'quantity' => '20.000000', 'status' => 'cancelled']);
-        Sanctum::actingAs($this->actor(['reports.view', 'management-plans.view']));
+        Sanctum::actingAs($this->actor(['can_view_reports', 'can_view_management_plans']));
         // Acción: agrega la cantidad exacta; la unidad se incorpora a la agrupación.
         $response = $this->postJson('/api/v1/reportes/management.feed-supply/previsualizaciones', [
             'groupings' => ['poultry_house'], 'metrics' => ['feed_quantity'],
@@ -100,14 +100,14 @@ final class BusinessReportSourcesTest extends TestCase
         // Preparación: simula un suministro previo a la retirada y su operación idempotente histórica.
         $flock = Flock::factory()->create();
         $product = Product::factory()->create(['kind' => 'finished_feed']);
-        $actor = $this->actor(['management-plans.view', 'management-plans.execute']);
+        $actor = $this->actor(['can_view_management_plans', 'can_execute_management_plans']);
         Sanctum::actingAs($actor);
         $body = ['idempotency_key' => (string) Str::uuid(), 'product_id' => $product->id, 'quantity' => '10.500000', 'unit' => 'kg', 'occurred_at' => now()->startOfSecond()->toIso8601String()];
         $supply = FeedSupply::factory()->for($flock)->create(['product_id' => $product->id, 'quantity' => '10.500000', 'unit' => 'kg']);
         $currentBalance = FeedBalance::factory()->create(['production_unit_id' => $flock->production_unit_id,
             'quantity_grams' => 800000, 'minimum_quantity_grams' => 300000]);
         $snapshot = ['public_id' => $supply->public_id, 'quantity' => '10.500000', 'unit' => 'kg'];
-        $historical = app(RunLotsCommand::class)->execute($actor, 'management-plans.execute', 'management-plans.feed.record',
+        $historical = app(RunLotsCommand::class)->execute($actor, 'can_execute_management_plans', 'management-plans.feed.record',
             $body['idempotency_key'], ['flock' => $flock->public_id, ...$body], static function (string $operationId) use ($supply, $actor, $snapshot): array {
                 app(AuditRecorder::class)->record(AuditEntryData::forSubject(
                     subject: $supply, actor: $actor, logName: 'management_plans', event: 'feed_supply_recorded',
@@ -149,7 +149,7 @@ final class BusinessReportSourcesTest extends TestCase
     public function test_donation_affects_stock_and_report_without_duplicate_replay(): void
     {
         // Preparación: registra stock de huevos y autentica permisos funcionales.
-        $actor = $this->actor(['egg-stock.move', 'egg-stock.view', 'inventory.move', 'reports.view', 'delivery.history']);
+        $actor = $this->actor(['can_move_egg_stock', 'can_view_egg_stock', 'can_move_inventory', 'can_view_reports', 'can_view_delivery_history']);
         $unit = ProductionUnit::factory()->create();
         app(RecordManualEggStockAction::class)->execute($unit, ['idempotency_key' => (string) Str::uuid(), 'quantity' => 100, 'reason' => 'Ingreso'], $actor);
         Sanctum::actingAs($actor);
@@ -168,7 +168,7 @@ final class BusinessReportSourcesTest extends TestCase
     public function test_current_stock_rejects_historical_dates(): void
     {
         // Preparación: autentica lectura de inventario.
-        Sanctum::actingAs($this->actor(['reports.view', 'inventory.view']));
+        Sanctum::actingAs($this->actor(['can_view_reports', 'can_view_inventory']));
         // Acción: intenta consultar saldos a una fecha histórica inexistente en esta fuente.
         $this->postJson('/api/v1/reportes/inventory.stock-balances/previsualizaciones', ['from' => '2020-01-01'])->assertUnprocessable();
     }
@@ -182,7 +182,7 @@ final class BusinessReportSourcesTest extends TestCase
         $product = Product::factory()->create(['kind' => 'finished_feed']);
         FeedSupply::factory()->for($flock)->create(['product_id' => $product->id, 'quantity' => '10', 'occurred_at' => '2026-10-08T12:00:00-03:00']);
         FeedSupply::factory()->for($flock)->create(['product_id' => $product->id, 'quantity' => '20', 'occurred_at' => '2026-10-11T12:00:00-03:00']);
-        Sanctum::actingAs($this->actor(['reports.view', 'management-plans.view']));
+        Sanctum::actingAs($this->actor(['can_view_reports', 'can_view_management_plans']));
         // Consulta: 30 registrados; días 9 y 10 con 10, día 12 con 20 estimados.
         $response = $this->postJson('/api/v1/reportes/management.feed-supply/previsualizaciones', ['metrics' => ['feed_quantity', 'estimated_feed_quantity']])->assertOk();
         $this->assertSame(0, bccomp($response->json('data.rows.0.feed_quantity'), '30', 6));
@@ -197,7 +197,7 @@ final class BusinessReportSourcesTest extends TestCase
     {
         $actor = User::factory()->create();
         foreach ($permissions as $permission) {
-            $actor->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+            $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
 
         return $actor;
@@ -214,7 +214,7 @@ final class BusinessReportSourcesTest extends TestCase
         $daily->forceFill(['flock_id' => $flock->id, 'local_date' => now()->toDateString()])->save();
         $entry = new DailyWeighingEntry;
         $entry->forceFill(['daily_weighing_id' => $daily->id, 'mode' => 'group', 'bird_count' => 5, 'total_weight_g' => '10000', 'average_weight_g' => '2000', 'occurred_at' => now(), 'created_by' => User::factory()->create()->id])->save();
-        Sanctum::actingAs($this->actor(['reports.view', 'weighings.view']));
+        Sanctum::actingAs($this->actor(['can_view_reports', 'can_view_weighings']));
         // Consulta: promedio correcto 13000/8, sin promediar 1000 y 2000 directamente.
         $result = $this->postJson('/api/v1/reportes/lots.weighing-measurements/previsualizaciones', ['metrics' => ['weighted_average_g', 'represented_birds']])->assertOk();
         $this->assertSame(0, bccomp($result->json('data.rows.0.weighted_average_g'), '1625', 6));
@@ -228,7 +228,7 @@ final class BusinessReportSourcesTest extends TestCase
         $this->travelTo(Carbon::parse('2026-10-12T12:00:00-03:00'));
         $flock = Flock::factory()->finished()->create(['finalized_at' => '2026-10-10T12:00:00-03:00']);
         FeedSupply::factory()->for($flock)->create(['quantity' => '10', 'occurred_at' => '2026-10-08T12:00:00-03:00']);
-        Sanctum::actingAs($this->actor(['reports.view', 'management-plans.view']));
+        Sanctum::actingAs($this->actor(['can_view_reports', 'can_view_management_plans']));
         // Consulta: solamente el día nueve tiene una pauta estimada de diez kg.
         $response = $this->postJson('/api/v1/reportes/management.feed-supply/previsualizaciones', ['metrics' => ['feed_quantity', 'estimated_feed_quantity']])->assertOk();
         $this->assertSame(0, bccomp($response->json('data.rows.0.feed_quantity'), '10', 6));

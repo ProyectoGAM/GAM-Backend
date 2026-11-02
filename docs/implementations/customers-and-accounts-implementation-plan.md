@@ -214,7 +214,7 @@ No se ofrece reversión genérica de un cargo de mercadería: una devolución/an
 
 ## 7. Autorización
 
-Registrar permisos nuevos en `IdentityPermissionSeeder`, manteniendo la sincronización de admin con el catálogo completo. Nombres propuestos: `customers.view`, `customers.manage`, `customer-accounts.view`, `customer-payments.record`, `customer-accounts.adjust` y `customer-accounts.reverse`.
+Registrar permisos nuevos en `IdentityPermissionSeeder`, manteniendo la sincronización de admin con el catálogo completo. Nombres propuestos: `can_view_customers`, `can_manage_customers`, `can_view_customer_accounts`, `can_record_customer_payments`, `can_adjust_customer_accounts` y `can_reverse_customer_accounts`.
 
 | Actor | Lectura y escritura |
 | --- | --- |
@@ -223,7 +223,7 @@ Registrar permisos nuevos en `IdentityPermissionSeeder`, manteniendo la sincroni
 | Empleado/otro usuario | Ningún acceso nuevo automático. Sólo permisos explícitos para funciones que se habiliten; ajustes/reversiones conservan además la restricción administrativa. |
 | Sin sesión, sesión revocada o dispositivo inválido | Sin acceso. El modo local y el cache no autorizan operaciones. |
 
-Los endpoints administrativos y operativos exponen Resources diferentes cuando cambie la información permitida. No otorgar `customers.manage` al rol delivery para hacer funcionar su buscador. Tampoco conceder acceso a todas las cuentas por tener `delivery.view-own`.
+Los endpoints administrativos y operativos exponen Resources diferentes cuando cambie la información permitida. No otorgar `can_manage_customers` al rol delivery para hacer funcionar su buscador. Tampoco conceder acceso a todas las cuentas por tener `can_view_own_deliveries`.
 
 Las comprobaciones del propietario del reparto y del usuario activo permanecen en Laravel, con sesión personal o compartida según el transporte existente. Guards y botones del frontend reflejan esos permisos; no los sustituyen. No crear permisos por cliente ni por UP.
 

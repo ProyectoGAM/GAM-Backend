@@ -17,26 +17,26 @@ final class VehicleCommandRequest extends FormRequest
     public function authorize(): bool
     {
         $permission = match (true) {
-            $this->routeIs('api.v1.vehicles.readings.*') => 'vehicles.readings.manage',
-            $this->routeIs('api.v1.vehicles.fuel.*') => 'vehicles.fuel.manage',
-            $this->routeIs('api.v1.vehicles.plans.*', 'api.v1.vehicles.maintenances.*') => 'vehicles.maintenance.manage',
-            $this->routeIs('api.v1.vehicles.documents.*') => 'vehicles.documents.manage',
-            $this->routeIs('api.v1.vehicles.usages.*') => 'vehicles.use',
-            default => 'vehicles.manage',
+            $this->routeIs('api.v1.vehicles.readings.*') => 'can_manage_vehicle_readings',
+            $this->routeIs('api.v1.vehicles.fuel.*') => 'can_manage_vehicle_fuel',
+            $this->routeIs('api.v1.vehicles.plans.*', 'api.v1.vehicles.maintenances.*') => 'can_manage_vehicle_maintenance',
+            $this->routeIs('api.v1.vehicles.documents.*') => 'can_manage_vehicle_documents',
+            $this->routeIs('api.v1.vehicles.usages.*') => 'can_use_vehicles',
+            default => 'can_manage_vehicles',
         };
         $user = $this->user();
         $authorized = $user?->can($permission) ?? false;
         if ($this->routeIs('api.v1.vehicles.fuel.store')) {
-            $authorized = $authorized || ($user?->can('delivery.fuel.record') ?? false);
+            $authorized = $authorized || ($user?->can('can_record_delivery_fuel') ?? false);
         }
         if ($this->routeIs('api.v1.vehicles.usages.*')) {
-            $authorized = $authorized || ($user?->can('vehicles.manage') ?? false);
+            $authorized = $authorized || ($user?->can('can_manage_vehicles') ?? false);
         }
         if (! $authorized) {
             return false;
         }
-        if ($this->routeIs('api.v1.vehicles.usages.close') && ! $user->can('vehicles.manage')) {
-            return $user->can('vehicles.use') && $this->route('uso')?->driver_id === $user->getKey();
+        if ($this->routeIs('api.v1.vehicles.usages.close') && ! $user->can('can_manage_vehicles')) {
+            return $user->can('can_use_vehicles') && $this->route('uso')?->driver_id === $user->getKey();
         }
 
         return true;
@@ -103,7 +103,7 @@ final class VehicleCommandRequest extends FormRequest
         if ($this->routeIs('api.v1.vehicles.usages.store')) {
             $rules['purpose'] = ['required', 'string', 'max:120'];
             $rules['idempotency_key'] = ['required', 'uuid'];
-            if (! ($this->user()?->can('vehicles.manage') ?? false)) {
+            if (! ($this->user()?->can('can_manage_vehicles') ?? false)) {
                 $rules['driver_id'] = ['prohibited'];
             }
         }
@@ -116,7 +116,7 @@ final class VehicleCommandRequest extends FormRequest
             $rules['liters'] = ['required', 'numeric', 'gt:0', 'max:9999999'];
             $rules['fuel_type'] = ['required', 'string', 'max:40'];
             $rules['amount'] = ['required', 'regex:/^\d{1,11}(?:\.\d{1,3})?$/D'];
-            if (($this->user()?->hasRole('delivery') ?? false) && ! ($this->user()?->can('vehicles.manage') ?? false)) {
+            if (($this->user()?->can('can_record_delivery_fuel') ?? false) && ! ($this->user()?->can('can_manage_vehicle_fuel') ?? false) && ! ($this->user()?->can('can_manage_vehicles') ?? false)) {
                 $rules['usage_id'] = ['required', 'ulid'];
             }
         }

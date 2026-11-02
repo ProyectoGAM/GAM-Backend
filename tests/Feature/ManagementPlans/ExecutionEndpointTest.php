@@ -16,7 +16,7 @@ final class ExecutionEndpointTest extends LotsTestCase
     public function test_planned_vaccination_and_unplanned_medication_remain_independent(): void
     {
         // Preparación: crea el lote con vacuna prevista y referencias reales de catálogo.
-        $this->signIn(['management-plans.view', 'management-plans.execute']);
+        $this->signIn(['can_view_management_plans', 'can_execute_management_plans']);
         $flock = $this->flockWithPlan(100, activities: [[
             'type' => 'vaccination', 'title' => 'Gumboro inicial', 'timing_kind' => 'week', 'start_week' => 1,
         ]]);
@@ -69,7 +69,7 @@ final class ExecutionEndpointTest extends LotsTestCase
     public function test_application_correction_is_append_only_without_stock(string $kind, string $type, string $path): void
     {
         // Preparación: registra la aplicación efectiva.
-        $this->signIn(['management-plans.view', 'management-plans.execute']);
+        $this->signIn(['can_view_management_plans', 'can_execute_management_plans']);
         $flock = $this->flockWithPlan();
         $catalog = $kind === 'medicine' ? Medicine::factory()->create() : Vaccine::factory()->create();
         $root = $kind === 'medicine' ? 'medicine_application' : 'vaccination_application';
@@ -102,7 +102,7 @@ final class ExecutionEndpointTest extends LotsTestCase
     public function test_medicine_stock_adjustment_is_retired_and_history_remains_readable(): void
     {
         // Preparación: concede gestión de stock y conserva un saldo previo a la retirada.
-        $this->signIn(['management-plans.stock.manage']);
+        $this->signIn(['can_manage_medicine_stock']);
         $medicine = Medicine::factory()->create();
         MedicineStockBalance::factory()->create(['medicine_id' => $medicine->id, 'on_hand_quantity' => -1]);
 

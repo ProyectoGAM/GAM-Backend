@@ -22,7 +22,7 @@ final readonly class CancelEggStockTransactionAction
             throw new LotsConflict('Las transacciones originadas por una recolección deben cancelarse desde su endpoint.');
         }
 
-        return $this->commands->execute($actor, 'egg-stock.adjust', 'egg-stock.cancel', $data['idempotency_key'], ['transaction' => $transaction->public_id, ...$data], function (string $operationId) use ($transaction, $data, $actor, $source): array {
+        return $this->commands->execute($actor, 'can_adjust_egg_stock', 'egg-stock.cancel', $data['idempotency_key'], ['transaction' => $transaction->public_id, ...$data], function (string $operationId) use ($transaction, $data, $actor, $source): array {
             $current = EggStockTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
             if ($current->version !== (int) $data['version'] || $current->status !== 'recorded') {
                 throw new LotsConflict('El movimiento cambió de versión o ya fue cancelado.');

@@ -26,7 +26,7 @@ final class DeliveryFinancialTest extends TestCase
         $this->seed(IdentityPermissionSeeder::class);
         config(['identity.pin.pepper' => 'test-only-customer-pin-pepper']);
         $driver = User::factory()->create(['pin_hash' => app(PinHasher::class)->hash('0007'), 'pin_enabled' => true]);
-        $driver->assignRole('delivery');
+        $driver->syncRoles(['delivery']);
         Sanctum::actingAs($driver, ['api:access']);
 
         return $driver;
@@ -134,7 +134,7 @@ final class DeliveryFinancialTest extends TestCase
             ['Idempotency-Key' => (string) Str::uuid()])->assertOk()->assertJsonPath('data.closed_financial_summary.collected_amount', '20.125');
         // Un administrador corrige el cobro después del cierre.
         $admin = User::factory()->create();
-        $admin->assignRole('admin');
+        $admin->syncRoles(['admin']);
         Sanctum::actingAs($admin, ['api:access']);
         $this->postJson('/api/v1/clientes/'.$customer->public_id.'/movimientos/'.$movement.'/reversion', ['reason' => 'Cobro duplicado'],
             ['Idempotency-Key' => (string) Str::uuid()])->assertOk();

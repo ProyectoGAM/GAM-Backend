@@ -17,7 +17,7 @@ final readonly class ReverseInventoryMovementAction
     public function __construct(private RecordInventoryMovementAction $recordMovement, private InventoryReversalAvailability $availability) {}
 
     /** @param array<string, mixed> $attributes */
-    public function execute(InventoryMovement $movement, array $attributes, User $actor, string $source = 'api', string $requiredPermission = 'inventory.adjust'): InventoryMovement
+    public function execute(InventoryMovement $movement, array $attributes, User $actor, string $source = 'api', string $requiredPermission = 'can_adjust_inventory'): InventoryMovement
     {
         return DB::transaction(function () use ($movement, $attributes, $actor, $source, $requiredPermission): InventoryMovement {
             $currentActor = User::query()->whereKey($actor->getKey())->lockForUpdate()->firstOrFail();

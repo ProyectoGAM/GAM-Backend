@@ -25,7 +25,7 @@ final class InventoryStockBalancesReportSource implements ReportSource
             definitionVersion: '2.2',
             label: 'Saldos de inventario',
             description: 'Stock disponible y mínimo por producto y ubicación.',
-            permission: 'inventory.view',
+            permission: 'can_view_inventory',
             columns: [
                 'product_id' => ['label' => 'ID de producto', 'type' => 'integer'],
                 'product' => ['label' => 'Producto', 'type' => 'string'],

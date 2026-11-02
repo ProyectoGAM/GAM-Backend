@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\IdentityAndAccess\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -34,8 +35,17 @@ class UserFactory extends Factory
     }
 
     /**
-     * Indicate that the model's email address should be unverified.
+     * Asigna un rol vacío independiente para no compartir permisos entre fixtures.
      */
+    public function configure(): static
+    {
+        return $this->afterCreating(function (User $user): void {
+            $role = Role::findOrCreate('test-user-'.$user->id, 'web');
+            $user->syncRoles([$role]);
+        });
+    }
+
+    /** Indica que el correo electrónico todavía no fue verificado. */
     public function unverified(): static
     {
         return $this->state(fn (array $attributes) => [

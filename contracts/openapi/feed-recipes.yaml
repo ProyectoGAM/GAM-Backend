@@ -7,9 +7,9 @@ info:
     y elaboración inmediata con descuento distribuido de ingredientes, saldo de alimento
     por receta y UP, cancelación compensatoria, ajustes independientes y mínimos configurables.
     Los endpoints del catálogo y cálculo conservan sus permisos originales.
-    Las nuevas operaciones requieren autenticación y sesión válida, sin permiso
-    específico provisional, salvo la configuración de mínimos que requiere inventory.manage
-    o rol admin. El consumo de lotes tiene su contrato propio en flock-feeding.yaml.
+    Las operaciones requieren sesión válida y permisos específicos: can_view_feed_stock,
+    can_manufacture_feed, can_cancel_feed_manufacturing, can_adjust_feed_stock,
+    can_adjust_feed_ingredients y can_manage_feed_minimums según la operación. El consumo de lotes tiene su contrato propio en flock-feeding.yaml.
     Los nombres pueden repetirse. El rendimiento es independiente de la suma
     de ingredientes. Los saldos usan gramos enteros con signo; los mínimos son
     enteros no negativos o null cuando no están configurados.
@@ -27,7 +27,7 @@ paths:
       tags: [Recetas]
       operationId: listFeedRecipes
       summary: Lista recetas globales con paginación
-      description: Requiere feed-recipes.view. Incluye activas e inactivas por defecto; ordena por ID descendente.
+      description: Requiere can_view_feed_recipes. Incluye activas e inactivas por defecto; ordena por ID descendente.
       parameters:
         - name: buscar
           in: query
@@ -67,7 +67,7 @@ paths:
       operationId: createFeedRecipe
       summary: Crea una receta con materias primas existentes
       description: >-
-        Requiere feed-recipes.manage. Idempotencia por actor y encabezado UUID.
+        Requiere can_manage_feed_recipes. Idempotencia por actor y encabezado UUID.
         La misma clave y contenido normalizado devuelve la receta existente en
         su estado actual, sin reescribir cantidades posteriores; otros datos
         con la misma clave devuelven 409. El orden de ingredientes no cambia
@@ -101,7 +101,7 @@ paths:
       tags: [Recetas]
       operationId: getFeedRecipe
       summary: Consulta una receta y su composición actual
-      description: Requiere feed-recipes.view. Permite consultar recetas inactivas.
+      description: Requiere can_view_feed_recipes. Permite consultar recetas inactivas.
       responses:
         '200': {$ref: '#/components/responses/RecipeResponse'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -116,7 +116,7 @@ paths:
       operationId: updateFeedRecipeQuantities
       summary: Actualiza únicamente las cantidades de ingredientes existentes
       description: >-
-        Requiere feed-recipes.manage. Debe enviar la lista completa con los mismos
+        Requiere can_manage_feed_recipes. Debe enviar la lista completa con los mismos
         producto_id sin agregar, quitar, duplicar ni sustituir ingredientes.
         No admite nombre, nota, rendimiento, estado ni otros campos.
         Permite editar recetas activas e inactivas. Las ediciones se serializan
@@ -147,7 +147,7 @@ paths:
       operationId: changeFeedRecipeStatus
       summary: Desactiva o reactiva una receta conservando su historial
       description: >-
-        Requiere feed-recipes.manage. Serializa con el mismo lock de edición.
+        Requiere can_manage_feed_recipes. Serializa con el mismo lock de edición.
         Repetir el estado actual no genera otra auditoría. No exige Idempotency-Key.
         No modifica la composición ni detiene consumos futuros de lotes.
       requestBody:
@@ -174,7 +174,7 @@ paths:
       operationId: calculateFeedRecipe
       summary: Calcula cantidades para un múltiplo entero de la combinación base
       description: >-
-        Requiere feed-recipes.view. Sólo admite cantidad_g, sin ajustes manuales.
+        Requiere can_view_feed_recipes. Sólo admite cantidad_g, sin ajustes manuales.
         La receta debe estar activa. Si Q no es múltiplo exacto de R devuelve 422.
         Si un ingrediente multiplicado supera 9223372036854775807 g devuelve 422.
         Usa la composición actual bajo un lock compartido. No consulta disponibilidad
@@ -432,7 +432,7 @@ paths:
       operationId: setFeedBalanceMinimum
       summary: Configura o quita el mínimo de alimento por receta y UP
       description: >-
-        Requiere autenticación, sesión válida e inventory.manage o rol admin.
+        Requiere autenticación, sesión válida y can_manage_feed_minimums o rol admin.
         Funciona con recetas activas o inactivas y sin movimientos anteriores.
         Materializa una cuenta en cero si todavía no existe, sin acreditar ni
         descontar alimento. minimo_g admite gramos enteros entre 0 y 999999999999;

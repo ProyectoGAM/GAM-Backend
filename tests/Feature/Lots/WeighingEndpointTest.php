@@ -48,7 +48,7 @@ final class WeighingEndpointTest extends LotsTestCase
         config(['identity.pin.pepper' => 'test-only-temporary-value']);
 
         $employee = User::factory()->create();
-        $employee->assignRole('employee');
+        $employee->syncRoles(['employee']);
         $employee->forceFill([
             'pin_hash' => app(PinHasher::class)->hash('0007'),
             'pin_enabled' => true,
@@ -57,7 +57,7 @@ final class WeighingEndpointTest extends LotsTestCase
         ])->save();
 
         $admin = User::factory()->create();
-        $admin->assignRole('admin');
+        $admin->syncRoles(['admin']);
         $secret = Str::random(64);
         $device = SharedDevice::query()->create([
             'name' => 'Test tablet',
@@ -109,7 +109,7 @@ final class WeighingEndpointTest extends LotsTestCase
     public function test_settings_can_be_created_and_updated_with_version(): void
     {
         // Preparación: autentica sólo con el permiso administrativo de pesajes.
-        $this->signIn(['weighing-settings.manage']);
+        $this->signIn(['can_manage_weighing_settings']);
 
         // Request: crea la configuración y luego la actualiza con su versión.
         $this->command('PUT', '/configuracion-pesajes', [
@@ -142,7 +142,7 @@ final class WeighingEndpointTest extends LotsTestCase
     public function test_reference_snapshot_uses_inclusive_bounds_and_adult_threshold(): void
     {
         // Preparación: configura rangos estrechos para distinguir pollitos y adultos.
-        $this->signIn(['weighings.view', 'weighings.manage', 'weighing-settings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings', 'can_manage_weighing_settings']);
         $this->command('PUT', '/configuracion-pesajes', [
             'adult_from_week' => 18,
             'unit' => 'g',
@@ -211,7 +211,7 @@ final class WeighingEndpointTest extends LotsTestCase
     public function test_correction_adopts_current_reference_when_original_was_unconfigured(): void
     {
         // Preparación: registra primero un pesaje sin configuración global.
-        $this->signIn(['weighings.view', 'weighings.manage', 'weighing-settings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings', 'can_manage_weighing_settings']);
         $flock = $this->flockWithHistory(20);
         $created = $this->command('POST', '/pesajes', [
             'flock_id' => $flock->public_id,
@@ -255,7 +255,7 @@ final class WeighingEndpointTest extends LotsTestCase
     public function test_historical_projection_rejects_population_above_snapshot(): void
     {
         // Preparación: reduce históricamente el lote a cinco aves después de su admisión.
-        $this->signIn(['weighings.manage']);
+        $this->signIn(['can_manage_weighings']);
         $flock = $this->flockWithHistory(20);
         $movementAt = now(config('lots.timezone'))->subDays(2)->startOfHour();
         FlockMovement::factory()->create([
@@ -302,7 +302,7 @@ final class WeighingEndpointTest extends LotsTestCase
     public function test_finished_flock_rejects_new_historical_weighing_but_allows_existing_correction(): void
     {
         // Preparación: registra una captura antes de finalizar el lote.
-        $this->signIn(['weighings.view', 'weighings.manage', 'flocks.finalize']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings', 'can_finalize_flocks']);
         $flock = $this->flockWithHistory(20);
         $historicalAt = $flock->established_at->addHour();
         $created = $this->command('POST', '/pesajes', [
@@ -345,7 +345,7 @@ final class WeighingEndpointTest extends LotsTestCase
     public function test_outlier_confirmation_has_no_side_effects_before_confirmed_replay(): void
     {
         // Preparación: configura el rango de pollitos y un lote con snapshot de admisión.
-        $this->signIn(['weighings.view', 'weighings.manage', 'weighing-settings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings', 'can_manage_weighing_settings']);
         $this->command('PUT', '/configuracion-pesajes', [
             'adult_from_week' => 18, 'unit' => 'g',
             'chick_min_weight' => '10.0', 'chick_max_weight' => '100.0',
@@ -377,7 +377,7 @@ final class WeighingEndpointTest extends LotsTestCase
     public function test_group_weighing_persists_weighted_average_and_measurements(): void
     {
         // Preparación: autentica al gestor y crea el snapshot histórico del lote.
-        $this->signIn(['weighings.view', 'weighings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings']);
         $flock = $this->flockWithHistory(20);
 
         // Request: registra dos tandas en kilogramos.
@@ -402,7 +402,7 @@ final class WeighingEndpointTest extends LotsTestCase
     public function test_weighing_without_reference_settings_returns_warning(): void
     {
         // Preparación: autentica al gestor y confirma que todavía no hay configuración global.
-        $this->signIn(['weighings.view', 'weighings.manage', 'weighing-settings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings', 'can_manage_weighing_settings']);
         $flock = $this->flockWithHistory(20);
 
         // Consulta: solicita la configuración inexistente.
@@ -428,7 +428,7 @@ final class WeighingEndpointTest extends LotsTestCase
     public function test_idempotent_replay_returns_same_operation_and_rejects_payload_change(): void
     {
         // Preparación: autentica al gestor y construye una solicitud con clave estable.
-        $this->signIn(['weighings.manage']);
+        $this->signIn(['can_manage_weighings']);
         $flock = $this->flockWithHistory(20);
         $payload = [
             'flock_id' => $flock->public_id,
@@ -466,7 +466,7 @@ final class WeighingEndpointTest extends LotsTestCase
     public function test_weighing_validation_enforces_mode_fields_unknown_keys_and_precision(): void
     {
         // Preparación: autentica al gestor y crea población suficiente para todas las solicitudes.
-        $this->signIn(['weighings.manage']);
+        $this->signIn(['can_manage_weighings']);
         $flock = $this->flockWithHistory(20);
 
         // Request: rechaza campos de grupo cuando el modo es individual.
@@ -531,7 +531,7 @@ final class WeighingEndpointTest extends LotsTestCase
     public function test_weighing_accepts_1000_measurements_and_rejects_1001(): void
     {
         // Preparación: autentica al gestor y crea un lote con población suficiente.
-        $this->signIn(['weighings.manage']);
+        $this->signIn(['can_manage_weighings']);
         $flock = $this->flockWithHistory(1001);
         $measurements = array_fill(0, 1000, ['weight' => '1.0']);
 
@@ -564,7 +564,7 @@ final class WeighingEndpointTest extends LotsTestCase
     public function test_group_outlier_uses_batch_average_and_requires_confirmation(): void
     {
         // Preparación: configura el rango de pollitos y crea un lote de veinte aves.
-        $this->signIn(['weighings.view', 'weighings.manage', 'weighing-settings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings', 'can_manage_weighing_settings']);
         $this->command('PUT', '/configuracion-pesajes', [
             'adult_from_week' => 18,
             'unit' => 'g',
@@ -614,7 +614,7 @@ final class WeighingEndpointTest extends LotsTestCase
     {
         // Preparación: replica el fixture de dispositivo compartido y habilita lectura de pesajes.
         [$employee, , $credential] = $this->sharedFixture();
-        $employee->givePermissionTo(Permission::findOrCreate('weighings.view', 'web'));
+        $employee->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_view_weighings', 'web'));
         $this->flockWithHistoryAs(20, $employee->getKey());
 
         // Request: inicia la primera sesión nativa compartida con el PIN del empleado.
@@ -679,7 +679,7 @@ final class WeighingEndpointTest extends LotsTestCase
     {
         // Preparación: crea un empleado y dispositivo compartido para el login web real.
         [$employee, , $credential] = $this->sharedFixture();
-        $employee->givePermissionTo(Permission::findOrCreate('weighings.view', 'web'));
+        $employee->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_view_weighings', 'web'));
 
         // Request: inicia una sesión web real y conserva la cookie de sesión emitida.
         $login = $this->withCookie('gam_shared_device', $credential)
@@ -725,7 +725,7 @@ final class WeighingEndpointTest extends LotsTestCase
     public function test_audit_failure_rolls_back_weighing_recording(): void
     {
         // Preparación: instala una falla controlada en el contrato de auditoría.
-        $this->signIn(['weighings.manage']);
+        $this->signIn(['can_manage_weighings']);
         $flock = $this->flockWithHistory(20);
         Event::fake([WeighingRecorded::class]);
         $this->mock(AuditRecorder::class)
@@ -753,7 +753,7 @@ final class WeighingEndpointTest extends LotsTestCase
     public function test_correction_replaces_measurements_and_appends_audit(): void
     {
         // Preparación: registra un pesaje individual sobre un lote histórico.
-        $this->signIn(['weighings.view', 'weighings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings']);
         $flock = $this->flockWithHistory(20);
         $created = $this->command('POST', '/pesajes', [
             'flock_id' => $flock->public_id,
@@ -810,7 +810,7 @@ final class WeighingEndpointTest extends LotsTestCase
     public function test_partial_correction_requires_reason_and_current_version(): void
     {
         // Preparación: registra una captura individual para corregir únicamente sus notas.
-        $this->signIn(['weighings.manage']);
+        $this->signIn(['can_manage_weighings']);
         $flock = $this->flockWithHistory(20);
         $created = $this->command('POST', '/pesajes', [
             'flock_id' => $flock->public_id,
@@ -857,7 +857,7 @@ final class WeighingEndpointTest extends LotsTestCase
     public function test_read_endpoints_return_ordered_points_and_distribution(): void
     {
         // Preparación: crea dos capturas con fechas distintas para un mismo lote.
-        $this->signIn(['weighings.view', 'weighings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings']);
         $flock = $this->flockWithHistory(20);
         $earlier = $this->command('POST', '/pesajes', [
             'flock_id' => $flock->public_id, 'mode' => 'individual', 'unit' => 'g',
@@ -890,7 +890,7 @@ final class WeighingEndpointTest extends LotsTestCase
     public function test_distribution_reports_group_unavailable_and_single_sample_reason(): void
     {
         // Preparación: registra una captura grupal y otra individual de una sola ave.
-        $this->signIn(['weighings.view', 'weighings.manage']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings']);
         $flock = $this->flockWithHistory(20);
         $group = $this->command('POST', '/pesajes', [
             'flock_id' => $flock->public_id,
@@ -927,7 +927,7 @@ final class WeighingEndpointTest extends LotsTestCase
         $this->getJson('/api/v1/pesajes')->assertUnauthorized();
 
         // Preparación: autentica sólo con permiso de lectura y crea un lote de prueba.
-        $this->signIn(['weighings.view']);
+        $this->signIn(['can_view_weighings']);
         $flock = $this->flockWithHistory(20);
 
         // Request: impide mutar pesajes cuando el usuario sólo puede leer.
@@ -942,14 +942,14 @@ final class WeighingEndpointTest extends LotsTestCase
         $this->assertDatabaseCount('weighings', 0);
 
         // Preparación: cambia a un usuario con gestión, sin permiso de lectura.
-        $this->signIn(['weighings.manage']);
+        $this->signIn(['can_manage_weighings']);
 
         // Request: impide leer pesajes cuando falta el permiso de lectura.
         $this->getJson('/api/v1/pesajes')->assertForbidden();
         $this->getJson('/api/v1/configuracion-pesajes')->assertForbidden();
 
         // Preparación: autentica sólo el permiso administrativo de configuración.
-        $this->signIn(['weighing-settings.manage']);
+        $this->signIn(['can_manage_weighing_settings']);
 
         // Request: permite consultar configuración pero no pesajes.
         $this->getJson('/api/v1/configuracion-pesajes')->assertOk();

@@ -10,7 +10,7 @@ final readonly class WeighingPolicy
 {
     public function viewAny(User $user): bool
     {
-        return LotsAuthorization::allows($user, 'weighings.view');
+        return LotsAuthorization::allows($user, 'can_view_weighings');
     }
 
     public function view(User $user, Weighing $weighing): bool
@@ -20,7 +20,7 @@ final readonly class WeighingPolicy
 
     public function create(User $user): bool
     {
-        return LotsAuthorization::allows($user, 'weighings.manage');
+        return LotsAuthorization::allows($user, 'can_manage_weighings');
     }
 
     public function update(User $user, Weighing $weighing): bool

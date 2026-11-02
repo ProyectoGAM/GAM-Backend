@@ -27,7 +27,7 @@ final readonly class RecordMedicineApplicationAction
     {
         return $this->commands->execute(
             $actor,
-            'management-plans.execute',
+            'can_execute_management_plans',
             'management-plans.medication.apply',
             $attributes['idempotency_key'],
             ['flock' => $flock->public_id, ...$attributes],

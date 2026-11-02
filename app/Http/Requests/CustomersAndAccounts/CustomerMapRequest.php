@@ -10,12 +10,12 @@ final class CustomerMapRequest extends CustomerRequest
     public function authorize(): bool
     {
         $actor = $this->user();
-        if ($actor === null || (! $actor->can('viewAny', Customer::class) && ! $actor->can('delivery.view-own'))) {
+        if ($actor === null || (! $actor->can('viewAny', Customer::class) && ! $actor->can('can_view_own_deliveries'))) {
             return false;
         }
         if ($this->filled('delivery_id')) {
             $delivery = Delivery::query()->where('public_id', $this->input('delivery_id'))->first();
-            if ($delivery !== null && ! $actor->can('delivery.history') && $delivery->driver_id !== $actor->id) {
+            if ($delivery !== null && ! $actor->can('can_view_delivery_history') && $delivery->driver_id !== $actor->id) {
                 return false;
             }
         }

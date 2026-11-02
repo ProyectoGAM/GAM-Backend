@@ -6,7 +6,7 @@ final class ViewEggStockRequest extends EggStockRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('egg-stock.view') ?? false;
+        return $this->user()?->can('can_view_egg_stock') ?? false;
     }
 
     /** @return array<string, mixed> */
