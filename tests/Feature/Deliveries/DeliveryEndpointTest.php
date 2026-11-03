@@ -11,6 +11,7 @@ use App\Models\Vehicles\Vehicle;
 use App\Queries\Inventory\GetEggStockBalanceQuery;
 use App\Services\IdentityAndAccess\PinHasher;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
@@ -38,8 +39,8 @@ final class DeliveryEndpointTest extends TestCase
         EggPresentation::query()->update(['default_unit_price' => 100]);
         config(['identity.pin.pepper' => 'test-only-temporary-value']);
         $user = User::factory()->create([
-            'pin_hash' => app(PinHasher::class)->hash('0007'),
-            'pin_enabled' => true,
+            'operation_pin_hash' => app(PinHasher::class)->hash('0007'),
+
             'pin_pepper_version' => config('identity.pin.pepper_version'),
             'pin_daily_window_started_at' => now(),
         ]);
@@ -94,12 +95,12 @@ final class DeliveryEndpointTest extends TestCase
         $this->command('POST', '/repartos', [...$start, 'pin' => '9999'])->assertUnauthorized()
             ->assertJsonPath('code', 'INVALID_PIN');
         $this->assertDatabaseCount('deliveries', 0);
-        $this->assertDatabaseHas('users', ['id' => $actor->id, 'pin_failed_attempts' => 1]);
+        $this->assertSame(1, RateLimiter::attempts('operation-pin|'.$actor->id));
 
         // Request: inicia con PIN válido y verifica que el hash no lo incluya.
         $key = (string) Str::uuid();
         $deliveryId = $this->command('POST', '/repartos', $start, $key)->assertCreated()->json('data.id');
-        $this->assertDatabaseHas('users', ['id' => $actor->id, 'pin_failed_attempts' => 0]);
+        $this->assertSame(0, RateLimiter::attempts('operation-pin|'.$actor->id));
         $this->assertDatabaseHas('deliveries', [
             'public_id' => $deliveryId,
             'start_request_hash' => hash('sha256', json_encode(['idempotency_key' => $key, ...$start])),
@@ -119,13 +120,13 @@ final class DeliveryEndpointTest extends TestCase
     public function test_delivery_pin_must_be_configured_and_is_locked_after_repeated_failures(): void
     {
         $actor = $this->signIn(['can_start_deliveries']);
-        $actor->forceFill(['pin_enabled' => false, 'pin_hash' => null])->save();
+        $actor->forceFill(['operation_pin_hash' => null])->save();
         $this->command('POST', '/repartos', ['quantity' => 10])->assertStatus(422)
             ->assertJsonPath('code', 'PIN_NOT_CONFIGURED');
 
         $actor->forceFill([
-            'pin_enabled' => true,
-            'pin_hash' => app(PinHasher::class)->hash('0007'),
+
+            'operation_pin_hash' => app(PinHasher::class)->hash('0007'),
         ])->save();
         for ($attempt = 0; $attempt < 4; $attempt++) {
             $this->command('POST', '/repartos', ['quantity' => 10, 'pin' => '9999'])
@@ -538,8 +539,8 @@ final class DeliveryEndpointTest extends TestCase
         ])->assertCreated();
 
         $secondDriver = User::factory()->create([
-            'pin_hash' => app(PinHasher::class)->hash('0007'),
-            'pin_enabled' => true,
+            'operation_pin_hash' => app(PinHasher::class)->hash('0007'),
+
             'pin_pepper_version' => config('identity.pin.pepper_version'),
             'pin_daily_window_started_at' => now(),
         ]);

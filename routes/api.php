@@ -14,6 +14,7 @@ use App\Http\Controllers\Geography\DepartmentController;
 use App\Http\Controllers\Geography\LocalityController;
 use App\Http\Controllers\IdentityAndAccess\AdminController;
 use App\Http\Controllers\IdentityAndAccess\AuthController;
+use App\Http\Controllers\IdentityAndAccess\OwnCredentialController;
 use App\Http\Controllers\IdentityAndAccess\RoleController;
 use App\Http\Controllers\IdentityAndAccess\SharedDeviceController;
 use App\Http\Controllers\IdentityAndAccess\UserManagementController;
@@ -59,6 +60,7 @@ use App\Http\Controllers\SuppliersAndCatalogs\SupplierStatusController;
 use App\Http\Controllers\SuppliersAndCatalogs\VaccineController;
 use App\Http\Controllers\SuppliersAndCatalogs\VaccineStatusController;
 use App\Http\Controllers\Vehicles\VehicleController;
+use App\Http\Middleware\EnforceProductionUnitAccess;
 use App\Http\Middleware\ReportDownloadAccess;
 use App\Http\Middleware\ValidateCurrentAccess;
 use Illuminate\Http\JsonResponse;
@@ -91,7 +93,11 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         ->middleware('shared.device:native')
         ->name('shared-device.local-revoke');
 
-    Route::middleware(['auth:sanctum', ValidateCurrentAccess::class])->group(function (): void {
+    Route::middleware(['auth:sanctum', ValidateCurrentAccess::class, EnforceProductionUnitAccess::class])->group(function (): void {
+        Route::patch('/auth/contrasena', [OwnCredentialController::class, 'update'])->defaults('credential', 'password')->middleware('throttle:credentials')->name('auth.password.update');
+        Route::patch('/auth/pin', [OwnCredentialController::class, 'update'])->defaults('credential', 'access_pin')->middleware('throttle:credentials')->name('auth.pin.update');
+        Route::put('/auth/pin-operativo', [OwnCredentialController::class, 'update'])->defaults('credential', 'operation_pin')->middleware('throttle:credentials')->name('auth.operation-pin.update');
+        Route::patch('/usuarios/{user}/unidad-productiva', [UserManagementController::class, 'productionUnit'])->name('users.production-unit.update');
         Route::get('/vehiculos/conductores', [VehicleController::class, 'drivers'])->name('vehicles.drivers');
         Route::get('/vehiculos/disponibles', [VehicleController::class, 'available'])->name('vehicles.available');
         Route::get('/vehiculos', [VehicleController::class, 'index'])->name('vehicles.index');

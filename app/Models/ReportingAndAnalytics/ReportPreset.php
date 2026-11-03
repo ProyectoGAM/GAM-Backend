@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
-#[Fillable(['user_id', 'name', 'source_key', 'definition_version', 'configuration'])]
+#[Fillable(['user_id', 'production_unit_id', 'name', 'source_key', 'definition_version', 'configuration'])]
 class ReportPreset extends Model
 {
     /** @use HasFactory<ReportPresetFactory> */

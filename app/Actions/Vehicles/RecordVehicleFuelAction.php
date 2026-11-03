@@ -4,6 +4,7 @@ namespace App\Actions\Vehicles;
 
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
+use App\Models\Deliveries\Delivery;
 use App\Models\User;
 use App\Models\Vehicles\Vehicle;
 use App\Models\Vehicles\VehicleFuelEntry;
@@ -20,6 +21,12 @@ final readonly class RecordVehicleFuelAction
     public function execute(Vehicle $vehicle, array $data, User $actor): VehicleFuelEntry
     {
         return DB::transaction(function () use ($vehicle, $data, $actor): VehicleFuelEntry {
+            if ($actor->usesDevicePin()) {
+                $usage = VehicleUsage::query()->where('public_id', $data['usage_id'] ?? '')
+                    ->where('vehicle_id', $vehicle->id)->where('driver_id', $actor->id)
+                    ->whereIn('delivery_id', Delivery::query()->select('id')->where('production_unit_id', $actor->production_unit_id))
+                    ->firstOrFail();
+            }
             $existing = VehicleFuelEntry::query()->where('idempotency_key', $data['idempotency_key'])->first();
             if ($existing !== null) {
                 $usageMatches = isset($data['usage_id'])

@@ -637,9 +637,13 @@ final class FlockFeedingEndpointTest extends LotsTestCase
         $this->localTime('2026-10-05 12:00');
         $actor = $this->signIn();
         $flock = $this->admitted();
+        config(['identity.pin.pepper' => 'test-only-temporary-value']);
+        $sharedActor = User::factory()->devicePin(ProductionUnit::findOrFail($flock->production_unit_id))->create();
+        $sharedActor->syncRoles([$actor->roles()->firstOrFail()]);
+        $actor = $sharedActor;
         $secret = Str::random(64);
         $device = SharedDevice::query()->create([
-            'name' => 'Tablet alimentación', 'credential_hash' => hash('sha256', $secret),
+            'name' => 'Tablet alimentación', 'production_unit_id' => $actor->production_unit_id, 'credential_hash' => hash('sha256', $secret),
             'credential_expires_at' => now()->addYear(), 'enrolled_by' => $actor->id, 'enrolled_at' => now(),
         ]);
         $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_login_shared', 'web'));

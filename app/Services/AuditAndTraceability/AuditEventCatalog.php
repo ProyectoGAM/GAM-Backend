@@ -34,6 +34,8 @@ final class AuditEventCatalog
         'shared_device_paired' => 'Dispositivo compartido vinculado',
         'shared_device_revoked' => 'Dispositivo compartido revocado',
         'user_registered' => 'Usuario registrado',
+        'user_credential_changed' => 'Credencial propia actualizada',
+        'user_production_unit_changed' => 'UP de acceso actualizada',
         'user_logged_out' => 'Sesión cerrada',
         'shared_pin_login' => 'Inicio de sesión en dispositivo compartido',
     ];

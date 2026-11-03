@@ -10,6 +10,8 @@ info:
     técnicos sólo se mueven por los comandos de Stock de huevos.
     Nuevos movimientos exigen producto activo con stock y ubicación/UP activas;
     las plantas deben estar operativas. Las transferencias validan ambos extremos.
+    Las cuentas PIN sólo consultan y operan en su UP registrada y vinculada. No pueden
+    transferir entre UP ni utilizar IDs de ubicaciones ajenas, aunque tengan permiso funcional.
     Medicamentos y vacunas se registran globalmente sin stock físico.
     No se crean ubicaciones sanitarias; las existentes conservan su lectura histórica.
 servers:

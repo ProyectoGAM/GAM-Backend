@@ -23,6 +23,8 @@ final readonly class ReportDownloadAccess
             return $next($request);
         }
 
-        return $this->auth->handle($request, fn (Request $authenticated): Response => $this->device->handle($authenticated, fn (Request $deviceRequest): Response => $this->session->handle($deviceRequest, $next), 'any'), 'sanctum');
+        return $this->auth->handle($request, fn (Request $authenticated): Response => app(ValidateCurrentAccess::class)->handle($authenticated,
+            fn (Request $valid): Response => $this->device->handle($valid,
+                fn (Request $deviceRequest): Response => $this->session->handle($deviceRequest, $next), 'any')), 'sanctum');
     }
 }

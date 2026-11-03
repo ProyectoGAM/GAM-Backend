@@ -6,6 +6,7 @@ use App\Actions\IdentityAndAccess\RegisterUserAction;
 use App\Actions\IdentityAndAccess\ResetUserPasswordAction;
 use App\Actions\IdentityAndAccess\RevokeUserSessionsAction;
 use App\Actions\IdentityAndAccess\SetUserPinAction;
+use App\Actions\IdentityAndAccess\UpdateUserProductionUnitAction;
 use App\Actions\IdentityAndAccess\UpdateUserRoleAction;
 use App\Actions\IdentityAndAccess\UpdateUserStatusAction;
 use App\Http\Requests\IdentityAndAccess\CreateManagedUserRequest;
@@ -15,6 +16,7 @@ use App\Http\Requests\IdentityAndAccess\RevokeUserSessionsRequest;
 use App\Http\Requests\IdentityAndAccess\SetPinRequest;
 use App\Http\Requests\IdentityAndAccess\UnlockPinRequest;
 use App\Http\Requests\IdentityAndAccess\UpdateUserPasswordRequest;
+use App\Http\Requests\IdentityAndAccess\UpdateUserProductionUnitRequest;
 use App\Http\Requests\IdentityAndAccess\UpdateUserRoleRequest;
 use App\Http\Requests\IdentityAndAccess\UpdateUserStatusRequest;
 use App\Http\Resources\IdentityAndAccess\UserResource;
@@ -24,6 +26,11 @@ use Illuminate\Http\Response;
 
 final class UserManagementController
 {
+    public function productionUnit(UpdateUserProductionUnitRequest $request, User $user, UpdateUserProductionUnitAction $action): JsonResponse
+    {
+        return response()->json(['data' => new UserResource($action->execute($request->user(), $user, $request->integer('up_id')))]);
+    }
+
     public function index(ListManagedUsersRequest $request): JsonResponse
     {
         return response()->json(['data' => UserResource::collection(User::query()->withTrashed()->paginate(50))]);

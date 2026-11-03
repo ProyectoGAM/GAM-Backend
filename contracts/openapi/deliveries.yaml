@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: GAM Delivery API
   version: 1.0.0
-  description: Operación móvil de repartos, sincronización offline y monitoreo administrativo.
+  description: Operación móvil de repartos, sincronización offline y monitoreo administrativo. Las cuentas PIN sólo operan dentro de su UP registrada y vinculada; cargas y devoluciones no pueden cruzar ese límite. Las cuentas con correo confirman inicio y cierre con su PIN operativo. Las respuestas PIN omiten saldos globales de cuentas corrientes, incluidos los resúmenes de cierre.
 servers:
   - url: /
 tags:
@@ -438,6 +438,7 @@ components:
         unallocated_returned_eggs: { type: integer }
     DeliveryFinancialSummary:
       type: object
+      description: Totales del reparto. Para sesiones PIN los clientes no incluyen balance_before ni balance_after, porque son saldos empresariales.
       properties:
         currency: { type: string, enum: [UYU] }
         merchandise_amount: { type: [string, 'null'] }

@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: GAM - Vehículos
   version: 1.0.0
-  description: Flota, usos, lecturas de tablero, combustible y mantenimiento de vehículos. Las rutas son relativas a /api/v1.
+  description: Flota, usos, lecturas de tablero, combustible y mantenimiento de vehículos. Las rutas son relativas a /api/v1. Las sesiones PIN sólo reciben un selector mínimo y pueden registrar combustible vinculado a su propio uso de un reparto de su UP; la gestión global requiere sesión personal.
 servers:
   - url: /api/v1
 security:

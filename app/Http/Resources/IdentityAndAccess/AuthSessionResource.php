@@ -22,6 +22,7 @@ final class AuthSessionResource extends JsonResource
             'id' => (string) $session->getKey(),
             'kind' => $session->kind,
             'auth_method' => $session->auth_method,
+            'up_id' => $session->production_unit_id,
             'expires_at' => $expiresAt?->toIso8601String(),
             'idle_timeout_seconds' => $session->kind === 'shared_user'
                 ? (int) config('identity.shared_idle_seconds', 120)

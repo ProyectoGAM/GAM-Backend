@@ -19,6 +19,7 @@ use App\Services\CustomersAndAccounts\CustomerAmounts;
 use App\Services\CustomersAndAccounts\CustomerOperationRunner;
 use App\Services\Deliveries\DeliveryPricing;
 use App\Services\Deliveries\DeliveryUnitBalance;
+use App\Services\IdentityAndAccess\AccessControl;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -46,6 +47,7 @@ final readonly class RecordDeliveryStopAction
             if ($actor === null || ! $actor->can('can_update_own_deliveries')) {
                 throw new AuthorizationException;
             }
+            app(AccessControl::class)->assertCurrentSession($actor);
             $lockedDelivery = Delivery::query()->whereKey($delivery->id)->lockForUpdate()->firstOrFail();
             if ($lockedDelivery->driver_id !== $actor->id) {
                 throw new DeliveryConflict('No puedes registrar entregas de otro repartidor.');

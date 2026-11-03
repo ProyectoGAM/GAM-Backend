@@ -136,7 +136,7 @@ final class InventoryMovementsReportSource implements ReportSource
             ->join('stock_locations', 'stock_locations.id', '=', 'inventory_movement_lines.stock_location_id')
             ->leftJoin('production_units', 'production_units.id', '=', 'stock_locations.production_unit_id')
             ->leftJoin('suppliers', 'suppliers.id', '=', 'inventory_movements.supplier_id')
-            ->getQuery();
+            ->toBase();
     }
 
     /** @return list<string> */

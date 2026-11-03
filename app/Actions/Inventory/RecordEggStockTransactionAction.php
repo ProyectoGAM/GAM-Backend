@@ -9,6 +9,7 @@ use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\EggStockTransaction;
 use App\Models\Inventory\InventoryMovement;
 use App\Models\User;
+use App\Services\IdentityAndAccess\ProductionUnitAccess;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -43,6 +44,7 @@ final readonly class RecordEggStockTransactionAction
         }
 
         return DB::transaction(function () use ($unit, $type, $quantity, $operationId, $actor, $occurredAt, $reason, $notes, $referenceType, $referenceId, $sign, $source): array {
+            app(ProductionUnitAccess::class)->assertUnit((int) $unit->id, $actor);
             $account = $this->accounts->execute($unit);
             $transaction = new EggStockTransaction;
             $transaction->forceFill([

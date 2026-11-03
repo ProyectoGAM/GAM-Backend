@@ -5,6 +5,10 @@ parameters:
     level: 5
     paths:
         - app/Models/IdentityAndAccess/Role.php
+        - app/Models/IdentityAndAccess/AuthSession.php
+        - app/Models/SharedDevice.php
+        - app/Models/SharedDevicePairingCode.php
+        - app/Enums/IdentityAndAccess
         - app/Models/User.php
         - app/Services/IdentityAndAccess
         - app/Actions/IdentityAndAccess
@@ -14,6 +18,8 @@ parameters:
         - app/Http/Resources/IdentityAndAccess
         - app/Queries/IdentityAndAccess
         - app/Http/Middleware/ValidateCurrentAccess.php
+        - app/Http/Middleware/ValidateSharedSession.php
+        - app/Http/Middleware/EnforceProductionUnitAccess.php
         - app/Policies/Inventory/FeedStockOperationPolicy.php
         - database/seeders/IdentityPermissionSeeder.php
         - database/factories/IdentityAndAccess

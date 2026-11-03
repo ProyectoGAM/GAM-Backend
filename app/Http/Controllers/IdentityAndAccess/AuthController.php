@@ -15,10 +15,10 @@ use App\Http\Resources\IdentityAndAccess\AccessTokenResource;
 use App\Http\Resources\IdentityAndAccess\AuthSessionResource;
 use App\Http\Resources\IdentityAndAccess\UserResource;
 use App\Models\IdentityAndAccess\AuthSession;
+use App\Models\IdentityAndAccess\Role;
 use App\Models\User;
 use App\Services\IdentityAndAccess\AuthSessionService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -48,6 +48,7 @@ final class AuthController
         $user = $result->user();
 
         [$token, $session] = DB::transaction(function () use ($user, $data, $issueToken, $sessions): array {
+            $user = $this->lockLoginUser($user, $data['password'], 'can_login_native');
             $token = $issueToken->execute($user, $data['device_name'] ?? 'login');
 
             return [$token, $sessions->createPersonal($user, $token)];
@@ -76,11 +77,13 @@ final class AuthController
         }
 
         $user = $result->user();
+        $session = DB::transaction(function () use ($user, $data, $sessions): AuthSession {
+            return $sessions->createWebPersonal($this->lockLoginUser($user, $data['password'], 'can_login_web'));
+        });
 
         // La duración la controla la sesión del servidor; no emitimos un recaller indefinido.
         Auth::guard('web')->login($user, false);
         $request->session()->regenerate();
-        $session = $sessions->createWebPersonal($user);
         $request->session()->put('auth_session_id', $session->getKey());
 
         return response()->json([
@@ -122,7 +125,7 @@ final class AuthController
         /** @var User $user */
         $user = $request->user();
 
-        if (! Hash::check($request->string('password')->toString(), $user->password)) {
+        if ($user->usesDevicePin() || ! is_string($user->password) || ! Hash::check($request->string('password')->toString(), $user->password)) {
             throw new IdentityException(401, 'INVALID_CREDENTIALS', 'Las credenciales proporcionadas no son correctas.');
         }
 
@@ -150,7 +153,7 @@ final class AuthController
         ])->header('Cache-Control', 'no-store');
     }
 
-    public function sessions(Request $request, AuthSessionService $sessions): JsonResponse
+    public function sessions(MeRequest $request, AuthSessionService $sessions): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -161,7 +164,7 @@ final class AuthController
     }
 
     public function revokeSession(
-        Request $request,
+        MeRequest $request,
         AuthSession $session,
         AuthSessionService $sessions,
     ): JsonResponse {
@@ -176,5 +179,17 @@ final class AuthController
         $sessions->revoke($session, 'self_revoked');
 
         return response()->json(['message' => 'La sesión fue revocada.']);
+    }
+
+    private function lockLoginUser(User $user, string $password, string $permission): User
+    {
+        Role::query()->where('name', 'admin')->where('guard_name', 'web')->lockForUpdate()->first();
+        $user = User::query()->whereKey($user->id)->lockForUpdate()->first();
+        if ($user === null || $user->usesDevicePin() || ! $user->hasAccessRole() || ! $user->can($permission)
+            || ! is_string($user->password) || ! Hash::check($password, $user->password)) {
+            throw new IdentityException(401, 'INVALID_CREDENTIALS', 'Las credenciales proporcionadas no son correctas.');
+        }
+
+        return $user;
     }
 }

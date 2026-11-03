@@ -8,6 +8,10 @@ info:
     abarcan Reparto, Manejo, Lotes, Vacunación, Pesadas, Alimentación y Postura.
     Alimentación distingue cantidad registrada de pauta diaria estimada. No se fabrican cobros,
     deudas, tamaños ni datos históricos ausentes. Los permisos de la fuente se revalidan.
+    Las sesiones PIN sólo consultan su UP: opciones y agregados se filtran antes de calcularse.
+    Las fuentes sin alcance UP demostrable se deniegan. Configuraciones y exportaciones conservan
+    su UP; el worker y la descarga privada revalidan el contexto. No se comparten exportaciones
+    restringidas mediante enlaces públicos.
   license:
     name: Proprietary
     identifier: Proprietary

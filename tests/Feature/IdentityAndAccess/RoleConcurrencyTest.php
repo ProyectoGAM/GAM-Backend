@@ -2,11 +2,15 @@
 
 namespace Tests\Feature\IdentityAndAccess;
 
+use App\Actions\IdentityAndAccess\AuthenticateSharedPinAction;
+use App\Actions\IdentityAndAccess\SetUserPinAction;
 use App\Actions\IdentityAndAccess\UpdateRolePermissionsAction;
 use App\Actions\IdentityAndAccess\UpdateUserRoleAction;
 use App\Exceptions\IdentityAndAccess\IdentityException;
 use App\Models\IdentityAndAccess\Role;
+use App\Models\SharedDevice;
 use App\Models\User;
+use App\Services\IdentityAndAccess\PinHasher;
 use Database\Seeders\IdentityPermissionSeeder;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\Concurrency;
@@ -103,6 +107,43 @@ final class RoleConcurrencyTest extends TestCase
         $this->assertSame([200, 409], $results);
         $this->assertSame(1, User::query()->role('admin')->count());
         $this->assertSame(1, DB::table('activity_log')->where('event', 'user_role_updated')->count());
+    }
+
+    /** Un login concurrente con el cambio de PIN no deja una sesión con la credencial anterior. */
+    public function test_pin_login_racing_with_reset_cannot_leave_an_old_credential_session(): void
+    {
+        // Prepara cuentas y dispositivo confirmados para los dos procesos.
+        $this->seed(IdentityPermissionSeeder::class);
+        $admin = User::factory()->create();
+        $admin->syncRoles('admin');
+        $user = User::factory()->devicePin()->create();
+        $user->syncRoles('employee');
+        $device = SharedDevice::query()->create(['name' => 'Concurrencia', 'production_unit_id' => $user->production_unit_id,
+            'credential_hash' => hash('sha256', 'race-device-test'), 'credential_expires_at' => now()->addYear(), 'enrolled_by' => $admin->id, 'enrolled_at' => now()]);
+        $userId = $user->id;
+        $adminId = $admin->id;
+        $deviceId = $device->id;
+        // Compite el acceso con PIN anterior contra el restablecimiento administrativo.
+        $results = Concurrency::driver('process')->run([
+            static function () use ($userId, $deviceId): int {
+                try {
+                    app(AuthenticateSharedPinAction::class)->execute(SharedDevice::findOrFail($deviceId), $userId, '0007');
+
+                    return 200;
+                } catch (IdentityException $exception) {
+                    return $exception->getStatusCode();
+                }
+            },
+            static function () use ($userId, $adminId): int {
+                app(SetUserPinAction::class)->execute(User::findOrFail($adminId), User::findOrFail($userId), '0012');
+
+                return 200;
+            },
+        ], timeout: 30);
+        $this->assertContains($results[0], [200, 401]);
+        $this->assertSame(200, $results[1]);
+        $this->assertSame(0, $user->authSessions()->whereNull('revoked_at')->count());
+        $this->assertTrue(app(PinHasher::class)->check('0012', $user->fresh()->pin_hash));
     }
 
     // Flujo: dos guardados con la misma versión no pueden pisar los permisos del mismo rol.

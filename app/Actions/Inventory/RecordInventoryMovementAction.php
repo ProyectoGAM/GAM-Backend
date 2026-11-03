@@ -23,6 +23,7 @@ use App\Models\ManagementPlans\VaccinationApplication;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\SuppliersAndCatalogs\Supplier;
 use App\Models\User;
+use App\Services\IdentityAndAccess\ProductionUnitAccess;
 use App\Services\Inventory\StockLocationLocks;
 use App\Services\Inventory\StockProductCompatibility;
 use App\Services\Lots\LotsAuthorization;
@@ -46,6 +47,12 @@ final readonly class RecordInventoryMovementAction
     {
         return DB::transaction(function () use ($command, $actor, $source, $feedCompensation, $regularization, $requiredPermission, $healthCompensation): InventoryMovement {
             $currentActor = User::query()->whereKey($actor->getKey())->lockForUpdate()->firstOrFail();
+            if ($currentActor->usesDevicePin()) {
+                foreach ($command->lines as $line) {
+                    $location = StockLocation::query()->whereKey($line['stock_location_id'])->firstOrFail();
+                    app(ProductionUnitAccess::class)->assertUnit((int) $location->production_unit_id, $currentActor);
+                }
+            }
             if ($requiredPermission !== null) {
                 LotsAuthorization::ensure($currentActor, $requiredPermission);
             }

@@ -24,7 +24,7 @@ final class RolePolicy
 
     public function update(User $user, Role $role): bool
     {
-        return $this->view($user, $role) && $role->name !== 'admin';
+        return $this->view($user, $role) && ! in_array($role->name, ['admin', 'unassigned'], true);
     }
 
     public function delete(User $user, Role $role): bool

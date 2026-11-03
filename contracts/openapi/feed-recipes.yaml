@@ -7,6 +7,8 @@ info:
     y elaboración inmediata con descuento distribuido de ingredientes, saldo de alimento
     por receta y UP, cancelación compensatoria, ajustes independientes y mínimos configurables.
     Los endpoints del catálogo y cálculo conservan sus permisos originales.
+    Las cuentas PIN sólo consultan y modifican saldos y operaciones de su UP. El catálogo
+    global admite lecturas y cálculo autorizado; sus mutaciones requieren sesión personal.
     Las operaciones requieren sesión válida y permisos específicos: can_view_feed_stock,
     can_manufacture_feed, can_cancel_feed_manufacturing, can_adjust_feed_stock,
     can_adjust_feed_ingredients y can_manage_feed_minimums según la operación. El consumo de lotes tiene su contrato propio en flock-feeding.yaml.

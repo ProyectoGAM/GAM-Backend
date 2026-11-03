@@ -3,6 +3,7 @@
 namespace App\Actions\IdentityAndAccess;
 
 use App\DTO\AuditAndTraceability\AuditEntryData;
+use App\Exceptions\IdentityAndAccess\IdentityException;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\IdentityAndAccess\Role;
 use App\Models\User;
@@ -21,6 +22,9 @@ final class UpdateUserRoleAction
             $role = Role::query()->where('guard_name', 'web')->whereKey($roleId)->lockForUpdate()->firstOrFail();
             $user = User::withTrashed()->whereKey($user->id)->lockForUpdate()->firstOrFail();
             Gate::forUser($actor)->authorize('assignRole', $user);
+            if ($role->name === 'admin' && $user->usesDevicePin()) {
+                throw new IdentityException(422, 'ACCESS_METHOD_CONFLICT', 'Una cuenta con acceso PIN no puede convertirse en administradora.');
+            }
             /** @var Role|null $before */
             $before = $user->roles()->first();
             if ($before?->id === $role->id) {

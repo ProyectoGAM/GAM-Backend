@@ -57,6 +57,7 @@ final readonly class RequestReportExportAction
 
             try {
                 $export = ReportExport::query()->create([
+                    'production_unit_id' => $actor->usesDevicePin() ? $actor->production_unit_id : null,
                     'user_id' => $actor->getKey(),
                     'operation_id' => Str::uuid()->toString(),
                     'idempotency_key_hash' => $idempotencyHash,

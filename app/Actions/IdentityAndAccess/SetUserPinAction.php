@@ -28,21 +28,17 @@ final class SetUserPinAction
                 $actor = $this->access->lockActor($actor);
                 $user = User::withTrashed()->whereKey($user->id)->lockForUpdate()->firstOrFail();
                 Gate::forUser($actor)->authorize('managePin', $user);
-                if ($user->hasRole('admin')) {
-                    throw new IdentityException(422, 'ADMIN_PIN_NOT_ALLOWED', 'Las cuentas administradoras no pueden usar PIN compartido.');
+                if (! $user->usesDevicePin()) {
+                    $user->forceFill(['operation_pin_hash' => $this->pinHasher->hash($pin)])->save();
+                } else {
+                    $user->forceFill([
+                        'pin_hash' => $this->pinHasher->hash($pin), 'pin_enabled' => true, 'pin_changed_at' => now(),
+                        'pin_pepper_version' => $this->pinHasher->pepperVersion(), 'pin_failed_attempts' => 0,
+                        'pin_failed_window_started_at' => null, 'pin_locked_until' => null,
+                        'pin_daily_failed_attempts' => 0, 'pin_daily_window_started_at' => now(),
+                    ])->save();
                 }
-
-                $user->forceFill([
-                    'pin_hash' => $this->pinHasher->hash($pin),
-                    'pin_enabled' => true,
-                    'pin_changed_at' => now(),
-                    'pin_pepper_version' => $this->pinHasher->pepperVersion(),
-                    'pin_failed_attempts' => 0,
-                    'pin_failed_window_started_at' => null,
-                    'pin_locked_until' => null,
-                    'pin_daily_failed_attempts' => 0,
-                    'pin_daily_window_started_at' => now(),
-                ])->save();
+                $this->access->revokeAll($user, 'pin_changed');
 
                 $this->auditRecorder->record(AuditEntryData::forSubject(
                     subject: $user,
@@ -50,7 +46,7 @@ final class SetUserPinAction
                     logName: 'identity',
                     event: 'user_pin_changed',
                     description: 'PIN de usuario configurado',
-                    properties: ['pin_enabled' => true],
+                    properties: ['pin_enabled' => $user->pin_enabled, 'credential_type' => $user->usesDevicePin() ? 'access_pin' : 'operation_pin'],
                     source: 'api',
                 ));
             });
@@ -66,7 +62,7 @@ final class SetUserPinAction
             $user = User::withTrashed()->whereKey($user->id)->lockForUpdate()->firstOrFail();
             Gate::forUser($actor)->authorize('managePin', $user);
             $user->forceFill([
-                'pin_hash' => null,
+                'operation_pin_hash' => null,
                 'pin_enabled' => false,
                 'pin_changed_at' => now(),
                 'pin_pepper_version' => null,
@@ -74,6 +70,7 @@ final class SetUserPinAction
                 'pin_locked_until' => null,
                 'pin_daily_failed_attempts' => 0,
             ])->save();
+            $this->access->revokeAll($user, 'pin_disabled');
 
             $user->authSessions()->where('kind', 'shared_user')->whereNull('revoked_at')->update([
                 'revoked_at' => now(),

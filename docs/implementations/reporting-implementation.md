@@ -2,6 +2,8 @@
 
 La implementación reutiliza el motor ReportingAndAnalytics y agrega una pantalla Angular de consulta, configuraciones privadas y exportaciones. El DOCX `Reportes_de_SGA.docx` se interpreta como necesidades de negocio: no exige nombres de columnas de base de datos. Se conservan datos históricos desconocidos como vacíos.
 
+La actualización de [acceso por UP](access-methods-and-production-unit-implementation.md) restringe las sesiones PIN: las fuentes SQL filtran antes de agregar u ofrecer opciones, y las fuentes sin UP demostrable quedan denegadas. Configuraciones y exportaciones conservan su UP; el worker genera con ese contexto y rechaza un traslado posterior del solicitante. La descarga privada revalida la sesión. Las exportaciones restringidas no admiten enlaces públicos.
+
 ## Fuentes entregadas
 
 | Fuente | Alcance | Permiso funcional |

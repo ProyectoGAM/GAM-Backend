@@ -3,6 +3,7 @@
 namespace App\Services\Lots;
 
 use App\Models\User;
+use App\Services\IdentityAndAccess\AccessControl;
 use Illuminate\Auth\Access\AuthorizationException;
 
 final class LotsAuthorization
@@ -14,6 +15,7 @@ final class LotsAuthorization
 
     public static function ensure(User $actor, string $permission): void
     {
+        app(AccessControl::class)->assertCurrentSession($actor);
         if (! self::allows($actor, $permission)) {
             throw new AuthorizationException;
         }

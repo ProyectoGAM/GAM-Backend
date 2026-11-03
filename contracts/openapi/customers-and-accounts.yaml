@@ -990,6 +990,7 @@ components:
           maxLength: 2000
     Movement:
       type: object
+      description: En respuestas operativas de reparto a cuentas PIN se omiten sequence, balance_before y balance_after. La gestión global de cuentas corrientes requiere sesión personal.
       properties:
         id:
           type: string

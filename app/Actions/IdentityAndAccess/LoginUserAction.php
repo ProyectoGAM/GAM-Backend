@@ -18,7 +18,7 @@ final class LoginUserAction
             ->first();
 
         if (
-            $user === null ||
+            $user === null || $user->usesDevicePin() || ! $user->hasAccessRole() || ! is_string($user->password) ||
             ! Hash::check($credentials['password'], $user->password)
         ) {
             return LoginResult::invalidCredentials();

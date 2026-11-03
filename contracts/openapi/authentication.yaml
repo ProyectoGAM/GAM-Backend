@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: GAM Identity and Access API
-  version: 2.0.0
-  description: Contrato de identidad, acceso y roles. Cada usuario tiene un único rol y sólo Admin configura sus permisos. Las claves del catálogo usan can_ y los permisos individuales no están disponibles.
+  version: 3.0.0
+  description: Dos modalidades permanentes de acceso, correo y contraseña o dispositivo vinculado con PIN y una única UP. El backend deniega consultas y operaciones fuera de la UP del usuario PIN. Sin rol impide iniciar sesión. Cambiar contraseña o cualquier PIN revoca todas las sesiones del usuario afectado. Admin puede configurar un PIN operativo; las tareas nuevas que lo exigirán se definirán posteriormente.
 servers:
   - url: /
 tags:
@@ -10,6 +10,73 @@ tags:
   - name: Administración
   - name: Dispositivos compartidos
 paths:
+  /api/v1/auth/contrasena:
+    patch:
+      tags: [Autenticación]
+      summary: Cambia la contraseña propia y cierra todas las sesiones
+      description: Sólo cuentas con correo. Exige la contraseña actual y no permite modificar correo, modalidad, rol ni UP.
+      security: [{ bearerAuth: [] }, { sanctumCookie: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OwnPasswordChange' }
+      responses:
+        '200': { $ref: '#/components/responses/CredentialChanged' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { description: Credencial nueva inválida o campos no permitidos }
+  /api/v1/auth/pin:
+    patch:
+      tags: [Autenticación]
+      summary: Cambia el PIN de acceso propio y cierra todas las sesiones
+      security: [{ bearerAuth: [], sharedDeviceHeader: [], sharedSessionHeader: [] }, { sanctumCookie: [], sharedDeviceCookie: [], sharedSessionHeader: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OwnAccessPinChange' }
+      responses:
+        '200': { $ref: '#/components/responses/CredentialChanged' }
+        '401': { $ref: '#/components/responses/InvalidPin' }
+        '422': { description: PIN inválido o campos no permitidos }
+  /api/v1/auth/pin-operativo:
+    put:
+      tags: [Autenticación]
+      summary: Configura o restablece el PIN operativo propio y cierra todas las sesiones
+      description: Incluye Admin. Exige la contraseña actual. Este PIN confirma tareas dentro de una sesión personal y nunca habilita login compartido. No se incorporan tareas nuevas hasta recibir su definición.
+      security: [{ bearerAuth: [] }, { sanctumCookie: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OwnOperationPinChange' }
+      responses:
+        '200': { $ref: '#/components/responses/CredentialChanged' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { description: PIN inválido o campos no permitidos }
+  /api/v1/usuarios/{user}/unidad-productiva:
+    patch:
+      tags: [Administración]
+      summary: Admin cambia la UP de una cuenta PIN y revoca sus sesiones
+      description: No cambia la modalidad ni la historia. Un reparto activo impide el traslado. El dispositivo conserva su UP y se mueve mediante revocación y nueva vinculación.
+      security: [{ bearerAuth: [] }, { sanctumCookie: [], csrf: [] }]
+      parameters:
+        - { name: user, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [up_id]
+              properties:
+                up_id: { type: integer, description: UP activa de destino }
+      responses:
+        '200': { description: Usuario actualizado }
+        '403': { description: Operación exclusiva de Admin }
+        '409': { description: El usuario mantiene un reparto activo }
+        '422': { description: Modalidad incompatible o UP inválida }
   /api/v1/permisos:
     get:
       tags: [Administración]
@@ -417,7 +484,8 @@ paths:
   /api/v1/users/{user}/pin:
     put:
       tags: [Administración]
-      summary: Configura un PIN operativo de cuatro dígitos
+      summary: Restablece el PIN de cuatro dígitos según la modalidad y cierra las sesiones del usuario
+      description: En cuentas PIN cambia la credencial de acceso; en cuentas con correo cambia el PIN operativo, incluido Admin si el actor está autorizado. Conserva la modalidad y revoca todas las sesiones del usuario afectado.
       security: [{ bearerAuth: [] }]
       parameters:
         - { name: user, in: path, required: true, schema: { type: integer } }
@@ -479,8 +547,10 @@ paths:
           application/json:
             schema:
               type: object
-              required: [name]
-              properties: { name: { type: string, maxLength: 100 } }
+              required: [name, up_id]
+              properties:
+                name: { type: string, maxLength: 100 }
+                up_id: { type: integer, description: UP activa elegida por Admin y conservada durante el canje }
       responses:
         '201':
           description: Código visible una sola vez
@@ -735,13 +805,58 @@ components:
         password_confirmation: { type: string, format: password }
     ManagedUserCreate:
       type: object
-      required: [name, email, password, password_confirmation, rol_id]
+      additionalProperties: false
+      required: [name, rol_id]
+      description: Alta exclusiva de Admin. Con correo requiere contraseña; sin correo requiere PIN y una UP activa. Sin rol es válido para registrar pero no permite iniciar sesión. La modalidad elegida queda fija.
+      oneOf:
+        - required: [email, password, password_confirmation]
+          properties:
+            email: { type: string, format: email }
+          not:
+            anyOf:
+              - required: [pin]
+              - required: [pin_confirmation]
+              - required: [up_id]
+        - required: [pin, pin_confirmation, up_id]
+          properties:
+            email: { type: 'null' }
+          not:
+            anyOf:
+              - required: [password]
+              - required: [password_confirmation]
       properties:
         name: { type: string }
-        email: { type: string, format: email }
+        email: { type: [string, 'null'], format: email }
         password: { type: string, format: password, minLength: 8 }
         password_confirmation: { type: string, format: password }
+        pin: { type: string, pattern: '^[0-9]{4}$' }
+        pin_confirmation: { type: string, pattern: '^[0-9]{4}$' }
+        up_id: { type: integer, minimum: 1 }
         rol_id: { type: integer, minimum: 1, description: Identificador de un único rol existente del guard web }
+    OwnPasswordChange:
+      type: object
+      additionalProperties: false
+      required: [current_password, password, password_confirmation]
+      properties:
+        current_password: { type: string, format: password }
+        password: { type: string, format: password, minLength: 8 }
+        password_confirmation: { type: string, format: password }
+    OwnAccessPinChange:
+      type: object
+      additionalProperties: false
+      required: [current_pin, pin, pin_confirmation]
+      properties:
+        current_pin: { type: string, pattern: '^[0-9]{4}$' }
+        pin: { type: string, pattern: '^[0-9]{4}$' }
+        pin_confirmation: { type: string, pattern: '^[0-9]{4}$' }
+    OwnOperationPinChange:
+      type: object
+      additionalProperties: false
+      required: [current_password, pin, pin_confirmation]
+      properties:
+        current_password: { type: string, format: password }
+        pin: { type: string, pattern: '^[0-9]{4}$' }
+        pin_confirmation: { type: string, pattern: '^[0-9]{4}$' }
     PinUpdate:
       type: object
       required: [pin, pin_confirmation]
@@ -773,11 +888,14 @@ components:
         password: { type: string, format: password }
     User:
       type: object
-      required: [id, name, email, rol, permissions]
+      required: [id, name, email, modalidad_acceso, up_id, pin_operativo_configurado, rol, permissions]
       properties:
         id: { type: integer }
         name: { type: string }
-        email: { type: string, format: email }
+        email: { type: [string, 'null'], format: email }
+        modalidad_acceso: { type: string, enum: [email_password, device_pin] }
+        up_id: { type: [integer, 'null'], description: Obligatoria para cuentas PIN; cuentas con correo sin UP tienen alcance empresarial sujeto a permisos }
+        pin_operativo_configurado: { type: boolean }
         rol:
           type: object
           required: [id, clave, nombre]
@@ -796,6 +914,7 @@ components:
         id: { type: string, format: uuid }
         kind: { type: string, enum: [personal, shared_user] }
         auth_method: { type: string, enum: [password, pin] }
+        up_id: { type: [integer, 'null'], description: UP de emisión obligatoria en sesiones compartidas }
         expires_at: { type: string, format: date-time, nullable: true }
         idle_timeout_seconds: { type: integer, nullable: true }
     PersonalLoginResponse:
@@ -822,10 +941,11 @@ components:
         session: { $ref: '#/components/schemas/Session' }
     SharedDevice:
       type: object
-      required: [id, name, expires_at]
+      required: [id, name, up_id, expires_at]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
+        up_id: { type: integer, description: UP fija de la vinculación }
         expires_at: { type: string, format: date-time, nullable: true }
         revoked_at: { type: string, format: date-time, nullable: true }
         active_session_id: { type: string, format: uuid, nullable: true }
@@ -859,6 +979,16 @@ components:
       properties:
         message: { type: string }
   responses:
+    CredentialChanged:
+      description: Credencial actualizada; todas las sesiones del usuario fueron revocadas y se conserva la vinculación física del dispositivo
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [message, requiere_reingreso]
+            properties:
+              message: { type: string }
+              requiere_reingreso: { type: boolean, const: true }
     Forbidden:
       description: No tienes autorización para realizar esta acción
     RoleResponse:

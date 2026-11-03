@@ -94,7 +94,7 @@ final class VehiclesDemoSeeder extends Seeder
         }
 
         $driver->syncRoles([Role::findByName('delivery', 'web')]);
-        if (! $driver->pin_enabled) {
+        if ($driver->operation_pin_hash === null) {
             app(SetUserPinAction::class)->execute($admin, $driver, (string) config('auth.demo_delivery.pin'));
         }
 

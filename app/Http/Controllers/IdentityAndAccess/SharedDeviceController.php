@@ -10,6 +10,8 @@ use App\Exceptions\IdentityAndAccess\IdentityException;
 use App\Http\Requests\IdentityAndAccess\FinalizeSharedSessionRequest;
 use App\Http\Requests\IdentityAndAccess\GeneratePairingCodeRequest;
 use App\Http\Requests\IdentityAndAccess\ListSharedUsersRequest;
+use App\Http\Requests\IdentityAndAccess\ManageSharedDeviceRequest;
+use App\Http\Requests\IdentityAndAccess\MeRequest;
 use App\Http\Requests\IdentityAndAccess\RedeemPairingCodeRequest;
 use App\Http\Requests\IdentityAndAccess\RevokeSharedDeviceRequest;
 use App\Http\Requests\IdentityAndAccess\SharedPinLoginRequest;
@@ -35,7 +37,7 @@ final class SharedDeviceController
         /** @var User $user */
         $user = $request->user();
         $this->requireRecentPassword($request);
-        $result = $generate->execute($user, $request->string('name')->toString());
+        $result = $generate->execute($user, $request->string('name')->toString(), $request->integer('up_id'));
 
         return response()->json($result, Response::HTTP_CREATED)->header('Cache-Control', 'no-store');
     }
@@ -52,6 +54,7 @@ final class SharedDeviceController
             'device' => [
                 'id' => $result['device']->getKey(),
                 'name' => $result['device']->name,
+                'up_id' => $result['device']->production_unit_id,
                 'expires_at' => $result['device']->credential_expires_at?->toIso8601String(),
             ],
             'device_token' => $result['token'],
@@ -73,6 +76,7 @@ final class SharedDeviceController
             'device' => [
                 'id' => $result['device']->getKey(),
                 'name' => $result['device']->name,
+                'up_id' => $result['device']->production_unit_id,
                 'expires_at' => $result['device']->credential_expires_at?->toIso8601String(),
             ],
         ], Response::HTTP_CREATED)
@@ -90,7 +94,7 @@ final class SharedDeviceController
             ->header('Cache-Control', 'no-store');
     }
 
-    public function status(Request $request): JsonResponse
+    public function status(ListSharedUsersRequest $request): JsonResponse
     {
         /** @var SharedDevice $device */
         $device = $request->attributes->get('shared_device');
@@ -99,6 +103,7 @@ final class SharedDeviceController
             'data' => [
                 'id' => $device->getKey(),
                 'name' => $device->name,
+                'up_id' => $device->production_unit_id,
                 'expires_at' => $device->credential_expires_at?->toIso8601String(),
                 'revoked_at' => $device->revoked_at?->toIso8601String(),
                 'active_session_id' => $device->sessions()->whereNull('revoked_at')->where('kind', 'shared_user')->latest('issued_at')->value('id'),
@@ -112,6 +117,7 @@ final class SharedDeviceController
             'data' => SharedDevice::query()->latest('enrolled_at')->get()->map(fn (SharedDevice $device): array => [
                 'id' => $device->getKey(),
                 'name' => $device->name,
+                'up_id' => $device->production_unit_id,
                 'expires_at' => $device->credential_expires_at?->toIso8601String(),
                 'revoked_at' => $device->revoked_at?->toIso8601String(),
                 'last_seen_at' => $device->last_seen_at?->toIso8601String(),
@@ -120,7 +126,7 @@ final class SharedDeviceController
     }
 
     public function revokeDevice(
-        Request $request,
+        ManageSharedDeviceRequest $request,
         SharedDevice $sharedDevice,
         RevokeSharedDeviceAction $revoke,
     ): JsonResponse {
@@ -160,9 +166,11 @@ final class SharedDeviceController
     public function users(ListSharedUsersRequest $request): JsonResponse
     {
         $users = User::query()
+            ->where('access_method', 'device_pin')
+            ->where('production_unit_id', $request->attributes->get('shared_device')->production_unit_id)
             ->where('pin_enabled', true)
             ->whereNull('deleted_at')
-            ->whereDoesntHave('roles', fn ($query) => $query->where('name', 'admin'))
+            ->whereDoesntHave('roles', fn ($query) => $query->whereIn('name', ['admin', 'unassigned']))
             ->permission('can_login_shared')
             ->orderBy('name')
             ->paginate((int) $request->validated('per_page', 50));
@@ -214,7 +222,7 @@ final class SharedDeviceController
         ])->header('Cache-Control', 'no-store');
     }
 
-    public function activity(Request $request): JsonResponse
+    public function activity(MeRequest $request): JsonResponse
     {
         /** @var AuthSession $session */
         $session = $request->attributes->get('auth_session');

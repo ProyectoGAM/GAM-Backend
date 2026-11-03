@@ -36,6 +36,6 @@ class Role extends BaseRole
 
     public function isProtected(): bool
     {
-        return in_array($this->name, ['admin', 'employee', 'delivery'], true);
+        return in_array($this->name, ['admin', 'employee', 'delivery', 'unassigned'], true);
     }
 }

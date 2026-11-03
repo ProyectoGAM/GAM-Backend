@@ -2,8 +2,11 @@
 
 namespace Database\Factories;
 
+use App\Enums\IdentityAndAccess\AccessMethod;
+use App\Models\FarmStructure\ProductionUnit;
 use App\Models\IdentityAndAccess\Role;
 use App\Models\User;
+use App\Services\IdentityAndAccess\PinHasher;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -50,6 +53,18 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
+        ]);
+    }
+
+    /** Cuenta sin correo, con un PIN de prueba y una única UP. */
+    public function devicePin(?ProductionUnit $unit = null, string $pin = '0007'): static
+    {
+        return $this->state(fn (): array => [
+            'access_method' => AccessMethod::DevicePin,
+            'email' => null, 'email_verified_at' => null, 'password' => null,
+            'production_unit_id' => $unit !== null ? $unit->id : ProductionUnit::factory(),
+            'pin_hash' => app(PinHasher::class)->hash($pin),
+            'pin_enabled' => true,
         ]);
     }
 }

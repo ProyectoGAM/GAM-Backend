@@ -10,6 +10,8 @@ GAM tiene dos transportes y tres contextos de sesión:
 
 El registro público está retirado. Las cuentas se crean mediante POST /api/v1/users y no se emite un token para la persona creada.
 
+La actualización de modalidades y alcance por UP se describe en la [guía de acceso, credenciales y dispositivos por UP](access-methods-and-production-unit-implementation.md): cuentas sin correo con PIN y una UP obligatoria, Sin rol sin login, PIN operativo de Admin y revocación de todas las sesiones al cambiar cualquier credencial.
+
 ## Roles configurables
 
 Cada usuario tiene un único rol, sin permisos directos. Admin activa o desactiva permisos del rol sin cambiar sus asignaciones. El catálogo se consulta en `/api/v1/permisos`; la gestión de roles y la asignación de usuarios son exclusivas de Admin mediante Policies. Login y `/me` exponen `rol` singular y `permissions` con claves `can_*`. El alta administrativa recibe `rol_id`. Los seeders conservan los permisos configurados de los roles operativos. Ver la [guía de integración](roles-and-permissions-implementation.md).
@@ -18,8 +20,8 @@ Cada usuario tiene un único rol, sin permisos directos. Admin activa o desactiv
 
 - IDENTITY_PIN_PEPPER es obligatorio en ambientes reales y nunca se entrega al cliente.
 - El PIN es un string exacto de cuatro dígitos. Se conserva 0007, se hashea con Argon2id sobre un HMAC-SHA256 con pepper y se guarda separado de password.
-- Administradores no pueden tener PIN operativo.
-- El listado compartido devuelve usuarios activos no administradores con PIN habilitado y permiso `can_login_shared` en su único rol; no exige un nombre de rol operativo específico.
+- Admin puede configurar un PIN operativo propio para confirmar tareas, conservando el acceso por correo. El listado de tareas nuevas se definirá posteriormente.
+- El listado compartido devuelve cuentas PIN activas con PIN habilitado, permiso `can_login_shared` y la misma UP del dispositivo; excluye Admin y Sin rol. La sesión sólo consulta y opera en esa UP.
 - El dispositivo se identifica con X-Shared-Device-Token en nativo o cookie gam_shared_device en web. Nunca se sustituye por un PAT personal.
 - Las operaciones de empleado requieren X-GAM-Session y la generación actual del dispositivo.
 - El backend revoca y audita en transacciones; la expiración también se comprueba en cada request y no depende del scheduler.
@@ -28,7 +30,7 @@ Cada usuario tiene un único rol, sin permisos directos. Admin activa o desactiv
 
 El rol estable `admin` tiene acceso funcional a todos los módulos, incluyendo consulta, gestión y ejecución de planes de manejo, recetas, inventario, reportes y reparto. `IdentityPermissionSeeder` centraliza el catálogo completo y asigna al rol todos los permisos registrados del guard `web`, incluidos los añadidos por otros módulos. `AdminUserSeeder` reutiliza esa misma carga y sólo asigna el rol a la cuenta administradora configurada: ya no sustituye sus permisos por una segunda lista parcial. Los nuevos permisos deben registrarse en el catálogo central o antes de esta sincronización.
 
-La reparación alcanza a todos los usuarios con rol `admin`. Login web, login nativo y `GET /api/v1/me` mantienen su formato y exponen los permisos efectivos mediante `UserResource`; el frontend puede habilitar sus pantallas con esa lista. Los roles `employee` y `delivery` conservan sus permisos específicos. Se mantienen las validaciones de negocio, estados, sesiones, canales, CSRF y la prohibición de PIN operativo para administradores.
+La reparación alcanza a todos los usuarios con rol `admin`. Login web, login nativo y `GET /api/v1/me` exponen los permisos efectivos mediante `UserResource`; el frontend puede habilitar sus pantallas con esa lista. Los roles `employee` y `delivery` conservan sus permisos específicos. Se mantienen las validaciones de negocio, estados, sesiones, canales y CSRF. La actualización posterior permite PIN operativo para Admin y agrega modalidad y contexto UP a la respuesta.
 
 Para actualizar permisos de una instalación existente sin cambiar cuentas ni contraseñas:
 
@@ -57,7 +59,7 @@ El Compose de desarrollo usa un pepper explícitamente local sólo para permitir
 ## Flujo operativo
 
 1. Un administrador inicia sesión por web o PAT nativo.
-2. Confirma nuevamente su contraseña para generar un código.
+2. Confirma nuevamente su contraseña y selecciona una UP activa para generar un código.
 3. El código alfanumérico de 10 caracteres vence en 10 minutos y sólo puede canjearse una vez.
 4. El canje nativo devuelve device_token una sola vez; el canje web establece la cookie HttpOnly.
 5. La instalación consulta el estado del dispositivo, obtiene empleados elegibles y solicita PIN.

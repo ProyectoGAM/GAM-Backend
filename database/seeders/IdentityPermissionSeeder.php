@@ -22,6 +22,9 @@ final class IdentityPermissionSeeder extends Seeder
             $admin = Role::findOrCreate('admin', 'web');
             $admin->forceFill(['label' => 'Administrador'])->save();
             $admin->syncPermissions(Permission::query()->where('guard_name', 'web')->get());
+            $unassigned = Role::findOrCreate('unassigned', 'web');
+            $unassigned->forceFill(['label' => 'Sin rol', 'description' => 'Sin permisos ni acceso a la aplicación'])->save();
+            $unassigned->syncPermissions([]);
             $defaults = [
                 'delivery' => ['label' => 'Repartidor', 'permissions' => [
                     'can_login_native', 'can_login_web', 'can_start_deliveries', 'can_view_own_deliveries',

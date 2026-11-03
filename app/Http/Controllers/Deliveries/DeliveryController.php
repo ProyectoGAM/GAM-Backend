@@ -8,10 +8,8 @@ use App\Actions\Deliveries\CloseDeliveryAction;
 use App\Actions\Deliveries\PublishDeliveryLocationsAction;
 use App\Actions\Deliveries\RecordDeliveryStopAction;
 use App\Actions\Deliveries\StartDeliveryAction;
-use App\Actions\IdentityAndAccess\AuthenticateSharedPinAction;
 use App\Enums\Deliveries\DeliveryStatus;
 use App\Enums\FarmStructure\ProductionUnitStatus;
-use App\Exceptions\IdentityAndAccess\IdentityException;
 use App\Http\Requests\Deliveries\CloseDeliveryRequest;
 use App\Http\Requests\Deliveries\CurrentDeliveriesRequest;
 use App\Http\Requests\Deliveries\ListDeliveriesRequest;
@@ -34,6 +32,7 @@ use App\Queries\CustomersAndAccounts\ListCustomersQuery;
 use App\Queries\Deliveries\ListDeliveriesQuery;
 use App\Queries\Deliveries\ShowDeliveryQuery;
 use App\Services\Deliveries\DeliveryLoadUnits;
+use App\Services\IdentityAndAccess\OperationPinVerifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Symfony\Component\HttpFoundation\Response;
@@ -69,7 +68,7 @@ final readonly class DeliveryController
         return response()->json(['data' => $units]);
     }
 
-    public function store(StartDeliveryRequest $request, StartDeliveryAction $action, AuthenticateSharedPinAction $pinAuth, DeliveryLoadUnits $units): JsonResponse
+    public function store(StartDeliveryRequest $request, StartDeliveryAction $action, OperationPinVerifier $pinAuth, DeliveryLoadUnits $units): JsonResponse
     {
         $this->confirmDriverPin($request, $pinAuth);
         $delivery = $action->execute(
@@ -125,7 +124,7 @@ final readonly class DeliveryController
         ]);
     }
 
-    public function close(CloseDeliveryRequest $request, Delivery $reparto, CloseDeliveryAction $action, AuthenticateSharedPinAction $pinAuth): DeliveryResource
+    public function close(CloseDeliveryRequest $request, Delivery $reparto, CloseDeliveryAction $action, OperationPinVerifier $pinAuth): DeliveryResource
     {
         $this->confirmDriverPin($request, $pinAuth);
 
@@ -137,13 +136,9 @@ final readonly class DeliveryController
         ));
     }
 
-    private function confirmDriverPin(StartDeliveryRequest|CloseDeliveryRequest $request, AuthenticateSharedPinAction $pinAuth): void
+    private function confirmDriverPin(StartDeliveryRequest|CloseDeliveryRequest $request, OperationPinVerifier $pinAuth): void
     {
         $actor = $request->actor();
-        if (! $actor->pin_enabled) {
-            throw new IdentityException(422, 'PIN_NOT_CONFIGURED', 'Pedí a administración que configure tu PIN de repartidor.');
-        }
-
-        $pinAuth->verifyPin($actor, (string) $request->validated('pin'));
+        $pinAuth->verify($actor, (string) $request->validated('pin'));
     }
 }

@@ -8,6 +8,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
+ * @property int|null $production_unit_id
  * @property Carbon|null $expires_at
  * @property Carbon|null $consumed_at
  */
@@ -31,6 +32,7 @@ final class SharedDevicePairingCode extends Model
     protected function casts(): array
     {
         return [
+            'production_unit_id' => 'integer',
             'expires_at' => 'datetime',
             'consumed_at' => 'datetime',
         ];

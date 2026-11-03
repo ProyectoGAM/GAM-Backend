@@ -139,7 +139,7 @@ final class InventoryStockBalancesReportSource implements ReportSource
             ->leftJoin('production_units', 'production_units.id', '=', 'stock_locations.production_unit_id')
             ->leftJoin('poultry_houses', 'poultry_houses.id', '=', 'stock_locations.poultry_house_id')
             ->where('products.stock_tracked', true)
-            ->getQuery();
+            ->toBase();
     }
 
     /** @return list<string|Expression> */

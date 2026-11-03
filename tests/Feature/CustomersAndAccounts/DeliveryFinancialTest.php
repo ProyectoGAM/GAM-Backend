@@ -25,7 +25,7 @@ final class DeliveryFinancialTest extends TestCase
     {
         $this->seed(IdentityPermissionSeeder::class);
         config(['identity.pin.pepper' => 'test-only-customer-pin-pepper']);
-        $driver = User::factory()->create(['pin_hash' => app(PinHasher::class)->hash('0007'), 'pin_enabled' => true]);
+        $driver = User::factory()->create(['operation_pin_hash' => app(PinHasher::class)->hash('0007')]);
         $driver->syncRoles(['delivery']);
         Sanctum::actingAs($driver, ['api:access']);
 

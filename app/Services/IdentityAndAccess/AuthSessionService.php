@@ -47,6 +47,7 @@ final class AuthSessionService
             'transport' => 'bearer',
             'auth_method' => 'pin',
             'shared_device_id' => $device->getKey(),
+            'production_unit_id' => $device->production_unit_id,
             'device_generation' => $device->session_generation,
             'personal_access_token_id' => $token->accessToken->getKey(),
             'issued_at' => now(),
@@ -63,6 +64,7 @@ final class AuthSessionService
             'transport' => 'cookie',
             'auth_method' => 'pin',
             'shared_device_id' => $device->getKey(),
+            'production_unit_id' => $device->production_unit_id,
             'device_generation' => $device->session_generation,
             'issued_at' => now(),
             'expires_at' => now()->addHours((int) config('identity.shared_session_hours', 8)),
@@ -122,6 +124,7 @@ final class AuthSessionService
             'id' => (string) $session->getKey(),
             'kind' => $session->kind,
             'auth_method' => $session->auth_method,
+            'up_id' => $session->production_unit_id,
             'expires_at' => $session->expires_at?->toIso8601String(),
             'idle_timeout_seconds' => $session->kind === 'shared_user'
                 ? (int) config('identity.shared_idle_seconds', 120)

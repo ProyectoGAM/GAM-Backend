@@ -9,7 +9,6 @@ use App\Models\IdentityAndAccess\Role;
 use App\Models\SharedDevice;
 use App\Models\User;
 use App\Services\IdentityAndAccess\AuthSessionService;
-use App\Services\IdentityAndAccess\PinHasher;
 use Database\Seeders\IdentityPermissionSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -339,11 +338,11 @@ final class RoleManagementTest extends TestCase
         $admin = $this->admin();
         config(['identity.pin.pepper' => 'test-only-temporary-value']);
         $role = $this->role(['can_login_shared']);
-        $user = User::factory()->create(['pin_enabled' => true, 'pin_hash' => app(PinHasher::class)->hash('0007')]);
+        $user = User::factory()->devicePin()->create();
         $user->syncRoles([$role]);
         $secret = 'shared-role-test-credential';
         $device = SharedDevice::query()->create([
-            'name' => 'Dispositivo de prueba', 'credential_hash' => hash('sha256', $secret),
+            'name' => 'Dispositivo de prueba', 'production_unit_id' => $user->production_unit_id, 'credential_hash' => hash('sha256', $secret),
             'credential_expires_at' => now()->addYear(), 'enrolled_by' => $admin->id, 'enrolled_at' => now(),
         ]);
         $token = $user->createToken('shared', ['api:access'], now()->addHours(8));
@@ -357,16 +356,16 @@ final class RoleManagementTest extends TestCase
         $this->withHeader('X-Shared-Device-Token', $device->id.'|'.$secret)->getJson('/api/v1/shared-device/users')->assertOk()->assertJsonCount(0, 'data');
     }
 
-    // Flujo: promover una cuenta a Admin elimina su PIN operativo y el contexto compartido anterior.
-    public function test_promotion_to_admin_disables_pin_and_revokes_shared_sessions(): void
+    // Flujo: promover una cuenta PIN a Admin se rechaza sin modificar su modalidad ni credencial.
+    public function test_promotion_to_admin_rejects_pin_account_without_destroying_credential(): void
     {
         // Preparación: conserva una sesión compartida antes de promover la cuenta.
         $admin = $this->admin();
         $role = $this->role(['can_login_shared']);
-        $user = User::factory()->create(['pin_enabled' => true, 'pin_hash' => 'test-only-hash']);
+        $user = User::factory()->devicePin()->create();
         $user->syncRoles([$role]);
         $device = SharedDevice::query()->create([
-            'name' => 'Dispositivo de prueba', 'credential_hash' => hash('sha256', 'promotion-test'),
+            'name' => 'Dispositivo de prueba', 'production_unit_id' => $user->production_unit_id, 'credential_hash' => hash('sha256', 'promotion-test'),
             'credential_expires_at' => now()->addYear(), 'enrolled_by' => $admin->id, 'enrolled_at' => now(),
         ]);
         $token = $user->createToken('shared', ['api:access'], now()->addHours(8));
@@ -374,12 +373,12 @@ final class RoleManagementTest extends TestCase
 
         // Request: asigna Admin como único rol y comprueba los efectos de seguridad.
         $adminRole = Role::findByName('admin', 'web');
-        $this->putJson('/api/v1/usuarios/'.$user->id.'/rol', ['rol_id' => $adminRole->id])->assertOk();
-        $this->assertFalse($user->fresh()->pin_enabled);
-        $this->assertNull($user->fresh()->pin_hash);
-        $this->assertNotNull($session->fresh()->revoked_at);
+        $this->putJson('/api/v1/usuarios/'.$user->id.'/rol', ['rol_id' => $adminRole->id])->assertUnprocessable();
+        $this->assertTrue($user->fresh()->pin_enabled);
+        $this->assertNotNull($user->fresh()->pin_hash);
+        $this->assertNull($session->fresh()->revoked_at);
         $this->assertSame(1, $user->roles()->count());
-        $this->assertDatabaseMissing('personal_access_tokens', ['id' => $token->accessToken->id]);
+        $this->assertDatabaseHas('personal_access_tokens', ['id' => $token->accessToken->id]);
     }
 
     // Flujo: una cuenta deshabilitada con sesiones históricas no impide editar los permisos del rol.

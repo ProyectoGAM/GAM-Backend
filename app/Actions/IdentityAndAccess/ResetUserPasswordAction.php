@@ -3,6 +3,7 @@
 namespace App\Actions\IdentityAndAccess;
 
 use App\DTO\AuditAndTraceability\AuditEntryData;
+use App\Exceptions\IdentityAndAccess\IdentityException;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\User;
 use App\Services\IdentityAndAccess\AccessControl;
@@ -19,12 +20,15 @@ final class ResetUserPasswordAction
             $actor = $this->access->lockActor($actor);
             $user = User::withTrashed()->whereKey($user->id)->lockForUpdate()->firstOrFail();
             Gate::forUser($actor)->authorize('update', $user);
+            if ($user->usesDevicePin()) {
+                throw new IdentityException(422, 'ACCESS_METHOD_CONFLICT', 'Una cuenta con acceso PIN no admite contraseña.');
+            }
             $user->forceFill(['password' => $password])->save();
             $user->authSessions()->whereNull('revoked_at')->update([
                 'revoked_at' => now(),
                 'revoked_reason' => 'password_reset',
             ]);
-            $user->tokens()->delete();
+            $this->access->revokeAll($user, 'password_reset');
 
             $this->auditRecorder->record(AuditEntryData::forSubject(
                 subject: $user,

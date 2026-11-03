@@ -69,11 +69,14 @@ final readonly class ReportSourceRegistry
 
     public function canShare(User $user, ReportSource $source): bool
     {
-        return $this->canRead($user, $source) && $this->allows($user, 'can_share_reports');
+        return ! $user->usesDevicePin() && $this->canRead($user, $source) && $this->allows($user, 'can_share_reports');
     }
 
     private function allowsSource(User $user, ReportSource $source): bool
     {
+        if ($user->usesDevicePin() && ! array_key_exists('production_unit_id', $source->definition()->columns)) {
+            return false;
+        }
         foreach ([$source->definition()->permission, ...$source->definition()->additionalPermissions] as $permission) {
             if (! $this->allows($user, $permission)) {
                 return false;

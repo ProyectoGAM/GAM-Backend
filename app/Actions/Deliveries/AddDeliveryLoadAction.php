@@ -13,6 +13,7 @@ use App\Models\Deliveries\DeliveryLoad;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
 use App\Services\Deliveries\DeliveryLoadUnits;
+use App\Services\IdentityAndAccess\AccessControl;
 use Illuminate\Support\Facades\DB;
 
 final readonly class AddDeliveryLoadAction
@@ -29,6 +30,8 @@ final readonly class AddDeliveryLoadAction
         $requestHash = hash('sha256', json_encode($data, JSON_THROW_ON_ERROR));
 
         return DB::transaction(function () use ($delivery, $actor, $data, $idempotencyKey, $requestHash): Delivery {
+            $actor = User::query()->whereKey($actor->id)->lockForUpdate()->firstOrFail();
+            app(AccessControl::class)->assertCurrentSession($actor);
             $locked = Delivery::query()->whereKey($delivery->getKey())->lockForUpdate()->firstOrFail();
             if ($locked->driver_id !== $actor->getKey()) {
                 throw new DeliveryConflict('No puedes cargar huevos en otro reparto.');

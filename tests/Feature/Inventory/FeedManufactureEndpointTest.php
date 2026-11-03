@@ -404,13 +404,14 @@ final class FeedManufactureEndpointTest extends TestCase
     public function test_shared_native_session_requires_current_context_and_generation(): void
     {
         // Preparación: registra un empleado, su credencial y una sesión nativa real.
-        $actor = User::factory()->create();
+        config(['identity.pin.pepper' => 'test-only-temporary-value']);
+        $actor = User::factory()->devicePin()->create();
         foreach (['can_view_feed_stock', 'can_manufacture_feed', 'can_cancel_feed_manufacturing', 'can_adjust_feed_stock', 'can_adjust_feed_ingredients'] as $permission) {
             $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
         $secret = Str::random(64);
         $device = SharedDevice::query()->create([
-            'name' => 'Tablet de prueba', 'credential_hash' => hash('sha256', $secret),
+            'name' => 'Tablet de prueba', 'production_unit_id' => $actor->production_unit_id, 'credential_hash' => hash('sha256', $secret),
             'credential_expires_at' => now()->addYear(), 'enrolled_by' => $actor->id, 'enrolled_at' => now(),
         ]);
         $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_login_shared', 'web'));

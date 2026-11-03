@@ -10,13 +10,15 @@ Sólo usuarios activos con el rol técnico `admin` administran roles, sus permis
 
 `admin` no admite edición ni eliminación; mantiene todos los permisos registrados. `employee` y `delivery` admiten configuración de sus permisos y metadatos visibles, pero sus claves técnicas y existencia están protegidas. No se puede desactivar ni retirar el rol al último Admin activo, incluso mediante solicitudes concurrentes.
 
+La actualización de acceso agrega `unassigned`, visible como **Sin rol**, protegido, siempre vacío y sin login. Asignarlo revoca sesiones existentes. Su descripción indica que la cuenta no tiene permisos ni acceso. Ver [modalidades y UP](access-methods-and-production-unit-implementation.md).
+
 ## Catálogo y autorización
 
 `config/permission-catalog.php` define 84 permisos en 23 módulos con claves estables `can_*`, etiqueta española, descripción breve, dependencias y marca de exclusividad Admin. Las agrupaciones ayudan al editor; no conceden permisos por sí mismas. Generalmente se separa consultar de gestionar, y se distinguen operaciones sensibles como ajustes, redistribuciones, anulaciones y exportaciones.
 
 La persistencia sigue utilizando Spatie Permission 8.3 y la autorización utiliza Policies de Laravel 13. Las Policies de dominio mantienen sus validaciones de estado y negocio. `RolePolicy` exige el rol Admin explícitamente; `UserPolicy` protege las cuentas y asignaciones. No hay un bypass global mediante `Gate::before`.
 
-Los permisos funcionales son globales para todas las unidades productivas de la empresa. No se incorporan asignaciones por UP ni claves con identificadores de registros.
+Las claves de permisos siguen siendo funcionales y no contienen IDs. Las cuentas con correo sin UP conservan alcance empresarial; las cuentas PIN pertenecen a una única UP y sus permisos nunca amplían ese límite. Un control previo de autorización puede denegar un recurso fuera de la UP antes de evaluar su Policy funcional.
 
 Las operaciones que ya eran exclusivas de Admin, como gestión de medicamentos/vacunas, presentaciones de huevos y ajustes/reversiones de cuentas corrientes, mantienen esa restricción. El catálogo las identifica como no asignables a otros roles. El stock físico sanitario sigue deshabilitado.
 

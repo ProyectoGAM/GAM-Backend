@@ -12,11 +12,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
+ * @property int|null $production_unit_id
  * @property ReportExportFormat $format
  * @property ReportExportStatus $status
  * @property array<string, mixed> $query
  */
 #[Fillable([
+    'production_unit_id',
     'user_id',
     'operation_id',
     'idempotency_key_hash',
@@ -49,6 +51,7 @@ class ReportExport extends Model
     protected function casts(): array
     {
         return [
+            'production_unit_id' => 'integer',
             'query' => 'array',
             'format' => ReportExportFormat::class,
             'status' => ReportExportStatus::class,
