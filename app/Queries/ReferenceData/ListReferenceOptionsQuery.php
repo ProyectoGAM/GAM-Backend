@@ -101,34 +101,34 @@ final readonly class ListReferenceOptionsQuery
             ],
         ];
 
-        if ($this->allowedAny($actor, ['geography.view', 'geography.manage'])) {
+        if ($this->allowedAny($actor, ['can_view_geography', 'can_manage_geography'])) {
             $options['departments'] = $this->departments();
             $options['localities'] = $this->localities();
         }
 
-        if ($this->allowedAny($actor, ['production-units.view', 'production-units.manage', 'inventory.manage'])) {
+        if ($this->allowedAny($actor, ['can_view_production_units', 'can_manage_production_units', 'can_manage_inventory'])) {
             $options['production_units'] = $this->productionUnits();
         }
 
-        if ($this->allowedAny($actor, ['poultry-houses.view', 'poultry-houses.manage'])) {
+        if ($this->allowedAny($actor, ['can_view_poultry_houses', 'can_manage_poultry_houses'])) {
             $options['poultry_houses'] = $this->poultryHouses();
         }
 
-        if ($this->allowedAny($actor, ['suppliers.view', 'suppliers.manage', 'inventory.move'])) {
+        if ($this->allowedAny($actor, ['can_view_suppliers', 'can_manage_suppliers', 'can_move_inventory'])) {
             $options['suppliers'] = $this->suppliers();
         }
 
-        if ($this->allowedAny($actor, ['products.view', 'products.manage', 'inventory.move', 'inventory.adjust'])) {
+        if ($this->allowedAny($actor, ['can_view_products', 'can_manage_products', 'can_move_inventory', 'can_adjust_inventory'])) {
             $options['products'] = $this->products();
         }
 
-        if ($this->allowedAny($actor, ['inventory.view', 'inventory.move', 'inventory.adjust', 'inventory.manage'])) {
+        if ($this->allowedAny($actor, ['can_view_inventory', 'can_move_inventory', 'can_adjust_inventory', 'can_manage_inventory'])) {
             $options['stock_locations'] = $this->stockLocations();
             $options['inventory_balances'] = $this->stockBalances();
             $options['movements'] = $this->movements();
         }
 
-        if ($this->allowed($actor, 'audit.view')) {
+        if ($this->allowed($actor, 'can_view_audit')) {
             $options['audit'] = [
                 'events' => AuditEntry::query()->whereNotNull('event')->select('event')->selectRaw('MAX(description) AS description')
                     ->groupBy('event')->orderBy('event')->get()

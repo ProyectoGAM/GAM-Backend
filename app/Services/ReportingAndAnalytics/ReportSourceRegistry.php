@@ -23,7 +23,7 @@ final readonly class ReportSourceRegistry
     /**
      * @return list<ReportSource>
      */
-    public function authorizedFor(User $user, string $permission = 'reports.view'): array
+    public function authorizedFor(User $user, string $permission = 'can_view_reports'): array
     {
         return array_values(array_filter(
             $this->sources,
@@ -52,7 +52,7 @@ final readonly class ReportSourceRegistry
 
     public function canRead(User $user, ReportSource $source): bool
     {
-        return $this->allows($user, 'reports.view') && $this->allowsSource($user, $source);
+        return $this->allows($user, 'can_view_reports') && $this->allowsSource($user, $source);
     }
 
     public function assertCanExport(User $user, ReportSource $source): void
@@ -64,16 +64,19 @@ final readonly class ReportSourceRegistry
 
     public function canExport(User $user, ReportSource $source): bool
     {
-        return $this->allows($user, 'reports.export') && $this->allowsSource($user, $source);
+        return $this->allows($user, 'can_export_reports') && $this->allowsSource($user, $source);
     }
 
     public function canShare(User $user, ReportSource $source): bool
     {
-        return $this->canRead($user, $source) && $this->allows($user, 'reports.share');
+        return ! $user->usesDevicePin() && $this->canRead($user, $source) && $this->allows($user, 'can_share_reports');
     }
 
     private function allowsSource(User $user, ReportSource $source): bool
     {
+        if ($user->usesDevicePin() && ! array_key_exists('production_unit_id', $source->definition()->columns)) {
+            return false;
+        }
         foreach ([$source->definition()->permission, ...$source->definition()->additionalPermissions] as $permission) {
             if (! $this->allows($user, $permission)) {
                 return false;

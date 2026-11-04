@@ -9,7 +9,7 @@ final class StartDeliveryRequest extends DeliveryRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('delivery.start') ?? false;
+        return $this->user()?->can('can_start_deliveries') ?? false;
     }
 
     protected function prepareForValidation(): void

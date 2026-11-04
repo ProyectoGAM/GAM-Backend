@@ -2,10 +2,10 @@
 
 namespace Database\Seeders;
 
+use App\Models\IdentityAndAccess\Role;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use RuntimeException;
-use Spatie\Permission\Models\Role;
 
 final class AdminUserSeeder extends Seeder
 {

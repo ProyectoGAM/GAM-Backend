@@ -34,11 +34,11 @@ final class ReferenceOptionsEndpointTest extends TestCase
         $location = StockLocation::factory()->create(['production_unit_id' => $unit->getKey(), 'name' => 'Depósito principal']);
         $balance = StockBalance::factory()->create(['product_id' => $product->getKey(), 'stock_location_id' => $location->getKey()]);
         $actor = $this->userWithPermissions([
-            'geography.view',
-            'production-units.view',
-            'suppliers.view',
-            'products.view',
-            'inventory.view',
+            'can_view_geography',
+            'can_view_production_units',
+            'can_view_suppliers',
+            'can_view_products',
+            'can_view_inventory',
         ]);
         Sanctum::actingAs($actor, ['*']);
 
@@ -69,7 +69,7 @@ final class ReferenceOptionsEndpointTest extends TestCase
     public function test_inventory_options_use_the_current_plant_name_without_farm_permissions(): void
     {
         // Preparación: crea una planta con ubicación técnica y saldo de un ingrediente.
-        $actor = $this->userWithPermissions(['inventory.view']);
+        $actor = $this->userWithPermissions(['can_view_inventory']);
         Sanctum::actingAs($actor, ['*']);
         $unit = ProductionUnit::factory()->create(['name' => 'Granja Norte']);
         $house = PoultryHouse::factory()->feed()->create(['production_unit_id' => $unit->getKey(), 'name' => 'Planta original']);
@@ -104,7 +104,7 @@ final class ReferenceOptionsEndpointTest extends TestCase
     {
         $user = User::factory()->create();
         foreach ($permissions as $permission) {
-            $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+            $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
 
         return $user;

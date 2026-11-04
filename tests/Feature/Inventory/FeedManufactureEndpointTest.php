@@ -404,12 +404,17 @@ final class FeedManufactureEndpointTest extends TestCase
     public function test_shared_native_session_requires_current_context_and_generation(): void
     {
         // Preparación: registra un empleado, su credencial y una sesión nativa real.
-        $actor = User::factory()->create();
+        config(['identity.pin.pepper' => 'test-only-temporary-value']);
+        $actor = User::factory()->devicePin()->create();
+        foreach (['can_view_feed_stock', 'can_manufacture_feed', 'can_cancel_feed_manufacturing', 'can_adjust_feed_stock', 'can_adjust_feed_ingredients'] as $permission) {
+            $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+        }
         $secret = Str::random(64);
         $device = SharedDevice::query()->create([
-            'name' => 'Tablet de prueba', 'credential_hash' => hash('sha256', $secret),
+            'name' => 'Tablet de prueba', 'production_unit_id' => $actor->production_unit_id, 'credential_hash' => hash('sha256', $secret),
             'credential_expires_at' => now()->addYear(), 'enrolled_by' => $actor->id, 'enrolled_at' => now(),
         ]);
+        $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_login_shared', 'web'));
         $token = $actor->createToken('shared-user', ['*'], now()->addHours(8));
         $session = app(AuthSessionService::class)->createShared($actor, $device->refresh(), $token);
         $headers = ['Authorization' => 'Bearer '.$token->plainTextToken, 'X-Shared-Device-Token' => $device->id.'|'.$secret, 'X-GAM-Session' => $session->id];
@@ -434,7 +439,7 @@ final class FeedManufactureEndpointTest extends TestCase
     {
         // Preparación: crea una elaboración con sus líneas originales.
         $data = $this->fixture();
-        $data['actor']->givePermissionTo(Permission::findOrCreate('inventory.adjust', 'web'));
+        $data['actor']->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_adjust_inventory', 'web'));
         $created = $this->manufacture($data)->assertCreated();
         $movement = InventoryMovement::query()->findOrFail($created->json('data.movimiento_id'));
 
@@ -454,7 +459,7 @@ final class FeedManufactureEndpointTest extends TestCase
     {
         // Preparación: elabora y desactiva un ingrediente sin crear una cancelación.
         $data = $this->fixture();
-        $data['actor']->givePermissionTo(Permission::findOrCreate('inventory.move', 'web'));
+        $data['actor']->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_move_inventory', 'web'));
         $created = $this->manufacture($data)->assertCreated();
         $original = FeedStockOperation::query()->findOrFail($created->json('data.id'));
         $data['products'][0]->forceFill(['status' => ProductStatus::Inactive])->save();
@@ -487,7 +492,7 @@ final class FeedManufactureEndpointTest extends TestCase
         }
         $this->postJson('/api/v1/elaboraciones', [], $this->headers())->assertUnauthorized();
 
-        // Preparación: un usuario sin permisos específicos mantiene el acceso provisional acordado.
+        // Preparación: un usuario con los permisos de alimento puede validar los filtros.
         $this->fixture();
 
         // Requests: rechaza paginación sin límites y campos inesperados.
@@ -500,6 +505,9 @@ final class FeedManufactureEndpointTest extends TestCase
     private function fixture(): array
     {
         $actor = User::factory()->create();
+        foreach (['can_view_feed_stock', 'can_manufacture_feed', 'can_cancel_feed_manufacturing', 'can_adjust_feed_stock', 'can_adjust_feed_ingredients'] as $permission) {
+            $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+        }
         Sanctum::actingAs($actor);
         $recipe = FeedRecipe::factory()->create(['created_by' => $actor->id]);
         $products = Product::factory()->rawMaterial()->count(2)->create()->all();

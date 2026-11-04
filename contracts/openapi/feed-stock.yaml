@@ -26,7 +26,7 @@ paths:
       operationId: listAllowedStockProducts
       summary: Consulta productos permitidos por ubicación y operación de stock
       description: >-
-        Requiere inventory.view o rol admin y el contexto de sesión compartida
+        Requiere can_view_inventory o rol admin y el contexto de sesión compartida
         cuando corresponda. Devuelve productos activos que controlan stock,
         compatibles con el tipo explícito de ubicación. Las cámaras sólo admiten
         supply y other; sanidad está deshabilitada y no admite productos; las cuentas de huevos
@@ -109,7 +109,7 @@ paths:
       operationId: createFeedIngredient
       summary: Crea un ingrediente y registra su primera carga
       description: >-
-        Requiere products.manage e inventory.move. La planta debe ser de tipo
+        Requiere can_manage_products e can_move_inventory. La planta debe ser de tipo
         feed. Idempotency-Key identifica la operación: el mismo contenido
         devuelve la representación existente y una clave reutilizada con otros
         datos devuelve 409. La cantidad positiva se normaliza a gramos. Si se
@@ -142,7 +142,7 @@ paths:
       tags: [Plantas de ración]
       operationId: getFeedStockByPlant
       summary: Consulta el stock de una planta de ración
-      description: Requiere inventory.view. Incluye saldos negativos y plantas inactivas.
+      description: Requiere can_view_inventory. Incluye saldos negativos y plantas inactivas.
       responses:
         '200': { $ref: '#/components/responses/FeedStockResponse' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
@@ -155,7 +155,7 @@ paths:
       tags: [Plantas de ración]
       operationId: getFeedStockByProductionUnit
       summary: Suma el stock de las plantas activas de una unidad productiva
-      description: Requiere inventory.view. Excluye sólo las plantas inactivas.
+      description: Requiere can_view_inventory. Excluye sólo las plantas inactivas.
       responses:
         '200': { $ref: '#/components/responses/FeedStockResponse' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
@@ -166,7 +166,7 @@ paths:
       tags: [Plantas de ración]
       operationId: getGlobalFeedStock
       summary: Suma el stock de las plantas activas de todas las unidades
-      description: Requiere inventory.view. Excluye sólo las plantas inactivas.
+      description: Requiere can_view_inventory. Excluye sólo las plantas inactivas.
       responses:
         '200': { $ref: '#/components/responses/FeedStockResponse' }
         '401': { $ref: '#/components/responses/Unauthenticated' }

@@ -16,7 +16,7 @@ final class SessionManagementTest extends TestCase
     public function test_user_can_list_and_revoke_a_personal_session(): void
     {
         $user = User::factory()->create(['password' => 'correct-password']);
-        $user->givePermissionTo(Permission::findOrCreate('identity.personal.login', 'web'));
+        $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_login_native', 'web'));
         $response = $this->postJson('/api/v1/auth/login', [
             'email' => $user->email,
             'password' => 'correct-password',
@@ -45,9 +45,9 @@ final class SessionManagementTest extends TestCase
     public function test_admin_password_reset_revokes_existing_sessions(): void
     {
         $admin = User::factory()->create();
-        $admin->givePermissionTo(Permission::findOrCreate('identity.users.manage', 'web'));
+        $admin->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_manage_users', 'web'));
         $user = User::factory()->create(['password' => 'old-password']);
-        $user->givePermissionTo(Permission::findOrCreate('identity.personal.login', 'web'));
+        $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_login_native', 'web'));
         $token = $user->createToken('old-session', ['api:access']);
         $session = AuthSession::query()->create([
             'user_id' => $user->getKey(),
@@ -77,7 +77,7 @@ final class SessionManagementTest extends TestCase
     public function test_admin_can_revoke_all_sessions_without_changing_the_password(): void
     {
         $admin = User::factory()->create();
-        $admin->givePermissionTo(Permission::findOrCreate('identity.sessions.manage', 'web'));
+        $admin->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_manage_user_sessions', 'web'));
         $user = User::factory()->create(['password' => 'unchanged-password']);
         $token = $user->createToken('revoked-session', ['api:access']);
         $session = AuthSession::query()->create([

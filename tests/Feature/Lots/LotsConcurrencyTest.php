@@ -79,7 +79,7 @@ final class LotsConcurrencyTest extends TestCase
     private function actor(string $permission): User
     {
         $actor = User::factory()->create();
-        $actor->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+        $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
 
         return $actor;
     }
@@ -100,11 +100,11 @@ final class LotsConcurrencyTest extends TestCase
         // Preparación: confirma referencias compartidas y dos usuarios diferentes.
         $house = PoultryHouse::factory()->create(['bird_capacity' => 100]);
         $breed = Breed::factory()->create();
-        $planSelection = $this->publishedPlanSelection($this->actor('flocks.manage'));
+        $planSelection = $this->publishedPlanSelection($this->actor('can_manage_flocks'));
         $commands = [];
         foreach ([1, 2] as $number) {
             $commands[] = [
-                'actor_id' => $this->actor('flocks.manage')->id,
+                'actor_id' => $this->actor('can_manage_flocks')->id,
                 'data' => ['code' => 'CONCURRENT-'.$number, 'breed_id' => $breed->id, 'origin' => 'Propio',
                     'poultry_house_id' => $house->id, 'initial_quantity' => 30,
                     'entry_date' => now(config('lots.timezone'))->toDateString(), 'idempotency_key' => (string) Str::uuid(),
@@ -143,7 +143,7 @@ final class LotsConcurrencyTest extends TestCase
         $flock = Flock::factory()->create(['initial_quantity' => 10, 'current_quantity' => 10]);
         $commands = [];
         foreach ([1, 2] as $number) {
-            $commands[] = ['flock_id' => $flock->id, 'actor_id' => $this->actor('mortality.manage')->id,
+            $commands[] = ['flock_id' => $flock->id, 'actor_id' => $this->actor('can_manage_mortality')->id,
                 'data' => ['version' => 1, 'quantity' => 7, 'notes' => 'Bajas observadas', 'occurred_at' => now()->startOfSecond()->toIso8601String(), 'idempotency_key' => (string) Str::uuid()]];
         }
 
@@ -172,7 +172,7 @@ final class LotsConcurrencyTest extends TestCase
     public function test_concurrent_duplicate_keys_produce_exactly_one_operation(): void
     {
         // Preparación: utiliza un único actor y exactamente el mismo comando.
-        $actor = $this->actor('flocks.manage');
+        $actor = $this->actor('can_manage_flocks');
         $actorId = $actor->id;
         $planSelection = $this->publishedPlanSelection($actor);
         $data = ['code' => 'SAME-KEY', 'breed_id' => Breed::factory()->create()->id, 'origin' => 'Propio',

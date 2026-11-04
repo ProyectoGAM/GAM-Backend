@@ -70,8 +70,8 @@ final class DeliveryResource extends JsonResource
                 : (($this->unpriced_stops_count ?? 0) > 0 ? null : ($this->delivered_amount ?? '0.000')),
             'currency' => Money::CURRENCY,
             'financial_summary' => $this->when($this->relationLoaded('stops') && $this->relationLoaded('accountMovements'),
-                fn () => app(DeliveryFinancialSummary::class)->execute($this->resource)),
-            'closed_financial_summary' => $this->financial_snapshot,
+                fn () => $this->presentFinancialSummary(app(DeliveryFinancialSummary::class)->execute($this->resource), $request)),
+            'closed_financial_summary' => $this->presentFinancialSummary($this->financial_snapshot, $request),
             'account_movements' => CustomerMovementResource::collection($this->whenLoaded('accountMovements')),
             'remaining_quantity' => $deliveredQuantity === null
                 ? null
@@ -97,5 +97,19 @@ final class DeliveryResource extends JsonResource
             'stops' => DeliveryStopResource::collection($this->whenLoaded('stops')),
             'locations' => DeliveryLocationResource::collection($this->whenLoaded('locations')),
         ];
+    }
+
+    /** Los saldos empresariales no se exponen en el contexto de una sola UP. @param array<string, mixed>|null $summary @return array<string, mixed>|null */
+    private function presentFinancialSummary(?array $summary, Request $request): ?array
+    {
+        if ($summary !== null && $request->user()?->usesDevicePin()) {
+            $summary['customers'] = array_map(static function (array $customer): array {
+                unset($customer['balance_before'], $customer['balance_after']);
+
+                return $customer;
+            }, $summary['customers'] ?? []);
+        }
+
+        return $summary;
     }
 }

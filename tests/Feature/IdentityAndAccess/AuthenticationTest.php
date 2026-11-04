@@ -2,12 +2,12 @@
 
 namespace Tests\Feature\IdentityAndAccess;
 
+use App\Models\IdentityAndAccess\Role;
 use App\Models\User;
 use Database\Seeders\IdentityPermissionSeeder;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class AuthenticationTest extends TestCase
@@ -47,7 +47,7 @@ class AuthenticationTest extends TestCase
             'email' => 'login@example.test',
             'password' => 'correct-password',
         ]);
-        $user->givePermissionTo(Permission::findOrCreate('identity.personal.login', 'web'));
+        $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_login_native', 'web'));
 
         // Acción: inicia sesión con las credenciales válidas.
         $response = $this->postJson('/api/v1/auth/login', [
@@ -76,7 +76,7 @@ class AuthenticationTest extends TestCase
             'email' => 'web-login@example.test',
             'password' => 'correct-password',
         ]);
-        $user->givePermissionTo(Permission::findOrCreate('identity.web.login', 'web'));
+        $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_login_web', 'web'));
 
         // Acción: inicia la sesión stateful desde el origen permitido.
         $this->withHeader('Origin', 'http://localhost:4200')
@@ -103,7 +103,7 @@ class AuthenticationTest extends TestCase
             'email' => 'delivery-web-login@example.test',
             'password' => 'correct-password',
         ]);
-        $user->assignRole(Role::findByName('delivery', 'web'));
+        $user->syncRoles([Role::findByName('delivery', 'web')]);
 
         $this->withHeader('Origin', 'http://localhost:4200')
             ->postJson('/api/v1/auth/web/login', [
@@ -211,7 +211,7 @@ class AuthenticationTest extends TestCase
             ->assertJsonPath('data.id', $user->id)
             ->assertJsonPath('data.email', 'profile@example.test')
             ->assertJsonPath('data.deleted_at', null)
-            ->assertJsonPath('data.roles', [])
+            ->assertJsonPath('data.rol.id', $user->roles()->firstOrFail()->id)
             ->assertJsonPath('data.permissions', []);
     }
 

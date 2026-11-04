@@ -13,6 +13,9 @@ final class VehicleResource extends JsonResource
     /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
+        if ($request->user()?->usesDevicePin()) {
+            return ['id' => $this->public_id, 'plate' => $this->plate, 'make' => $this->make, 'model' => $this->model, 'capacity_kg' => $this->capacity_kg, 'status' => $this->status];
+        }
         $availability = $this->resource->getAttribute('vehicle_availability') ?? app(VehicleAvailability::class)->describe($this->resource);
 
         return [

@@ -34,7 +34,7 @@ final readonly class CorrectMortalityAction
     /** @param array<string, mixed> $data */
     public function execute(MortalityRecord $record, array $data, User $actor, bool $cancel = false, string $source = 'api'): FlockOperation
     {
-        return $this->commands->execute($actor, 'mortality.manage', $cancel ? 'mortality.cancel' : 'mortality.correct', $data['idempotency_key'], ['record' => $record->public_id, ...$data], function (string $operationId) use ($record, $data, $actor, $cancel, $source): array {
+        return $this->commands->execute($actor, 'can_manage_mortality', $cancel ? 'mortality.cancel' : 'mortality.correct', $data['idempotency_key'], ['record' => $record->public_id, ...$data], function (string $operationId) use ($record, $data, $actor, $cancel, $source): array {
             $flockId = Flock::query()->whereKey($record->flock_id)->value('public_id');
             $flock = $this->state->lock([$flockId])->get($flockId);
             $current = MortalityRecord::query()->whereKey($record->id)->lockForUpdate()->firstOrFail();

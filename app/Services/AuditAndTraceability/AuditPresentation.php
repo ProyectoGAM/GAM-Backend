@@ -16,6 +16,7 @@ final readonly class AuditPresentation
 {
     /** @var array<string, string> */
     private const FIELDS = [
+        'label' => 'Nombre visible', 'role' => 'Rol', 'enabled' => 'Habilitado',
         'name' => 'Nombre', 'code' => 'Código', 'status' => 'Estado',
         'mode' => 'Modo de alimentación', 'age_days' => 'Edad en días', 'population' => 'Cantidad de aves',
         'quantity_grams' => 'Cantidad de ración', 'daily_quantity_grams' => 'Cantidad diaria de ración',
@@ -186,7 +187,7 @@ final readonly class AuditPresentation
             $resource = $subject['resource'] ?? null;
             $identifier = $subject['id'] ?? null;
             $knownResource = is_string($resource) && in_array($resource, [
-                'user', 'flock', 'production_unit', 'poultry_house', 'department', 'locality',
+                'user', 'role', 'flock', 'production_unit', 'poultry_house', 'department', 'locality',
                 'feed_recipe', 'stock_location', 'egg_presentation', 'medicine', 'vaccine',
                 'product', 'supplier', 'customer', 'inventory_movement',
             ], true);

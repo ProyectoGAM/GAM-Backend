@@ -11,7 +11,7 @@ final class DeliveriesReportSource extends SqlReportSource
 {
     public function definition(): ReportSourceDefinition
     {
-        return $this->describe('deliveries.deliveries', 'Reparto', 'Una fila por entrega confirmada. Valor de mercadería y cantidades reales; los cobros y la deuda requieren su registro en el módulo financiero.', 'delivery.history', [
+        return $this->describe('deliveries.deliveries', 'Reparto', 'Una fila por entrega confirmada. Valor de mercadería y cantidades reales; los cobros y la deuda requieren su registro en el módulo financiero.', 'can_view_delivery_history', [
             'date' => ['label' => 'Fecha', 'type' => 'datetime'], 'delivery_id' => ['label' => 'Reparto', 'type' => 'string'],
             'delivery' => ['label' => 'Reparto', 'type' => 'string'], 'client_id' => ['label' => 'Cliente', 'type' => 'string'], 'client' => ['label' => 'Cliente', 'type' => 'string'],
             'quantity' => ['label' => 'Huevos entregados', 'type' => 'quantity', 'unit' => 'huevos'],

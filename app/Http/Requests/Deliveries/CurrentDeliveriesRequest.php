@@ -9,7 +9,7 @@ final class CurrentDeliveriesRequest extends DeliveryRequest
         $actor = $this->user();
 
         return $actor !== null
-            && ($actor->can('delivery.monitor') || $actor->can('delivery.view-own'));
+            && ($actor->can('can_monitor_deliveries') || $actor->can('can_view_own_deliveries'));
     }
 
     /** @return array<string, list<string>> */
@@ -31,7 +31,7 @@ final class CurrentDeliveriesRequest extends DeliveryRequest
 
         $actor = $this->user();
 
-        if ($actor !== null && ! $actor->can('delivery.monitor')) {
+        if ($actor !== null && ! $actor->can('can_monitor_deliveries')) {
             $filters['driver_id'] = $actor->getKey();
         }
 

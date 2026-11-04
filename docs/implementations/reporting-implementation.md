@@ -2,23 +2,25 @@
 
 La implementación reutiliza el motor ReportingAndAnalytics y agrega una pantalla Angular de consulta, configuraciones privadas y exportaciones. El DOCX `Reportes_de_SGA.docx` se interpreta como necesidades de negocio: no exige nombres de columnas de base de datos. Se conservan datos históricos desconocidos como vacíos.
 
+La actualización de [acceso por UP](access-methods-and-production-unit-implementation.md) restringe las sesiones PIN: las fuentes SQL filtran antes de agregar u ofrecer opciones, y las fuentes sin UP demostrable quedan denegadas. Configuraciones y exportaciones conservan su UP; el worker genera con ese contexto y rechaza un traslado posterior del solicitante. La descarga privada revalida la sesión. Las exportaciones restringidas no admiten enlaces públicos.
+
 ## Fuentes entregadas
 
 | Fuente | Alcance | Permiso funcional |
 | --- | --- | --- |
-| `inventory.stock-balances` | Stock actual; rechaza fechas históricas | `inventory.view` |
-| `inventory.movements` | Movimientos físicos y sus unidades | `inventory.view` |
-| `lots.egg-production` | Postura válida y total vitalicio por galpón | `egg-collections.view` |
-| `lots.admissions` | Ingresos y alojamientos no revertidos; cantidad ingresada | `flocks.view` |
-| `lots.weighing-measurements` | Muestras históricas y diarias; promedio ponderado por aves | `weighings.view` |
-| `management.vaccinations` | Aplicaciones válidas, vacuna y partida registrada | `management-plans.view` |
-| `management.executions` | Manejos realizados y programación de la revisión aplicable | `management-plans.view` |
-| `management.feed-supply` | Ración registrada y pauta estimada separadas | `management-plans.view` |
-| `deliveries.deliveries` | Una fila por entrega confirmada, cantidades, presentaciones, valor y notas | `delivery.history` |
-| `vehicles.usage` | Usos, responsables y kilometraje registrado | `vehicles.view` |
-| `vehicles.fuel` | Cargas de combustible, litros e importe en UYU | `vehicles.fuel.view` |
-| `vehicles.maintenance` | Intervenciones, estado y costos | `vehicles.maintenance.view` |
-| `commerce.egg-outflow` | Vendidos, donados y total, excluyendo cargas/ajustes/pérdidas | `delivery.history` y `egg-stock.view` |
+| `inventory.stock-balances` | Stock actual; rechaza fechas históricas | `can_view_inventory` |
+| `inventory.movements` | Movimientos físicos y sus unidades | `can_view_inventory` |
+| `lots.egg-production` | Postura válida y total vitalicio por galpón | `can_view_egg_collections` |
+| `lots.admissions` | Ingresos y alojamientos no revertidos; cantidad ingresada | `can_view_flocks` |
+| `lots.weighing-measurements` | Muestras históricas y diarias; promedio ponderado por aves | `can_view_weighings` |
+| `management.vaccinations` | Aplicaciones válidas, vacuna y partida registrada | `can_view_management_plans` |
+| `management.executions` | Manejos realizados y programación de la revisión aplicable | `can_view_management_plans` |
+| `management.feed-supply` | Ración registrada y pauta estimada separadas | `can_view_management_plans` |
+| `deliveries.deliveries` | Una fila por entrega confirmada, cantidades, presentaciones, valor y notas | `can_view_delivery_history` |
+| `vehicles.usage` | Usos, responsables y kilometraje registrado | `can_view_vehicles` |
+| `vehicles.fuel` | Cargas de combustible, litros e importe en UYU | `can_view_vehicle_fuel` |
+| `vehicles.maintenance` | Intervenciones, estado y costos | `can_view_vehicle_maintenance` |
+| `commerce.egg-outflow` | Vendidos, donados y total, excluyendo cargas/ajustes/pérdidas | `can_view_delivery_history` y `can_view_egg_stock` |
 
 El servidor define filtros, columnas, ordenamientos, dimensiones, métricas, opciones, consultas estándar y capacidades. La UI ofrece las consultas estándar antes de las opciones avanzadas. Las nuevas fuentes admiten todo el historial registrado (`max_range_days=0`), con 100 filas por página y 50.000 por XLSX. PDF se limita a 2.000 filas. No se recortan archivos silenciosamente: superar el límite produce un fallo accionable.
 
@@ -69,7 +71,7 @@ Ejemplo de donación, con el mismo protocolo de idempotencia:
 {"quantity": 12, "occurred_at": "2026-10-12T10:00:00-03:00", "reason": "Entrega a escuela", "notes": "Dos envases de seis"}
 ```
 
-La donación utiliza `egg_stock_transactions.type=donation` y la Action existente para descontar stock físico, bajo `egg-stock.move`. Corrección/anulación reutiliza inventario con `egg-stock.adjust`. El historial de huevos permite filtrar el nuevo tipo. El registro/anulación de alimento exige `management-plans.execute`; consulta/opciones exige view o execute. Ambos hechos son idempotentes y se auditan dentro de la misma transacción. Alimentación también participa en el diario del lote para proteger las reversiones de redistribución.
+La donación utiliza `egg_stock_transactions.type=donation` y la Action existente para descontar stock físico, bajo `can_move_egg_stock`. Corrección/anulación reutiliza inventario con `can_adjust_egg_stock`. El historial de huevos permite filtrar el nuevo tipo. El registro/anulación de alimento exige `can_execute_management_plans`; consulta/opciones exige view o execute. Ambos hechos son idempotentes y se auditan dentro de la misma transacción. Alimentación también participa en el diario del lote para proteger las reversiones de redistribución.
 
 ## Exportación, cola y compartición
 

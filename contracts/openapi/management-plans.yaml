@@ -38,7 +38,7 @@ paths:
     get:
       tags: [Plantillas]
       summary: Lista plantillas de manejo
-      description: Requiere management-plans.view o management-plans.manage. Los borradores son visibles para gestores. El filtro has_draft requiere management-plans.manage y se aplica antes de paginar.
+      description: Requiere can_view_management_plans o can_manage_management_plans. Los borradores son visibles para gestores. El filtro has_draft requiere can_manage_management_plans y se aplica antes de paginar.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PerPage'
@@ -60,7 +60,7 @@ paths:
     post:
       tags: [Plantillas]
       summary: Crea una plantilla en borrador
-      description: Requiere management-plans.manage. No crea manejos ni movimientos de stock.
+      description: Requiere can_manage_management_plans. No crea manejos ni movimientos de stock.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -82,7 +82,7 @@ paths:
       tags: [Plantillas]
       summary: Consulta una versión de plantilla
       description: >-
-        Requiere management-plans.view o management-plans.manage. Con solo permiso de consulta
+        Requiere can_view_management_plans o can_manage_management_plans. Con solo permiso de consulta
         se accede únicamente a versiones publicadas alguna vez; los borradores son exclusivos
         de gestores. Sin version consulta la publicada, o la actual si aún no se publicó y el
         actor es gestor.
@@ -101,7 +101,7 @@ paths:
     patch:
       tags: [Plantillas]
       summary: Crea una nueva versión en borrador
-      description: Requiere management-plans.manage. Una versión publicada nunca se modifica.
+      description: Requiere can_manage_management_plans. Una versión publicada nunca se modifica.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -121,7 +121,7 @@ paths:
     post:
       tags: [Plantillas]
       summary: Publica la versión actual
-      description: Requiere management-plans.manage. La versión previamente publicada queda retirada para nuevas asignaciones.
+      description: Requiere can_manage_management_plans. La versión previamente publicada queda retirada para nuevas asignaciones.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -158,7 +158,7 @@ paths:
     post:
       tags: [Plantillas]
       summary: Reactiva una plantilla retirada
-      description: Requiere management-plans.manage. Solo cambia el estado de la plantilla a active; conserva sus versiones, actividades y copias de lote. Una plantilla nunca publicada sigue sin poder asignarse hasta su publicación. Registra auditoría.
+      description: Requiere can_manage_management_plans. Solo cambia el estado de la plantilla a active; conserva sus versiones, actividades y copias de lote. Una plantilla nunca publicada sigue sin poder asignarse hasta su publicación. Registra auditoría.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -179,7 +179,7 @@ paths:
     get:
       tags: [Planes de lote]
       summary: Consulta el plan propio del lote
-      description: Requiere management-plans.view o management-plans.manage.
+      description: Requiere can_view_management_plans o can_manage_management_plans.
       parameters:
         - name: include_revisions
           in: query
@@ -194,7 +194,7 @@ paths:
     post:
       tags: [Planes de lote]
       summary: Asigna explícitamente un plan a un lote anterior
-      description: Requiere management-plans.manage. No atribuye planes históricos automáticamente.
+      description: Requiere can_manage_management_plans. No atribuye planes históricos automáticamente.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -211,7 +211,7 @@ paths:
     patch:
       tags: [Planes de lote]
       summary: Añade una revisión completa al plan del lote
-      description: Requiere management-plans.manage. Las actividades de revisiones anteriores y sus vínculos con ejecuciones permanecen.
+      description: Requiere can_manage_management_plans. Las actividades de revisiones anteriores y sus vínculos con ejecuciones permanecen.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -230,7 +230,7 @@ paths:
     get:
       tags: [Historial]
       summary: Consulta cronológica paginada de manejos efectivos
-      description: Requiere management-plans.view. Incluye hechos fuera de plan, correcciones y antecedentes de fraccionamiento con su operación original. Programar una actividad no crea un hecho en esta lista.
+      description: Requiere can_view_management_plans. Incluye hechos fuera de plan, correcciones y antecedentes de fraccionamiento con su operación original. Programar una actividad no crea un hecho en esta lista.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PerPage'
@@ -256,7 +256,7 @@ paths:
     post:
       tags: [Ejecuciones]
       summary: Registra una aplicación de vacuna
-      description: Requiere management-plans.execute. Registra la aplicación sin cantidad ni consumo de stock. Sin plan_activity_id se exige reason; con una actividad válida del plan vigente el motivo es opcional. Si la actividad identifica una vacuna, debe coincidir con vaccine_id. No se infiere el vínculo por fecha ni catálogo.
+      description: Requiere can_execute_management_plans. Registra la aplicación sin cantidad ni consumo de stock. Sin plan_activity_id se exige reason; con una actividad válida del plan vigente el motivo es opcional. Si la actividad identifica una vacuna, debe coincidir con vaccine_id. No se infiere el vínculo por fecha ni catálogo.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -272,7 +272,7 @@ paths:
     post:
       tags: [Ejecuciones]
       summary: Registra una aplicación de medicamento
-      description: Requiere management-plans.execute. Registra la aplicación sin cantidad, saldo clínico ni consumo de inventario. Sin plan_activity_id se exige reason; con una actividad válida del plan vigente el motivo es opcional. Si la actividad identifica un medicamento, debe coincidir con medicine_id. No se infiere el vínculo por fecha ni catálogo.
+      description: Requiere can_execute_management_plans. Registra la aplicación sin cantidad, saldo clínico ni consumo de inventario. Sin plan_activity_id se exige reason; con una actividad válida del plan vigente el motivo es opcional. Si la actividad identifica un medicamento, debe coincidir con medicine_id. No se infiere el vínculo por fecha ni catálogo.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -288,7 +288,7 @@ paths:
     post:
       tags: [Ejecuciones]
       summary: Registra un cambio de ración
-      description: Requiere management-plans.execute. Puede referir alimento terminado; no infiere ni descuenta consumo diario.
+      description: Requiere can_execute_management_plans. Puede referir alimento terminado; no infiere ni descuenta consumo diario.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -303,7 +303,7 @@ paths:
     post:
       tags: [Ejecuciones]
       summary: Registra una práctica manual tipada
-      description: Requiere management-plans.execute. Admite despique, colocación de nidos y otras prácticas.
+      description: Requiere can_execute_management_plans. Admite despique, colocación de nidos y otras prácticas.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -327,7 +327,7 @@ paths:
     post:
       tags: [Ejecuciones]
       summary: Registra una corrección compensatoria
-      description: Requiere management-plans.execute. Conserva la aplicación original; compensa el stock cuando corresponde.
+      description: Requiere can_execute_management_plans. Conserva la aplicación original; compensa el stock cuando corresponde.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -348,7 +348,7 @@ paths:
       tags: [Stock de medicamentos]
       summary: Ajuste de stock de medicamentos retirado
       deprecated: true
-      description: Requiere management-plans.stock.manage. Un pedido válido devuelve 409 sin modificar saldos ni generar auditoría. Se conserva la ruta por compatibilidad; las aplicaciones nuevas no controlan stock.
+      description: Requiere can_manage_medicine_stock. Un pedido válido devuelve 409 sin modificar saldos ni generar auditoría. Se conserva la ruta por compatibilidad; las aplicaciones nuevas no controlan stock.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -370,7 +370,7 @@ paths:
       tags: [Stock de medicamentos]
       summary: Consulta el saldo histórico de un medicamento
       deprecated: true
-      description: Requiere management-plans.view o management-plans.stock.manage. Lectura de compatibilidad del contador previo; las aplicaciones nuevas no lo usan ni lo modifican. Sólo las correcciones de aplicaciones históricas pueden compensarlo.
+      description: Requiere can_view_management_plans o can_manage_medicine_stock. Lectura de compatibilidad del contador previo; las aplicaciones nuevas no lo usan ni lo modifican. Sólo las correcciones de aplicaciones históricas pueden compensarlo.
       responses:
         '200':
           description: Saldo histórico del medicamento; cero si nunca tuvo contador.
@@ -422,7 +422,7 @@ paths:
                 occurred_at: { type: string, format: date-time }
                 notes: { type: [string, 'null'], maxLength: 5000 }
       responses:
-        '201': { description: Sólo reintento de una operación histórica guardada; requiere management-plans.execute. }
+        '201': { description: Sólo reintento de una operación histórica guardada; requiere can_execute_management_plans. }
         '410': { description: Las cargas nuevas de suministros están retiradas; no hay cambios de stock. }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -713,7 +713,7 @@ components:
           properties:
             reason: { type: string, minLength: 1, maxLength: 500, pattern: '\S' }
     RationInput:
-      description: Cambia configuración de alimentación del día y conserva el permiso management-plans.execute. Receta, total diario o ambos; todos los valores quedan manuales. No registra comidas ni descuenta alimento inmediatamente. No admite fecha anterior al día del registro.
+      description: Cambia configuración de alimentación del día y conserva el permiso can_execute_management_plans. Receta, total diario o ambos; todos los valores quedan manuales. No registra comidas ni descuenta alimento inmediatamente. No admite fecha anterior al día del registro.
       anyOf:
         - required: [feed_recipe_id]
         - required: [daily_quantity_grams]

@@ -11,7 +11,7 @@ final class EggOutflowReportSource extends SqlReportSource
 {
     public function definition(): ReportSourceDefinition
     {
-        return $this->describe('commerce.egg-outflow', 'Ventas y donaciones', 'Entregas comerciales confirmadas y donaciones registradas, sin cargas, pérdidas, ajustes ni retornos. Selecciona Venta para excluir donaciones o todos los tipos para incluirlas.', 'delivery.history', [
+        return $this->describe('commerce.egg-outflow', 'Ventas y donaciones', 'Entregas comerciales confirmadas y donaciones registradas, sin cargas, pérdidas, ajustes ni retornos. Selecciona Venta para excluir donaciones o todos los tipos para incluirlas.', 'can_view_delivery_history', [
             'date' => ['label' => 'Fecha', 'type' => 'datetime'], 'kind' => ['label' => 'Tipo de salida', 'type' => 'string'],
             'recipient' => ['label' => 'Cliente / destinatario', 'type' => 'string'], 'quantity' => ['label' => 'Huevos', 'type' => 'quantity', 'unit' => 'huevos'],
             'notes' => ['label' => 'Comentarios', 'type' => 'string'],
@@ -20,7 +20,7 @@ final class EggOutflowReportSource extends SqlReportSource
             'total_eggs' => ['label' => 'Vendidos más donados', 'type' => 'quantity', 'unit' => 'huevos']], [
                 'kind' => ['label' => 'Incluir donaciones', 'type' => 'enum', 'operators' => ['eq', 'in'], 'options' => ['Venta', 'Donación']],
             ], [['label' => 'Sólo volumen vendido', 'configuration' => ['filters' => [['field' => 'kind', 'operator' => 'eq', 'value' => 'Venta']], 'metrics' => ['sold_eggs']]],
-                ['label' => 'Volumen vendido y donado', 'configuration' => ['metrics' => ['sold_eggs', 'donated_eggs', 'total_eggs']]]], ['egg-stock.view']);
+                ['label' => 'Volumen vendido y donado', 'configuration' => ['metrics' => ['sold_eggs', 'donated_eggs', 'total_eggs']]]], ['can_view_egg_stock']);
     }
 
     protected function baseQuery(): Builder

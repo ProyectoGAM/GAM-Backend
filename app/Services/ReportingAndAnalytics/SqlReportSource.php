@@ -6,6 +6,7 @@ use App\DTO\ReportingAndAnalytics\ReportQueryData;
 use App\DTO\ReportingAndAnalytics\ReportResultData;
 use App\DTO\ReportingAndAnalytics\ReportSourceDefinition;
 use App\Interfaces\ReportingAndAnalytics\ReportSource;
+use App\Services\IdentityAndAccess\ProductionUnitAccess;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -82,6 +83,7 @@ abstract class SqlReportSource implements ReportSource
             $label = $field;
         }
         $builder = DB::query()->fromSub($this->baseQuery(), 'options')->whereNotNull($field);
+        $this->scopeToUnit($builder);
         if ($search !== '') {
             $builder->whereRaw('CAST("'.$label.'" AS TEXT) ILIKE ?', ['%'.$search.'%']);
         }
@@ -98,6 +100,7 @@ abstract class SqlReportSource implements ReportSource
             $dates->selectRaw("date_trunc('{$period}', records.date AT TIME ZONE ?)::date as {$period}", [$timezone]);
         }
         $builder = DB::query()->fromSub($dates, 'report_rows');
+        $this->scopeToUnit($builder);
         foreach ($query->filters as $filter) {
             match ($filter['operator']) {
                 'in' => $builder->whereIn($filter['field'], $filter['value']),
@@ -144,6 +147,15 @@ abstract class SqlReportSource implements ReportSource
     private function resultColumns(ReportQueryData $query): array
     {
         return $query->groupings !== [] || $query->metrics !== [] ? [...$query->groupings, ...$query->metrics] : $query->columns;
+    }
+
+    private function scopeToUnit(Builder $query): void
+    {
+        $unitId = app(ProductionUnitAccess::class)->unitId();
+        if ($unitId !== null) {
+            abort_unless(array_key_exists('production_unit_id', $this->definition()->columns), 403);
+            $query->where('production_unit_id', $unitId);
+        }
     }
 
     /**

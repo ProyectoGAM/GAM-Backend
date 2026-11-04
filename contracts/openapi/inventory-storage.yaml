@@ -10,6 +10,8 @@ info:
     técnicos sólo se mueven por los comandos de Stock de huevos.
     Nuevos movimientos exigen producto activo con stock y ubicación/UP activas;
     las plantas deben estar operativas. Las transferencias validan ambos extremos.
+    Las cuentas PIN sólo consultan y operan en su UP registrada y vinculada. No pueden
+    transferir entre UP ni utilizar IDs de ubicaciones ajenas, aunque tengan permiso funcional.
     Medicamentos y vacunas se registran globalmente sin stock físico.
     No se crean ubicaciones sanitarias; las existentes conservan su lectura histórica.
 servers:
@@ -21,7 +23,7 @@ paths:
   /stock-locations:
     get:
       summary: Lista ubicaciones con tipo explícito y categorías admitidas
-      description: Requiere inventory.view o admin. No hay asignaciones de usuarios a UP.
+      description: Requiere can_view_inventory o admin. No hay asignaciones de usuarios a UP.
       operationId: listTypedStockLocations
       parameters:
         - { name: type, in: query, schema: { type: string, enum: [warehouse, feed_plant, egg_account, health, unknown] } }
@@ -48,11 +50,11 @@ paths:
     get:
       summary: Consulta saldos y revisa existencias históricas incompatibles
       description: >-
-        Requiere inventory.view o admin. incompatible_only=1 devuelve saldos
+        Requiere can_view_inventory o admin. incompatible_only=1 devuelve saldos
         distintos de cero cuya categoría, unidad o estructura de ubicación no
         coincide con la política. No modifica saldos. La inactividad por sí sola
         no reclasifica una existencia como incompatible. Orden por ubicación,
-        producto e ID. La regularización requiere inventory.adjust.
+        producto e ID. La regularización requiere can_adjust_inventory.
       operationId: listStorageBalances
       parameters:
         - { name: incompatible_only, in: query, schema: { type: boolean } }
@@ -80,7 +82,7 @@ paths:
       summary: Registra un ingreso con proveedor explícito o interno
       operationId: receiveCompatibleStock
       description: >-
-        Requiere inventory.move o admin. supplier_id omitido o null usa la
+        Requiere can_move_inventory o admin. supplier_id omitido o null usa la
         identidad estable internal_supplier, configurada previamente mediante
         inventario:preparar-almacenamiento. No busca por nombre, crea ni reactiva
         proveedores durante el movimiento. Un ID explícito tiene prioridad.
@@ -125,7 +127,7 @@ paths:
       summary: Regulariza un saldo histórico incompatible sin borrar historia
       operationId: regularizeIncompatibleStock
       description: >-
-        Requiere inventory.adjust o admin. trasladar reduce un saldo positivo
+        Requiere can_adjust_inventory o admin. trasladar reduce un saldo positivo
         incompatible y suma exactamente la misma cantidad en un destino activo
         compatible. recontar lleva a cero un saldo incompatible positivo o
         negativo tras revisión humana, sin crear un destino. El motivo queda

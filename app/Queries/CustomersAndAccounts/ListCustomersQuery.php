@@ -4,6 +4,7 @@ namespace App\Queries\CustomersAndAccounts;
 
 use App\Models\CustomersAndAccounts\Customer;
 use App\Models\Deliveries\Delivery;
+use App\Services\IdentityAndAccess\ProductionUnitAccess;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -13,6 +14,10 @@ final class ListCustomersQuery
     public function query(array $filters): Builder
     {
         $query = Customer::query()->with(['account', 'locality.department']);
+        if (app(ProductionUnitAccess::class)->unitId() !== null) {
+            $query->without('account');
+            abort_if(! empty($filters['account_status']), 403);
+        }
         if (! empty($filters['search'])) {
             $search = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $filters['search']);
             $query->whereRaw("concat_ws(' ', name, business_name, document_number, phone, email, address, public_id) ILIKE ?", ['%'.$search.'%']);

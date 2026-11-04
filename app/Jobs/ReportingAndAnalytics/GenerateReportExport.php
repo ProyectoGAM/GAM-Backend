@@ -7,6 +7,7 @@ use App\Enums\ReportingAndAnalytics\ReportExportStatus;
 use App\Exceptions\ReportingAndAnalytics\ReportConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\ReportingAndAnalytics\ReportExport;
+use App\Services\IdentityAndAccess\ProductionUnitAccess;
 use App\Services\ReportingAndAnalytics\ReportExportWriter;
 use App\Services\ReportingAndAnalytics\ReportQueryNormalizer;
 use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
@@ -62,6 +63,9 @@ final class GenerateReportExport implements ShouldBeUnique, ShouldQueue
         if ($export->user === null) {
             throw new ModelNotFoundException('El solicitante del reporte ya no está disponible.');
         }
+        if ($export->user->usesDevicePin() && (int) $export->production_unit_id !== $export->user->production_unit_id) {
+            throw new \RuntimeException('La UP del solicitante ya no coincide con la exportación.');
+        }
         $registry->assertCanExport($export->user, $source);
         if ($export->definition_version !== $source->definition()->definitionVersion) {
             throw new \RuntimeException('La versión de la fuente de reporte ya no es compatible.');
@@ -103,7 +107,10 @@ final class GenerateReportExport implements ShouldBeUnique, ShouldQueue
         unset($storedQuery['source_key'], $storedQuery['definition_version']);
         $query = $normalizer->normalize($export->source_key, $storedQuery);
         try {
-            $file = $writer->write($export, $source, $query);
+            $file = app(ProductionUnitAccess::class)->within(
+                $export->production_unit_id === null ? null : (int) $export->production_unit_id,
+                fn (): array => $writer->write($export, $source, $query),
+            );
         } catch (ReportConflict $exception) {
             // Un límite de negocio es definitivo; repetir el mismo reporte no lo corrige.
             $this->failed($exception);

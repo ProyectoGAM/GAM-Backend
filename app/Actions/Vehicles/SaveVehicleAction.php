@@ -28,8 +28,8 @@ final readonly class SaveVehicleAction
             }
             if (isset($data['habitual_driver_id'])) {
                 $driver = User::query()->whereKey($data['habitual_driver_id'])->first();
-                if ($driver === null || ! $driver->hasRole('delivery')) {
-                    throw ValidationException::withMessages(['habitual_driver_id' => 'Elegí una cuenta activa con rol de repartidor.']);
+                if ($driver === null || ! $driver->can('can_start_deliveries')) {
+                    throw ValidationException::withMessages(['habitual_driver_id' => 'Elegí una cuenta activa con permiso para iniciar repartos.']);
                 }
             }
             $before = $locked->exists ? $locked->snapshot() : [];

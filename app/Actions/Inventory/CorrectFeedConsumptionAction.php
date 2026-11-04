@@ -26,7 +26,7 @@ final readonly class CorrectFeedConsumptionAction
     /** @param array<string, mixed> $data */
     public function execute(FeedConsumption $consumption, array $data, User $actor, string $source = 'api'): FlockOperation
     {
-        return $this->commands->execute($actor, null, 'flock.feeding.correct', $data['idempotency_key'], ['consumption_id' => $consumption->id, ...$data],
+        return $this->commands->execute($actor, 'can_correct_feed_consumption', 'flock.feeding.correct', $data['idempotency_key'], ['consumption_id' => $consumption->id, ...$data],
             function (string $operationId) use ($consumption, $data, $actor, $source): array {
                 $flock = Flock::query()->whereKey($consumption->flock_id)->lockForUpdate()->firstOrFail();
                 $locked = FeedConsumption::query()->whereKey($consumption->id)->lockForUpdate()->firstOrFail();

@@ -15,10 +15,10 @@ Todas las rutas siguientes son relativas a /api/v1.
 
 | Consulta | Ruta | Permiso |
 | --- | --- | --- |
-| Listado con resumen | GET /audit/entries | audit.view |
-| Detalle de una entrada | GET /auditoria/entradas/{id} | audit.view |
-| Búsqueda de responsables | GET /auditoria/responsables | audit.view |
-| Etiquetas de eventos | GET /reference/options | Bloque audit con audit.view |
+| Listado con resumen | GET /audit/entries | can_view_audit |
+| Detalle de una entrada | GET /auditoria/entradas/{id} | can_view_audit |
+| Búsqueda de responsables | GET /auditoria/responsables | can_view_audit |
+| Etiquetas de eventos | GET /reference/options | Bloque audit con can_view_audit |
 
 No hay endpoint nuevo de mutación de auditoría. El catálogo no agrega audit.actors:
 el selector debe usar la búsqueda paginada de responsables.
@@ -198,7 +198,7 @@ el ID. Los procesos identificados muestran Sistema.
 | kind=unavailable | No hay identidad humana o automática que pueda afirmarse. |
 | exists=true | La fila existe, incluso si está deshabilitada. |
 | status=disabled | Cuenta con baja lógica; conserva su fila. |
-| can_manage=true | La fila existe y quien consulta tiene identity.users.manage. |
+| can_manage=true | La fila existe y quien consulta tiene can_manage_users. |
 
 La búsqueda devuelve sólo actores con actividad, una opción por identidad. Cada
 opción contiene value, label, type, kind, status, can_manage, exists, name y
@@ -350,7 +350,7 @@ vigente y reutilizar el formulario existente. No enviar idempotency_key en el bo
 Mantener el mismo UUID si se reintenta la misma confirmación con idéntico payload.
 Un nuevo intento de negocio o un payload distinto necesita otra clave.
 
-Las reversiones de inventario requieren inventory.adjust. Las rectificaciones de
+Las reversiones de inventario requieren can_adjust_inventory. Las rectificaciones de
 alimentación conservan la autorización actual del módulo: sesión autenticada,
 sin permiso funcional específico nuevo. Las sesiones compartidas necesitan sus
 credenciales, X-GAM-Session y generación vigentes en el comando; las sesiones web

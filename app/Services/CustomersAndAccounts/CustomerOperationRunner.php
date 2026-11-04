@@ -6,6 +6,7 @@ use App\Exceptions\CustomersAndAccounts\CustomerAccountConflict;
 use App\Models\CustomersAndAccounts\Customer;
 use App\Models\CustomersAndAccounts\CustomerOperation;
 use App\Models\User;
+use App\Services\IdentityAndAccess\AccessControl;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -34,6 +35,7 @@ final class CustomerOperationRunner
             if ($currentActor === null) {
                 throw new AuthorizationException;
             }
+            app(AccessControl::class)->assertCurrentSession($currentActor);
             if (str_starts_with($ability, 'delivery.')) {
                 if (! $currentActor->can($ability)) {
                     throw new AuthorizationException;

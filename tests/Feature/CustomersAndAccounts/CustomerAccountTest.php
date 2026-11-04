@@ -25,7 +25,7 @@ final class CustomerAccountTest extends TestCase
     {
         $this->seed(IdentityPermissionSeeder::class);
         $user = User::factory()->create();
-        $user->assignRole('admin');
+        $user->syncRoles(['admin']);
         Sanctum::actingAs($user, ['api:access']);
 
         return Customer::factory()->withAccount()->create(['created_by' => $user->id]);
@@ -117,7 +117,7 @@ final class CustomerAccountTest extends TestCase
         // Permiso explícito sin rol administrativo.
         $customer = $this->customer();
         $user = User::factory()->create();
-        $user->givePermissionTo('customer-accounts.adjust');
+        $user->roles()->firstOrFail()->givePermissionTo('can_adjust_customer_accounts');
         Sanctum::actingAs($user, ['api:access']);
         $this->command($customer, 'ajustes', ['direction' => 'increase', 'amount' => '1', 'reason' => 'Intento', 'expected_version' => 0])->assertForbidden();
         $this->assertDatabaseCount('customer_account_movements', 0);
@@ -129,7 +129,7 @@ final class CustomerAccountTest extends TestCase
         // Invocación interna con actor no autorizado.
         $customer = $this->customer();
         $user = User::factory()->create();
-        $user->givePermissionTo('customer-accounts.adjust');
+        $user->roles()->firstOrFail()->givePermissionTo('can_adjust_customer_accounts');
         $this->expectException(AuthorizationException::class);
         app(AdjustCustomerAccountAction::class)->execute($customer, $user,
             ['direction' => 'increase', 'amount' => '1', 'reason' => 'Intento interno', 'expected_version' => 0], (string) Str::uuid());

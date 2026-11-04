@@ -8,7 +8,7 @@ final class ListAuditEntriesRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('audit.view') ?? false;
+        return $this->user()?->can('can_view_audit') ?? false;
     }
 
     /**

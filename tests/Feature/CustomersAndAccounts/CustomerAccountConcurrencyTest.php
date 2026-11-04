@@ -6,13 +6,13 @@ use App\Actions\CustomersAndAccounts\AdjustCustomerAccountAction;
 use App\Actions\CustomersAndAccounts\RecordCustomerPaymentAction;
 use App\Exceptions\CustomersAndAccounts\CustomerAccountConflict;
 use App\Models\CustomersAndAccounts\Customer;
+use App\Models\IdentityAndAccess\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\Concurrency;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Group;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 #[Group('customer-account-concurrency')]
@@ -85,7 +85,7 @@ final class CustomerAccountConcurrencyTest extends TestCase
     {
         // Preparación de datos confirmados, visibles para ambos procesos.
         $actor = User::factory()->create();
-        $actor->assignRole(Role::findOrCreate('admin', 'web'));
+        $actor->syncRoles([Role::findOrCreate('admin', 'web')]);
         $actorId = $actor->id;
         $customerId = Customer::factory()->withAccount()->create(['created_by' => $actorId])->id;
         $key = (string) Str::uuid();
@@ -113,8 +113,8 @@ final class CustomerAccountConcurrencyTest extends TestCase
         $first = User::factory()->create();
         $second = User::factory()->create();
         $role = Role::findOrCreate('admin', 'web');
-        $first->assignRole($role);
-        $second->assignRole($role);
+        $first->syncRoles([$role]);
+        $second->syncRoles([$role]);
         $firstId = $first->id;
         $secondId = $second->id;
         $customerId = Customer::factory()->withAccount()->create(['created_by' => $firstId])->id;
@@ -142,8 +142,8 @@ final class CustomerAccountConcurrencyTest extends TestCase
         $first = User::factory()->create();
         $second = User::factory()->create();
         $role = Role::findOrCreate('admin', 'web');
-        $first->assignRole($role);
-        $second->assignRole($role);
+        $first->syncRoles([$role]);
+        $second->syncRoles([$role]);
         $firstId = $first->id;
         $secondId = $second->id;
         $customerId = Customer::factory()->withAccount()->create(['created_by' => $firstId])->id;

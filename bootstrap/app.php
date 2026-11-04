@@ -29,10 +29,10 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->append(AssignTraceContext::class);
-        $middleware->trimStrings(except: ['pin', 'pin_confirmation']);
+        $middleware->trimStrings(except: ['pin', 'pin_confirmation', 'current_pin']);
         $middleware->statefulApi();
         $middleware->trustProxies(at: '*');
-        
+
         $middleware->alias([
             'ability' => CheckForAnyAbility::class,
             'abilities' => CheckAbilities::class,

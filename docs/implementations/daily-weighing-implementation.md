@@ -17,13 +17,13 @@ Todas las rutas son relativas a `/api/v1` y usan la autenticación personal o co
 
 | Método y ruta | Permiso | Resultado |
 | --- | --- | --- |
-| `GET /pesajes-diarios?flock_id={ULID}` | `weighings.view` | Historial por fecha descendente, con `date_from`, `date_to`, `per_page` y `cursor`. Una lista vacía indica que no hay jornadas. |
-| `GET /lotes/{lote}/pesajes-diarios/{fecha}` | `weighings.view` | Jornada de una fecha local; `404` si no existe. |
-| `GET /pesajes-diarios/{jornada}` | `weighings.view` | Jornada e ingresos ordenados por hora e ID, paginados con `per_page` y `cursor`. |
-| `POST /lotes/{lote}/pesajes-diarios/ingresos` | `weighings.manage` | Agrega un ingreso a la fecha local actual; devuelve la jornada y el ingreso. |
-| `DELETE /pesajes-diarios/{jornada}/ingresos/{ingreso}` | `weighings.manage` | Elimina una medición concreta y devuelve la jornada recalculada. |
-| `GET /pesajes-diarios/{jornada}/distribucion` | `weighings.view` | Histograma y curva de los pesos individuales activos. |
-| `GET/PUT /configuracion-pesajes` | `weighing-settings.manage` | Consulta o cambia los rangos globales. |
+| `GET /pesajes-diarios?flock_id={ULID}` | `can_view_weighings` | Historial por fecha descendente, con `date_from`, `date_to`, `per_page` y `cursor`. Una lista vacía indica que no hay jornadas. |
+| `GET /lotes/{lote}/pesajes-diarios/{fecha}` | `can_view_weighings` | Jornada de una fecha local; `404` si no existe. |
+| `GET /pesajes-diarios/{jornada}` | `can_view_weighings` | Jornada e ingresos ordenados por hora e ID, paginados con `per_page` y `cursor`. |
+| `POST /lotes/{lote}/pesajes-diarios/ingresos` | `can_manage_weighings` | Agrega un ingreso a la fecha local actual; devuelve la jornada y el ingreso. |
+| `DELETE /pesajes-diarios/{jornada}/ingresos/{ingreso}` | `can_manage_weighings` | Elimina una medición concreta y devuelve la jornada recalculada. |
+| `GET /pesajes-diarios/{jornada}/distribucion` | `can_view_weighings` | Histograma y curva de los pesos individuales activos. |
+| `GET/PUT /configuracion-pesajes` | `can_manage_weighing_settings` | Consulta o cambia los rangos globales. |
 
 Las páginas devuelven `next_cursor`; `null` indica que no hay más resultados. El listado de jornadas se ordena por fecha e ID descendentes, y los ingresos por hora e ID ascendentes. `per_page` admite de 1 a 100; el detalle usa 50 y el historial 20 por defecto. Así, los ingresos nuevos no desplazan elementos entre páginas.
 

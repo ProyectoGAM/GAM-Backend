@@ -5,6 +5,7 @@ namespace App\Services\Lots;
 use App\Exceptions\Lots\LotsConflict;
 use App\Models\Lots\FlockOperation;
 use App\Models\User;
+use App\Services\IdentityAndAccess\ProductionUnitAccess;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
@@ -36,6 +37,9 @@ final readonly class RunLotsCommand
                 }
                 $existing = FlockOperation::query()->where('created_by', $actor->id)->where('idempotency_key', $key)->first();
                 if ($existing !== null) {
+                    if ($currentActor->usesDevicePin() && (int) $existing->production_unit_id !== $currentActor->production_unit_id) {
+                        throw new AuthorizationException;
+                    }
                     if ($existing->request_hash !== $hash) {
                         throw new LotsConflict('La clave de idempotencia ya fue utilizada con otros datos.');
                     }
@@ -43,10 +47,12 @@ final readonly class RunLotsCommand
                     return $existing;
                 }
                 $operationId = (string) Str::uuid();
-                $result = $operation($operationId);
+                $result = app(ProductionUnitAccess::class)->within($currentActor->usesDevicePin() ? $currentActor->production_unit_id : null,
+                    fn (): array => $operation($operationId));
                 $record = new FlockOperation;
                 $record->forceFill([
                     'operation_id' => $operationId,
+                    'production_unit_id' => $currentActor->usesDevicePin() ? $currentActor->production_unit_id : null,
                     'created_by' => $actor->id,
                     'idempotency_key' => $key,
                     'command' => $command,

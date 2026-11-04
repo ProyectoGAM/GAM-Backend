@@ -6,6 +6,7 @@ use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\FarmStructure\ProductionUnit;
+use App\Services\IdentityAndAccess\ProductionUnitAccess;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Str;
 
@@ -16,8 +17,9 @@ final class SpatieAuditRecorder implements AuditRecorder
         $traceId = $entry->traceId ?? Context::get('trace_id');
         $subjectId = $entry->subjectId;
         $properties = $entry->properties;
-        if ($entry->upId !== null) {
-            $unit = ProductionUnit::query()->find($entry->upId, ['id', 'name']);
+        $upId = $entry->upId ?? app(ProductionUnitAccess::class)->unitId();
+        if ($upId !== null) {
+            $unit = ProductionUnit::query()->find($upId, ['id', 'name']);
             $properties['production_unit_snapshot'] = $unit === null ? null : ['id' => $unit->id, 'name' => $unit->name];
         }
 
@@ -39,7 +41,7 @@ final class SpatieAuditRecorder implements AuditRecorder
             'operation_id' => $entry->operationId,
             'trace_id' => is_string($traceId) && $traceId !== '' ? $traceId : Str::uuid()->toString(),
             'source' => $entry->source,
-            'up_id' => $entry->upId,
+            'up_id' => $upId,
             'attribute_changes' => $entry->attributeChanges,
             'properties' => $properties,
         ]);

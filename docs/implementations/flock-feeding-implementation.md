@@ -1,5 +1,7 @@
 # Alimentación de lotes, consumos diarios y rectificaciones
 
+La entrega de roles y permisos exige sesión válida y permisos del rol: consulta con `can_view_flock_feeding`, configuración manual/automática con `can_manage_flock_feeding` y rectificación con `can_correct_feed_consumption`. Las operaciones automáticas del scheduler conservan su contexto de sistema.
+
 ## Alcance y decisiones
 
 El tercer bloque consume exclusivamente alimento elaborado desde `FeedBalance`, por receta y UP del lote. No descuenta ingredientes, modifica elaboraciones ni aplica sus restricciones de cancelación. Permite saldos cero o negativos sin elaboración previa, con aritmética exacta y límites comprobados.
@@ -65,7 +67,7 @@ Una restricción única `(flock_id, consumption_date)` y un lock del lote serial
 | GET | `/lotes/{flock}/consumos-alimento/{consumption}` | Original, último efectivo, censo, etapa, rectificaciones y movimientos. |
 | POST | `/lotes/{flock}/consumos-alimento/{consumption}/rectificaciones` | Compensación con motivo. |
 
-Los nuevos endpoints requieren la sesión autenticada existente y los middleware de dispositivo/sesión compartidos. En nativo compartido se exigen `X-Shared-Device-Token`, `X-GAM-Session`, sesión actual y generación vigente; en web, la credencial HttpOnly y CSRF existentes. No agregan permisos funcionales. Una consulta de estos historiales de negocio no expone la API genérica de auditoría, que conserva `audit.view`.
+Los nuevos endpoints requieren la sesión autenticada existente y los middleware de dispositivo/sesión compartidos. En nativo compartido se exigen `X-Shared-Device-Token`, `X-GAM-Session`, sesión actual y generación vigente; en web, la credencial HttpOnly y CSRF existentes. No agregan permisos funcionales. Una consulta de estos historiales de negocio no expone la API genérica de auditoría, que conserva `can_view_audit`.
 
 Las mutaciones requieren UUID en `Idempotency-Key`, devuelven 201 y la misma respuesta al repetir clave/contenido. La clave no se admite en el cuerpo. Otro contenido con esa clave devuelve 409. Un consumo ajeno al lote devuelve 404.
 
@@ -83,7 +85,7 @@ Entrada de rectificación:
 
 El regreso a automático admite un cuerpo vacío. Cantidades recibidas admiten entero JSON o cadena entera; se rechazan punto flotante, fracciones, notación científica y redondeos. Las cantidades de respuestas se entregan como cadenas para preservar precisión. Los listados admiten `desde`, `hasta`, `por_pagina` (1–100) y `page` acotada; ordenan fecha e ID descendente. `acumulado_g` suma cantidades efectivas de todo el filtro antes de paginar y usa suma decimal exacta de PostgreSQL.
 
-El endpoint existente `POST /flocks/{flock}/cambios-racion` conserva `management-plans.execute` y su registro de manejo, pero ahora cambia la configuración manual del día mediante la misma Action. Sustituye `finished_feed_product_id` por `feed_recipe_id` y `daily_quantity_grams` (uno o ambos obligatorios), con `occurred_at` del día de registro. No registra comidas ni descuenta stock inmediatamente. Los antiguos registros con snapshots de productos siguen consultables; corregir su metadata no revierte la alimentación vigente.
+El endpoint existente `POST /flocks/{flock}/cambios-racion` conserva `can_execute_management_plans` y su registro de manejo, pero ahora cambia la configuración manual del día mediante la misma Action. Sustituye `finished_feed_product_id` por `feed_recipe_id` y `daily_quantity_grams` (uno o ambos obligatorios), con `occurred_at` del día de registro. No registra comidas ni descuenta stock inmediatamente. Los antiguos registros con snapshots de productos siguen consultables; corregir su metadata no revierte la alimentación vigente.
 
 ## Persistencia, auditoría y límites
 

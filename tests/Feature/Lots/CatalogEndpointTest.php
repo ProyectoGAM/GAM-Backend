@@ -72,7 +72,7 @@ final class CatalogEndpointTest extends LotsTestCase
     public function test_catalog_mutations_require_their_own_permissions(): void
     {
         // Preparación: autentica un usuario con acceso sólo de consulta.
-        $this->signIn(['breeds.view']);
+        $this->signIn(['can_view_breeds']);
 
         // Requests: permite listar y prohíbe crear con los mismos permisos.
         $this->getJson('/api/v1/breeds')->assertOk();

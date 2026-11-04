@@ -61,7 +61,7 @@ final class CustomerContractTest extends TestCase
         // Alta autorizada y lectura de una ficha real.
         $this->seed(IdentityPermissionSeeder::class);
         $user = User::factory()->create();
-        $user->assignRole('admin');
+        $user->syncRoles(['admin']);
         Sanctum::actingAs($user, ['api:access']);
         $id = $this->postJson('/api/v1/clientes', ['name' => 'Contrato'], ['Idempotency-Key' => (string) Str::uuid()])->assertCreated()->json('data.id');
         $data = $this->getJson('/api/v1/clientes/'.$id)->assertOk()->json('data');

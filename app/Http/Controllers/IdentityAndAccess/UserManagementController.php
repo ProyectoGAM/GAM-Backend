@@ -6,23 +6,32 @@ use App\Actions\IdentityAndAccess\RegisterUserAction;
 use App\Actions\IdentityAndAccess\ResetUserPasswordAction;
 use App\Actions\IdentityAndAccess\RevokeUserSessionsAction;
 use App\Actions\IdentityAndAccess\SetUserPinAction;
+use App\Actions\IdentityAndAccess\UpdateUserProductionUnitAction;
+use App\Actions\IdentityAndAccess\UpdateUserRoleAction;
+use App\Actions\IdentityAndAccess\UpdateUserStatusAction;
 use App\Http\Requests\IdentityAndAccess\CreateManagedUserRequest;
 use App\Http\Requests\IdentityAndAccess\DeletePinRequest;
+use App\Http\Requests\IdentityAndAccess\ListManagedUsersRequest;
+use App\Http\Requests\IdentityAndAccess\RevokeUserSessionsRequest;
 use App\Http\Requests\IdentityAndAccess\SetPinRequest;
 use App\Http\Requests\IdentityAndAccess\UnlockPinRequest;
 use App\Http\Requests\IdentityAndAccess\UpdateUserPasswordRequest;
-use App\Http\Requests\IdentityAndAccess\UpdateUserRolesRequest;
+use App\Http\Requests\IdentityAndAccess\UpdateUserProductionUnitRequest;
+use App\Http\Requests\IdentityAndAccess\UpdateUserRoleRequest;
 use App\Http\Requests\IdentityAndAccess\UpdateUserStatusRequest;
 use App\Http\Resources\IdentityAndAccess\UserResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Spatie\Permission\Models\Role;
 
 final class UserManagementController
 {
-    public function index(): JsonResponse
+    public function productionUnit(UpdateUserProductionUnitRequest $request, User $user, UpdateUserProductionUnitAction $action): JsonResponse
+    {
+        return response()->json(['data' => new UserResource($action->execute($request->user(), $user, $request->integer('up_id')))]);
+    }
+
+    public function index(ListManagedUsersRequest $request): JsonResponse
     {
         return response()->json(['data' => UserResource::collection(User::query()->withTrashed()->paginate(50))]);
     }
@@ -33,41 +42,22 @@ final class UserManagementController
         $actor = $request->user();
         $data = $request->validated();
         $user = $register->execute($data, $actor);
-        $user->assignRole(Role::findOrCreate($data['role'], 'web'));
 
         return response()->json(['data' => new UserResource($user->refresh())], Response::HTTP_CREATED);
     }
 
-    public function status(UpdateUserStatusRequest $request, User $user): JsonResponse
+    public function status(UpdateUserStatusRequest $request, User $user, UpdateUserStatusAction $action): JsonResponse
     {
-        if ($request->boolean('enabled')) {
-            $user->restore();
-        } else {
-            $user->authSessions()->whereNull('revoked_at')->update(['revoked_at' => now(), 'revoked_reason' => 'user_disabled']);
-            $user->tokens()->delete();
-            $user->delete();
-        }
+        $user = $action->execute($request->user(), $user, $request->boolean('enabled'));
 
-        return response()->json(['data' => new UserResource($user->refresh())]);
+        return response()->json(['data' => new UserResource($user)]);
     }
 
-    public function roles(UpdateUserRolesRequest $request, User $user): JsonResponse
+    public function roles(UpdateUserRoleRequest $request, User $user, UpdateUserRoleAction $action): JsonResponse
     {
-        $user->syncRoles($request->validated('roles'));
+        $user = $action->execute($request->user(), $user, $request->integer('rol_id'));
 
-        if ($user->hasRole('admin')) {
-            $user->authSessions()->where('kind', 'shared_user')->whereNull('revoked_at')->update([
-                'revoked_at' => now(),
-                'revoked_reason' => 'role_changed',
-            ]);
-            $user->forceFill([
-                'pin_hash' => null,
-                'pin_enabled' => false,
-                'pin_pepper_version' => null,
-            ])->save();
-        }
-
-        return response()->json(['data' => new UserResource($user->refresh())]);
+        return response()->json(['data' => new UserResource($user)]);
     }
 
     public function setPin(SetPinRequest $request, User $user, SetUserPinAction $setPin): JsonResponse
@@ -112,7 +102,7 @@ final class UserManagementController
     public function sessions(
         User $user,
         RevokeUserSessionsAction $revokeSessions,
-        Request $request,
+        RevokeUserSessionsRequest $request,
     ): JsonResponse {
         /** @var User $actor */
         $actor = $request->user();

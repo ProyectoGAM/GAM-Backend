@@ -4,6 +4,7 @@ namespace App\Queries\ReportingAndAnalytics;
 
 use App\DTO\ReportingAndAnalytics\ReportResultData;
 use App\Models\User;
+use App\Services\IdentityAndAccess\ProductionUnitAccess;
 use App\Services\ReportingAndAnalytics\ReportQueryNormalizer;
 use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
 
@@ -20,6 +21,7 @@ final readonly class PreviewReportQuery
         $source = $this->registry->get($sourceKey);
         $this->registry->assertCanRead($actor, $source);
 
-        return $source->preview($this->normalizer->normalize($sourceKey, $input));
+        return app(ProductionUnitAccess::class)->within($actor->usesDevicePin() ? $actor->production_unit_id : null,
+            fn (): ReportResultData => $source->preview($this->normalizer->normalize($sourceKey, $input)));
     }
 }

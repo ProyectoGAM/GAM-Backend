@@ -17,7 +17,7 @@ final readonly class ListReportSourcesQuery
             fn (ReportSource $source): array => [...$source->definition()->toArray(), 'capabilities' => [
                 'export' => $this->registry->canExport($actor, $source),
                 'share' => $this->registry->canShare($actor, $source),
-                'presets' => $actor->hasRole('admin') || $actor->checkPermissionTo('reports.presets.manage'),
+                'presets' => $actor->hasRole('admin') || $actor->checkPermissionTo('can_manage_report_presets'),
             ]],
             $this->registry->authorizedFor($actor),
         );

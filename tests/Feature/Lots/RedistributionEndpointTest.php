@@ -348,7 +348,7 @@ final class RedistributionEndpointTest extends LotsTestCase
     public function test_reversal_rejects_later_egg_collection_activity(): void
     {
         // Preparación: redistribuye aves y habilita los permisos de recolección.
-        $this->signIn(['flocks.view', 'flocks.manage', 'flocks.redistribute', 'flocks.finalize', 'egg-collections.view', 'egg-collections.manage', 'egg-stock.view', 'egg-stock.move', 'egg-stock.adjust']);
+        $this->signIn(['can_view_flocks', 'can_manage_flocks', 'can_redistribute_flocks', 'can_finalize_flocks', 'can_view_egg_collections', 'can_manage_egg_collections', 'can_view_egg_stock', 'can_move_egg_stock', 'can_adjust_egg_stock']);
         $source = $this->flockWithPlan();
         $house = $this->house();
         $operation = $this->command('POST', "/flocks/{$source->public_id}/redistributions", [
@@ -370,7 +370,7 @@ final class RedistributionEndpointTest extends LotsTestCase
     public function test_reversal_rejects_later_weighing_activity(): void
     {
         // Preparación: crea una redistribución parcial y habilita el módulo de pesajes.
-        $this->signIn(['flocks.view', 'flocks.manage', 'flocks.redistribute', 'flocks.finalize', 'weighings.view', 'weighings.manage']);
+        $this->signIn(['can_view_flocks', 'can_manage_flocks', 'can_redistribute_flocks', 'can_finalize_flocks', 'can_view_weighings', 'can_manage_weighings']);
         $source = $this->flockWithPlan();
         $house = $this->house();
         $operation = $this->command('POST', "/flocks/{$source->public_id}/redistributions", [

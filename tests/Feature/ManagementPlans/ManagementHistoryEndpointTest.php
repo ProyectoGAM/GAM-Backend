@@ -13,7 +13,7 @@ final class ManagementHistoryEndpointTest extends LotsTestCase
     public function test_partial_split_excludes_completed_activity_from_child_plan(): void
     {
         // Preparación: ejecuta una práctica prevista y deja un pesaje para la semana siguiente.
-        $this->signIn(['flocks.redistribute', 'management-plans.view', 'management-plans.execute']);
+        $this->signIn(['can_redistribute_flocks', 'can_view_management_plans', 'can_execute_management_plans']);
         $source = $this->flockWithPlan(100, activities: [
             ['type' => 'manual_practice', 'title' => 'Colocar nidos', 'timing_kind' => 'week', 'start_week' => 5],
             ['type' => 'weighing', 'title' => 'Pesaje siguiente', 'timing_kind' => 'week', 'start_week' => 6],
@@ -48,7 +48,7 @@ final class ManagementHistoryEndpointTest extends LotsTestCase
     public function test_partial_split_exposes_antecedents_with_provenance_and_pagination(): void
     {
         // Preparación: registra dos tratamientos antes del fraccionamiento.
-        $this->signIn(['flocks.redistribute', 'management-plans.view', 'management-plans.execute']);
+        $this->signIn(['can_redistribute_flocks', 'can_view_management_plans', 'can_execute_management_plans']);
         $source = $this->flockWithPlan();
         $medicine = Medicine::factory()->create();
         $first = $this->command('POST', '/flocks/'.$source->public_id.'/medicaciones', [
@@ -87,7 +87,7 @@ final class ManagementHistoryEndpointTest extends LotsTestCase
     public function test_history_requires_view_permission_and_bounded_filters(): void
     {
         // Preparación: genera un lote y luego cambia a un actor sin permiso.
-        $this->signIn(['management-plans.view']);
+        $this->signIn(['can_view_management_plans']);
         $flock = $this->flockWithPlan();
         $this->signIn([]);
 
@@ -95,7 +95,7 @@ final class ManagementHistoryEndpointTest extends LotsTestCase
         $this->getJson('/api/v1/flocks/'.$flock->public_id.'/manejos')->assertForbidden();
 
         // Request: incluso con permiso valida paginación y filtros.
-        $this->signIn(['management-plans.view']);
+        $this->signIn(['can_view_management_plans']);
         $this->getJson('/api/v1/flocks/'.$flock->public_id.'/manejos?per_page=101')->assertUnprocessable();
         $this->getJson('/api/v1/flocks/'.$flock->public_id.'/manejos?unknown=yes')->assertUnprocessable();
     }

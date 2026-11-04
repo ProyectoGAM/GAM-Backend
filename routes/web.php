@@ -3,6 +3,7 @@
 use App\Http\Controllers\IdentityAndAccess\AdminController;
 use App\Http\Controllers\IdentityAndAccess\AuthController;
 use App\Http\Controllers\IdentityAndAccess\SharedDeviceController;
+use App\Http\Middleware\ValidateCurrentAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Route;
 
@@ -18,13 +19,13 @@ Route::get('/status', function (): JsonResponse {
 })->name('health');
 
 Route::get('/administration', AdminController::class)
-    ->middleware('auth:sanctum')
+    ->middleware(['auth:sanctum', ValidateCurrentAccess::class])
     ->name('admin.dashboard');
 
 Route::prefix('api/v1/auth')->middleware('web')->group(function (): void {
     Route::post('/web/login', [AuthController::class, 'webLogin'])->middleware(['throttle:auth', 'throttle:auth-account'])->name('web.auth.login');
     Route::post('/web/logout', [AuthController::class, 'webLogout'])->middleware('auth')->name('web.auth.logout');
-    Route::post('/web/confirm-password', [AuthController::class, 'confirmPassword'])->middleware('auth')->name('web.auth.confirm-password');
+    Route::post('/web/confirm-password', [AuthController::class, 'confirmPassword'])->middleware(['auth', ValidateCurrentAccess::class])->name('web.auth.confirm-password');
     Route::post('/web/pairing', [SharedDeviceController::class, 'redeemWebCode'])->middleware('throttle:pairing')->name('web.shared-devices.pair');
 });
 

@@ -22,7 +22,7 @@ final class ProductIngredientRulesTest extends TestCase
     public function test_raw_material_creation_requires_grams_and_enables_stock_tracking(): void
     {
         // Preparación: autentica un gestor de productos.
-        Sanctum::actingAs($this->userWithPermissions(['products.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_products']), ['*']);
 
         // Acción: crea una materia prima omitiendo el indicador opcional de stock.
         $this->postJson('/api/v1/products', [
@@ -62,7 +62,7 @@ final class ProductIngredientRulesTest extends TestCase
     public function test_raw_material_configuration_is_immutable_after_inventory_history(): void
     {
         // Preparación: persiste una materia prima con un saldo histórico y autentica al gestor.
-        $actor = $this->userWithPermissions(['products.manage']);
+        $actor = $this->userWithPermissions(['can_manage_products']);
         $rawMaterial = Product::factory()->create([
             'kind' => ProductKind::RawMaterial,
             'base_unit' => BaseUnit::Gram,
@@ -84,7 +84,7 @@ final class ProductIngredientRulesTest extends TestCase
     public function test_product_with_history_cannot_become_raw_material(): void
     {
         // Preparación: crea un suministro con saldo persistido y un usuario autorizado.
-        $actor = $this->userWithPermissions(['products.manage']);
+        $actor = $this->userWithPermissions(['can_manage_products']);
         $supply = Product::factory()->create([
             'kind' => ProductKind::Supply,
             'base_unit' => BaseUnit::Kilogram,
@@ -106,7 +106,7 @@ final class ProductIngredientRulesTest extends TestCase
     {
         $user = User::factory()->create();
         foreach ($permissions as $permission) {
-            $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+            $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
 
         return $user;

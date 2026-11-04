@@ -3,6 +3,7 @@
 namespace App\Actions\Deliveries;
 
 use App\Actions\Inventory\RecordEggStockTransactionAction;
+use App\Actions\Vehicles\CloseVehicleUsageAction;
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Enums\Deliveries\DeliveryStatus;
 use App\Enums\Deliveries\DeliveryStopStatus;
@@ -12,9 +13,9 @@ use App\Models\Deliveries\Delivery;
 use App\Models\Deliveries\DeliveryStop;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
-use App\Actions\Vehicles\CloseVehicleUsageAction;
 use App\Services\Deliveries\DeliveryFinancialSummary;
 use App\Services\Deliveries\DeliveryUnitBalance;
+use App\Services\IdentityAndAccess\AccessControl;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -33,6 +34,8 @@ final readonly class CloseDeliveryAction
         $requestHash = hash('sha256', json_encode($data, JSON_THROW_ON_ERROR));
 
         return DB::transaction(function () use ($delivery, $actor, $data, $idempotencyKey, $requestHash): Delivery {
+            $actor = User::query()->whereKey($actor->id)->lockForUpdate()->firstOrFail();
+            app(AccessControl::class)->assertCurrentSession($actor);
             $lockedDelivery = Delivery::query()->whereKey($delivery->getKey())->lockForUpdate()->firstOrFail();
             if ($lockedDelivery->driver_id !== $actor->getKey()) {
                 throw new DeliveryConflict('No puedes cerrar otro reparto.');

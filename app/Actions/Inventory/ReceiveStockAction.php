@@ -30,6 +30,6 @@ final readonly class ReceiveStockAction
             referenceId: $attributes['reference_id'] ?? null,
             reason: $attributes['reason'] ?? null,
             occurredAt: $attributes['occurred_at'] ?? null,
-        ), $actor, requiredPermission: 'inventory.move');
+        ), $actor, requiredPermission: 'can_move_inventory');
     }
 }

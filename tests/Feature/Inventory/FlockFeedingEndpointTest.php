@@ -29,11 +29,17 @@ use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
+use Spatie\Permission\Models\Permission;
 use Symfony\Component\Yaml\Yaml;
 use Tests\Feature\Lots\LotsTestCase;
 
 final class FlockFeedingEndpointTest extends LotsTestCase
 {
+    protected function signIn(array $permissions = ['can_view_flocks', 'can_manage_flocks', 'can_redistribute_flocks', 'can_finalize_flocks', 'can_view_mortality', 'can_manage_mortality', 'can_view_egg_collections', 'can_manage_egg_collections', 'can_view_breeds', 'can_manage_breeds']): User
+    {
+        return parent::signIn([...$permissions, 'can_view_flock_feeding', 'can_manage_flock_feeding', 'can_correct_feed_consumption']);
+    }
+
     /** @param list<array<string,mixed>> $stages */
     private function admitted(int $quantity = 100, array $stages = []): Flock
     {
@@ -143,7 +149,7 @@ final class FlockFeedingEndpointTest extends LotsTestCase
     {
         // Preparación: asigna cuatro etapas diarias con recetas distintas.
         $this->localTime('2026-10-05 12:00');
-        $actor = $this->signIn(['flocks.manage', 'feed-recipes.manage']);
+        $actor = $this->signIn(['can_manage_flocks', 'can_manage_feed_recipes']);
         $recipes = FeedRecipe::factory()->count(4)->create();
         $flock = $this->admitted(stages: [
             ['day' => 1, 'grams' => 40, 'recipe' => $recipes[0]],
@@ -202,7 +208,7 @@ final class FlockFeedingEndpointTest extends LotsTestCase
     {
         // Preparación: crea un lote y una receta seleccionable.
         $this->localTime('2026-10-05 12:00');
-        $actor = $this->signIn(['flocks.manage', 'mortality.manage', 'feed-recipes.manage']);
+        $actor = $this->signIn(['can_manage_flocks', 'can_manage_mortality', 'can_manage_feed_recipes']);
         $flock = $this->admitted();
         $recipe = FeedRecipe::factory()->create();
         $key = (string) Str::uuid();
@@ -374,7 +380,7 @@ final class FlockFeedingEndpointTest extends LotsTestCase
     {
         // Preparación: registra un consumo original y una configuración manual posterior.
         $this->localTime('2026-10-05 12:00');
-        $actor = $this->signIn(['flocks.manage', 'feed-recipes.manage']);
+        $actor = $this->signIn(['can_manage_flocks', 'can_manage_feed_recipes']);
         $flock = $this->admitted();
         $this->localTime('2026-10-06 00:00');
         $consumption = $this->consume($flock, '2026-10-05');
@@ -459,7 +465,7 @@ final class FlockFeedingEndpointTest extends LotsTestCase
     {
         // Preparación: crea una receta y un gestor de plantillas.
         $this->localTime('2026-10-05 12:00');
-        $this->signIn(['management-plans.manage']);
+        $this->signIn(['can_manage_management_plans']);
         $recipe = FeedRecipe::factory()->create();
         $initial = ['type' => 'ration_change', 'title' => 'Inicio', 'timing_kind' => 'day', 'start_day' => 1, 'catalog_ref' => $recipe->id, 'grams_per_bird' => 40];
         $weighing = ['type' => 'weighing', 'title' => 'Pesaje', 'timing_kind' => 'day', 'start_day' => 1];
@@ -480,7 +486,7 @@ final class FlockFeedingEndpointTest extends LotsTestCase
     {
         // Preparación: crea un lote el lunes y una nueva receta.
         $this->localTime('2026-10-05 12:00');
-        $this->signIn(['flocks.manage', 'management-plans.manage']);
+        $this->signIn(['can_manage_flocks', 'can_manage_management_plans']);
         $flock = $this->admitted();
         $recipe = FeedRecipe::factory()->create();
         $initial = ['type' => 'ration_change', 'title' => 'Plan revisado', 'timing_kind' => 'day', 'start_day' => 1, 'catalog_ref' => $recipe->id, 'grams_per_bird' => 80];
@@ -583,7 +589,7 @@ final class FlockFeedingEndpointTest extends LotsTestCase
     {
         // Preparación: crea el lote y conserva la receta asignada.
         $this->localTime('2026-10-05 12:00');
-        $this->signIn(['flocks.manage', 'management-plans.manage']);
+        $this->signIn(['can_manage_flocks', 'can_manage_management_plans']);
         $flock = $this->admitted();
         $configuration = FlockFeedingChange::query()->where('flock_id', $flock->id)->firstOrFail();
         $template = PlanTemplate::query()->sole();
@@ -610,7 +616,7 @@ final class FlockFeedingEndpointTest extends LotsTestCase
     {
         // Preparación: asigna una etapa futura y entra en manual.
         $this->localTime('2026-10-05 12:00');
-        $actor = $this->signIn(['flocks.manage', 'feed-recipes.manage']);
+        $actor = $this->signIn(['can_manage_flocks', 'can_manage_feed_recipes']);
         $initial = FeedRecipe::factory()->create();
         $future = FeedRecipe::factory()->create();
         $flock = $this->admitted(stages: [['day' => 1, 'grams' => 40, 'recipe' => $initial], ['day' => 3, 'grams' => 80, 'recipe' => $future]]);
@@ -631,11 +637,16 @@ final class FlockFeedingEndpointTest extends LotsTestCase
         $this->localTime('2026-10-05 12:00');
         $actor = $this->signIn();
         $flock = $this->admitted();
+        config(['identity.pin.pepper' => 'test-only-temporary-value']);
+        $sharedActor = User::factory()->devicePin(ProductionUnit::findOrFail($flock->production_unit_id))->create();
+        $sharedActor->syncRoles([$actor->roles()->firstOrFail()]);
+        $actor = $sharedActor;
         $secret = Str::random(64);
         $device = SharedDevice::query()->create([
-            'name' => 'Tablet alimentación', 'credential_hash' => hash('sha256', $secret),
+            'name' => 'Tablet alimentación', 'production_unit_id' => $actor->production_unit_id, 'credential_hash' => hash('sha256', $secret),
             'credential_expires_at' => now()->addYear(), 'enrolled_by' => $actor->id, 'enrolled_at' => now(),
         ]);
+        $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_login_shared', 'web'));
         $token = $actor->createToken('shared-feeding', ['*'], now()->addHours(8));
         $session = app(AuthSessionService::class)->createShared($actor, $device->refresh(), $token);
         $headers = ['Authorization' => 'Bearer '.$token->plainTextToken, 'X-Shared-Device-Token' => $device->id.'|'.$secret, 'X-GAM-Session' => $session->id];
@@ -659,7 +670,7 @@ final class FlockFeedingEndpointTest extends LotsTestCase
     {
         // Preparación: asigna un plan y autentica a un ejecutor de manejos.
         $this->localTime('2026-10-05 12:00');
-        $this->signIn(['flocks.manage', 'management-plans.execute']);
+        $this->signIn(['can_manage_flocks', 'can_execute_management_plans']);
         $flock = $this->admitted();
         $recipe = FeedRecipe::factory()->create();
 
@@ -728,7 +739,7 @@ final class FlockFeedingEndpointTest extends LotsTestCase
     {
         // Preparación: asigna una segunda etapa que comienza el martes.
         $this->localTime('2026-10-05 12:00');
-        $actor = $this->signIn(['flocks.manage', 'feed-recipes.manage']);
+        $actor = $this->signIn(['can_manage_flocks', 'can_manage_feed_recipes']);
         $recipe = FeedRecipe::factory()->create();
         $flock = $this->admitted(stages: [['day' => 1, 'grams' => 40], ['day' => 2, 'grams' => 60, 'recipe' => $recipe]]);
 

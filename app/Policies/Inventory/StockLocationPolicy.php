@@ -9,7 +9,7 @@ final readonly class StockLocationPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $this->allowed($user, 'inventory.view');
+        return $this->allowed($user, 'can_view_inventory');
     }
 
     public function view(User $user, StockLocation $stockLocation): bool
@@ -19,7 +19,7 @@ final readonly class StockLocationPolicy
 
     public function create(User $user): bool
     {
-        return $this->allowed($user, 'inventory.manage');
+        return $this->allowed($user, 'can_manage_inventory');
     }
 
     public function update(User $user, StockLocation $stockLocation): bool

@@ -27,7 +27,7 @@ final class HealthApplicationEndpointTest extends LotsTestCase
     public function test_planned_application_is_idempotent_without_quantity(string $kind, string $type, string $path, ?string $reason): void
     {
         // Preparación: vincula un catálogo concreto al plan vigente y conserva un saldo histórico.
-        $this->signIn(['management-plans.view', 'management-plans.execute']);
+        $this->signIn(['can_view_management_plans', 'can_execute_management_plans']);
         $catalog = $kind === 'medicine' ? Medicine::factory()->create() : Vaccine::factory()->create();
         $flock = $this->flockWithPlan(activities: [[
             'type' => $type, 'title' => 'Aplicación prevista', 'timing_kind' => 'week', 'start_week' => 1,
@@ -76,7 +76,7 @@ final class HealthApplicationEndpointTest extends LotsTestCase
     public function test_unplanned_application_requires_reason_and_preserves_it(string $kind, string $path): void
     {
         // Preparación: el lote no tiene ninguna actividad sanitaria vinculada.
-        $this->signIn(['management-plans.view', 'management-plans.execute']);
+        $this->signIn(['can_view_management_plans', 'can_execute_management_plans']);
         $flock = $this->flockWithPlan();
         $catalog = $kind === 'medicine' ? Medicine::factory()->create() : Vaccine::factory()->create();
         $payload = [$kind.'_id' => $catalog->public_id, 'occurred_at' => now()->subMinute()->toIso8601String(), 'notes' => 'Observaciones'];
@@ -101,7 +101,7 @@ final class HealthApplicationEndpointTest extends LotsTestCase
     public function test_invalid_plan_links_do_not_allow_reason_omission(string $kind, string $type, string $path): void
     {
         // Preparación: arma el plan propio, otro lote y una referencia distinta del catálogo.
-        $this->signIn(['management-plans.execute']);
+        $this->signIn(['can_execute_management_plans']);
         $catalog = $kind === 'medicine' ? Medicine::factory()->create() : Vaccine::factory()->create();
         $flock = $this->flockWithPlan(activities: [['type' => $type, 'title' => 'Otra ficha', 'timing_kind' => 'week', 'start_week' => 1,
             'catalog_type' => $kind, 'catalog_id' => 999, 'catalog_snapshot' => ['id' => (string) Str::ulid()]]]);
@@ -136,7 +136,7 @@ final class HealthApplicationEndpointTest extends LotsTestCase
     public function test_internal_application_enforces_reason_and_no_stock(string $kind, array $extra): void
     {
         // Preparación: usa un actor autorizado y un lote sin actividad sanitaria vinculada.
-        $actor = $this->signIn(['management-plans.execute']);
+        $actor = $this->signIn(['can_execute_management_plans']);
         $flock = $this->flockWithPlan();
         $catalog = $kind === 'medicine' ? Medicine::factory()->create() : Vaccine::factory()->create();
         $action = $kind === 'medicine' ? RecordMedicineApplicationAction::class : RecordVaccinationApplicationAction::class;
@@ -160,7 +160,7 @@ final class HealthApplicationEndpointTest extends LotsTestCase
     public function test_quantity_is_prohibited_and_reason_is_bounded(string $kind, string $path): void
     {
         // Preparación: usa un registro fuera de plan con motivo válido.
-        $this->signIn(['management-plans.execute']);
+        $this->signIn(['can_execute_management_plans']);
         $flock = $this->flockWithPlan();
         $catalog = $kind === 'medicine' ? Medicine::factory()->create() : Vaccine::factory()->create();
         $payload = [$kind.'_id' => $catalog->public_id, 'reason' => 'Tratamiento', 'occurred_at' => now()->subMinute()->toIso8601String()];
@@ -185,7 +185,7 @@ final class HealthApplicationEndpointTest extends LotsTestCase
 
         // Requests: un visitante recibe 401 y un usuario sin permiso recibe 403.
         $this->command('POST', '/flocks/'.$flock->public_id.'/'.$path, $payload)->assertUnauthorized();
-        $this->signIn(['management-plans.view']);
+        $this->signIn(['can_view_management_plans']);
         $this->command('POST', '/flocks/'.$flock->public_id.'/'.$path, $payload)->assertForbidden();
         $this->assertDatabaseCount($kind === 'medicine' ? 'medicine_applications' : 'vaccination_applications', 0);
     }
@@ -196,7 +196,7 @@ final class HealthApplicationEndpointTest extends LotsTestCase
     public function test_audit_failure_rolls_back_the_application(string $kind, string $path): void
     {
         // Preparación: falla únicamente el registro de auditoría de una aplicación válida.
-        $this->signIn(['management-plans.execute']);
+        $this->signIn(['can_execute_management_plans']);
         $flock = $this->flockWithPlan();
         $catalog = $kind === 'medicine' ? Medicine::factory()->create() : Vaccine::factory()->create();
         $payload = [$kind.'_id' => $catalog->public_id, 'reason' => 'Tratamiento', 'occurred_at' => now()->subMinute()->toIso8601String()];

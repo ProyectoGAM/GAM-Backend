@@ -125,8 +125,8 @@ final class ProductEggRestrictionsTest extends TestCase
     private function signIn(): User
     {
         $actor = User::factory()->create();
-        foreach (['products.manage', 'products.view'] as $permission) {
-            $actor->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+        foreach (['can_manage_products', 'can_view_products'] as $permission) {
+            $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
         Sanctum::actingAs($actor, ['api:access']);
 

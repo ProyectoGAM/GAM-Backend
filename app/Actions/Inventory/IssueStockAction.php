@@ -12,7 +12,7 @@ final readonly class IssueStockAction
     public function __construct(private RecordInventoryMovementAction $recordMovement) {}
 
     /** @param array<string, mixed> $attributes */
-    public function execute(array $attributes, User $actor, string $requiredPermission = 'inventory.move'): InventoryMovement
+    public function execute(array $attributes, User $actor, string $requiredPermission = 'can_move_inventory'): InventoryMovement
     {
         $lines = array_map(static fn (array $line): array => [
             'product_id' => (int) $line['product_id'],

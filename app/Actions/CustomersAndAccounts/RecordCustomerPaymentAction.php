@@ -33,7 +33,7 @@ final readonly class RecordCustomerPaymentAction
         }
 
         return $this->operations->run('payment', $key, ['customer' => $customer->public_id, 'delivery' => $delivery?->public_id, 'data' => $data],
-            $actor, $delivery === null ? 'pay' : 'delivery.update-own',
+            $actor, $delivery === null ? 'pay' : 'can_update_own_deliveries',
             function (CustomerOperation $operation, User $actor) use ($customer, $data, $delivery): array {
                 if ($delivery !== null) {
                     $currentDelivery = Delivery::query()->whereKey($delivery->id)->lockForUpdate()->firstOrFail();

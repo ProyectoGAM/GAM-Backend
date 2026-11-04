@@ -6,7 +6,7 @@ final class ListDeliveryProductionUnitsRequest extends DeliveryRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('delivery.view-own') ?? false;
+        return $this->user()?->can('can_view_own_deliveries') ?? false;
     }
 
     /** @return array<string, list<string>> */

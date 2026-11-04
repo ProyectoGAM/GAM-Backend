@@ -16,7 +16,7 @@ final class DeliveryClientResource extends JsonResource
             'latitude' => $this->latitude, 'longitude' => $this->longitude, 'status' => $this->status->value,
             'ready_for_delivery' => $this->status === CustomerStatus::Active && filled($this->address) && $this->latitude !== null && $this->longitude !== null,
             'delivery_notes' => $this->delivery_notes, 'visit_frequency' => $this->visit_frequency,
-            'account' => new CustomerAccountResource($this->whenLoaded('account')),
+            'account' => $this->when(! $request->user()?->usesDevicePin(), fn () => new CustomerAccountResource($this->whenLoaded('account'))),
             'last_delivery' => $this->when($this->relationLoaded('lastDelivery'), fn () => $this->lastDelivery === null ? null : [
                 'id' => $this->lastDelivery->id, 'delivery_id' => $this->lastDelivery->delivery?->public_id,
                 'visited_at' => $this->lastDelivery->visited_at, 'delivered_quantity' => $this->lastDelivery->delivered_quantity,

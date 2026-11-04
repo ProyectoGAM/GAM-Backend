@@ -83,7 +83,7 @@ final class WeighingConcurrencyTest extends TestCase
     {
         // Preparación: crea el operador autorizado y un lote con su movimiento histórico visible.
         $actor = User::factory()->create();
-        $actor->givePermissionTo(Permission::findOrCreate('weighings.manage', 'web'));
+        $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_manage_weighings', 'web'));
         $flock = Flock::factory()->create(['initial_quantity' => 20, 'current_quantity' => 20]);
         FlockMovement::factory()->create([
             'destination_flock_id' => $flock->id,
@@ -138,7 +138,7 @@ final class WeighingConcurrencyTest extends TestCase
         $firstActor = User::factory()->create();
         $secondActor = User::factory()->create();
         foreach ([$firstActor, $secondActor] as $actor) {
-            $actor->givePermissionTo(Permission::findOrCreate('weighings.manage', 'web'));
+            $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_manage_weighings', 'web'));
         }
         $flock = Flock::factory()->create(['initial_quantity' => 20, 'current_quantity' => 20]);
         FlockMovement::factory()->create([

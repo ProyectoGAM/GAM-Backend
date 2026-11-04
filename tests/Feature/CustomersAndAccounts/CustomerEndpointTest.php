@@ -19,7 +19,7 @@ final class CustomerEndpointTest extends TestCase
     {
         $this->seed(IdentityPermissionSeeder::class);
         $user = User::factory()->create();
-        $user->assignRole('admin');
+        $user->syncRoles(['admin']);
         Sanctum::actingAs($user, ['api:access']);
 
         return $user;
@@ -98,7 +98,7 @@ final class CustomerEndpointTest extends TestCase
         // Preparación de lector sin permisos de dinero.
         $this->seed(IdentityPermissionSeeder::class);
         $user = User::factory()->create();
-        $user->givePermissionTo('customers.view');
+        $user->roles()->firstOrFail()->givePermissionTo('can_view_customers');
         $customer = Customer::factory()->withAccount()->create();
         Sanctum::actingAs($user, ['api:access']);
         $this->getJson('/api/v1/clientes/'.$customer->public_id)->assertOk()->assertJsonMissingPath('data.account');

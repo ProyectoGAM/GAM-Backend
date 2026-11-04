@@ -14,7 +14,7 @@ final class ManagementExecutionsReportSource extends SqlReportSource
 
     public function definition(): ReportSourceDefinition
     {
-        return $this->describe('management.executions', 'Manejo general', 'Ejecuciones reales y fecha o período de su manual. Las tareas condicionales o sin calendario se identifican sin inventar fechas.', 'management-plans.view', [
+        return $this->describe('management.executions', 'Manejo general', 'Ejecuciones reales y fecha o período de su manual. Las tareas condicionales o sin calendario se identifican sin inventar fechas.', 'can_view_management_plans', [
             'date' => ['label' => 'Fecha realizada', 'type' => 'datetime'], 'production_unit_id' => ['label' => 'Unidad productiva', 'type' => 'integer'],
             'production_unit' => ['label' => 'Unidad productiva', 'type' => 'string'], 'poultry_house_id' => ['label' => 'Galpón', 'type' => 'integer'],
             'poultry_house' => ['label' => 'Galpón', 'type' => 'string'], 'flock_id' => ['label' => 'Lote', 'type' => 'string'], 'flock' => ['label' => 'Lote', 'type' => 'string'],

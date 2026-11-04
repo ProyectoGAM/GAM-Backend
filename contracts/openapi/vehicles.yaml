@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: GAM - Vehículos
   version: 1.0.0
-  description: Flota, usos, lecturas de tablero, combustible y mantenimiento de vehículos. Las rutas son relativas a /api/v1.
+  description: Flota, usos, lecturas de tablero, combustible y mantenimiento de vehículos. Las rutas son relativas a /api/v1. Las sesiones PIN sólo reciben un selector mínimo y pueden registrar combustible vinculado a su propio uso de un reparto de su UP; la gestión global requiere sesión personal.
 servers:
   - url: /api/v1
 security:
@@ -12,7 +12,7 @@ paths:
     get:
       operationId: listVehicleDrivers
       summary: Listar repartidores para el conductor habitual o un uso manual
-      description: Requiere vehicles.manage. Solo devuelve cuentas activas con rol repartidor.
+      description: Requiere can_manage_vehicles. Solo devuelve cuentas activas con rol repartidor.
       responses:
         '200': { description: Repartidores habilitados. }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -20,7 +20,7 @@ paths:
     get:
       operationId: listVehicles
       summary: Listar vehículos
-      description: Requiere vehicles.view, vehicles.manage o un permiso específico de vehículo. Permite filtrar por matrícula, marca, modelo, estado y disponibilidad.
+      description: Requiere can_view_vehicles, can_manage_vehicles o un permiso específico de vehículo. Permite filtrar por matrícula, marca, modelo, estado y disponibilidad.
       parameters:
         - { in: query, name: search, schema: { type: string, maxLength: 120 } }
         - { in: query, name: status, schema: { type: string, enum: [active, out_of_service, retired] } }
@@ -33,7 +33,7 @@ paths:
     post:
       operationId: createVehicle
       summary: Registrar vehículo
-      description: Requiere vehicles.manage. La matrícula se normaliza y debe ser única. Si no se indica estado, el vehículo se crea activo y su historial inicial conserva ese estado.
+      description: Requiere can_manage_vehicles. La matrícula se normaliza y debe ser única. Si no se indica estado, el vehículo se crea activo y su historial inicial conserva ese estado.
       requestBody:
         required: true
         content:
@@ -46,7 +46,7 @@ paths:
     get:
       operationId: listAvailableVehicles
       summary: Consultar vehículos disponibles para un reparto
-      description: Requiere delivery.start. El resultado puede cambiar antes del inicio; el servidor vuelve a validar y reservar dentro de la transacción.
+      description: Requiere can_start_deliveries. El resultado puede cambiar antes del inicio; el servidor vuelve a validar y reservar dentro de la transacción.
       parameters:
         - { in: query, name: search, schema: { type: string, maxLength: 120 } }
       responses:
@@ -58,14 +58,14 @@ paths:
     get:
       operationId: showVehicle
       summary: Ver ficha e historial del vehículo
-      description: Requiere vehicles.view, vehicles.manage o un permiso específico de vehículo. Los listados de combustible, mantenimiento y documentos se filtran por permiso.
+      description: Requiere can_view_vehicles, can_manage_vehicles o un permiso específico de vehículo. Los listados de combustible, mantenimiento y documentos se filtran por permiso.
       responses:
         '200': { description: Ficha del vehículo. }
         '404': { $ref: '#/components/responses/NotFound' }
     patch:
       operationId: updateVehicle
       summary: Actualizar ficha del vehículo
-      description: Requiere vehicles.manage. Usa version para control optimista. El estado se cambia por su operación específica.
+      description: Requiere can_manage_vehicles. Usa version para control optimista. El estado se cambia por su operación específica.
       parameters:
         - { $ref: '#/components/parameters/VehicleId' }
       requestBody:
@@ -81,7 +81,7 @@ paths:
     patch:
       operationId: changeVehicleStatus
       summary: Cambiar estado operativo
-      description: Requiere vehicles.manage. Se conserva el motivo y responsable. Retirar requiere cerrar primero el uso activo.
+      description: Requiere can_manage_vehicles. Se conserva el motivo y responsable. Retirar requiere cerrar primero el uso activo.
       requestBody:
         required: true
         content:
@@ -105,7 +105,7 @@ paths:
     post:
       operationId: recordVehicleReading
       summary: Registrar lectura manual de tablero
-      description: Requiere vehicles.readings.manage. Acepta kilometraje, valida vecinos cronológicos y no reemplaza lecturas originales.
+      description: Requiere can_manage_vehicle_readings. Acepta kilometraje, valida vecinos cronológicos y no reemplaza lecturas originales.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -136,7 +136,7 @@ paths:
     post:
       operationId: startVehicleUsage
       summary: Iniciar uso fuera de reparto
-      description: Requiere vehicles.use. El uso reserva el vehículo hasta su cierre.
+      description: Requiere can_use_vehicles. El uso reserva el vehículo hasta su cierre.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -147,7 +147,7 @@ paths:
               required: [purpose]
               properties:
                 purpose: { type: string, maxLength: 120 }
-                driver_id: { type: integer, description: Repartidor activo responsable; solo vehicles.manage }
+                driver_id: { type: integer, description: Repartidor activo responsable; solo can_manage_vehicles }
                 odometer_km: { type: number, minimum: 0 }
                 notes: { type: string, maxLength: 5000 }
       responses:
@@ -180,7 +180,7 @@ paths:
     post:
       operationId: recordVehicleFuel
       summary: Registrar carga de combustible
-      description: Requiere vehicles.fuel.manage para administración o delivery.fuel.record para registrar combustible en el uso propio. Los importes no se descuentan de cobranzas ni saldos de clientes.
+      description: Requiere can_manage_vehicle_fuel para administración o can_record_delivery_fuel para registrar combustible en el uso propio. Los importes no se descuentan de cobranzas ni saldos de clientes.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -222,7 +222,7 @@ paths:
     get:
       operationId: downloadVehicleFuelReceipt
       summary: Descargar comprobante privado de combustible
-      description: Requiere vehicles.fuel.view o vehicles.fuel.manage.
+      description: Requiere can_view_vehicle_fuel o can_manage_vehicle_fuel.
       responses:
         '200': { description: Archivo privado del registro de combustible. }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -236,7 +236,7 @@ paths:
     post:
       operationId: createVehicleMaintenancePlan
       summary: Crear plan preventivo
-      description: Requiere vehicles.maintenance.manage. Se pueden combinar límites de fecha, kilometraje y horas; vence el primero alcanzado.
+      description: Requiere can_manage_vehicle_maintenance. Se pueden combinar límites de fecha, kilometraje y horas; vence el primero alcanzado.
       requestBody:
         required: true
         content:
@@ -268,7 +268,7 @@ paths:
     post:
       operationId: createVehicleMaintenance
       summary: Planificar intervención
-      description: Requiere vehicles.maintenance.manage. El costo de reparación se registra aquí una sola vez.
+      description: Requiere can_manage_vehicle_maintenance. El costo de reparación se registra aquí una sola vez.
       requestBody:
         required: true
         content:
@@ -325,7 +325,7 @@ paths:
     post:
       operationId: uploadVehicleMaintenanceDocument
       summary: Adjuntar comprobante privado a una intervención
-      description: Requiere vehicles.maintenance.manage. Solo acepta PDF o imágenes de hasta 10 MB.
+      description: Requiere can_manage_vehicle_maintenance. Solo acepta PDF o imágenes de hasta 10 MB.
       requestBody:
         required: true
         content:
@@ -346,7 +346,7 @@ paths:
     get:
       operationId: downloadVehicleMaintenanceDocument
       summary: Descargar comprobante privado de mantenimiento
-      description: Requiere vehicles.maintenance.view o vehicles.maintenance.manage.
+      description: Requiere can_view_vehicle_maintenance o can_manage_vehicle_maintenance.
       responses:
         '200': { description: Archivo privado de la intervención. }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -355,7 +355,7 @@ paths:
     post:
       operationId: uploadVehicleDocument
       summary: Cargar documento privado
-      description: Requiere vehicles.documents.manage. Tipos PDF/JPEG/PNG, máximo 10 MiB; la descarga usa autorización y almacenamiento privado.
+      description: Requiere can_manage_vehicle_documents. Tipos PDF/JPEG/PNG, máximo 10 MiB; la descarga usa autorización y almacenamiento privado.
       requestBody:
         required: true
         content:
@@ -378,7 +378,7 @@ paths:
     get:
       operationId: downloadVehicleDocument
       summary: Descargar documento privado
-      description: Requiere vehicles.documents.view. El documento debe pertenecer al vehículo indicado.
+      description: Requiere can_view_vehicle_documents. El documento debe pertenecer al vehículo indicado.
       responses:
         '200': { description: Archivo privado como descarga. }
         '404': { $ref: '#/components/responses/NotFound' }

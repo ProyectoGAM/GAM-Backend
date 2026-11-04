@@ -9,6 +9,7 @@ use App\Enums\SuppliersAndCatalogs\SupplierStatus;
 use App\Exceptions\SuppliersAndCatalogs\SuppliersAndCatalogsConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\AuditAndTraceability\AuditEntry;
+use App\Models\IdentityAndAccess\Role;
 use App\Models\Inventory\StockBalance;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\SuppliersAndCatalogs\Supplier;
@@ -20,7 +21,6 @@ use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use RuntimeException;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 final class VaccineEndpointTest extends TestCase
@@ -82,7 +82,7 @@ final class VaccineEndpointTest extends TestCase
     {
         // Preparación: autentica un gestor de productos sin rol administrador.
         $manager = User::factory()->create();
-        $manager->givePermissionTo(Permission::findOrCreate('products.manage', 'web'));
+        $manager->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_manage_products', 'web'));
         Sanctum::actingAs($manager, ['*']);
         $this->getJson('/api/v1/vacunas')->assertForbidden();
 
@@ -194,7 +194,7 @@ final class VaccineEndpointTest extends TestCase
         // Acción: prueba los guards de la API genérica de Productos sobre el vínculo.
         $this->patchJson('/api/v1/products/'.$listed->product_id, ['sku' => 'OTRO-SKU'])->assertConflict();
         $manager = User::factory()->create();
-        $manager->givePermissionTo(Permission::findOrCreate('products.manage', 'web'));
+        $manager->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_manage_products', 'web'));
         Sanctum::actingAs($manager, ['*']);
         $this->patchJson('/api/v1/products/'.$listed->product_id, ['name' => 'Cambio sin rol'])->assertForbidden();
     }
@@ -273,7 +273,7 @@ final class VaccineEndpointTest extends TestCase
     private function admin(): User
     {
         $user = User::factory()->create();
-        $user->assignRole(Role::findOrCreate('admin', 'web'));
+        $user->syncRoles([Role::findOrCreate('admin', 'web')]);
 
         return $user;
     }

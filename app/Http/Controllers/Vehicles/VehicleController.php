@@ -39,7 +39,7 @@ final readonly class VehicleController
 {
     public function drivers(VehicleDriversRequest $request): JsonResponse
     {
-        $drivers = User::query()->whereHas('roles', fn ($query) => $query->where('name', 'delivery'))
+        $drivers = User::query()->permission('can_start_deliveries')
             ->orderBy('name')->get(['id', 'name']);
 
         return response()->json(['data' => $drivers]);
@@ -107,9 +107,9 @@ final readonly class VehicleController
     public function show(VehicleReadRequest $request, Vehicle $vehiculo, VehicleAvailability $availability): JsonResponse
     {
         $user = $request->user();
-        $canReadFuel = $user?->can('vehicles.fuel.view') || $user?->can('vehicles.fuel.manage');
-        $canReadMaintenance = $user?->can('vehicles.maintenance.view') || $user?->can('vehicles.maintenance.manage');
-        $canReadDocuments = $user?->can('vehicles.documents.view') || $user?->can('vehicles.documents.manage');
+        $canReadFuel = $user?->can('can_view_vehicle_fuel') || $user?->can('can_manage_vehicle_fuel');
+        $canReadMaintenance = $user?->can('can_view_vehicle_maintenance') || $user?->can('can_manage_vehicle_maintenance');
+        $canReadDocuments = $user?->can('can_view_vehicle_documents') || $user?->can('can_manage_vehicle_documents');
         $vehicle = $vehiculo->load(['habitualDriver:id,name', 'statusChanges' => fn ($query) => $query->with('actor:id,name')->latest('occurred_at')->limit(50), 'usages' => fn ($query) => $query->with(['driver:id,name', 'delivery:id,public_id'])->latest('started_at')->limit(50), 'readings' => fn ($query) => $query->where('meter_type', 'odometer')->with('correctsReading')->latest('recorded_at')->orderByDesc('id')->limit(50), 'fuelEntries' => fn ($query) => $query->with('usage')->latest('occurred_at')->limit(50), 'maintenancePlans' => fn ($query) => $query->where('active', true)->orderBy('task'), 'maintenances' => fn ($query) => $query->with(['items.plan', 'documents'])->latest()->limit(50), 'documents' => fn ($query) => $query->latest()]);
         $latest = $vehicle->readings()->effective()->where('meter_type', 'odometer')->orderByDesc('recorded_at')->orderByDesc('id')->first();
         $vehicle->setAttribute('latest_odometer', $latest?->value);
@@ -212,7 +212,7 @@ final readonly class VehicleController
     {
         $data = $request->validated();
         $actor = $this->actor($request);
-        $driver = isset($data['driver_id']) ? User::query()->whereKey($data['driver_id'])->whereHas('roles', fn ($query) => $query->where('name', 'delivery'))->firstOrFail() : $actor;
+        $driver = isset($data['driver_id']) ? User::query()->whereKey($data['driver_id'])->permission('can_start_deliveries')->firstOrFail() : $actor;
 
         return response()->json(['data' => $action->execute($vehiculo, $driver, $data, $data['idempotency_key'], actor: $actor)], 201);
     }

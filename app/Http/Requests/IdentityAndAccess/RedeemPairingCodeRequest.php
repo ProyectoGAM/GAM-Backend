@@ -2,9 +2,7 @@
 
 namespace App\Http\Requests\IdentityAndAccess;
 
-use Illuminate\Foundation\Http\FormRequest;
-
-final class RedeemPairingCodeRequest extends FormRequest
+final class RedeemPairingCodeRequest extends RoleRequest
 {
     public function authorize(): bool
     {

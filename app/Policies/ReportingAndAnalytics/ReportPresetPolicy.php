@@ -34,7 +34,7 @@ final readonly class ReportPresetPolicy
 
     private function allowed(User $user): bool
     {
-        return $user->hasRole('admin') || $user->checkPermissionTo('reports.presets.manage');
+        return $user->hasRole('admin') || $user->checkPermissionTo('can_manage_report_presets');
     }
 
     private function owns(User $user, ReportPreset $preset): bool

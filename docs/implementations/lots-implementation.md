@@ -53,7 +53,7 @@ La entrega de [alimentación de lotes](flock-feeding-implementation.md) exige in
 
 `POST /breeds` y `PATCH /breeds/{breed}` permiten definir por separado mínimos y máximos esperados de pollitos y adultas en gramos. Al omitir una pareja, la raza hereda el rango global de esa etapa. En un PATCH, enviar ambos límites como `null` restablece la herencia. Las razas existentes siguen heredando sin migración de datos; la nueva migración agrega columnas anulables y restricciones para exigir parejas completas y `0 < mínimo < máximo`. La semana de paso a adultas permanece en `/configuracion-pesajes`.
 
-La lista y las respuestas de alta/edición exponen `range_overrides` y `expected_ranges` para distinguir lo guardado de lo efectivo. `breeds.view` permite consultar; `breeds.manage` permite crear y modificar con versión e idempotencia. `SaveBreedAction` audita el cambio y reclasifica dentro de la misma transacción las jornadas abiertas de lotes de esa raza; las cerradas conservan el rango capturado. El contrato se encuentra en [lots.yaml](../../contracts/openapi/lots.yaml), y las pruebas en [BreedWeighingRangeEndpointTest](../../tests/Feature/Lots/BreedWeighingRangeEndpointTest.php).
+La lista y las respuestas de alta/edición exponen `range_overrides` y `expected_ranges` para distinguir lo guardado de lo efectivo. `can_view_breeds` permite consultar; `can_manage_breeds` permite crear y modificar con versión e idempotencia. `SaveBreedAction` audita el cambio y reclasifica dentro de la misma transacción las jornadas abiertas de lotes de esa raza; las cerradas conservan el rango capturado. El contrato se encuentra en [lots.yaml](../../contracts/openapi/lots.yaml), y las pruebas en [BreedWeighingRangeEndpointTest](../../tests/Feature/Lots/BreedWeighingRangeEndpointTest.php).
 
 La implementación quedó verificada con seis pruebas nuevas (77 aserciones) de herencia, personalización por etapa, confirmación de anomalías, reclasificación, restauración de herencia, snapshot histórico y validación; también pasaron las pruebas de catálogos, contratos, concurrencia y seeders afectadas. El 2026-10-09 se aplicó sólo la nueva migración a la base local `gam`; las dos razas demo conservaron sus límites propios en `null` y el lote `LOT-PESAJE-TEST` continuó disponible. Pint y `git diff --check` no señalaron problemas. Larastan mantuvo únicamente dos avisos previos de `RecordInventoryMovementAction`.
 
@@ -116,15 +116,15 @@ Un cliente offline debe guardar ULID, payload, clave y versiones; enviar sus ope
 
 | Permiso | Alcance |
 |---|---|
-| `flocks.view` | Listados, detalle, semana actual e histórico de movimientos. |
-| `flocks.manage` | Alta, código/observaciones, activación y cuarentena. |
-| `flocks.redistribute` | Redistribuciones y sus reversiones. |
-| `flocks.finalize` | Finalización con egreso. |
-| `breeds.view` / `breeds.manage` | Lectura / administración de razas. |
-| `mortality.view` / `mortality.manage` | Consultas / registro, corrección y cancelación de mortalidad. |
-| `egg-collections.view` / `egg-collections.manage` | Consultas y métricas / comandos de recolección. |
-| `egg-stock.view` / `egg-stock.move` / `egg-stock.adjust` | Saldos, movimientos, ingresos, salidas y correcciones de la cuenta de huevos por UP. |
-| `audit.view` | Lectura del endpoint transversal de auditoría. |
+| `can_view_flocks` | Listados, detalle, semana actual e histórico de movimientos. |
+| `can_manage_flocks` | Alta, código/observaciones, activación y cuarentena. |
+| `can_redistribute_flocks` | Redistribuciones y sus reversiones. |
+| `can_finalize_flocks` | Finalización con egreso. |
+| `can_view_breeds` / `can_manage_breeds` | Lectura / administración de razas. |
+| `can_view_mortality` / `can_manage_mortality` | Consultas / registro, corrección y cancelación de mortalidad. |
+| `can_view_egg_collections` / `can_manage_egg_collections` | Consultas y métricas / comandos de recolección. |
+| `can_view_egg_stock` / `can_move_egg_stock` / `can_adjust_egg_stock` | Saldos, movimientos, ingresos, salidas y correcciones de la cuenta de huevos por UP. |
+| `can_view_audit` | Lectura del endpoint transversal de auditoría. |
 
 `AdminUserSeeder` agrega los permisos funcionales de Lotes y stock de huevos al administrador. Son globales para toda la empresa; no hay asignaciones usuario–UP ni restricciones por propietario. Un operador de producción no necesita permisos de movimiento manual de inventario para que su recolección legítima genere stock.
 
@@ -402,8 +402,8 @@ Las entradas manuales, salidas para reparto y pérdidas se validan en el recorri
 | Finalización | POST `/flocks/{C}/finalization` con versión 1 y motivo, si C no fue modificado. | `200`, C=0/`finished`, egreso 20, no mortalidad extra, consulta e histórico disponibles. |
 | Reapertura | Intentar cambiar C finalizado a `active`; luego corregir una mortalidad terminal con y sin confirmación. | El cambio ordinario responde `409`; la corrección sin `confirm_reactivation` responde `409` sin mutación y con confirmación sólo reactiva en galpón libre y operativo, aunque supere el umbral. |
 | Sin autenticación | GET `/flocks` sin token. | `401`. |
-| Sin permiso | Usuario activo sin `flocks.view` consulta lotes; sin permiso de escritura intenta un comando. | `403`; no hay escrituras. Repetir para mortalidad, recolección y catálogos. |
-| Auditoría restringida | Usuario sin `audit.view` consulta `/audit/entries`. | `403`, aunque tenga permisos de producción. |
+| Sin permiso | Usuario activo sin `can_view_flocks` consulta lotes; sin permiso de escritura intenta un comando. | `403`; no hay escrituras. Repetir para mortalidad, recolección y catálogos. |
+| Auditoría restringida | Usuario sin `can_view_audit` consulta `/audit/entries`. | `403`, aunque tenga permisos de producción. |
 | Referencia inexistente | GET de un ULID de lote inexistente. | `404`. |
 | Campos protegidos | PATCH de lote con `current_quantity`, `initial_quantity`, `status` o identificadores internos. | `422`; las cantidades sólo cambian por Actions específicas. |
 | Enteros positivos | En altas/registros enviar 0, negativos, fracciones o más de 2147483647. | `422` y ningún cambio. |

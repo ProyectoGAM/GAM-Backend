@@ -27,8 +27,8 @@ paths:
       tags: ["Pesajes diarios"]
       operationId: listDailyWeighings
       summary: "Pagina las jornadas de un lote, de la fecha más reciente a la más antigua"
-      description: "Permiso weighings.view. El cursor opaco evita omisiones cuando se agregan jornadas nuevas. Una lista vacía indica ausencia de datos."
-      x-permission: weighings.view
+      description: "Permiso can_view_weighings. El cursor opaco evita omisiones cuando se agregan jornadas nuevas. Una lista vacía indica ausencia de datos."
+      x-permission: can_view_weighings
       parameters:
         - "$ref": "#/components/parameters/RequiredFlockFilter"
         - "$ref": "#/components/parameters/From"
@@ -45,8 +45,8 @@ paths:
       tags: ["Pesajes diarios"]
       operationId: showDailyWeighingByDate
       summary: "Consulta la jornada de un lote por fecha local"
-      description: "Permiso weighings.view. Devuelve 404 si no existe jornada para la fecha; status=closed si la fecha local ya terminó. Los ingresos se ordenan por hora e ID y usan cursor opaco."
-      x-permission: weighings.view
+      description: "Permiso can_view_weighings. Devuelve 404 si no existe jornada para la fecha; status=closed si la fecha local ya terminó. Los ingresos se ordenan por hora e ID y usan cursor opaco."
+      x-permission: can_view_weighings
       parameters:
         - "$ref": "#/components/parameters/FlockPath"
         - "$ref": "#/components/parameters/LocalDatePath"
@@ -62,7 +62,7 @@ paths:
       tags: ["Pesajes diarios"]
       operationId: addDailyWeighingEntry
       summary: "Agrega un ingreso a la jornada local actual del lote"
-      description: "Permiso weighings.manage. Cada ingreso usa gramos. La jornada se crea con el primer ingreso confirmado. Un 409 DAILY_WEIGHING_OUT_OF_RANGE_CONFIRMATION_REQUIRED no persiste nada; reintenta con la misma clave y confirm_out_of_range=true. Los grupos cuentan como un solo ingreso anómalo. Dos usuarios se serializan sobre el lote."
+      description: "Permiso can_manage_weighings. Cada ingreso usa gramos. La jornada se crea con el primer ingreso confirmado. Un 409 DAILY_WEIGHING_OUT_OF_RANGE_CONFIRMATION_REQUIRED no persiste nada; reintenta con la misma clave y confirm_out_of_range=true. Los grupos cuentan como un solo ingreso anómalo. Dos usuarios se serializan sobre el lote."
       security:
         - bearerAuth: []
         - sanctumCookie: []
@@ -74,7 +74,7 @@ paths:
           sharedDeviceCookie: []
           sharedSessionHeader: []
           csrf: []
-      x-permission: weighings.manage
+      x-permission: can_manage_weighings
       parameters:
         - "$ref": "#/components/parameters/FlockPath"
         - "$ref": "#/components/parameters/IdempotencyKey"
@@ -93,8 +93,8 @@ paths:
       tags: ["Pesajes diarios"]
       operationId: showDailyWeighing
       summary: "Consulta la jornada y una página de sus ingresos"
-      description: "Permiso weighings.view. La ausencia devuelve 404; la falta de permiso devuelve 403. La jornada permanece consultable cuando queda vacía tras eliminar ingresos."
-      x-permission: weighings.view
+      description: "Permiso can_view_weighings. La ausencia devuelve 404; la falta de permiso devuelve 403. La jornada permanece consultable cuando queda vacía tras eliminar ingresos."
+      x-permission: can_view_weighings
       parameters:
         - "$ref": "#/components/parameters/DailyWeighingPath"
         - "$ref": "#/components/parameters/Cursor"
@@ -109,7 +109,7 @@ paths:
       tags: ["Pesajes diarios"]
       operationId: deleteDailyWeighingEntry
       summary: "Elimina una medición concreta y devuelve la jornada actualizada"
-      description: "Permiso weighings.manage. También permite jornadas cerradas, siempre con versión y motivo. Conserva la fila como histórica y registra auditoría sin borrar entradas previas. Recalcula aves, peso, promedio, anomalías y último ingreso."
+      description: "Permiso can_manage_weighings. También permite jornadas cerradas, siempre con versión y motivo. Conserva la fila como histórica y registra auditoría sin borrar entradas previas. Recalcula aves, peso, promedio, anomalías y último ingreso."
       security:
         - bearerAuth: []
         - sanctumCookie: []
@@ -121,7 +121,7 @@ paths:
           sharedDeviceCookie: []
           sharedSessionHeader: []
           csrf: []
-      x-permission: weighings.manage
+      x-permission: can_manage_weighings
       parameters:
         - "$ref": "#/components/parameters/DailyWeighingPath"
         - "$ref": "#/components/parameters/DailyWeighingEntryPath"
@@ -141,8 +141,8 @@ paths:
       tags: ["Pesajes diarios"]
       operationId: getDailyWeighingDistribution
       summary: "Calcula histograma y curva con los pesos individuales activos de la jornada"
-      description: "Permiso weighings.view. Excluye grupos y entradas eliminadas. Con menos de dos individuos devuelve reason=insufficient_sample; con varianza cero, reason=zero_variance. En ambos casos curve=null."
-      x-permission: weighings.view
+      description: "Permiso can_view_weighings. Excluye grupos y entradas eliminadas. Con menos de dos individuos devuelve reason=insufficient_sample; con varianza cero, reason=zero_variance. En ambos casos curve=null."
+      x-permission: can_view_weighings
       parameters:
         - "$ref": "#/components/parameters/DailyWeighingPath"
       responses:
@@ -155,8 +155,8 @@ paths:
       tags: ["Pesajes"]
       operationId: listWeighings
       summary: "Lista pesajes ordenados del más reciente al más antiguo"
-      description: "Permiso requerido: weighings.view."
-      x-permission: weighings.view
+      description: "Permiso requerido: can_view_weighings."
+      x-permission: can_view_weighings
       parameters:
         - "$ref": "#/components/parameters/FlockFilter"
         - "$ref": "#/components/parameters/ModeFilter"
@@ -178,7 +178,7 @@ paths:
       tags: ["Pesajes"]
       operationId: recordWeighing
       summary: "Registra un pesaje individual o grupal"
-      description: "Permiso requerido: weighings.manage. plan_activity_id es opcional y sólo puede identificar una actividad weighing vigente del mismo lote; el vínculo se elige explícitamente y nunca se infiere por coincidencia de tipo o fecha. La respuesta incluye origin_operation_id como referencia inequívoca a esta operación. Los valores fuera de rango requieren confirmación explícita y el primer conflicto no persiste efectos."
+      description: "Permiso requerido: can_manage_weighings. plan_activity_id es opcional y sólo puede identificar una actividad weighing vigente del mismo lote; el vínculo se elige explícitamente y nunca se infiere por coincidencia de tipo o fecha. La respuesta incluye origin_operation_id como referencia inequívoca a esta operación. Los valores fuera de rango requieren confirmación explícita y el primer conflicto no persiste efectos."
       security:
         - bearerAuth: []
         - sanctumCookie: []
@@ -190,7 +190,7 @@ paths:
           sharedDeviceCookie: []
           sharedSessionHeader: []
           csrf: []
-      x-permission: weighings.manage
+      x-permission: can_manage_weighings
       parameters:
         - "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -216,7 +216,7 @@ paths:
       operationId: getWeighingEvolution
       summary: "Obtiene un punto por pesaje para la evolución de un lote"
       description: "Requiere flock_id. No agrega, interpola ni suaviza los puntos. Si la consulta supera 1000 pesajes, debes indicar date_from y date_to para acotar las fechas."
-      x-permission: weighings.view
+      x-permission: can_view_weighings
       parameters:
         - "$ref": "#/components/parameters/RequiredFlockFilter"
         - "$ref": "#/components/parameters/ModeFilter"
@@ -238,7 +238,7 @@ paths:
       tags: ["Pesajes"]
       operationId: showWeighing
       summary: "Consulta un pesaje"
-      x-permission: weighings.view
+      x-permission: can_view_weighings
       parameters:
         - "$ref": "#/components/parameters/Weighing"
       responses:
@@ -266,7 +266,7 @@ paths:
           sharedDeviceCookie: []
           sharedSessionHeader: []
           csrf: []
-      x-permission: weighings.manage
+      x-permission: can_manage_weighings
       parameters:
         - "$ref": "#/components/parameters/Weighing"
         - "$ref": "#/components/parameters/IdempotencyKey"
@@ -294,7 +294,7 @@ paths:
       operationId: getWeighingDistribution
       summary: "Calcula histograma y campana para un pesaje individual"
       description: "Los pesajes grupales devuelven available=false y reason=group_mode."
-      x-permission: weighings.view
+      x-permission: can_view_weighings
       parameters:
         - "$ref": "#/components/parameters/Weighing"
         - "$ref": "#/components/parameters/OutputUnit"
@@ -313,7 +313,7 @@ paths:
       tags: ["Configuración de pesajes"]
       operationId: showWeighingSettings
       summary: "Consulta la configuración global de rangos"
-      x-permission: weighing-settings.manage
+      x-permission: can_manage_weighing_settings
       responses:
         "200":
           description: "Configuración o null cuando todavía no existe."
@@ -327,7 +327,7 @@ paths:
       tags: ["Configuración de pesajes"]
       operationId: saveWeighingSettings
       summary: "Crea o actualiza los rangos globales"
-      description: "Permiso weighing-settings.manage. Actualiza y reclasifica en la misma transacción todas las jornadas abiertas de la fecha local. Cada etapa conserva el rango propio de su raza si existe y adopta el nuevo valor global si lo hereda. Las jornadas cerradas conservan su rango y resultados históricos."
+      description: "Permiso can_manage_weighing_settings. Actualiza y reclasifica en la misma transacción todas las jornadas abiertas de la fecha local. Cada etapa conserva el rango propio de su raza si existe y adopta el nuevo valor global si lo hereda. Las jornadas cerradas conservan su rango y resultados históricos."
       security:
         - bearerAuth: []
         - sanctumCookie: []
@@ -339,7 +339,7 @@ paths:
           sharedDeviceCookie: []
           sharedSessionHeader: []
           csrf: []
-      x-permission: weighing-settings.manage
+      x-permission: can_manage_weighing_settings
       parameters:
         - "$ref": "#/components/parameters/IdempotencyKey"
       requestBody:

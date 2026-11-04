@@ -11,7 +11,7 @@ final class EggProductionReportSource extends SqlReportSource
 {
     public function definition(): ReportSourceDefinition
     {
-        return $this->describe('lots.egg-production', 'Postura', 'Recolecciones válidas y producción histórica por galpón. Incluye lotes finalizados; el período comprende el historial registrado.', 'egg-collections.view', [
+        return $this->describe('lots.egg-production', 'Postura', 'Recolecciones válidas y producción histórica por galpón. Incluye lotes finalizados; el período comprende el historial registrado.', 'can_view_egg_collections', [
             'date' => ['label' => 'Fecha', 'type' => 'datetime'], 'production_unit_id' => ['label' => 'Unidad productiva', 'type' => 'integer'],
             'production_unit' => ['label' => 'Unidad productiva', 'type' => 'string'], 'poultry_house_id' => ['label' => 'Galpón', 'type' => 'integer'],
             'poultry_house' => ['label' => 'Galpón', 'type' => 'string'], 'flock_id' => ['label' => 'Lote', 'type' => 'string'],

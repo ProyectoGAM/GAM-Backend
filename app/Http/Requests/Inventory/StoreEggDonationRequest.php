@@ -6,7 +6,7 @@ final class StoreEggDonationRequest extends EggStockRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('egg-stock.move') ?? false;
+        return $this->user()?->can('can_move_egg_stock') ?? false;
     }
 
     public function rules(): array

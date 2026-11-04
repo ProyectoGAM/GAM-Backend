@@ -21,14 +21,14 @@ final readonly class RecordFeedSupplyAction
     /** Reproduce operaciones históricas; las nuevas cargas se retiran en favor del consumo por receta y UP. */
     public function execute(Flock $flock, array $data, User $actor): FlockOperation
     {
-        return $this->commands->execute($actor, 'management-plans.execute', 'management-plans.feed.record', $data['idempotency_key'],
+        return $this->commands->execute($actor, 'can_execute_management_plans', 'management-plans.feed.record', $data['idempotency_key'],
             ['flock' => $flock->public_id, ...$data], static fn (string $operationId): array => throw new FeedSupplyRetired);
     }
 
     /** Anula el suministro mediante una operación auditada e idempotente. */
     public function cancel(Flock $flock, FeedSupply $supply, array $data, User $actor): FlockOperation
     {
-        return $this->commands->execute($actor, 'management-plans.execute', 'management-plans.feed.cancel', $data['idempotency_key'],
+        return $this->commands->execute($actor, 'can_execute_management_plans', 'management-plans.feed.cancel', $data['idempotency_key'],
             ['flock' => $flock->public_id, 'supply' => $supply->public_id, ...$data], function (string $operationId) use ($flock, $supply, $data, $actor): array {
                 $lockedFlock = $this->state->lock([$flock->public_id])->get($flock->public_id);
                 $record = FeedSupply::query()->where('flock_id', $flock->id)->whereKey($supply->id)->lockForUpdate()->firstOrFail();

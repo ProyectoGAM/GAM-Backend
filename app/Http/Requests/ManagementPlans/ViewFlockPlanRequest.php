@@ -9,7 +9,7 @@ final class ViewFlockPlanRequest extends ManagementPlanRequest
      */
     public function authorize(): bool
     {
-        return $this->allowed('management-plans.view') || $this->allowed('management-plans.manage');
+        return $this->allowed('can_view_management_plans') || $this->allowed('can_manage_management_plans');
     }
 
     /**

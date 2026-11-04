@@ -15,6 +15,7 @@ use App\Exceptions\Inventory\InventoryConflict;
 use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
+use App\Models\IdentityAndAccess\Role;
 use App\Models\Inventory\StockBalance;
 use App\Models\Inventory\StockLocation;
 use App\Models\SuppliersAndCatalogs\Medicine;
@@ -30,7 +31,6 @@ use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Symfony\Component\Yaml\Yaml;
 use Tests\TestCase;
 
@@ -279,12 +279,12 @@ final class StockStorageEndpointTest extends TestCase
         $this->assertDatabaseCount('inventory_movements', 0);
     }
 
-    // Flujo: pérdidas conserva inventory.adjust como autorización suficiente dentro de la transacción.
+    // Flujo: pérdidas conserva can_adjust_inventory como autorización suficiente dentro de la transacción.
     public function test_loss_requires_adjust_permission_without_requiring_move(): void
     {
         // Preparación: concede sólo el permiso que exige el contrato de pérdidas.
         $actor = User::factory()->create();
-        $actor->givePermissionTo(Permission::findOrCreate('inventory.adjust', 'web'));
+        $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_adjust_inventory', 'web'));
         Sanctum::actingAs($actor, ['*']);
         $product = Product::factory()->create();
         $location = StockLocation::factory()->create();
@@ -493,8 +493,8 @@ final class StockStorageEndpointTest extends TestCase
     private function admin(): User
     {
         $actor = User::factory()->create();
-        $actor->assignRole(Role::findOrCreate('admin', 'web'));
-        foreach (['inventory.view', 'inventory.move', 'inventory.adjust', 'inventory.manage'] as $permission) {
+        $actor->syncRoles([Role::findOrCreate('admin', 'web')]);
+        foreach (['can_view_inventory', 'can_move_inventory', 'can_adjust_inventory', 'can_manage_inventory'] as $permission) {
             Permission::findOrCreate($permission, 'web');
         }
         Sanctum::actingAs($actor, ['*']);

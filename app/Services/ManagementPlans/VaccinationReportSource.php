@@ -14,7 +14,7 @@ final class VaccinationReportSource extends SqlReportSource
 
     public function definition(): ReportSourceDefinition
     {
-        return $this->describe('management.vaccinations', 'Vacunación', 'Aplicaciones válidas, vacuna y partida registrada. Los datos históricos desconocidos permanecen vacíos.', 'management-plans.view', [
+        return $this->describe('management.vaccinations', 'Vacunación', 'Aplicaciones válidas, vacuna y partida registrada. Los datos históricos desconocidos permanecen vacíos.', 'can_view_management_plans', [
             'date' => ['label' => 'Fecha', 'type' => 'datetime'], 'production_unit_id' => ['label' => 'Unidad productiva', 'type' => 'integer'],
             'production_unit' => ['label' => 'Unidad productiva', 'type' => 'string'], 'poultry_house_id' => ['label' => 'Galpón', 'type' => 'integer'],
             'poultry_house' => ['label' => 'Galpón', 'type' => 'string'], 'flock_id' => ['label' => 'Lote', 'type' => 'string'], 'flock' => ['label' => 'Lote', 'type' => 'string'],

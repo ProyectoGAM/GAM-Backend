@@ -22,7 +22,7 @@ final class VehicleEndpointTest extends TestCase
     {
         $this->seed(IdentityPermissionSeeder::class);
         $admin = User::factory()->create();
-        $admin->assignRole('admin');
+        $admin->syncRoles(['admin']);
         Sanctum::actingAs($admin, ['api:access']);
 
         return $admin;
@@ -33,8 +33,8 @@ final class VehicleEndpointTest extends TestCase
     {
         $this->seed(IdentityPermissionSeeder::class);
         config(['identity.pin.pepper' => 'vehicle-test-pepper']);
-        $driver = User::factory()->create(['pin_hash' => app(PinHasher::class)->hash('0007'), 'pin_enabled' => true]);
-        $driver->assignRole('delivery');
+        $driver = User::factory()->create(['operation_pin_hash' => app(PinHasher::class)->hash('0007')]);
+        $driver->syncRoles(['delivery']);
         Sanctum::actingAs($driver, ['api:access']);
 
         return $driver;
@@ -134,5 +134,22 @@ final class VehicleEndpointTest extends TestCase
         $this->assertNotNull($usage->ended_at);
         $this->assertNull($usage->active_vehicle_key);
         $this->getJson('/api/v1/vehiculos/disponibles')->assertOk()->assertJsonCount(1, 'data');
+    }
+
+    // Flujo: registrar combustible propio no habilita cargas sin uso activo al retirar inicio de repartos.
+    public function test_delivery_fuel_permission_requires_usage_even_without_delivery_start_permission(): void
+    {
+        // Preparación: configura un rol personalizado con combustible propio y sin inicio de repartos.
+        $this->seed(IdentityPermissionSeeder::class);
+        $actor = User::factory()->create();
+        $actor->roles()->firstOrFail()->syncPermissions(['can_view_own_deliveries', 'can_record_delivery_fuel']);
+        $vehicle = Vehicle::factory()->create();
+        Sanctum::actingAs($actor);
+
+        // Request: exige asociar el combustible al uso propio en lugar de ampliar el alcance del rol.
+        $this->postJson('/api/v1/vehiculos/'.$vehicle->public_id.'/combustible', [
+            'liters' => '5.000', 'fuel_type' => 'diesel', 'amount' => '100.000',
+        ], ['Idempotency-Key' => (string) Str::uuid()])->assertUnprocessable()->assertJsonValidationErrors('usage_id');
+        $this->assertDatabaseCount('vehicle_fuel_entries', 0);
     }
 }

@@ -10,7 +10,7 @@ final class VehicleIndexRequest extends FormRequest
     {
         $user = $this->user();
 
-        return collect(['vehicles.view', 'vehicles.manage', 'vehicles.readings.manage', 'vehicles.use', 'vehicles.fuel.view', 'vehicles.fuel.manage', 'vehicles.maintenance.view', 'vehicles.maintenance.manage', 'vehicles.documents.view', 'vehicles.documents.manage'])
+        return collect(['can_view_vehicles', 'can_manage_vehicles', 'can_manage_vehicle_readings', 'can_use_vehicles', 'can_view_vehicle_fuel', 'can_manage_vehicle_fuel', 'can_view_vehicle_maintenance', 'can_manage_vehicle_maintenance', 'can_view_vehicle_documents', 'can_manage_vehicle_documents'])
             ->contains(fn (string $permission): bool => $user?->can($permission) === true);
     }
 

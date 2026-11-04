@@ -34,7 +34,7 @@ final class ReportingEndpointTest extends TestCase
     public function test_sources_require_reports_and_source_permissions(): void
     {
         // Preparación: autentica un usuario con permiso general y de inventario.
-        Sanctum::actingAs($this->userWithPermissions(['reports.view', 'inventory.view']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_view_reports', 'can_view_inventory']), ['*']);
 
         // Acción: consulta el catálogo público de fuentes.
         $response = $this->getJson('/api/v1/reports/sources');
@@ -47,7 +47,7 @@ final class ReportingEndpointTest extends TestCase
     public function test_preview_rejects_non_allowlisted_columns(): void
     {
         // Preparación: autentica un usuario con permisos de consulta.
-        Sanctum::actingAs($this->userWithPermissions(['reports.view', 'inventory.view']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_view_reports', 'can_view_inventory']), ['*']);
 
         // Acción: solicita una columna interna que no está en el contrato.
         $response = $this->postJson('/api/v1/reports/inventory.stock-balances/previews', [
@@ -62,7 +62,7 @@ final class ReportingEndpointTest extends TestCase
     public function test_preview_accepts_public_pagination_keys(): void
     {
         // Preparación: autentica un usuario con permisos de consulta de inventario.
-        Sanctum::actingAs($this->userWithPermissions(['reports.view', 'inventory.view']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_view_reports', 'can_view_inventory']), ['*']);
 
         // Acción: envía la consulta con las claves públicas usadas por el frontend.
         $response = $this->postJson('/api/v1/reports/inventory.stock-balances/previews', [
@@ -80,7 +80,7 @@ final class ReportingEndpointTest extends TestCase
     public function test_grouping_adds_a_metric_and_aggregates_rows(): void
     {
         // Preparación: crea dos saldos del mismo producto en ubicaciones distintas.
-        Sanctum::actingAs($this->userWithPermissions(['reports.view', 'inventory.view']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_view_reports', 'can_view_inventory']), ['*']);
         $product = Product::factory()->create(['name' => 'Maíz agrupado']);
         StockBalance::factory()->for($product, 'product')->for(StockLocation::factory(), 'stockLocation')->create([
             'on_hand_quantity' => '3.000000',
@@ -106,7 +106,7 @@ final class ReportingEndpointTest extends TestCase
     public function test_preview_groups_movements_by_day_without_missing_sort_alias(): void
     {
         // Preparación: autentica un usuario con permisos de consulta de reportes e inventario.
-        Sanctum::actingAs($this->userWithPermissions(['reports.view', 'inventory.view']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_view_reports', 'can_view_inventory']), ['*']);
 
         // Acción: solicita la agrupación usada por el indicador de movimientos.
         $response = $this->postJson('/api/v1/reports/inventory.movements/previews', [
@@ -127,7 +127,7 @@ final class ReportingEndpointTest extends TestCase
     public function test_presets_are_private_to_the_authenticated_user(): void
     {
         // Preparación: autentica al propietario con permisos de presets e inventario.
-        $owner = $this->userWithPermissions(['reports.presets.manage', 'reports.view', 'inventory.view']);
+        $owner = $this->userWithPermissions(['can_manage_report_presets', 'can_view_reports', 'can_view_inventory']);
         Sanctum::actingAs($owner, ['*']);
 
         // Acción: crea una configuración válida para la fuente de saldos.
@@ -147,7 +147,7 @@ final class ReportingEndpointTest extends TestCase
         $preset = ReportPreset::query()->firstOrFail();
 
         // Acción: autentica a otro usuario e intenta leer el preset ajeno.
-        Sanctum::actingAs($this->userWithPermissions(['reports.presets.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_report_presets']), ['*']);
         $this->getJson('/api/v1/report-presets/'.$preset->getKey())->assertForbidden();
     }
 
@@ -155,7 +155,7 @@ final class ReportingEndpointTest extends TestCase
     public function test_export_request_is_idempotent_and_queued(): void
     {
         // Preparación: autentica al solicitante y evita ejecutar el worker durante la prueba.
-        $actor = $this->userWithPermissions(['reports.view', 'reports.export', 'inventory.view']);
+        $actor = $this->userWithPermissions(['can_view_reports', 'can_export_reports', 'can_view_inventory']);
         Sanctum::actingAs($actor, ['*']);
         Queue::fake();
         $key = (string) Str::uuid();
@@ -183,7 +183,7 @@ final class ReportingEndpointTest extends TestCase
     {
         // Preparación: registra un archivo completado en el disco privado.
         Storage::fake('local');
-        $owner = $this->userWithPermissions(['reports.view', 'inventory.view']);
+        $owner = $this->userWithPermissions(['can_view_reports', 'can_view_inventory']);
         $export = $this->completedExport($owner);
         $token = $owner->createToken('download-test')->plainTextToken;
 
@@ -216,7 +216,7 @@ final class ReportingEndpointTest extends TestCase
     {
         // Preparación: registra una exportación disponible y autentica al propietario con permiso para compartir.
         Storage::fake('local');
-        $owner = $this->userWithPermissions(['reports.share', 'reports.view', 'inventory.view']);
+        $owner = $this->userWithPermissions(['can_share_reports', 'can_view_reports', 'can_view_inventory']);
         $export = $this->completedExport($owner);
         Sanctum::actingAs($owner, ['*']);
 
@@ -281,7 +281,7 @@ final class ReportingEndpointTest extends TestCase
         // Preparación: congela la fecha y crea el archivo privado con vencimiento habitual de 24 horas.
         $this->travelTo(Carbon::parse('2026-10-13T12:00:00Z')->setTimezone(config('app.timezone')));
         Storage::fake('local');
-        $owner = $this->userWithPermissions(['reports.share', 'reports.view', 'inventory.view']);
+        $owner = $this->userWithPermissions(['can_share_reports', 'can_view_reports', 'can_view_inventory']);
         $export = $this->completedExport($owner);
         Sanctum::actingAs($owner);
 
@@ -300,7 +300,7 @@ final class ReportingEndpointTest extends TestCase
         // Preparación: crea dos firmas para la misma exportación con duraciones distintas.
         $this->travelTo(Carbon::parse('2026-10-13T12:00:00Z')->setTimezone(config('app.timezone')));
         Storage::fake('local');
-        $owner = $this->userWithPermissions(['reports.share', 'reports.view', 'inventory.view']);
+        $owner = $this->userWithPermissions(['can_share_reports', 'can_view_reports', 'can_view_inventory']);
         $export = $this->completedExport($owner);
         Sanctum::actingAs($owner);
         $longLink = $this->postJson('/api/v1/exportaciones-reportes/'.$export->id.'/enlaces-temporales', ['expires_in' => 43200])->assertCreated()->json('url');
@@ -331,7 +331,7 @@ final class ReportingEndpointTest extends TestCase
         // Preparación: registra un archivo vigente y conserva su vencimiento original.
         $this->travelTo(Carbon::parse('2026-10-13T12:00:00Z')->setTimezone(config('app.timezone')));
         Storage::fake('local');
-        $owner = $this->userWithPermissions(['reports.share', 'reports.view', 'inventory.view']);
+        $owner = $this->userWithPermissions(['can_share_reports', 'can_view_reports', 'can_view_inventory']);
         $export = $this->completedExport($owner);
         $expiry = $export->expires_at->timestamp;
         Sanctum::actingAs($owner);
@@ -347,7 +347,7 @@ final class ReportingEndpointTest extends TestCase
         // Preparación: conserva el archivo, pero vence su disponibilidad.
         $this->travelTo(Carbon::parse('2026-10-13T12:00:00Z')->setTimezone(config('app.timezone')));
         Storage::fake('local');
-        $owner = $this->userWithPermissions(['reports.share', 'reports.view', 'inventory.view']);
+        $owner = $this->userWithPermissions(['can_share_reports', 'can_view_reports', 'can_view_inventory']);
         $export = $this->completedExport($owner);
         $export->update(['expires_at' => now()->subMinute()]);
         $expiry = $export->expires_at->timestamp;
@@ -398,7 +398,7 @@ final class ReportingEndpointTest extends TestCase
         $user = User::factory()->create();
 
         foreach ($permissions as $permission) {
-            $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+            $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
 
         return $user;

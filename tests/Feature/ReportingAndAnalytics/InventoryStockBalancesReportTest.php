@@ -23,7 +23,7 @@ final class InventoryStockBalancesReportTest extends TestCase
     public function test_grouped_balances_exclude_only_inactive_feed_plants(): void
     {
         // Preparación: crea materias primas y un suministro en plantas activas e inactivas.
-        $actor = $this->userWithPermissions(['reports.view', 'inventory.view']);
+        $actor = $this->userWithPermissions(['can_view_reports', 'can_view_inventory']);
         Sanctum::actingAs($actor, ['*']);
         $rawMaterial = Product::factory()->create([
             'name' => 'Maíz reporte',
@@ -74,7 +74,7 @@ final class InventoryStockBalancesReportTest extends TestCase
     {
         $user = User::factory()->create();
         foreach ($permissions as $permission) {
-            $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+            $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
 
         return $user;

@@ -25,7 +25,7 @@ final class InventoryStockBalancesReportSource implements ReportSource
             definitionVersion: '2.2',
             label: 'Saldos de inventario',
             description: 'Stock disponible y mínimo por producto y ubicación.',
-            permission: 'inventory.view',
+            permission: 'can_view_inventory',
             columns: [
                 'product_id' => ['label' => 'ID de producto', 'type' => 'integer'],
                 'product' => ['label' => 'Producto', 'type' => 'string'],
@@ -139,7 +139,7 @@ final class InventoryStockBalancesReportSource implements ReportSource
             ->leftJoin('production_units', 'production_units.id', '=', 'stock_locations.production_unit_id')
             ->leftJoin('poultry_houses', 'poultry_houses.id', '=', 'stock_locations.poultry_house_id')
             ->where('products.stock_tracked', true)
-            ->getQuery();
+            ->toBase();
     }
 
     /** @return list<string|Expression> */

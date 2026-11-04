@@ -84,8 +84,8 @@ final class ReportSnapshotTest extends TestCase
     {
         // Preparación: conserva permiso general, sin permiso de la fuente.
         $owner = User::factory()->create();
-        foreach (['reports.view', 'reports.share'] as $permission) {
-            $owner->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+        foreach (['can_view_reports', 'can_share_reports'] as $permission) {
+            $owner->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
         $export = ReportExport::factory()->for($owner)->create(['status' => ReportExportStatus::Completed, 'source_key' => 'lots.egg-production']);
         Sanctum::actingAs($owner);
@@ -97,8 +97,8 @@ final class ReportSnapshotTest extends TestCase
     private function owner(): User
     {
         $owner = User::factory()->create();
-        foreach (['reports.view', 'reports.share', 'egg-collections.view'] as $permission) {
-            $owner->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+        foreach (['can_view_reports', 'can_share_reports', 'can_view_egg_collections'] as $permission) {
+            $owner->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
 
         return $owner;

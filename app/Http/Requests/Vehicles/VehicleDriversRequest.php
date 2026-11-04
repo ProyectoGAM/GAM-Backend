@@ -8,7 +8,7 @@ final class VehicleDriversRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('vehicles.manage') ?? false;
+        return $this->user()?->can('can_manage_vehicles') ?? false;
     }
 
     /** @return array<string, list<string>> */

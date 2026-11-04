@@ -5,6 +5,7 @@ namespace App\Services\AuditAndTraceability;
 use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\Inventory\FeedConsumption;
 use App\Models\Inventory\FeedConsumptionCorrection;
+use App\Models\Inventory\FeedStockOperation;
 use App\Models\Inventory\InventoryMovement;
 use App\Models\Lots\Flock;
 use App\Models\Lots\MortalityRecord;
@@ -47,6 +48,9 @@ final readonly class AuditEntryActions
             }
             $superseded = $consumption->latestCorrection !== null && ($entry->event === 'feed_consumption_recorded' || (int) $consumption->latestCorrection->id !== (int) $entry->subject_id);
             $reason = $superseded ? 'Este registro ya fue rectificado. Consulta el consumo vigente para registrar otra rectificación.' : null;
+            if ($reason === null && ! $viewer->can('correctConsumption', FeedStockOperation::class)) {
+                $reason = 'No tienes permiso para rectificar consumos de alimento.';
+            }
 
             return $this->result($reason === null ? 'available' : 'unavailable',
                 $reason ?? 'Puedes rectificar el consumo mediante una compensación. La configuración de alimentación no cambia.',

@@ -11,7 +11,7 @@ final class FlockAdmissionsReportSource extends SqlReportSource
 {
     public function definition(): ReportSourceDefinition
     {
-        return $this->describe('lots.admissions', 'Lotes', 'Ingresos y alojamientos históricos. La cantidad corresponde al ingreso, no a las aves vivas actuales.', 'flocks.view', [
+        return $this->describe('lots.admissions', 'Lotes', 'Ingresos y alojamientos históricos. La cantidad corresponde al ingreso, no a las aves vivas actuales.', 'can_view_flocks', [
             'date' => ['label' => 'Fecha de ingreso', 'type' => 'datetime'], 'production_unit_id' => ['label' => 'Unidad productiva', 'type' => 'integer'],
             'production_unit' => ['label' => 'Unidad productiva', 'type' => 'string'], 'poultry_house_id' => ['label' => 'Galpón', 'type' => 'integer'],
             'poultry_house' => ['label' => 'Galpón', 'type' => 'string'], 'flock_id' => ['label' => 'Lote', 'type' => 'string'], 'flock' => ['label' => 'Lote', 'type' => 'string'],

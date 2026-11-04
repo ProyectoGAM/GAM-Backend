@@ -3,6 +3,7 @@
 namespace App\Actions\Deliveries;
 
 use App\Actions\Inventory\RecordEggStockTransactionAction;
+use App\Actions\Vehicles\StartVehicleUsageAction;
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Enums\Deliveries\DeliveryStatus;
 use App\Enums\FarmStructure\ProductionUnitStatus;
@@ -14,7 +15,8 @@ use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
 use App\Models\Vehicles\Vehicle;
 use App\Services\Deliveries\DeliveryLoadUnits;
-use App\Actions\Vehicles\StartVehicleUsageAction;
+use App\Services\IdentityAndAccess\AccessControl;
+use App\Services\IdentityAndAccess\ProductionUnitAccess;
 use App\Services\Inventory\EggPresentationCatalog;
 use Illuminate\Support\Facades\DB;
 
@@ -31,11 +33,16 @@ final readonly class StartDeliveryAction
     /** @param array<string, mixed> $data */
     public function execute(User $actor, array $data, string $idempotencyKey): Delivery
     {
+        if ($actor->usesDevicePin()) {
+            app(ProductionUnitAccess::class)->assertUnit((int) ($data['production_unit_id'] ?? $actor->production_unit_id), $actor);
+            $data['production_unit_id'] = $actor->production_unit_id;
+        }
         $requestHash = hash('sha256', json_encode($data, JSON_THROW_ON_ERROR));
         $startedWithoutLoad = (bool) ($data['start_without_load'] ?? false);
 
         return DB::transaction(function () use ($actor, $data, $idempotencyKey, $requestHash, $startedWithoutLoad): Delivery {
-            User::query()->whereKey($actor->getKey())->lockForUpdate()->firstOrFail();
+            $actor = User::query()->whereKey($actor->getKey())->lockForUpdate()->firstOrFail();
+            app(AccessControl::class)->assertCurrentSession($actor);
             $existing = Delivery::query()->where('start_idempotency_key', $idempotencyKey)->first();
             if ($existing !== null) {
                 $legacyData = $data;
@@ -72,7 +79,7 @@ final readonly class StartDeliveryAction
                 'driver_id' => $actor->getKey(),
                 'vehicle_id' => $vehicle->getKey(),
                 'vehicle_snapshot' => $vehicleSnapshot,
-                'production_unit_id' => $unit?->getKey(),
+                'production_unit_id' => $unit?->getKey() ?? ($actor->usesDevicePin() ? $actor->production_unit_id : null),
                 'started_without_load' => $startedWithoutLoad,
                 'vehicle_reference' => $vehicleSnapshot['plate'],
                 'status' => DeliveryStatus::Active,

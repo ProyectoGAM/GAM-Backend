@@ -15,7 +15,7 @@ final readonly class InventoryReversalAvailability
 {
     public function __construct(private StockProductCompatibility $compatibility) {}
 
-    public function restriction(InventoryMovement $movement, string $requiredPermission = 'inventory.adjust'): ?string
+    public function restriction(InventoryMovement $movement, string $requiredPermission = 'can_adjust_inventory'): ?string
     {
         if ($movement->reference_type === 'stock_regularization') {
             return 'Una regularización no puede revertirse reintroduciendo stock incompatible.';
@@ -23,7 +23,7 @@ final readonly class InventoryReversalAvailability
         if (in_array($movement->reference_type, ['feed_manufacture', 'feed_manufacture_cancellation', 'feed_ingredient_adjustment'], true)) {
             return 'Los movimientos de alimento deben corregirse desde su operación de elaboración o ajuste.';
         }
-        if (in_array($movement->reference_type, ['vaccination_application', 'medicine_application'], true) && $requiredPermission !== 'management-plans.execute') {
+        if (in_array($movement->reference_type, ['vaccination_application', 'medicine_application'], true) && $requiredPermission !== 'can_execute_management_plans') {
             return 'Los consumos sanitarios deben corregirse desde su aplicación.';
         }
         if ($movement->reversal()->exists()) {

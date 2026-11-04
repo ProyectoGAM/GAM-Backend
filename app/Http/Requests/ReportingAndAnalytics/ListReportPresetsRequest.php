@@ -10,7 +10,7 @@ final class ListReportPresetsRequest extends FormRequest
     {
         $user = $this->user();
 
-        return $user !== null && ($user->hasRole('admin') || $user->can('reports.presets.manage'));
+        return $user !== null && ($user->hasRole('admin') || $user->can('can_manage_report_presets'));
     }
 
     /** @return array<string, array<int, mixed>> */

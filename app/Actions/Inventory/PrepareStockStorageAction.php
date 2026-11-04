@@ -27,7 +27,7 @@ final readonly class PrepareStockStorageAction
 
     public function execute(User $actor): void
     {
-        LotsAuthorization::ensure($actor, 'inventory.manage');
+        LotsAuthorization::ensure($actor, 'can_manage_inventory');
         StockLocation::query()->where('type', StockLocationType::Unknown)->orderBy('id')->eachById(function (StockLocation $location) use ($actor): void {
             DB::transaction(function () use ($location, $actor): void {
                 $locked = StockLocation::query()->whereKey($location->getKey())->lockForUpdate()->firstOrFail();

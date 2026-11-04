@@ -7,6 +7,7 @@ use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Geography\Department;
 use App\Models\Geography\Locality;
+use App\Models\IdentityAndAccess\Role;
 use App\Models\Inventory\EggPresentation;
 use App\Models\Inventory\FeedRecipe;
 use App\Models\Inventory\StockLocation;
@@ -98,6 +99,7 @@ final readonly class AuditEntryData
     {
         $resources = [
             User::class => 'user',
+            Role::class => 'role',
             Flock::class => 'flock',
             ProductionUnit::class => 'production_unit',
             PoultryHouse::class => 'poultry_house',
@@ -116,7 +118,9 @@ final readonly class AuditEntryData
         if ($resource === null) {
             return null;
         }
-        $attribute = $resource === 'flock' ? 'code' : 'name';
+        $attribute = match ($resource) {
+            'flock' => 'code', 'role' => 'label', default => 'name'
+        };
         $label = array_key_exists($attribute, $subject->getAttributes()) ? $subject->getAttribute($attribute) : null;
         $label ??= $properties['subject_snapshot']['name'] ?? $properties['subject_snapshot']['product']['name'] ?? null;
 

@@ -8,7 +8,7 @@ final class AdminRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('admin.dashboard.view') ?? false;
+        return $this->user()?->can('can_view_admin_dashboard') ?? false;
     }
 
     /**

@@ -21,7 +21,7 @@ final readonly class PlanTemplateController
     {
         $filters = $request->validated();
         $query = PlanTemplate::query();
-        if (! $request->user()?->can('management-plans.manage')) {
+        if (! $request->user()?->can('can_manage_management_plans')) {
             $query->whereNotNull('published_version');
         }
         if (isset($filters['status'])) {

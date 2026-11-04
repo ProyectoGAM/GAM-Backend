@@ -325,7 +325,7 @@ final class MortalityEndpointTest extends LotsTestCase
         $this->command('POST', "/flocks/{$flock->public_id}/mortalities", $payload)->assertUnauthorized();
         $this->signIn();
         $created = $this->command('POST', "/flocks/{$flock->public_id}/mortalities", $payload)->assertCreated();
-        $this->signIn(['mortality.view']);
+        $this->signIn(['can_view_mortality']);
 
         // Requests: el permiso de lectura no habilita altas, correcciones ni cancelaciones.
         $this->command('POST', "/flocks/{$flock->public_id}/mortalities", [...$payload, 'version' => 2])->assertForbidden();

@@ -21,6 +21,7 @@ use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 final class FeedAdjustmentEndpointTest extends TestCase
@@ -219,6 +220,9 @@ final class FeedAdjustmentEndpointTest extends TestCase
     private function fixture(): array
     {
         $actor = User::factory()->create();
+        foreach (['can_view_feed_stock', 'can_manufacture_feed', 'can_cancel_feed_manufacturing', 'can_adjust_feed_stock', 'can_adjust_feed_ingredients'] as $permission) {
+            $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+        }
         Sanctum::actingAs($actor);
         $recipe = FeedRecipe::factory()->create(['created_by' => $actor->id]);
         $plant = PoultryHouse::factory()->feed()->create();

@@ -225,8 +225,9 @@ final class FeedBalanceMinimumEndpointTest extends TestCase
     private function signIn(bool $manage = true): User
     {
         $actor = User::factory()->create();
+        $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_view_feed_stock', 'web'));
         if ($manage) {
-            $actor->givePermissionTo(Permission::findOrCreate('inventory.manage', 'web'));
+            $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_manage_feed_minimums', 'web'));
         }
         Sanctum::actingAs($actor);
 

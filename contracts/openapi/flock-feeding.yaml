@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: 'API de alimentación de lotes y consumos diarios'
   version: 1.0.0
-  description: 'Tercer bloque: etapas copiadas, automático, manual fijo, regreso explícito, consumos del cierre diario y rectificaciones compensatorias. Las etapas automáticas evalúan receta disponible a las 00:00 de su inicio en America/Montevideo; una receta ya vigente sigue consumiéndose aunque se desactive durante ese día. No registra comidas individuales, pausas, eliminación ni cancelación de consumos. Nuevos endpoints requieren sesión autenticada y contexto compartido vigente, sin permisos funcionales nuevos. El alta y las operaciones existentes de lotes y planes conservan sus permisos.'
+  description: 'Tercer bloque: etapas copiadas, automático, manual fijo, regreso explícito, consumos del cierre diario y rectificaciones compensatorias. Las etapas automáticas evalúan receta disponible a las 00:00 de su inicio en America/Montevideo; una receta ya vigente sigue consumiéndose aunque se desactive durante ese día. No registra comidas individuales, pausas, eliminación ni cancelación de consumos. Nuevos endpoints requieren sesión autenticada y contexto compartido vigente, y permisos can_view_flock_feeding para consulta, can_manage_flock_feeding para configuración y can_correct_feed_consumption para rectificaciones. El alta y las operaciones existentes de lotes y planes conservan sus permisos.'
 servers:
   -
     url: /api/v1

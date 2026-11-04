@@ -28,7 +28,7 @@ final readonly class DeleteDailyWeighingEntryAction
     {
         return $this->commands->execute(
             $actor,
-            'weighings.manage',
+            'can_manage_weighings',
             'daily-weighing.entry.delete',
             $data['idempotency_key'],
             ['daily_weighing' => $daily->public_id, 'entry' => $entry->public_id, ...$data],

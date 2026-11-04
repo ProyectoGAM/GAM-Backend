@@ -2,13 +2,13 @@
 
 namespace Tests\Feature\SuppliersAndCatalogs;
 
+use App\Models\IdentityAndAccess\Role;
 use App\Models\SuppliersAndCatalogs\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
-use Spatie\Permission\Models\Role;
 use Symfony\Component\Yaml\Yaml;
 use Tests\TestCase;
 
@@ -65,7 +65,7 @@ final class MedicineContractTest extends TestCase
     {
         // Preparación: construye referencias autorizadas y lee el esquema de salida.
         $admin = User::factory()->create();
-        $admin->assignRole(Role::findOrCreate('admin', 'web'));
+        $admin->syncRoles([Role::findOrCreate('admin', 'web')]);
         Sanctum::actingAs($admin, ['*']);
         $supplier = Supplier::factory()->create();
         $contract = Yaml::parseFile(base_path('contracts/openapi/medication.yaml'));

@@ -23,7 +23,7 @@ final class PoultryHouseEndpointTest extends TestCase
     {
         // Preparación: crea la unidad productiva y autentica al gestor.
         $unidadProductiva = ProductionUnit::factory()->create();
-        $actor = $this->userWithPermissions(['poultry-houses.manage']);
+        $actor = $this->userWithPermissions(['can_manage_poultry_houses']);
         Sanctum::actingAs($actor, ['*']);
 
         // Acción: registra el galpón con su capacidad física.
@@ -54,7 +54,7 @@ final class PoultryHouseEndpointTest extends TestCase
     {
         // Preparación: crea la unidad productiva y autentica al gestor.
         $productionUnit = ProductionUnit::factory()->create();
-        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_poultry_houses']), ['*']);
 
         // Request: registra la planta sin enviar capacidad de aves.
         $response = $this->postJson(
@@ -82,7 +82,7 @@ final class PoultryHouseEndpointTest extends TestCase
     {
         // Preparación: crea la unidad productiva y autentica al gestor.
         $productionUnit = ProductionUnit::factory()->create();
-        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_poultry_houses']), ['*']);
 
         // Request: intenta enviar una capacidad incompatible con el tipo feed.
         $this->postJson(
@@ -100,7 +100,7 @@ final class PoultryHouseEndpointTest extends TestCase
     {
         // Preparación: crea un galpón avícola y autentica al gestor.
         $poultryHouse = PoultryHouse::factory()->create();
-        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_poultry_houses']), ['*']);
 
         // Request: intenta convertir el galpón avícola en una planta de ración.
         $this->patchJson("/api/v1/poultry-houses/{$poultryHouse->getKey()}", [
@@ -122,7 +122,7 @@ final class PoultryHouseEndpointTest extends TestCase
         $poultryHouse = PoultryHouse::factory()->feed()->create();
         $this->mock(PoultryHouseOccupancyProvider::class)
             ->shouldNotReceive('occupancyFor');
-        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_poultry_houses']), ['*']);
 
         // Request: cambia el estado de la planta a inactivo.
         $this->patchJson("/api/v1/poultry-houses/{$poultryHouse->getKey()}/status", [
@@ -146,7 +146,7 @@ final class PoultryHouseEndpointTest extends TestCase
         $productionUnit = ProductionUnit::factory()->create();
         PoultryHouse::factory()->for($productionUnit)->create(['name' => 'House A']);
         PoultryHouse::factory()->for($productionUnit)->feed()->create(['name' => 'Planta A']);
-        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.view']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_view_poultry_houses']), ['*']);
 
         // Request: consulta únicamente las plantas de ración.
         $this->getJson("/api/v1/production-units/{$productionUnit->getKey()}/poultry-houses?type=feed")
@@ -162,7 +162,7 @@ final class PoultryHouseEndpointTest extends TestCase
     {
         // Preparación: crea una unidad inactiva y autentica al gestor.
         $unidadProductiva = ProductionUnit::factory()->inactive()->create();
-        $actor = $this->userWithPermissions(['poultry-houses.manage']);
+        $actor = $this->userWithPermissions(['can_manage_poultry_houses']);
         Sanctum::actingAs($actor, ['*']);
 
         // Acción: intenta registrar un galpón en la unidad inactiva.
@@ -183,7 +183,7 @@ final class PoultryHouseEndpointTest extends TestCase
     {
         // Preparación: crea el galpón, autentica al gestor y fija una ocupación actual.
         $poultryHouse = PoultryHouse::factory()->create(['bird_capacity' => 100]);
-        $actor = $this->userWithPermissions(['poultry-houses.manage']);
+        $actor = $this->userWithPermissions(['can_manage_poultry_houses']);
         Sanctum::actingAs($actor, ['*']);
         $this->app->instance(PoultryHouseOccupancyProvider::class, new class implements PoultryHouseOccupancyProvider
         {
@@ -232,7 +232,7 @@ final class PoultryHouseEndpointTest extends TestCase
     {
         // Preparación: crea el galpón y autentica al gestor.
         $poultryHouse = PoultryHouse::factory()->create();
-        $actor = $this->userWithPermissions(['poultry-houses.manage']);
+        $actor = $this->userWithPermissions(['can_manage_poultry_houses']);
         Sanctum::actingAs($actor, ['*']);
 
         $url = "/api/v1/poultry-houses/{$poultryHouse->getKey()}/status";
@@ -291,7 +291,7 @@ final class PoultryHouseEndpointTest extends TestCase
             }
         };
         $this->app->instance(PoultryHouseOccupancyProvider::class, $provider);
-        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.view']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_view_poultry_houses']), ['*']);
 
         // Acción: consulta la colección y luego el detalle individual de un galpón.
         $this->getJson("/api/v1/production-units/{$productionUnit->getKey()}/poultry-houses")
@@ -330,7 +330,7 @@ final class PoultryHouseEndpointTest extends TestCase
             'poultry_house_id' => $house->id, 'production_unit_id' => $house->production_unit_id,
             'initial_quantity' => $quantity, 'current_quantity' => $quantity,
         ]);
-        Sanctum::actingAs($this->userWithPermissions(['poultry-houses.view']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_view_poultry_houses']), ['*']);
 
         // Consulta: verifica el detalle y el listado con el proveedor real de Lotes.
         $this->getJson("/api/v1/poultry-houses/{$house->id}")
@@ -351,7 +351,7 @@ final class PoultryHouseEndpointTest extends TestCase
         $user = User::factory()->create();
 
         foreach ($permissions as $permission) {
-            $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+            $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
 
         return $user;

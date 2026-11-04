@@ -24,7 +24,7 @@ final readonly class UpdateFlockAction
             $data['code'] = Str::upper(trim($data['code']));
         }
 
-        return $this->commands->execute($actor, 'flocks.manage', 'flock.update', $data['idempotency_key'], ['flock' => $flock->public_id, ...$data], function (string $operationId) use ($flock, $data, $actor, $source): array {
+        return $this->commands->execute($actor, 'can_manage_flocks', 'flock.update', $data['idempotency_key'], ['flock' => $flock->public_id, ...$data], function (string $operationId) use ($flock, $data, $actor, $source): array {
             $locked = $this->state->lock([$flock->public_id])->get($flock->public_id);
             $this->state->version($locked, (int) $data['version']);
             $this->state->open($locked);

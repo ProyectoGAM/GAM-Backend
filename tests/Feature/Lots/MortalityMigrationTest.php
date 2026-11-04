@@ -2,12 +2,12 @@
 
 namespace Tests\Feature\Lots;
 
+use App\Models\IdentityAndAccess\Role;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 
 final class MortalityMigrationTest extends LotsTestCase
 {
@@ -48,7 +48,7 @@ final class MortalityMigrationTest extends LotsTestCase
         DB::statement('ALTER TABLE flocks ADD CONSTRAINT flocks_quantities_check CHECK (initial_quantity > 0 AND current_quantity >= 0 AND version > 0)');
         DB::statement("ALTER TABLE flocks ADD CONSTRAINT flocks_status_quantity_check CHECK ((status = 'finished') = (current_quantity = 0))");
         $categoryPermission = Permission::findOrCreate('mortality-categories.view', 'web');
-        $actor->givePermissionTo($categoryPermission);
+        $actor->roles()->firstOrFail()->givePermissionTo($categoryPermission);
         $role = Role::findOrCreate('legacy-catalog-reader', 'web');
         $role->givePermissionTo($categoryPermission);
 
