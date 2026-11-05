@@ -88,6 +88,23 @@ Las mutaciones utilizan `AuditRecorder` y `AuditEntryData` dentro de su transacc
 
 Actualizar con migraciones normales y el seeder de permisos. La demo de repartidor mantiene su PIN como operativo; repetir el seeder no lo restablece si ya existe. Los nuevos campos y flujos de integración están en [authentication.yaml](../../contracts/openapi/authentication.yaml). Los cambios visuales de una aplicación frontend independiente deben consumir ese contrato; esta entrega del repositorio backend no incluye pantallas de perfil.
 
+### Usuarios de dispositivo compartido para la demo local
+
+`SharedUserDemoSeeder` registra cuatro cuentas PIN con el rol **Operación de galpón**. La carga general lo ejecuta después de sembrar los roles y las UP. En un dispositivo vinculado a la UP correspondiente, elegí el usuario en el selector e ingresá el PIN de demo `1234`.
+
+| UP | Cuentas |
+| --- | --- |
+| Granja El Ombú | Ana Duarte (demo) y Mateo Silva (demo) |
+| Granja Santa Clara | Lucía Méndez (demo) y Bruno Castro (demo) |
+
+El alta usa el flujo habitual, con hash Argon2id y el pepper del entorno, y registra la UP en la auditoría. Volver a ejecutar la carga conserva los cambios de PIN, rol, UP y estado de las cuentas existentes. Sólo se ejecuta en `local` o `testing`.
+
+```bash
+docker compose -f compose.dev.yaml exec -T api php artisan db:seed --class='Database\Seeders\IdentityAndAccess\SharedUserDemoSeeder' --no-interaction
+```
+
+Se verificaron las cuatro cuentas en la base local. Pasaron 22 pruebas en PostgreSQL de testing, incluido el ingreso desde la UP asignada, el rechazo desde otra UP y la recarga después de cambiar el PIN.
+
 ## Verificación
 
 Se verificó con PostgreSQL aislado (`gam_testing` y `gam_access_testing`), sin ejecutar pruebas sobre la base local:

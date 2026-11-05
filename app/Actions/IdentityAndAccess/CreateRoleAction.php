@@ -17,14 +17,22 @@ final class CreateRoleAction
     public function __construct(private AccessControl $access, private PermissionCatalog $catalog, private AuditRecorder $audit) {}
 
     /** @param array{nombre: string, descripcion?: ?string, permisos: list<string>} $data */
-    public function execute(User $actor, array $data): Role
+    public function execute(User $actor, array $data, ?string $demoKey = null): Role
     {
-        return DB::transaction(function () use ($actor, $data): Role {
+        return DB::transaction(function () use ($actor, $data, $demoKey): Role {
             $actor = $this->access->lockActor($actor);
             Gate::forUser($actor)->authorize('create', Role::class);
+            $name = $demoKey === null ? 'custom_'.Str::lower((string) Str::ulid()) : 'demo_'.$demoKey;
+            if ($demoKey !== null) {
+                $existing = Role::query()->where('name', $name)->where('guard_name', 'web')->first();
+                if ($existing !== null) {
+                    return $existing->load('permissions');
+                }
+            }
+
             $this->catalog->validate($data['permisos']);
             $role = Role::query()->create([
-                'name' => 'custom_'.Str::lower((string) Str::ulid()), 'guard_name' => 'web',
+                'name' => $name, 'guard_name' => 'web',
                 'label' => $data['nombre'], 'description' => $data['descripcion'] ?? null,
             ]);
             $role->syncPermissions($data['permisos']);
@@ -33,7 +41,7 @@ final class CreateRoleAction
                 description: 'Rol creado', properties: ['result' => 'success', 'subject_snapshot' => [
                     'name' => $role->name, 'label' => $role->label, 'description' => $role->description,
                     'permissions' => $data['permisos'],
-                ]], attributeChanges: ['old' => ['permissions' => []], 'new' => ['permissions' => $data['permisos']]], source: 'api',
+                ]], attributeChanges: ['old' => ['permissions' => []], 'new' => ['permissions' => $data['permisos']]], source: $demoKey === null ? 'api' : 'seeder',
             ));
             $this->access->invalidate();
 

@@ -8,12 +8,14 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\CustomersAndAccounts\ChangeCustomerStatusRequest;
 use App\Http\Requests\CustomersAndAccounts\CustomerMapRequest;
 use App\Http\Requests\CustomersAndAccounts\ListCustomersRequest;
+use App\Http\Requests\CustomersAndAccounts\ResolveCustomerLocationRequest;
 use App\Http\Requests\CustomersAndAccounts\SaveCustomerRequest;
 use App\Http\Requests\CustomersAndAccounts\ShowCustomerRequest;
 use App\Http\Resources\CustomersAndAccounts\CustomerResource;
 use App\Http\Resources\Deliveries\DeliveryStopResource;
 use App\Models\CustomersAndAccounts\Customer;
 use App\Queries\CustomersAndAccounts\ListCustomersQuery;
+use App\Services\CustomersAndAccounts\CustomerLocationGeocoder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -27,6 +29,13 @@ final class CustomerController extends Controller
     public function map(CustomerMapRequest $request, ListCustomersQuery $query): JsonResponse
     {
         return response()->json($query->markers($request->validated()));
+    }
+
+    public function resolveLocation(ResolveCustomerLocationRequest $request, CustomerLocationGeocoder $geocoder): JsonResponse
+    {
+        return response()->json([
+            'data' => $geocoder->reverse($request->float('latitude'), $request->float('longitude')),
+        ], headers: ['Cache-Control' => 'no-store']);
     }
 
     public function store(SaveCustomerRequest $request, SaveCustomerAction $action): JsonResponse

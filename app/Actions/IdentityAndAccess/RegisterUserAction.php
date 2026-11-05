@@ -19,9 +19,9 @@ final class RegisterUserAction
     public function __construct(private AuditRecorder $auditRecorder, private AccessControl $access) {}
 
     /** @param array{name: string, email?: ?string, password?: string, pin?: string, up_id?: int, rol_id: int} $data */
-    public function execute(array $data, User $actor): User
+    public function execute(array $data, User $actor, string $source = 'api'): User
     {
-        return DB::transaction(function () use ($data, $actor): User {
+        return DB::transaction(function () use ($data, $actor, $source): User {
             $actor = $this->access->lockActor($actor);
             Gate::forUser($actor)->authorize('create', User::class);
             $role = Role::query()->where('guard_name', 'web')->whereKey($data['rol_id'])->lockForUpdate()->firstOrFail();
@@ -45,7 +45,8 @@ final class RegisterUserAction
             $this->auditRecorder->record(AuditEntryData::forSubject(
                 subject: $user, actor: $actor, logName: 'identity', event: 'user_registered', description: 'Usuario registrado',
                 properties: ['result' => 'success', 'subject_snapshot' => ['name' => $user->name, 'email' => $user->email, 'role' => $role->name]],
-                attributeChanges: ['old' => ['role' => null], 'new' => ['role' => $role->name]], source: 'api',
+                attributeChanges: ['old' => ['role' => null], 'new' => ['role' => $role->name]],
+                upId: $user->production_unit_id, source: $source,
             ));
 
             return $user;

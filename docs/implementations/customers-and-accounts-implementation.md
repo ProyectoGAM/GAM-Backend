@@ -33,6 +33,7 @@ Contratos: [clientes y cuentas](../../contracts/openapi/customers-and-accounts.y
 | Método y ruta bajo `/api/v1` | Función |
 | --- | --- |
 | `GET/POST /clientes` | Listar/crear fichas; la creación abre una cuenta en cero. |
+| `POST /clientes/validar-ubicacion` | Validar el punto de un cliente y sugerir su dirección antes del alta. |
 | `GET /clientes/mapa` | Marcadores acotados por `west/east/south/north`, límite y contexto de visita. |
 | `GET/PATCH /clientes/{cliente}` | Consultar/editar datos generales. |
 | `PATCH /clientes/{cliente}/estado` | Activar/desactivar, sin borrar historia. |
@@ -81,6 +82,18 @@ Ejemplo de cobro independiente de mercadería:
 
 Los medios son `cash`, `transfer` y `other`, presentados como Efectivo, Transferencia y Otro. El cobro administrativo utiliza esos mismos campos de pago sin `client_reference` ni `client_event_id`; el cliente pertenece a la ruta.
 
+### Ubicación durante el alta
+
+Cuando el usuario elige un punto en el mapa, el formulario puede enviar `{"latitude":-34.9011,"longitude":-56.1645}` a `POST /api/v1/clientes/validar-ubicacion`. La consulta requiere `can_manage_customers` y admite 30 solicitudes por minuto por usuario. Un punto fuera del polígono oficial de Uruguay devuelve `422` antes de contactar a Mapbox.
+
+Con un punto válido, el backend envía las coordenadas a Mapbox Geocoding v6 y devuelve `data` con las coordenadas originales, `country_code: "UY"` y una sugerencia de `address`, `locality`, `department` y `postcode`. Los datos que Mapbox no encuentre se devuelven como `null`. La localidad y el departamento son nombres. Para guardar una localidad del catálogo, el formulario debe enviar su `locality_id` al crear la ficha.
+
+La consulta usa geocodificación temporal (`permanent=false`). El formulario puede mostrar los resultados de Mapbox durante la sesión y debe guardar únicamente las coordenadas elegidas por el usuario y los datos de dirección aportados de forma independiente. El alta requiere `Idempotency-Key` y vuelve a comprobar el límite territorial si recibe coordenadas.
+
+Configurá `MAPBOX_ACCESS_TOKEN` en el entorno del backend con el mismo token público que usa el selector de UP (`.env` en desarrollo o `.env.production` para Compose de producción). Pulse agrupa las consultas lentas de Mapbox por ruta y omite sus parámetros. [Documentación de Mapbox sobre almacenamiento de resultados](https://docs.mapbox.com/api/search/geocoding/#storing-geocoding-results)
+
+La verificación del endpoint y su contrato pasó 14 pruebas en PostgreSQL de testing. Se simuló Mapbox para cubrir dirección encontrada, falta de resultados y fallas de conexión. Una consulta real desde el backend local también devolvió una dirección de Montevideo con el token de UP.
+
 ## Autoridad, transacciones y auditoría
 
 La capacidad `CustomersAndAccounts` usa FormRequests, Controllers, Actions/Queries, Eloquent y Resources. La UI usa rutas lazy, signals, formularios reactivos, servicios de feature y el `ApiClient` existente. Se mantienen los shells, los patrones de Proveedores y los tokens semánticos en ambos temas. No se añadieron dependencias.
@@ -118,6 +131,22 @@ Cerrar conserva PIN, descarga total de sobrantes, una UP de destino y sincroniza
 Aplicar migraciones con el procedimiento habitual y después `IdentityPermissionSeeder` para actualizar el catálogo sin cambiar contraseñas. La migración propia es `2026_10_29_195003_create_customers_and_accounts_tables.php`. No requiere reconstruir repartos antiguos ni ejecutar seeds generales sobre datos reales.
 
 `Database\Seeders\CustomersAndAccounts\CustomersDemoSeeder` crea seis fichas ficticias, una deuda inicial y un saldo a favor mediante las Actions, con claves estables. Se integró en `LocalDemoDataSeeder`; sólo opera en `local/testing`, es idempotente y no se ejecuta en producción.
+
+`SanJoseCustomersDemoSeeder` agrega nueve fichas ficticias con puntos fijos en el centro de San José de Mayo. Si la localidad ya existe en el catálogo, la vincula a las fichas. Los nombres y las direcciones son de demostración. [Referencia geográfica de San José de Mayo](https://www.geodatos.net/coordenadas/uruguay/san-jose-de-mayo)
+
+| Estado | Saldos de ejemplo en UYU |
+| --- | --- |
+| Deuda | 780.500, 1250.000 y 2450.750 |
+| Saldo a favor | 95.000, 320.125 y 640.250 a favor |
+| Saldo al día | Tres cuentas en 0.000, una con un ajuste de 900.000 cancelado con un pago por el mismo importe |
+
+La carga integra `LocalDemoDataSeeder` y también puede ejecutarse por separado con un administrador ya creado. Usa las Actions habituales para guardar fichas y contabilizar ajustes y pagos con auditoría. Las claves estables permiten repetirla sin duplicar fichas ni movimientos. Está habilitada en `local/testing`.
+
+```bash
+docker compose -f compose.dev.yaml exec -T api php artisan db:seed --class='Database\Seeders\CustomersAndAccounts\SanJoseCustomersDemoSeeder' --no-interaction
+```
+
+Pasaron las cuatro pruebas de ambos seeders en PostgreSQL de testing. La carga local se verificó consultando los saldos de las nueve cuentas nuevas, con tres fichas en cada estado.
 
 La base local estaba atrasada respecto del código de Inventario. Para el recorrido real se respaldó previamente y se aplicaron las dependencias existentes de recetas (`2026_10_13_061455`) y tipos de almacenamiento (`2026_10_28_062746`), además de la migración propia. Se ejecutó `inventario:preparar-almacenamiento --actor=1`: clasificación auditada de metadatos, sin regularizar saldos. No se aplicaron otras migraciones ajenas pendientes ni se reseteó la base. Se crearon datos locales de prueba por los flujos reales, sin tocar credenciales de cuentas existentes.
 

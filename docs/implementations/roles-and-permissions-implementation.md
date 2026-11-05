@@ -121,6 +121,21 @@ Si una base de prueba contiene múltiples roles por usuario o permisos directos,
 
 `IdentityPermissionSeeder` registra el catálogo y actualiza Admin con todos los permisos registrados. Los permisos predeterminados de `employee` y `delivery` se aplican al crearlos o inicializar por primera vez sus metadatos; esto incluye el rol que ya crea una migración histórica. Reejecutarlo no deshace la configuración del cliente ni elimina roles personalizados. Las factories asignan un rol vacío independiente a cada usuario de prueba para no compartir permisos accidentalmente entre fixtures.
 
+`RoleDemoSeeder` agrega cuatro roles editables. Se integra a `LocalDemoDataSeeder` para desarrollo y puede ejecutarse por separado en `local` o `testing`. Requiere que ya estén cargados el catálogo de permisos y una cuenta administradora. Las claves de demo son estables y cada creación registra una entrada de auditoría con origen `seeder`. Repetir la carga conserva las ediciones de los roles existentes. Los roles quedan disponibles para asignarlos a usuarios.
+
+| Rol | Canal | Permisos de ejemplo |
+| --- | --- | --- |
+| Gestión de clientes | Navegador | Consultar y gestionar fichas, consultar departamentos y localidades |
+| Cobranzas | Navegador | Consultar fichas y cuentas corrientes, registrar pagos |
+| Consulta de inventario | Navegador | Consultar existencias, productos y unidades productivas |
+| Operación de galpón | Dispositivo compartido | Consultar lotes y registrar recolecciones, mortalidad y pesajes en la UP asignada |
+
+```bash
+docker compose -f compose.dev.yaml exec -T api php artisan db:seed --class='Database\Seeders\IdentityAndAccess\RoleDemoSeeder' --no-interaction
+```
+
+Pasaron 25 pruebas del seeder y de gestión de roles en PostgreSQL de testing con un pepper temporal para los casos de PIN. Se verificaron los cuatro perfiles en la base local.
+
 La reversión del esquema elimina columnas y restricciones nuevas, pero no vuelve a los nombres públicos anteriores de permisos. Revertir también el contrato requiere un despliegue coordinado, no únicamente ejecutar `migrate:rollback`.
 
 ## Verificación
