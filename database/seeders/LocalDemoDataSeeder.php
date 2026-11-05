@@ -30,7 +30,10 @@ use App\Services\ReportingAndAnalytics\ReportExportWriter;
 use App\Services\ReportingAndAnalytics\ReportQueryNormalizer;
 use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
 use Database\Seeders\CustomersAndAccounts\CustomersDemoSeeder;
+use Database\Seeders\CustomersAndAccounts\SanJoseCustomersDemoSeeder;
 use Database\Seeders\FarmStructure\MaintenanceDemoSeeder;
+use Database\Seeders\IdentityAndAccess\RoleDemoSeeder;
+use Database\Seeders\IdentityAndAccess\SharedUserDemoSeeder;
 use Database\Seeders\Inventory\FeedManufactureDemoSeeder;
 use Database\Seeders\Inventory\FeedRecipeDemoSeeder;
 use Database\Seeders\Inventory\FeedStockDemoSeeder;
@@ -61,11 +64,14 @@ final class LocalDemoDataSeeder extends Seeder
         }
 
         $admin = User::query()->where('email', config('auth.admin.email'))->firstOrFail();
+        $this->call(RoleDemoSeeder::class);
         $localities = $this->seedLocalities();
         $units = $this->seedProductionUnits($localities);
+        $this->call(SharedUserDemoSeeder::class);
         $this->seedPoultryHouses($units);
         $this->call(MaintenanceDemoSeeder::class);
         $this->call(CustomersDemoSeeder::class);
+        $this->call(SanJoseCustomersDemoSeeder::class);
         $suppliers = $this->seedSuppliers($localities);
         $this->call(MedicineDemoSeeder::class);
         $products = $this->seedProducts();

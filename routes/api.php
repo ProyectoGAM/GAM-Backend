@@ -129,6 +129,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::middleware(['shared.device:any', 'shared.session.conditional'])->name('customers.')->group(function (): void {
             Route::get('/clientes', [CustomerController::class, 'index'])->name('index');
             Route::post('/clientes', [CustomerController::class, 'store'])->name('store');
+            Route::post('/clientes/validar-ubicacion', [CustomerController::class, 'resolveLocation'])
+                ->middleware('throttle:customer-location')->name('validate-location');
             Route::get('/clientes/mapa', [CustomerController::class, 'map'])->name('map');
             Route::get('/clientes/{cliente}', [CustomerController::class, 'show'])->name('show');
             Route::patch('/clientes/{cliente}', [CustomerController::class, 'update'])->name('update');

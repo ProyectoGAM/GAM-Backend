@@ -113,6 +113,61 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CustomerInput'
+  /api/v1/clientes/validar-ubicacion:
+    post:
+      summary: 'Valida el punto de un cliente y sugiere una dirección'
+      description: 'Requiere can_manage_customers. Verifica el punto contra el polígono oficial de Uruguay antes de consultar a Mapbox. La dirección y su contexto se muestran como sugerencias temporales durante el alta. Los resultados de Mapbox son sólo para visualización durante la sesión.'
+      tags:
+        - 'Clientes y cuenta corriente'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [latitude, longitude]
+              properties:
+                latitude: {type: number, minimum: -90, maximum: 90}
+                longitude: {type: number, minimum: -180, maximum: 180}
+            example: {latitude: -34.9011, longitude: -56.1645}
+      responses:
+        200:
+          description: 'Punto válido en Uruguay. Si Mapbox no encuentra la dirección o algún dato del contexto, se devuelve null en ese campo.'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [latitude, longitude, address, locality, department, postcode, country_code]
+                    properties:
+                      latitude: {type: number}
+                      longitude: {type: number}
+                      address: {type: [string, 'null'], maxLength: 240}
+                      locality: {type: [string, 'null']}
+                      department: {type: [string, 'null']}
+                      postcode: {type: [string, 'null']}
+                      country_code: {type: string, const: UY}
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        403:
+          $ref: '#/components/responses/Forbidden'
+        422:
+          $ref: '#/components/responses/ValidationError'
+        429:
+          description: 'Límite de 30 consultas por minuto por usuario.'
+        503:
+          description: 'El servicio de direcciones no está configurado o Mapbox no pudo responder correctamente.'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: {type: string}
   /api/v1/clientes/mapa:
     get:
       summary: 'Consulta marcadores del área visible, sin ficha ni saldo'

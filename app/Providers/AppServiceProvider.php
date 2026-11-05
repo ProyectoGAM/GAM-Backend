@@ -99,6 +99,9 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(60)->by('delivery-command|'.$key);
         });
 
+        RateLimiter::for('customer-location', fn (Request $request): Limit => Limit::perMinute(30)
+            ->by($request->user()?->id ?? $request->ip()));
+
         RateLimiter::for('delivery-location', function (Request $request): Limit {
             $actor = $request->user();
             $delivery = $request->route('reparto');

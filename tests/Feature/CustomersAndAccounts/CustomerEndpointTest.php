@@ -7,6 +7,8 @@ use App\Models\CustomersAndAccounts\Customer;
 use App\Models\User;
 use Database\Seeders\IdentityPermissionSeeder;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -53,6 +55,130 @@ final class CustomerEndpointTest extends TestCase
         }
         $this->assertDatabaseCount('customers', 0);
         $this->assertDatabaseCount('customer_operations', 0);
+    }
+
+    /** La consulta devuelve una sugerencia temporal y conserva el punto elegido. */
+    public function test_resolves_customer_location_without_persisting_the_suggestion(): void
+    {
+        // Preparación: autoriza al gestor y simula una dirección de Mapbox.
+        $this->admin();
+        config(['services.mapbox.access_token' => 'test-token']);
+        Http::preventStrayRequests()->fake([
+            'https://api.mapbox.com/search/geocode/v6/reverse*' => Http::response([
+                'features' => [
+                    ['properties' => [
+                        'feature_type' => 'address',
+                        'full_address' => 'Av. 18 de Julio 1234, Montevideo',
+                        'coordinates' => ['latitude' => -34.9012, 'longitude' => -56.1646],
+                        'context' => [
+                            'place' => ['name' => 'Montevideo'],
+                            'region' => ['name' => 'Montevideo'],
+                            'postcode' => ['name' => '11200'],
+                        ],
+                    ]],
+                ],
+            ]),
+        ]);
+
+        // Consulta: verifica la sugerencia y comprueba que la consulta no escribe datos.
+        $this->postJson('/api/v1/clientes/validar-ubicacion', ['latitude' => -34.9011, 'longitude' => -56.1645])
+            ->assertOk()->assertExactJson(['data' => [
+                'latitude' => -34.9011,
+                'longitude' => -56.1645,
+                'address' => 'Av. 18 de Julio 1234, Montevideo',
+                'locality' => 'Montevideo',
+                'department' => 'Montevideo',
+                'postcode' => '11200',
+                'country_code' => 'UY',
+            ]]);
+        Http::assertSent(function (Request $request): bool {
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+            return $request->method() === 'GET' && $query === [
+                'latitude' => '-34.9011',
+                'longitude' => '-56.1645',
+                'country' => 'UY',
+                'language' => 'es',
+                'permanent' => 'false',
+                'access_token' => 'test-token',
+            ];
+        });
+        $this->assertDatabaseCount('customers', 0);
+        $this->assertDatabaseCount('customer_operations', 0);
+
+        Http::assertSentCount(1);
+    }
+
+    /** Los datos inválidos se rechazan antes de enviar coordenadas a Mapbox. */
+    public function test_rejects_invalid_customer_locations_without_calling_mapbox(): void
+    {
+        // Preparación: bloquea cualquier llamada saliente.
+        $this->admin();
+        config(['services.mapbox.access_token' => 'test-token']);
+        Http::preventStrayRequests();
+
+        // Solicitudes: cubre un punto fuera de Uruguay, coordenadas incompletas y campos ajenos.
+        $this->postJson('/api/v1/clientes/validar-ubicacion', ['latitude' => -34.6037, 'longitude' => -58.3816])
+            ->assertUnprocessable()->assertJsonPath('errors.latitude.0', 'La ubicación debe encontrarse dentro de Uruguay.');
+        $this->postJson('/api/v1/clientes/validar-ubicacion', ['latitude' => -34.9011])
+            ->assertUnprocessable()->assertJsonValidationErrors('longitude');
+        $this->postJson('/api/v1/clientes/validar-ubicacion', ['latitude' => 100, 'longitude' => -56.1645])
+            ->assertUnprocessable()->assertJsonValidationErrors('latitude');
+        $this->postJson('/api/v1/clientes/validar-ubicacion', ['latitude' => -34.9011, 'longitude' => -56.1645, 'name' => 'Cliente'])
+            ->assertUnprocessable()->assertJsonValidationErrors('name');
+        Http::assertNothingSent();
+    }
+
+    /** La resolución exige sesión y permiso de gestión de clientes. */
+    public function test_customer_location_requires_customer_management_permission(): void
+    {
+        // Preparación: define un punto válido y bloquea la salida a Mapbox.
+        config(['services.mapbox.access_token' => 'test-token']);
+        Http::preventStrayRequests();
+        $point = ['latitude' => -34.9011, 'longitude' => -56.1645];
+
+        // Solicitud anónima y solicitud con un usuario sin permiso de gestión.
+        $this->postJson('/api/v1/clientes/validar-ubicacion', $point)->assertUnauthorized();
+        Sanctum::actingAs(User::factory()->create(), ['api:access']);
+        $this->postJson('/api/v1/clientes/validar-ubicacion', $point)->assertForbidden();
+        Http::assertNothingSent();
+    }
+
+    /** Un punto válido puede carecer de dirección en el proveedor. */
+    public function test_returns_a_valid_point_without_address_when_mapbox_has_no_match(): void
+    {
+        // Preparación: simula un punto sin cobertura de geocodificación.
+        $this->admin();
+        config(['services.mapbox.access_token' => 'test-token']);
+        Http::preventStrayRequests()->fake([
+            'https://api.mapbox.com/search/geocode/v6/reverse*' => Http::response(['features' => []]),
+        ]);
+
+        // Consulta: confirma Uruguay y deja vacíos los datos de dirección.
+        $this->postJson('/api/v1/clientes/validar-ubicacion', ['latitude' => -34.9011, 'longitude' => -56.1645])
+            ->assertOk()->assertJsonPath('data.country_code', 'UY')->assertJsonPath('data.address', null)
+            ->assertJsonPath('data.locality', null)->assertJsonPath('data.department', null)->assertJsonPath('data.postcode', null);
+    }
+
+    /** Una falla de configuración o del proveedor devuelve un error sin datos internos. */
+    public function test_returns_service_unavailable_when_mapbox_cannot_be_used(): void
+    {
+        // Preparación: autoriza al gestor y simula una caída de conexión.
+        $this->admin();
+        $point = ['latitude' => -34.9011, 'longitude' => -56.1645];
+        Http::preventStrayRequests()->fake([
+            'https://api.mapbox.com/search/geocode/v6/reverse*' => Http::failedConnection('Información interna del proveedor'),
+        ]);
+
+        // Consultas: comprueba el mismo mensaje con y sin token configurado.
+        config(['services.mapbox.access_token' => null]);
+        $this->postJson('/api/v1/clientes/validar-ubicacion', $point)->assertServiceUnavailable();
+        Http::assertNothingSent();
+
+        config(['services.mapbox.access_token' => 'test-token']);
+        $this->postJson('/api/v1/clientes/validar-ubicacion', $point)->assertServiceUnavailable()
+            ->assertJsonPath('message', 'No se pudo consultar la dirección en Mapbox. Inténtalo nuevamente más tarde.')
+            ->assertDontSee('Información interna del proveedor')->assertDontSee('test-token');
     }
 
     /** Un mismo nombre no es un identificador; búsqueda literal y paginación funcionan con más de cien clientes. */
