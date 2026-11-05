@@ -4,6 +4,7 @@ Cada guía describe el alcance entregado, las decisiones de negocio, el contrato
 
 ## Guías
 
+- [Actualización de seguridad de PHP en Docker](php-runtime-security-update.md)
 - [Identidad y acceso](identity-access-implementation.md)
 - [Modalidades de acceso, credenciales y dispositivos por UP](access-methods-and-production-unit-implementation.md)
 - [Acceso, registro y dispositivos por UP — plan de implementación](access-methods-and-production-unit-implementation-plan.md)
