@@ -13,6 +13,7 @@ use App\Models\Deliveries\Delivery;
 use App\Models\Deliveries\DeliveryStop;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
+use App\Services\Deliveries\DeliveryEggAlerts;
 use App\Services\Deliveries\DeliveryFinancialSummary;
 use App\Services\Deliveries\DeliveryUnitBalance;
 use App\Services\IdentityAndAccess\AccessControl;
@@ -26,6 +27,7 @@ final readonly class CloseDeliveryAction
         private AuditRecorder $audit,
         private DeliveryUnitBalance $balances,
         private CloseVehicleUsageAction $closeVehicleUsage,
+        private DeliveryEggAlerts $eggAlerts,
     ) {}
 
     /** @param array{returned_quantity?:int,returned_items?:list<array<string,mixed>>,return_production_unit_id?:int|null,notes?:string|null,odometer_km?:string|null} $data */
@@ -60,6 +62,9 @@ final readonly class CloseDeliveryAction
                 ? ($data['returned_items'] === [] ? ['quantity' => 0, 'items' => []] : $this->balances->allocate($lockedDelivery, $data['returned_items']))
                 : null;
             $returned = $allocation['quantity'] ?? $data['returned_quantity'];
+            if ($returned > 0 && $lockedDelivery->loaded_quantity === 0) {
+                throw new DeliveryConflict('El reparto debe tener una carga para registrar una devolución.');
+            }
             $origins = $lockedDelivery->loads->pluck('production_unit_id')->filter()->unique()->values();
             if ($origins->isEmpty()) {
                 $origins->push($lockedDelivery->production_unit_id);
@@ -68,10 +73,8 @@ final readonly class CloseDeliveryAction
             if ($returned > 0 && ($returnUnitId === null || ! $origins->contains((int) $returnUnitId))) {
                 throw ValidationException::withMessages(['return_production_unit_id' => 'Seleccioná una de las unidades productivas de las cargas para descargar todos los sobrantes.']);
             }
-            if ($delivered + $returned > $lockedDelivery->loaded_quantity) {
-                throw new DeliveryConflict('La devolución supera la cantidad que quedó disponible.');
-            }
-            if ($delivered + $returned < $lockedDelivery->loaded_quantity) {
+            $remaining = $lockedDelivery->loaded_quantity - $delivered - $returned;
+            if ($remaining > 0) {
                 throw new DeliveryConflict('La descarga final debe incluir todos los huevos sobrantes para cerrar el reparto.');
             }
 
@@ -126,6 +129,11 @@ final readonly class CloseDeliveryAction
                     'result' => 'success',
                 ],
             ));
+
+            if ($returned > 0) {
+                $this->eggAlerts->surplus($lockedDelivery, (int) $returnUnitId, $returned);
+            }
+            $this->eggAlerts->negativeDeliveryBalance($lockedDelivery, $remaining);
 
             return $this->load($lockedDelivery);
         }, 3);

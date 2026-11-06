@@ -19,11 +19,11 @@ final readonly class SynchronizeOperationalAlertsAction
     ) {}
 
     /**
-     * Sincroniza una evaluación ya serializada por tipo y unidad productiva.
+     * Sincroniza una evaluación ya serializada por tipo y alcance, sea general o de una unidad productiva.
      *
      * @param  array<string, array{entity_id: string, target_path: string, urgency: NotificationUrgency, title: string, message: string}>  $pending
      */
-    public function execute(int $unitId, string $module, string $type, string $permission, string $entityType, CarbonImmutable $evaluatedAt, array $pending): void
+    public function execute(?int $unitId, string $module, string $type, string $permission, string $entityType, CarbonImmutable $evaluatedAt, array $pending): void
     {
         $recipients = $pending === [] ? [] : $this->recipients->ids($unitId, $permission);
         $open = [];

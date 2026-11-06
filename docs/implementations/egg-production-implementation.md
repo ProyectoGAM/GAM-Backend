@@ -62,6 +62,8 @@ Las operaciones manuales se ejecutan desde Inventario, siempre sobre la cuenta t
 
 El saldo se obtiene exclusivamente de `stock_balances` y puede ser negativo para cuentas de huevos. Ningún otro producto o ubicación del inventario puede tener saldo negativo. Los reportes generales de saldos y movimientos exponen UP como columna, filtro y agrupación y aumentan sus versiones de definición.
 
+Cualquier movimiento confirmado que deje este saldo por debajo de cero abre o actualiza el [aviso alto de stock negativo de la UP](alerts-and-notifications-implementation-plan.md#10-stock-negativo-de-huevos-por-up). Al llegar a cero o recuperar un saldo positivo, el aviso se resuelve.
+
 Una UP inactiva o finalizada no admite movimientos nuevos, pero sus operaciones históricas pueden consultarse, corregirse o cancelarse. No se implementan transferencias ni reatribuciones entre UP: la UP fotografiada por una recolección es inmutable.
 
 ## Correcciones, cancelaciones e histórico

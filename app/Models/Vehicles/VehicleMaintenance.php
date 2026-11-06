@@ -11,6 +11,11 @@ use Illuminate\Support\Str;
 #[Fillable(['vehicle_id', 'created_by', 'completed_by', 'type', 'status', 'immobilizes_vehicle', 'workshop', 'description', 'notes', 'planned_at', 'started_at', 'completed_at', 'odometer_km', 'cost_amount', 'cost_currency', 'idempotency_key', 'request_hash', 'cancellation_reason', 'version'])]
 class VehicleMaintenance extends Model
 {
+    public const string TIMEZONE = 'America/Montevideo';
+
+    /** Conserva el desfase horario al persistir la fecha prevista. */
+    protected $dateFormat = 'Y-m-d H:i:sP';
+
     protected static function booted(): void
     {
         static::creating(fn (self $maintenance) => $maintenance->public_id ??= (string) Str::ulid());

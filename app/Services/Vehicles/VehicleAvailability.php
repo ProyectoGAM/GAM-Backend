@@ -3,6 +3,8 @@
 namespace App\Services\Vehicles;
 
 use App\Models\Vehicles\Vehicle;
+use App\Models\Vehicles\VehicleDocument;
+use App\Models\Vehicles\VehicleMaintenance;
 use Illuminate\Support\Carbon;
 
 final class VehicleAvailability
@@ -13,14 +15,16 @@ final class VehicleAvailability
         $activeUsage = $vehicle->usages()->whereNull('ended_at')->exists();
         $immobilizingMaintenance = $vehicle->maintenances()->where('status', 'in_progress')->where('immobilizes_vehicle', true)->exists();
         $warnings = [];
-        $expiredDocuments = $vehicle->documents()->whereNotNull('expires_at')->whereDate('expires_at', '<', Carbon::today())->count();
-        $soonDocuments = $vehicle->documents()->whereNotNull('expires_at')->whereBetween('expires_at', [Carbon::today(), Carbon::today()->addDays(30)])->count();
-        if ($expiredDocuments > 0) {
+        $today = Carbon::today(VehicleMaintenance::TIMEZONE);
+        $documents = $vehicle->documents()->currentExpiring();
+        $expiredDocuments = (clone $documents)->where('expires_at', '<', $today->toDateString())->exists();
+        $soonDocuments = $documents->whereBetween('expires_at', [$today->toDateString(), $today->copy()->addDays(VehicleDocument::EXPIRY_NOTICE_DAYS)->toDateString()])->exists();
+        if ($expiredDocuments) {
             $warnings[] = 'Hay documentación vencida.';
-        } elseif ($soonDocuments > 0) {
+        } elseif ($soonDocuments) {
             $warnings[] = 'Hay documentación próxima a vencer.';
         }
-        $odometer = $vehicle->readings()->effective()->where('meter_type', 'odometer')->orderByDesc('recorded_at')->orderByDesc('id')->first();
+        $odometer = $vehicle->latestEffectiveOdometer()->first();
         $plans = $vehicle->maintenancePlans()->where('active', true)->get();
         $schedule = app(VehicleMaintenanceSchedule::class);
         foreach ($plans as $plan) {

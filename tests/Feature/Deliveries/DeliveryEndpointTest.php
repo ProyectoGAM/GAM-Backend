@@ -2,10 +2,12 @@
 
 namespace Tests\Feature\Deliveries;
 
+use App\Actions\Inventory\RecordEggStockTransactionAction;
 use App\Models\CustomersAndAccounts\Customer;
 use App\Models\Deliveries\Delivery;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\EggPresentation;
+use App\Models\Notifications\AppNotification;
 use App\Models\User;
 use App\Models\Vehicles\Vehicle;
 use App\Queries\Inventory\GetEggStockBalanceQuery;
@@ -79,6 +81,156 @@ final class DeliveryEndpointTest extends TestCase
         return $this->json($method, '/api/v1'.$path, $payload, [
             'Idempotency-Key' => $key,
         ]);
+    }
+
+    // Flujo: las cargas que dejan saldo negativo y la devolución al cierre generan avisos distintos.
+    public function test_egg_alerts_follow_the_confirmed_loads_and_surplus(): void
+    {
+        // Preparación: distingue el acceso al stock local del acceso a un reparto con varias UP.
+        $driver = $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
+        $unit = ProductionUnit::factory()->create();
+        $otherUnit = ProductionUnit::factory()->create();
+        $supervisor = User::factory()->create();
+        $localViewer = User::factory()->devicePin($otherUnit)->create();
+        $history = Permission::findOrCreate('can_view_delivery_history', 'web');
+        $inbox = Permission::findOrCreate('can_view_notifications', 'web');
+        $eggStock = Permission::findOrCreate('can_view_egg_stock', 'web');
+        $monitor = Permission::findOrCreate('can_monitor_deliveries', 'web');
+        $supervisor->roles()->firstOrFail()->givePermissionTo($history, $monitor, $inbox, $eggStock);
+        $localViewer->roles()->firstOrFail()->givePermissionTo($history, $inbox, $eggStock);
+
+        // Request: el alta y su reintento dejan el saldo en -10 y un único aviso alto.
+        $startKey = (string) Str::uuid();
+        $start = ['production_unit_id' => $unit->id, 'quantity' => 10];
+        $deliveryId = $this->command('POST', '/repartos', $start, $startKey)->assertCreated()->json('data.id');
+        $this->command('POST', '/repartos', $start, $startKey)->assertCreated();
+        $negative = AppNotification::query()->sole();
+        $this->assertSame($supervisor->id, $negative->recipient_id);
+        $this->assertSame($unit->id, $negative->production_unit_id);
+        $this->assertStringContainsString('-10', $negative->message);
+
+        // Request: una recarga en otra UP genera su propio aviso alto y conserva el alcance.
+        $loadKey = (string) Str::uuid();
+        $load = ['production_unit_id' => $otherUnit->id, 'quantity' => 5];
+        $this->command('POST', "/repartos/{$deliveryId}/cargas", $load, $loadKey)->assertOk();
+        $this->command('POST', "/repartos/{$deliveryId}/cargas", $load, $loadKey)->assertOk();
+        $this->assertDatabaseHas('app_notifications', [
+            'recipient_id' => $supervisor->id, 'production_unit_id' => $otherUnit->id,
+            'type' => 'egg_stock_negative', 'urgency' => 'alto', 'entity_id' => (string) $otherUnit->id,
+        ]);
+        $this->assertDatabaseHas('app_notifications', [
+            'recipient_id' => $localViewer->id, 'production_unit_id' => $otherUnit->id, 'type' => 'egg_stock_negative',
+        ]);
+        $this->assertDatabaseCount('app_notifications', 3);
+
+        // Request: un cierre rechazado deja la bandeja intacta; el cierre válido avisa una sola vez.
+        $closeKey = (string) Str::uuid();
+        $close = ['returned_quantity' => 15, 'return_production_unit_id' => $otherUnit->id];
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", [...$close, 'returned_quantity' => 14])->assertConflict();
+        $this->assertDatabaseCount('app_notifications', 3);
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", $close, $closeKey)->assertOk();
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", $close, $closeKey)->assertOk();
+        $surplus = AppNotification::query()->where('type', 'delivery_egg_surplus')->sole();
+        $this->assertStringContainsString('15 huevos', $surplus->message);
+        $this->assertSame($supervisor->id, $surplus->recipient_id);
+        $this->assertDatabaseCount('app_notifications', 4);
+        $remainingNegative = AppNotification::query()->where('type', 'egg_stock_negative')->whereNull('resolved_at')->sole();
+        $this->assertSame($negative->id, $remainingNegative->id);
+
+        // Consulta: el supervisor ve ambas urgencias y el vínculo al módulo en su bandeja.
+        Sanctum::actingAs($supervisor, ['api:access']);
+        $this->getJson('/api/v1/notificaciones/'.$negative->public_id)->assertOk()
+            ->assertJsonPath('data.urgencia', 'alto')
+            ->assertJsonPath('data.entidad.id', (string) $unit->id)
+            ->assertJsonPath('data.modulo', 'inventory');
+        $this->getJson('/api/v1/notificaciones/'.$surplus->public_id)->assertOk()
+            ->assertJsonPath('data.urgencia', 'bajo')
+            ->assertJsonPath('data.modulo', 'deliveries')
+            ->assertJsonPath('data.entidad.ruta', '/administracion/repartos/repartos');
+    }
+
+    // Flujo: el saldo cero y el cierre sin devolución no generan alertas.
+    public function test_no_egg_alert_is_issued_for_exact_stock_and_no_surplus(): void
+    {
+        // Preparación: da al repartidor permisos de supervisión y carga una cuenta con diez huevos.
+        $actor = $this->signIn([
+            'can_start_deliveries', 'can_update_own_deliveries', 'can_monitor_deliveries', 'can_view_notifications',
+        ]);
+        $unit = ProductionUnit::factory()->create();
+        app(RecordEggStockTransactionAction::class)->execute($unit, 'manual_receipt', 10, (string) Str::uuid(), $actor);
+
+        // Requests: carga y entrega todos los huevos antes de cerrar sin devolución.
+        $deliveryId = $this->command('POST', '/repartos', ['production_unit_id' => $unit->id, 'quantity' => 10])
+            ->assertCreated()->json('data.id');
+        $this->command('POST', "/repartos/{$deliveryId}/entregas", [
+            'client_reference' => '01K00000000000000000000001', 'status' => 'delivered',
+            'items' => [['unit' => 'huevo', 'amount' => '10', 'eggs_per_unit' => 1]],
+        ])->assertOk();
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", ['returned_quantity' => 0])->assertOk();
+        $this->assertDatabaseCount('app_notifications', 0);
+    }
+
+    // Flujo: una entrega puede exceder la carga y el reparto cierra con el saldo negativo visible.
+    public function test_delivery_shortfall_has_its_own_alert_and_survives_closing(): void
+    {
+        // Preparación: registra un maple sin dejar negativo el stock de la UP.
+        $actor = $this->signIn([
+            'can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries',
+            'can_monitor_deliveries', 'can_view_notifications',
+        ]);
+        $unit = ProductionUnit::factory()->create();
+        app(RecordEggStockTransactionAction::class)->execute($unit, 'manual_receipt', 30, (string) Str::uuid(), $actor);
+        $deliveryId = $this->command('POST', '/repartos', [
+            'production_unit_id' => $unit->id,
+            'items' => [['unit' => 'maple', 'amount' => '1', 'eggs_per_unit' => 30]],
+        ])->assertCreated()->json('data.id');
+
+        // Request: acepta y contabiliza la entrega de un maple y medio y conserva el saldo con signo.
+        $stopKey = (string) Str::uuid();
+        $stop = [
+            'client_reference' => '01K00000000000000000000001', 'status' => 'delivered',
+            'items' => [['unit' => 'maple', 'amount' => '1.5', 'eggs_per_unit' => 30]],
+        ];
+        $this->command('POST', "/repartos/{$deliveryId}/entregas", $stop, $stopKey)->assertOk()
+            ->assertJsonPath('data.delivered_quantity', 45)
+            ->assertJsonPath('data.total_amount', '150.000');
+        $this->command('POST', "/repartos/{$deliveryId}/entregas", $stop, $stopKey)->assertOk();
+        $this->getJson("/api/v1/repartos/{$deliveryId}")->assertOk()
+            ->assertJsonPath('data.remaining_quantity', -15)
+            ->assertJsonPath('data.unit_balances.rows.0.remaining_amount', '-0.5');
+
+        // Request: cierra sin devolución y conserva el único aviso alto asociado al reparto.
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", ['returned_quantity' => 0])->assertOk()
+            ->assertJsonPath('data.remaining_quantity', -15);
+        $notice = AppNotification::query()->sole();
+        $this->assertSame('delivery_egg_balance_negative', $notice->type);
+        $this->assertSame('alto', $notice->urgency->value);
+        $this->assertSame($deliveryId, $notice->entity_id);
+        $this->assertSame(0, app(GetEggStockBalanceQuery::class)->execute($unit)['balance']);
+    }
+
+    // Flujo: una devolución por encima del saldo teórico genera dos avisos independientes al cerrar.
+    public function test_close_can_record_actual_surplus_and_alert_on_the_new_shortfall(): void
+    {
+        // Preparación: registra una carga inicial que deja el stock de la UP en cero.
+        $actor = $this->signIn([
+            'can_start_deliveries', 'can_update_own_deliveries', 'can_monitor_deliveries', 'can_view_notifications',
+        ]);
+        $unit = ProductionUnit::factory()->create();
+        app(RecordEggStockTransactionAction::class)->execute($unit, 'manual_receipt', 10, (string) Str::uuid(), $actor);
+        $deliveryId = $this->command('POST', '/repartos', ['production_unit_id' => $unit->id, 'quantity' => 10])
+            ->assertCreated()->json('data.id');
+
+        // Request: devuelve doce huevos y conserva la diferencia de dos huevos al confirmar.
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", [
+            'returned_items' => [['unit' => 'huevo', 'amount' => '12', 'eggs_per_unit' => 1]],
+        ])->assertOk()
+            ->assertJsonPath('data.returned_quantity', 12)
+            ->assertJsonPath('data.remaining_quantity', -2);
+        $this->assertSame(12, app(GetEggStockBalanceQuery::class)->execute($unit)['balance']);
+        $this->assertDatabaseCount('app_notifications', 2);
+        $this->assertDatabaseHas('app_notifications', ['type' => 'delivery_egg_balance_negative', 'urgency' => 'alto']);
+        $this->assertDatabaseHas('app_notifications', ['type' => 'delivery_egg_surplus', 'urgency' => 'bajo']);
     }
 
     // Verifica el PIN de inicio y cierre sin persistirlo en el comando del reparto.
@@ -438,8 +590,8 @@ final class DeliveryEndpointTest extends TestCase
 
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
             'client_reference' => '01K00000000000000000000002', 'status' => 'delivered',
-            'items' => [['unit' => 'maple', 'amount' => '2', 'eggs_per_unit' => 30]],
-        ])->assertUnprocessable();
+            'items' => [['unit' => 'maple', 'amount' => '2', 'eggs_per_unit' => 29]],
+        ])->assertUnprocessable()->assertJsonValidationErrors('items.0.unit');
         $this->command('POST', "/repartos/{$deliveryId}/cargas", [
             'items' => [['unit' => 'maple', 'amount' => '1', 'eggs_per_unit' => 30]],
         ])->assertOk()->assertJsonPath('data.unit_balances.rows.1.remaining_amount', '2');

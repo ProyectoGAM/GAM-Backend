@@ -65,3 +65,43 @@ En las UP activas, un galpón avícola con más aves vivas que su `bird_capacity
 Se mantiene un aviso vigente por galpón y destinatario. Cuando la ocupación llega al máximo o queda por debajo, el aviso pasa al historial de resueltos. Un nuevo exceso que cumple la condición de edad abre otro aviso. La redistribución y su reversión reevalúan la UP al confirmar la operación. El comando `galpones:evaluar-capacidad` se ejecuta cada cinco minutos para detectar cambios de edad, capacidad y ocupación y reconciliar la bandeja.
 
 El aviso usa el módulo `farm_structure` y el código `poultry_house_over_capacity`. El vínculo abre el detalle del galpón. Los destinatarios requieren `can_view_poultry_houses` y `can_view_notifications`, con el alcance por UP de las cuentas PIN. [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)
+
+## 6. Stock mínimo de Inventarios
+
+Cada saldo de un producto activo con control de stock se compara con el mínimo de su ubicación. En cámaras de insumos y plantas de ración activas se evalúan los saldos compatibles. Si el saldo coincide exactamente con el mínimo, incluido cero, la urgencia es `medio`. Si queda por debajo, la urgencia pasa a `alto` y un aviso leído vuelve a no leído. Si el saldo supera el mínimo, el aviso se resuelve. La comparación conserva los seis decimales del saldo.
+
+`inventario:evaluar-minimos` sincroniza la bandeja cada cinco minutos. Mantiene un aviso vigente por saldo y destinatario. Publica `stock_minimum_reached` en el módulo `inventory`, con un vínculo a Existencias. Requiere `can_view_inventory` y `can_view_notifications`. Las cuentas PIN sólo reciben avisos de su UP. Los avisos de ubicaciones generales llegan a las cuentas personales autorizadas. [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)
+
+## 7. Huevos en Repartos
+
+- Las cargas iniciales y adicionales pueden abrir o actualizar la [alerta de stock negativo de la UP](#10-stock-negativo-de-huevos-por-up).
+- Cuando las entregas y devoluciones registradas superan los huevos cargados, el reparto conserva su saldo negativo y genera `delivery_egg_balance_negative` con urgencia `alto`. Se publica un aviso por reparto y destinatario desde la primera operación que deja ese saldo en negativo.
+- Un cierre que devuelve huevos sobrantes a stock genera `delivery_egg_surplus` con la urgencia normal de la bandeja, `bajo`, e informa cuántos huevos se devolvieron.
+
+Las entregas y devoluciones admiten cantidades reales por encima del saldo teórico en presentaciones cargadas, conservan la equivalencia en huevos enteros y registran los efectos contables habituales. Si el saldo final queda positivo, el cierre requiere registrar los huevos pendientes de devolución. Una devolución con saldo final negativo puede emitir a la vez el aviso de sobrante y el de saldo negativo del reparto.
+
+Los avisos del reparto se guardan en la misma transacción de la operación y conservan una referencia al reparto en el módulo `deliveries`. Los reintentos no los duplican. Los reciben quienes tienen `can_view_notifications` y permiso para consultar el historial o monitorear Repartos. Una cuenta PIN sólo recibe avisos de repartos íntegramente dentro de su UP. [Contrato de Repartos](../../contracts/openapi/deliveries.yaml) · [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)
+
+## 8. Intervenciones previstas de Vehículos
+
+Una intervención con fecha prevista genera un aviso normal (`bajo`) desde tres días antes y durante todo el día previsto. Pasa a `alto` desde el día siguiente si sigue planificada o en curso. Se usan días calendario de Montevideo. Al programar una intervención, una fecha sin desfase se interpreta en esa zona y una fecha con desfase conserva su instante.
+
+`vehiculos:evaluar-intervenciones` actualiza la bandeja cada cinco minutos. Mantiene un aviso por intervención fechada y destinatario. Si el aviso estaba leído, la escalada lo devuelve a no leído. Al completar o anular la intervención, el aviso se resuelve en el siguiente ciclo. El mismo comando aplica las reglas de los planes preventivos descritas en la sección 9.
+
+El código `vehicle_maintenance_due` pertenece al módulo `vehicles` y enlaza a la ficha del vehículo. Lo reciben las cuentas personales con `can_view_vehicle_maintenance` y `can_view_notifications`. [Contrato de Vehículos](../../contracts/openapi/vehicles.yaml) · [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)
+
+## 9. Planes preventivos y documentos de Vehículos
+
+Los planes activos de vehículos que no están retirados generan `vehicle_maintenance_plan_due` con urgencia normal (`bajo`) al quedar 30 días o 500 km para un límite. La urgencia sube a `alto` al alcanzar la fecha o el kilometraje, lo que ocurra primero. Para el kilometraje se toma la última lectura efectiva y se respeta el ciclo del tablero. El límite de fecha se evalúa aunque falte una lectura válida. Si una intervención vinculada ya tiene aviso por su fecha, la bandeja conserva el aviso de esa intervención con la mayor urgencia aplicable. Si se anula y el plan sigue pendiente, vuelve a mostrarse el plan.
+
+`vehiculos:evaluar-documentos` publica `vehicle_document_expiring` para documentos de vehículos que no están retirados. El aviso es normal desde 30 días antes y durante el vencimiento, y alto desde el día siguiente. Para un mismo vehículo, tipo y título, comparados sin distinguir mayúsculas ni espacios exteriores, se evalúa el mayor vencimiento. Una copia con la misma fecha conserva el aviso original. Un archivo sin vencimiento queda fuera de la evaluación. Cargar la renovación resuelve el aviso anterior y mantiene los archivos históricos en la ficha.
+
+Ambas evaluaciones usan el calendario de Montevideo y se ejecutan cada cinco minutos. Para recibir avisos, una cuenta personal necesita acceso a notificaciones y permiso de lectura del área correspondiente, mantenimiento o documentación. [Contrato de Vehículos](../../contracts/openapi/vehicles.yaml) · [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)
+
+## 10. Stock negativo de huevos por UP
+
+`egg_stock_negative` es un aviso alto de Inventario. Se evalúa el saldo confirmado de la cuenta técnica de la UP después de ingresos, pérdidas, donaciones, cargas, devoluciones, correcciones y cancelaciones. Las correcciones compuestas se evalúan con su saldo final. Hay un aviso vigente por UP y destinatario, que actualiza su mensaje mientras el saldo sea negativo. Al recuperar cero o más, pasa al historial de resueltos. Una nueva caída bajo cero abre un episodio nuevo.
+
+`inventario:evaluar-stock-huevos` revisa las UP cada cinco minutos para cubrir saldos existentes y recuperar evaluaciones pendientes. También resuelve los avisos anteriores `delivery_egg_stock_negative` por carga y los conserva en el historial. Los avisos de saldo negativo del reparto y de sobrantes al cierre tienen sus propios disparadores.
+
+Los destinatarios requieren `can_view_egg_stock` y `can_view_notifications`. Las cuentas PIN reciben sólo los avisos de su UP. El vínculo abre Stock de huevos y el aviso identifica la UP y su saldo. [Contrato de Stock de huevos](../../contracts/openapi/lots.yaml) · [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)

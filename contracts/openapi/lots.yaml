@@ -941,7 +941,7 @@ paths:
       tags: ["Stock de huevos"]
       operationId: "showEggStockBalance"
       summary: "Consulta el balance de huevos de una unidad productiva"
-      description: "Permiso requerido: can_view_egg_stock. Una unidad sin movimientos devuelve balance cero."
+      description: "Permiso requerido: can_view_egg_stock. Una unidad sin movimientos devuelve balance cero. Un saldo confirmado por debajo de cero genera un aviso alto por unidad productiva y destinatario. El aviso se resuelve al llegar a cero o recuperar un saldo positivo."
       x-permission: "can_view_egg_stock"
       parameters:
         - "$ref": "#/components/parameters/ProductionUnit"
