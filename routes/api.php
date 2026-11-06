@@ -47,6 +47,7 @@ use App\Http\Controllers\ManagementPlans\FlockManagementHistoryController;
 use App\Http\Controllers\ManagementPlans\FlockPlanController;
 use App\Http\Controllers\ManagementPlans\ManagementExecutionController;
 use App\Http\Controllers\ManagementPlans\PlanTemplateController;
+use App\Http\Controllers\Notifications\NotificationController;
 use App\Http\Controllers\ReferenceData\ReferenceOptionsController;
 use App\Http\Controllers\ReportingAndAnalytics\ReportExportController;
 use App\Http\Controllers\ReportingAndAnalytics\ReportOptionsController;
@@ -94,6 +95,13 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         ->name('shared-device.local-revoke');
 
     Route::middleware(['auth:sanctum', ValidateCurrentAccess::class, EnforceProductionUnitAccess::class])->group(function (): void {
+        Route::prefix('notificaciones')->name('notifications.')->group(function (): void {
+            Route::get('/', [NotificationController::class, 'index'])->name('index');
+            Route::get('/resumen', [NotificationController::class, 'summary'])->name('summary');
+            Route::post('/canal', [NotificationController::class, 'authorizeChannel'])->middleware('throttle:60,1')->name('channel');
+            Route::get('/{notificacion}', [NotificationController::class, 'show'])->whereUlid('notificacion')->name('show');
+            Route::patch('/{notificacion}/lectura', [NotificationController::class, 'markRead'])->whereUlid('notificacion')->name('read');
+        });
         Route::patch('/auth/contrasena', [OwnCredentialController::class, 'update'])->defaults('credential', 'password')->middleware('throttle:credentials')->name('auth.password.update');
         Route::patch('/auth/pin', [OwnCredentialController::class, 'update'])->defaults('credential', 'access_pin')->middleware('throttle:credentials')->name('auth.pin.update');
         Route::put('/auth/pin-operativo', [OwnCredentialController::class, 'update'])->defaults('credential', 'operation_pin')->middleware('throttle:credentials')->name('auth.operation-pin.update');

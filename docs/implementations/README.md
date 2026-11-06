@@ -27,6 +27,8 @@ Cada guía describe el alcance entregado, las decisiones de negocio, el contrato
 - [Alimentación de lotes, consumo diario y rectificaciones](flock-feeding-implementation.md)
 - [Clientes y cuenta corriente — implementación de las cards 13 y 15](customers-and-accounts-implementation.md)
 - [Clientes y cuenta corriente — plan y decisiones de alcance](customers-and-accounts-implementation-plan.md)
+- [Notificaciones en la app y futuras alertas por módulo — plan de implementación](alerts-and-notifications-implementation-plan.md)
+- [Notificaciones en la app — API y tiempo real](notifications-implementation.md)
 
 ## Qué registrar en cada cambio
 

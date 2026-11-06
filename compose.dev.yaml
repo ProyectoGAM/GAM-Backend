@@ -53,6 +53,12 @@ x-app-environment: &app-environment
   CACHE_STORE: redis
   CACHE_PREFIX: gam_dev_cache_
   QUEUE_CONNECTION: redis
+  BROADCAST_CONNECTION: reverb
+  REVERB_APP_ID: gam-local
+  REVERB_APP_KEY: gam-local
+  REVERB_APP_SECRET: ${REVERB_APP_SECRET:-gam-local-websocket-development}
+  REVERB_ALLOWED_ORIGINS: ${REVERB_ALLOWED_ORIGINS:-localhost,127.0.0.1}
+  REVERB_HOST: reverb
   SESSION_DRIVER: redis
   SESSION_CONNECTION: default
   SESSION_COOKIE: gam_session
@@ -287,6 +293,13 @@ services:
       start_period: 20s
     stop_grace_period: 60s
 
+  reverb:
+    <<: *app-service
+    command: ["php", "artisan", "reverb:start", "--no-interaction"]
+    depends_on:
+      api:
+        condition: service_healthy
+
   scheduler:
     <<: *app-service
     command:
@@ -340,7 +353,8 @@ services:
          {"url":"/docs/openapi/audit.yaml","name":"Auditoría e historial"},
          {"url":"/docs/openapi/vehicles.yaml","name":"Vehículos"},
          {"url":"/docs/openapi/deliveries.yaml","name":"Repartos"},
-         {"url":"/docs/openapi/customers-and-accounts.yaml","name":"Clientes y cuenta corriente"}]
+         {"url":"/docs/openapi/customers-and-accounts.yaml","name":"Clientes y cuenta corriente"},
+         {"url":"/docs/openapi/notifications.yaml","name":"Notificaciones"}]
       URLS_PRIMARY_NAME: Autenticación
     volumes:
       - ./contracts/openapi:/usr/share/nginx/html/openapi:ro
@@ -372,6 +386,8 @@ services:
         condition: service_healthy
       swagger-ui:
         condition: service_healthy
+      reverb:
+        condition: service_started
     healthcheck:
       test:
           ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/status >/dev/null || exit 1"]

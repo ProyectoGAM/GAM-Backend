@@ -25,8 +25,14 @@ return [
         'vehicles' => 'Vehículos',
         'feed_stock' => 'Alimento e ingredientes',
         'flock_feeding' => 'Alimentación de lotes',
+        'notifications' => 'Notificaciones',
     ],
     'permissions' => [
+        'can_view_notifications' => [
+            'module' => 'notifications', 'label' => 'Consultar notificaciones',
+            'description' => 'Ver y marcar como leídas las notificaciones propias.',
+            'requires' => [], 'admin_only' => false,
+        ],
         'can_view_admin_dashboard' => [
             'module' => 'identity', 'label' => 'Ver inicio administrativo',
             'description' => 'Acceder al inicio del área de administración.',

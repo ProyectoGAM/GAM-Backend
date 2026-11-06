@@ -52,6 +52,12 @@ final class SharedDevice extends Model
         return $this->belongsTo(User::class, 'enrolled_by');
     }
 
+    /** @return BelongsTo<ProductionUnit, $this> */
+    public function productionUnit(): BelongsTo
+    {
+        return $this->belongsTo(ProductionUnit::class);
+    }
+
     /** @return HasMany<AuthSession, $this> */
     public function sessions(): HasMany
     {

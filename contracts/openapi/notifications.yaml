@@ -1,0 +1,152 @@
+openapi: 3.1.0
+info:
+  title: Notificaciones de GAM
+  version: 1.0.0
+  description: Bandeja personal de notificaciones con actualizaciones dentro de la aplicación.
+servers:
+  - url: /
+security:
+  - sesionWeb: []
+  - tokenPersonal: []
+paths:
+  /api/v1/notificaciones:
+    get:
+      summary: Lista las notificaciones propias de más reciente a más antigua
+      parameters:
+        - name: estado_lectura
+          in: query
+          schema: {type: string, enum: [leida, no_leida]}
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100000}
+        - name: per_page
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      responses:
+        '200':
+          description: Página de notificaciones
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta, links]
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/Notificacion'}
+                  meta: {type: object}
+                  links: {type: object}
+        '401': {description: Sesión ausente o inválida}
+        '403': {description: Falta el permiso de notificaciones}
+        '422': {description: Filtros inválidos}
+  /api/v1/notificaciones/resumen:
+    get:
+      summary: Consulta el contador y la suscripción privada de la sesión
+      responses:
+        '200':
+          description: Resumen de la bandeja
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [no_leidas, tiempo_real]
+                    properties:
+                      no_leidas: {type: integer, minimum: 0}
+                      tiempo_real:
+                        type: [object, 'null']
+                        required: [clave, canal]
+                        properties:
+                          clave: {type: string, description: Clave pública de Reverb}
+                          canal: {type: string, description: Canal privado de la sesión sin el prefijo del protocolo}
+        '401': {description: Sesión ausente o inválida}
+        '403': {description: Falta el permiso de notificaciones}
+  /api/v1/notificaciones/canal:
+    post:
+      summary: Autoriza la suscripción de la sesión vigente al canal privado
+      description: El evento notifications.changed indica que debe volver a consultarse la bandeja.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [socket_id, channel_name]
+              properties:
+                socket_id: {type: string, example: '123.456'}
+                channel_name: {type: string, description: Canal de la sesión con prefijo private-}
+      responses:
+        '200':
+          description: Firma de autorización para Reverb
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [auth]
+                properties:
+                  auth: {type: string}
+        '401': {description: Sesión ausente o inválida}
+        '403': {description: Canal ajeno o suscripción no autorizada}
+        '422': {description: Datos del canal inválidos}
+        '429': {description: Demasiadas solicitudes}
+  /api/v1/notificaciones/{notificacion}:
+    parameters:
+      - $ref: '#/components/parameters/Notificacion'
+    get:
+      summary: Consulta una notificación propia
+      responses:
+        '200': {$ref: '#/components/responses/Notificacion'}
+        '401': {description: Sesión ausente o inválida}
+        '403': {description: Falta el permiso de notificaciones}
+        '404': {description: Notificación no disponible}
+  /api/v1/notificaciones/{notificacion}/lectura:
+    parameters:
+      - $ref: '#/components/parameters/Notificacion'
+    patch:
+      summary: Marca como leída y conserva la primera fecha de lectura
+      responses:
+        '200': {$ref: '#/components/responses/Notificacion'}
+        '401': {description: Sesión ausente o inválida}
+        '403': {description: Falta el permiso de notificaciones}
+        '404': {description: Notificación no disponible}
+components:
+  securitySchemes:
+    sesionWeb: {type: apiKey, in: cookie, name: gam_session, description: Sesión web de Sanctum con CSRF en escrituras}
+    tokenPersonal: {type: http, scheme: bearer, description: En equipos compartidos también se requiere la credencial de equipo y X-GAM-Session}
+  parameters:
+    Notificacion:
+      name: notificacion
+      in: path
+      required: true
+      schema: {type: string, format: ulid}
+  responses:
+    Notificacion:
+      description: Notificación personal
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data: {$ref: '#/components/schemas/Notificacion'}
+  schemas:
+    Notificacion:
+      type: object
+      required: [id, tipo, titulo, mensaje, fecha, leida_en, entidad]
+      properties:
+        id: {type: string, format: ulid}
+        tipo: {type: string}
+        titulo: {type: string}
+        mensaje: {type: string}
+        fecha: {type: string, format: date-time}
+        leida_en: {type: [string, 'null'], format: date-time}
+        entidad:
+          type: [object, 'null']
+          required: [tipo, id, ruta]
+          properties:
+            tipo: {type: string}
+            id: {type: string}
+            ruta: {type: [string, 'null']}

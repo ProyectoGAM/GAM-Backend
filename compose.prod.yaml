@@ -39,6 +39,12 @@ x-app: &app
     CACHE_STORE: redis
     CACHE_PREFIX: gam_prod_cache_
     QUEUE_CONNECTION: redis
+    BROADCAST_CONNECTION: reverb
+    REVERB_APP_ID: ${REVERB_APP_ID:-}
+    REVERB_APP_KEY: ${REVERB_APP_KEY:-}
+    REVERB_APP_SECRET: ${REVERB_APP_SECRET:-}
+    REVERB_ALLOWED_ORIGINS: ${REVERB_ALLOWED_ORIGINS:-localhost}
+    REVERB_HOST: reverb
     SESSION_DRIVER: redis
     SESSION_CONNECTION: default
     SESSION_COOKIE: gam_session
@@ -144,6 +150,13 @@ services:
         condition: service_healthy
     stop_grace_period: 60s
 
+  reverb:
+    <<: *app
+    command: ["php", "artisan", "reverb:start", "--no-interaction"]
+    depends_on:
+      api:
+        condition: service_healthy
+
   scheduler:
     <<: *app
     command: ["php", "artisan", "schedule:work", "--no-interaction"]
@@ -179,6 +192,8 @@ services:
       api:
         condition: service_healthy
       swagger-ui:
+        condition: service_started
+      reverb:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/status >/dev/null || exit 1"]
