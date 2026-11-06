@@ -6,7 +6,11 @@ La bandeja personal muestra avisos persistidos en PostgreSQL. Una campana en Adm
 
 Inyectar `PublishNotificationAction` y pasarle un `NotificationData` con usuario destinatario, tipo, clave estable de origen, título y mensaje en español y fecha del hecho. Para empleados con dispositivo/PIN, incluir la UP del hecho. La referencia opcional acepta el tipo y el ID público de la entidad, además de una ruta interna de GAM. Usar textos que el destinatario esté autorizado a ver.
 
+El emisor indica `urgency` mediante `NotificationUrgency::Low`, `Medium` o `High` y `module` mediante un código estable, por ejemplo `management_plans`, `inventory` o `deliveries`. El módulo identifica el origen aunque el aviso carezca de entidad relacionada. La migración asigna `bajo` y `general` a los avisos existentes. Las publicaciones que omiten ambos valores reciben esos mismos valores iniciales.
+
 La combinación de destinatario, tipo y clave de origen identifica una publicación. Un reintento devuelve el aviso original con su fecha de lectura. Si la publicación se realiza dentro de la transacción del módulo, se revierte junto con ella. El marcado de lectura conserva la primera fecha aunque se repita la solicitud. [Contrato de la API](../../contracts/openapi/notifications.yaml)
+
+El listado, el detalle y la respuesta al marcar como leída incluyen `urgencia` (`bajo`, `medio`, `alto`) y `modulo`. El listado usa fecha descendente por defecto. `GET /api/v1/notificaciones?orden=urgencia` ordena de alto a bajo antes de paginar, con los avisos más recientes primero dentro de cada nivel. Los filtros `urgencia`, `modulo` y `estado_lectura` se pueden combinar. Por ejemplo, `GET /api/v1/notificaciones?urgencia=alto&modulo=management_plans`.
 
 ## Entrega y autorización
 

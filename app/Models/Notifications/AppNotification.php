@@ -2,6 +2,7 @@
 
 namespace App\Models\Notifications;
 
+use App\Enums\Notifications\NotificationUrgency;
 use App\Models\User;
 use Database\Factories\Notifications\AppNotificationFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -18,13 +19,13 @@ final class AppNotification extends Model
     protected $dateFormat = 'Y-m-d H:i:sP';
 
     protected $fillable = [
-        'public_id', 'recipient_id', 'production_unit_id', 'type', 'source_key', 'title', 'message',
+        'public_id', 'recipient_id', 'production_unit_id', 'type', 'source_key', 'urgency', 'module', 'title', 'message',
         'entity_type', 'entity_id', 'target_path', 'occurred_at', 'read_at',
     ];
 
     protected function casts(): array
     {
-        return ['occurred_at' => 'immutable_datetime', 'read_at' => 'immutable_datetime'];
+        return ['urgency' => NotificationUrgency::class, 'occurred_at' => 'immutable_datetime', 'read_at' => 'immutable_datetime'];
     }
 
     /** @return Builder<self> */

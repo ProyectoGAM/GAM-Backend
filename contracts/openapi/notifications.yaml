@@ -16,6 +16,17 @@ paths:
         - name: estado_lectura
           in: query
           schema: {type: string, enum: [leida, no_leida]}
+        - name: urgencia
+          in: query
+          schema: {$ref: '#/components/schemas/Urgencia'}
+        - name: modulo
+          in: query
+          description: Código estable del módulo que emitió el aviso
+          schema: {$ref: '#/components/schemas/Modulo'}
+        - name: orden
+          in: query
+          description: Por fecha descendente o por urgencia de alto a bajo. En cada nivel se muestran primero los avisos más recientes.
+          schema: {type: string, enum: [fecha, urgencia], default: fecha}
         - name: page
           in: query
           schema: {type: integer, minimum: 1, maximum: 100000}
@@ -133,12 +144,22 @@ components:
             properties:
               data: {$ref: '#/components/schemas/Notificacion'}
   schemas:
+    Urgencia:
+      type: string
+      enum: [bajo, medio, alto]
+    Modulo:
+      type: string
+      pattern: '^[a-z][a-z0-9_]{0,79}$'
+      maxLength: 80
+      example: management_plans
     Notificacion:
       type: object
-      required: [id, tipo, titulo, mensaje, fecha, leida_en, entidad]
+      required: [id, tipo, urgencia, modulo, titulo, mensaje, fecha, leida_en, entidad]
       properties:
         id: {type: string, format: ulid}
         tipo: {type: string}
+        urgencia: {$ref: '#/components/schemas/Urgencia'}
+        modulo: {$ref: '#/components/schemas/Modulo'}
         titulo: {type: string}
         mensaje: {type: string}
         fecha: {type: string, format: date-time}

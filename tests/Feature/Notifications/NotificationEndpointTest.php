@@ -4,6 +4,7 @@ namespace Tests\Feature\Notifications;
 
 use App\Actions\Notifications\PublishNotificationAction;
 use App\DTO\Notifications\NotificationData;
+use App\Enums\Notifications\NotificationUrgency;
 use App\Events\Notifications\NotificationInboxChanged;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Notifications\AppNotification;
@@ -34,7 +35,8 @@ final class NotificationEndpointTest extends TestCase
 
         // Consulta: verifica orden, paginación, contador y aislamiento de accesos directos.
         $this->getJson('/api/v1/notificaciones?per_page=1')->assertOk()
-            ->assertJsonPath('data.0.id', $new->public_id)->assertJsonPath('meta.total', 2);
+            ->assertJsonPath('data.0.id', $new->public_id)->assertJsonPath('meta.total', 2)
+            ->assertJsonPath('data.0.urgencia', 'bajo')->assertJsonPath('data.0.modulo', 'general');
         $this->getJson('/api/v1/notificaciones/resumen')->assertOk()->assertJsonPath('data.no_leidas', 2);
         $this->getJson('/api/v1/notificaciones/'.$foreign->public_id)->assertNotFound();
         $this->patchJson('/api/v1/notificaciones/'.$foreign->public_id.'/lectura')->assertNotFound();
@@ -51,6 +53,44 @@ final class NotificationEndpointTest extends TestCase
         $this->getJson('/api/v1/notificaciones/resumen')->assertOk()->assertJsonPath('data.no_leidas', 1);
     }
 
+    // Filtra por origen y urgencia, y aplica el orden de prioridad antes de paginar.
+    public function test_inbox_can_filter_and_sort_by_urgency_and_source_module(): void
+    {
+        // Preparación: crea avisos de distintos módulos, urgencias y fechas.
+        $user = $this->administrator();
+        $newest = AppNotification::factory()->create(['recipient_id' => $user->id]);
+        $medium = AppNotification::factory()->create([
+            'recipient_id' => $user->id, 'module' => 'deliveries',
+            'urgency' => NotificationUrgency::Medium, 'occurred_at' => now()->subDay(),
+        ]);
+        $high = AppNotification::factory()->create([
+            'recipient_id' => $user->id, 'module' => 'management_plans',
+            'urgency' => NotificationUrgency::High, 'occurred_at' => now()->subDays(2),
+        ]);
+        $oldHigh = AppNotification::factory()->create([
+            'recipient_id' => $user->id, 'module' => 'deliveries',
+            'urgency' => NotificationUrgency::High, 'occurred_at' => now()->subDays(3),
+        ]);
+
+        // Consulta: comprueba el orden cronológico habitual y el orden opcional por urgencia.
+        $this->getJson('/api/v1/notificaciones')->assertOk()->assertJsonPath('data.0.id', $newest->public_id);
+        $this->getJson('/api/v1/notificaciones?orden=urgencia&per_page=3')->assertOk()
+            ->assertJsonPath('data.0.id', $high->public_id)
+            ->assertJsonPath('data.1.id', $oldHigh->public_id)
+            ->assertJsonPath('data.2.id', $medium->public_id)
+            ->assertJsonPath('meta.total', 4);
+
+        // Consulta: combina filtros y verifica la clasificación también en el detalle.
+        $this->getJson('/api/v1/notificaciones?urgencia=alto&modulo=deliveries')->assertOk()
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $oldHigh->public_id);
+        $this->getJson('/api/v1/notificaciones/'.$high->public_id)->assertOk()
+            ->assertJsonPath('data.urgencia', 'alto')->assertJsonPath('data.modulo', 'management_plans');
+
+        // Consulta: rechaza filtros fuera del contrato.
+        $this->getJson('/api/v1/notificaciones?urgencia=critico&modulo=Planes&orden=titulo')
+            ->assertUnprocessable()->assertJsonValidationErrors(['urgencia', 'modulo', 'orden']);
+    }
+
     // Una publicación revertida no deja registro ni señal, y el reintento crea una sola fila.
     public function test_publication_is_transactional_and_idempotent(): void
     {
@@ -58,7 +98,10 @@ final class NotificationEndpointTest extends TestCase
         $user = $this->administrator();
         Event::fake([NotificationInboxChanged::class]);
         $occurredAt = Carbon::parse('2026-11-05T09:00:00-03:00');
-        $data = new NotificationData($user->id, 'test', 'source-001', 'Aviso', 'Prueba', $occurredAt);
+        $data = new NotificationData(
+            $user->id, 'test', 'source-001', 'Aviso', 'Prueba', $occurredAt,
+            urgency: NotificationUrgency::High, module: 'management_plans',
+        );
         $publisher = app(PublishNotificationAction::class);
 
         // Mutación: revierte la primera publicación antes de que pueda emitir.
@@ -71,7 +114,10 @@ final class NotificationEndpointTest extends TestCase
         // Mutación: repite la publicación confirmada con la misma clave.
         $notification = $publisher->execute($data);
         $this->assertTrue($publisher->execute($data)->is($notification));
-        $this->assertSame($occurredAt->timestamp, $notification->fresh()->occurred_at->timestamp);
+        $stored = $notification->fresh();
+        $this->assertSame($occurredAt->timestamp, $stored->occurred_at->timestamp);
+        $this->assertSame(NotificationUrgency::High, $stored->urgency);
+        $this->assertSame('management_plans', $stored->module);
         $this->assertDatabaseCount('app_notifications', 1);
         Event::assertDispatchedTimes(NotificationInboxChanged::class, 1);
     }

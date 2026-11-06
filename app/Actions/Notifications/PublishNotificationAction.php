@@ -18,6 +18,8 @@ final class PublishNotificationAction
         ], [
             'public_id' => (string) Str::ulid(),
             'production_unit_id' => $data->productionUnitId,
+            'urgency' => $data->urgency,
+            'module' => $data->module,
             'title' => $data->title,
             'message' => $data->message,
             'entity_type' => $data->entityType,

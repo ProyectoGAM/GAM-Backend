@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Notifications;
 
 use App\Actions\Notifications\MarkNotificationReadAction;
+use App\Enums\Notifications\NotificationUrgency;
 use App\Http\Requests\Notifications\AuthorizeNotificationChannelRequest;
 use App\Http\Requests\Notifications\ListNotificationsRequest;
 use App\Http\Requests\Notifications\NotificationRequest;
@@ -18,13 +19,22 @@ final class NotificationController
 {
     public function index(ListNotificationsRequest $request): AnonymousResourceCollection
     {
-        $query = AppNotification::inboxFor($request->user());
+        $query = AppNotification::inboxFor($request->user())
+            ->when($request->validated('urgencia'), fn ($query, string $urgency) => $query->where('urgency', $urgency))
+            ->when($request->validated('modulo'), fn ($query, string $module) => $query->where('module', $module));
 
         match ($request->validated('estado_lectura')) {
             'leida' => $query->whereNotNull('read_at'),
             'no_leida' => $query->whereNull('read_at'),
             default => null,
         };
+
+        if ($request->validated('orden') === 'urgencia') {
+            $query->orderByRaw('CASE urgency WHEN ? THEN 1 WHEN ? THEN 2 ELSE 3 END', [
+                NotificationUrgency::High->value,
+                NotificationUrgency::Medium->value,
+            ]);
+        }
 
         return NotificationResource::collection($query->orderByDesc('occurred_at')->orderByDesc('id')
             ->paginate((int) $request->validated('per_page', 20))->withQueryString());
