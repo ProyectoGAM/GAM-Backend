@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Lots;
 
+use App\Actions\Lots\ConfirmWeighingAnomalyAction;
 use App\Actions\Lots\CorrectWeighingAction;
 use App\Actions\Lots\RecordWeighingAction;
 use App\Actions\Lots\SaveWeighingReferenceSettingsAction;
+use App\Http\Requests\Lots\ConfirmWeighingAnomalyRequest;
 use App\Http\Requests\Lots\CorrectWeighingRequest;
 use App\Http\Requests\Lots\ListWeighingsRequest;
 use App\Http\Requests\Lots\StoreWeighingRequest;
@@ -48,6 +50,13 @@ final readonly class WeighingController
     public function update(CorrectWeighingRequest $request, Weighing $pesaje, CorrectWeighingAction $action): LotsOperationResource
     {
         return new LotsOperationResource($action->execute($pesaje, $request->attributesForAction(), $request->actor()));
+    }
+
+    public function confirmAnomaly(ConfirmWeighingAnomalyRequest $request, Weighing $pesaje, ConfirmWeighingAnomalyAction $action): LotsOperationResource
+    {
+        $data = $request->attributesForAction();
+
+        return new LotsOperationResource($action->weighing($pesaje, $data['version'], $data['idempotency_key'], $request->actor()));
     }
 
     public function distribution(WeighingDistributionRequest $request, Weighing $pesaje, GetWeighingDistributionQuery $query): JsonResponse

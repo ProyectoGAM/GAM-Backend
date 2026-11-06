@@ -37,6 +37,7 @@ final readonly class FlockFeedingHistory
             description: match ($event) {
                 'flock_feeding_initialized' => 'Alimentación del lote inicializada',
                 'flock_feeding_manual_changed' => 'Configuración manual de alimentación modificada',
+                'flock_feeding_manual_confirmed' => 'Ración manual del lote confirmada',
                 'flock_feeding_automatic_restored' => 'Alimentación automática restablecida',
                 'flock_feeding_plan_revised' => 'Etapas de alimentación del lote revisadas',
                 'feed_consumption_corrected' => 'Consumo diario rectificado con compensación',

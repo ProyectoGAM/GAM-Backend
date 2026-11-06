@@ -14,7 +14,7 @@ La actualización de acceso agrega `unassigned`, visible como **Sin rol**, prote
 
 ## Catálogo y autorización
 
-`config/permission-catalog.php` define 87 permisos en 24 módulos con claves estables `can_*`, etiqueta española, descripción breve, dependencias y marca de exclusividad Admin. Las agrupaciones organizan el editor. Las operaciones sensibles tienen permisos específicos, incluidos `can_record_beak_trimming` y `can_reverse_beak_trimming` para registrar e invalidar un despique por separado.
+`config/permission-catalog.php` define 88 permisos en 24 módulos con claves estables `can_*`, etiqueta española, descripción breve, dependencias y marca de exclusividad Admin. Las agrupaciones organizan el editor. El permiso `can_manage_alert_thresholds` habilita la configuración de umbrales por UP. Registrar e invalidar un despique requiere `can_record_beak_trimming` y `can_reverse_beak_trimming`, respectivamente.
 
 La persistencia sigue utilizando Spatie Permission 8.3 y la autorización utiliza Policies de Laravel 13. Las Policies de dominio mantienen sus validaciones de estado y negocio. `RolePolicy` exige el rol Admin explícitamente; `UserPolicy` protege las cuentas y asignaciones. No hay un bypass global mediante `Gate::before`.
 

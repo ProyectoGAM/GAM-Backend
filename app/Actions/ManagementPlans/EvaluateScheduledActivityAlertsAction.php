@@ -2,30 +2,21 @@
 
 namespace App\Actions\ManagementPlans;
 
-use App\Actions\Notifications\PublishNotificationAction;
-use App\Actions\Notifications\ResolveAlertNotificationAction;
-use App\DTO\Notifications\NotificationData;
+use App\Actions\Notifications\SynchronizeOperationalAlertsAction;
 use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Enums\ManagementPlans\ScheduledActivityType;
+use App\Enums\Notifications\AlertTimingType;
 use App\Enums\Notifications\NotificationUrgency;
-use App\Events\Notifications\NotificationInboxChanged;
 use App\Interfaces\Clock;
 use App\Models\FarmStructure\ProductionUnit;
-use App\Models\Notifications\AppNotification;
 use App\Services\ManagementPlans\ScheduledPlanActivities;
-use App\Services\Notifications\AlertRecipients;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 final readonly class EvaluateScheduledActivityAlertsAction
 {
-    private const string MODULE = 'management_plans';
-
     public function __construct(
         private ScheduledPlanActivities $activities,
-        private AlertRecipients $recipients,
-        private PublishNotificationAction $publish,
-        private ResolveAlertNotificationAction $resolve,
+        private SynchronizeOperationalAlertsAction $synchronize,
         private Clock $clock,
     ) {}
 
@@ -36,64 +27,28 @@ final readonly class EvaluateScheduledActivityAlertsAction
             $unit = ProductionUnit::query()->findOrFail($unitId);
             $evaluatedAt = $this->clock->now()->setTimezone((string) config('lots.timezone'));
             $today = $evaluatedAt->startOfDay();
-            $pending = $unit->status === ProductionUnitStatus::Active
-                ? iterator_to_array($this->activities->pending($type, $unitId, $evaluatedAt, $today->addDays($type->warningDays())))
-                : [];
-            $recipients = $pending === [] ? [] : $this->recipients->ids($unitId, 'can_view_management_plans');
-            $open = [];
+            $alertType = AlertTimingType::from($type->value.'_due');
+            $thresholds = $alertType->thresholds($unit);
+            $pending = [];
 
-            $notificationType = $type->value.'_due';
-            $notices = AppNotification::query()->where('module', self::MODULE)->where('type', $notificationType)
-                ->where('production_unit_id', $unitId)->where('is_alert', true)->whereNull('resolved_at');
-
-            foreach ($notices->lazyById(100) as $notice) {
-                $key = Str::beforeLast($notice->source_key, ':');
-                $occurrence = $pending[$key] ?? null;
-                if ($occurrence === null || ! isset($recipients[$notice->recipient_id])) {
-                    $this->resolve->execute($notice);
-
-                    continue;
-                }
-
-                $open[$key][$notice->recipient_id] = true;
-                $urgency = $occurrence['invalidated'] || $occurrence['due']->lessThanOrEqualTo($today) ? NotificationUrgency::High : NotificationUrgency::Medium;
-                if ($notice->urgency === NotificationUrgency::Medium && $urgency === NotificationUrgency::High) {
-                    $notice->read_at = null;
-                }
-                $notice->fill([
-                    'entity_id' => $occurrence['entity_id'],
-                    'urgency' => $urgency,
-                    'message' => $this->message($type, $occurrence['activity'], $occurrence['flock'], $occurrence['due']->format('d/m/Y')),
-                ]);
-                if ($notice->isDirty()) {
-                    $notice->save();
-                    NotificationInboxChanged::dispatch($notice->recipient_id, $unitId);
-                }
-            }
-
-            foreach ($pending as $key => $occurrence) {
-                $urgency = $occurrence['invalidated'] || $occurrence['due']->lessThanOrEqualTo($today) ? NotificationUrgency::High : NotificationUrgency::Medium;
-                foreach ($recipients as $recipientId => $_) {
-                    if (isset($open[$key][$recipientId])) {
-                        continue;
+            if ($unit->status === ProductionUnitStatus::Active) {
+                $through = $today->subDays($thresholds->firstDay());
+                foreach ($this->activities->pending($type, $unitId, $evaluatedAt, $through) as $key => $occurrence) {
+                    $days = (int) $occurrence['due']->diffInDays($today, false);
+                    $urgency = $occurrence['invalidated'] ? NotificationUrgency::High : $thresholds->urgency($days);
+                    if ($urgency !== null) {
+                        $pending[$key] = [
+                            'entity_id' => $occurrence['entity_id'],
+                            'target_path' => '/administracion/manejo-lotes/planes/lotes/'.$occurrence['flock_id'],
+                            'urgency' => $urgency,
+                            'title' => $type->title(),
+                            'message' => $this->message($type, $occurrence['activity'], $occurrence['flock'], $occurrence['due']->format('d/m/Y')),
+                        ];
                     }
-
-                    $this->publish->execute(new NotificationData(
-                        recipientId: $recipientId,
-                        type: $notificationType,
-                        sourceKey: $key.':'.Str::uuid(),
-                        title: $type->title(),
-                        message: $this->message($type, $occurrence['activity'], $occurrence['flock'], $occurrence['due']->format('d/m/Y')),
-                        occurredAt: $evaluatedAt,
-                        productionUnitId: $unitId,
-                        entityType: 'flock_plan_activity',
-                        entityId: $occurrence['entity_id'],
-                        urgency: $urgency,
-                        module: self::MODULE,
-                        isAlert: true,
-                    ));
                 }
             }
+
+            $this->synchronize->execute($unitId, 'management_plans', $alertType->value, 'can_view_management_plans', 'flock_plan_activity', $evaluatedAt, $pending);
         }, 3);
     }
 

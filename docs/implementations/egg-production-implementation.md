@@ -39,6 +39,16 @@ La Action crea una transacción lógica de tipo `collection_receipt` y un movimi
 
 Corregir o cancelar una recolección no cambia aves ni versión del lote. La recolección continúa disponible aunque el lote se divida, fusione o finalice; sólo se exige una UP operativa para registrar operaciones nuevas.
 
+## Aviso por falta de recolección diaria
+
+`lotes:evaluar-recolecciones-diarias` revisa cada cinco minutos los lotes abiertos con aves en UP activas, con los mismos criterios de estado que el registro de recolección. Usa la fecha efectiva de la última recolección vigente del lote en `LOTS_TIMEZONE` y cuenta jornadas completas consecutivas desde el día siguiente. Si el lote aún no tiene recolecciones vigentes, cuenta desde su jornada de admisión. La jornada actual cuenta al cerrar a medianoche.
+
+El aviso empieza en `bajo` al primer día, sube a `medio` al segundo y a `alto` al séptimo. Se actualiza el mismo aviso por destinatario durante la racha y una escalada vuelve a marcarlo como no leído. Registrar la recolección del día resuelve el aviso en la siguiente evaluación. Las correcciones de fecha y anulaciones recalculan la racha a partir de los registros vigentes.
+
+La API devuelve `modulo: lots`, `tipo: daily_egg_collection_missing` y el lote en `entidad`, con `entidad.ruta` en `/administracion/lotes/lotes/{id}/recoleccion`. Los destinatarios necesitan `can_view_egg_collections` y `can_view_notifications` dentro del alcance de la UP. `GET` y `PUT /api/v1/unidades-productivas/{productionUnit}/umbrales-alertas/daily_egg_collection_missing` requieren `can_manage_alert_thresholds`. La edición de umbrales se audita y repetir los mismos valores conserva el registro original. [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)
+
+Pasaron 55 pruebas en PostgreSQL aislado, incluidas la escalada, el corte local de jornada, la resolución, la anulación y la configuración de umbrales. También se verificaron el horario de evaluación, el contrato OpenAPI y el análisis de tipos. La alerta usa las recolecciones existentes y la configuración común de umbrales.
+
 ## Cuenta corriente de huevos
 
 Las operaciones manuales se ejecutan desde Inventario, siempre sobre la cuenta técnica de una UP:

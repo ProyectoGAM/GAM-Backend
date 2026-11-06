@@ -127,6 +127,43 @@ paths:
         '401': {description: Sesión ausente o inválida}
         '403': {description: Falta el permiso de notificaciones}
         '404': {description: Notificación no disponible}
+  /api/v1/unidades-productivas/{productionUnit}/umbrales-alertas/{alertType}:
+    parameters:
+      - name: productionUnit
+        in: path
+        required: true
+        schema: {type: integer, minimum: 1}
+      - name: alertType
+        in: path
+        required: true
+        schema: {$ref: '#/components/schemas/TipoUmbralTemporal'}
+    get:
+      summary: Consulta los umbrales efectivos por unidad productiva y tipo de alerta
+      description: Requiere can_manage_alert_thresholds. Las cuentas PIN consultan su propia unidad productiva.
+      responses:
+        '200': {$ref: '#/components/responses/UmbralesTemporales'}
+        '401': {description: Sesión ausente o inválida}
+        '403': {description: Falta el permiso de configuración de umbrales}
+        '404': {description: Unidad productiva o tipo de alerta no disponible}
+    put:
+      summary: Configura los días de cada nivel por unidad productiva y tipo de alerta
+      description: Requiere can_manage_alert_thresholds. Los cambios se aplican en la próxima evaluación.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UmbralesTemporalesInput'}
+            examples:
+              recoleccion_diaria:
+                value: {bajo: 1, medio: 2, alto: 7}
+              vacuna:
+                value: {bajo: null, medio: -7, alto: 0}
+      responses:
+        '200': {$ref: '#/components/responses/UmbralesTemporales'}
+        '401': {description: Sesión ausente o inválida}
+        '403': {description: Falta el permiso de configuración de umbrales}
+        '404': {description: Unidad productiva o tipo de alerta no disponible}
+        '422': {description: Umbrales inválidos}
 components:
   securitySchemes:
     sesionWeb: {type: apiKey, in: cookie, name: gam_session, description: Sesión web de Sanctum con CSRF en escrituras}
@@ -138,6 +175,23 @@ components:
       required: true
       schema: {type: string, format: ulid}
   responses:
+    UmbralesTemporales:
+      description: Configuración efectiva de umbrales
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data:
+                type: object
+                required: [unidad_productiva_id, tipo, bajo, medio, alto]
+                properties:
+                  unidad_productiva_id: {type: integer}
+                  tipo: {$ref: '#/components/schemas/TipoUmbralTemporal'}
+                  bajo: {type: [integer, 'null']}
+                  medio: {type: [integer, 'null']}
+                  alto: {type: integer}
     Notificacion:
       description: Notificación personal
       content:
@@ -148,6 +202,18 @@ components:
             properties:
               data: {$ref: '#/components/schemas/Notificacion'}
   schemas:
+    TipoUmbralTemporal:
+      type: string
+      enum: [daily_egg_collection_missing, manual_feeding_review_due, vaccination_due, medication_due, beak_trimming_due, manual_practice_due, flock_movement_due, egg_collection_due, mortality_due]
+    UmbralesTemporalesInput:
+      type: object
+      additionalProperties: false
+      required: [bajo, medio, alto]
+      description: Los niveles activos deben estar en orden ascendente. Nulo deshabilita bajo o medio. En recolección de huevos se admiten 1 a 365 jornadas locales cerradas sin registro vigente. En revisión de ración manual, bajo debe ser nulo y medio y alto deben estar entre 1 y 365. Para tareas previstas, los valores negativos anticipan el aviso, cero es el día previsto y los positivos indican días de atraso.
+      properties:
+        bajo: {type: [integer, 'null'], minimum: -365, maximum: 365}
+        medio: {type: [integer, 'null'], minimum: -365, maximum: 365}
+        alto: {type: integer, minimum: -365, maximum: 365}
     Urgencia:
       type: string
       enum: [bajo, medio, alto]
@@ -163,7 +229,7 @@ components:
         id: {type: string, format: ulid}
         tipo:
           type: string
-          description: Código estable del aviso emitido por el módulo. Planes de manejo publica vaccination_due, medication_due, beak_trimming_due, manual_practice_due, flock_movement_due, egg_collection_due y mortality_due.
+          description: Código estable del aviso emitido por el módulo. Lotes publica daily_egg_collection_missing y weighing_anomaly. Las anomalías de pesaje tienen urgencia alta y referencian un ingreso diario o un pesaje independiente. Planes de manejo publica feed_coverage, manual_feeding_review_due, vaccination_due, medication_due, beak_trimming_due, manual_practice_due, flock_movement_due, egg_collection_due y mortality_due.
           example: medication_due
         urgencia: {$ref: '#/components/schemas/Urgencia'}
         modulo: {$ref: '#/components/schemas/Modulo'}

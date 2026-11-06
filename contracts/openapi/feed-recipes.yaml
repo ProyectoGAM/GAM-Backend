@@ -30,7 +30,7 @@ paths:
     get:
       operationId: getFeedCoverageAlertThresholds
       summary: Consulta los umbrales de alerta de cobertura por unidad productiva
-      description: Requiere can_view_feed_stock. Las cuentas de dispositivo consultan su propia unidad.
+      description: Requiere can_view_feed_stock o can_manage_alert_thresholds. Las cuentas de dispositivo consultan su propia unidad.
       responses:
         '200': {$ref: '#/components/responses/FeedCoverageThresholds'}
         '401': {description: Sesión inválida}
@@ -38,8 +38,8 @@ paths:
         '404': {description: Unidad productiva no disponible}
     put:
       operationId: updateFeedCoverageAlertThresholds
-      summary: Guarda ambos umbrales de alerta de cobertura
-      description: Requiere can_manage_feed_minimums. La evaluación programada aplica los cambios en su próxima ejecución.
+      summary: Guarda los umbrales de alerta de cobertura
+      description: Requiere can_manage_alert_thresholds o can_manage_feed_minimums. La evaluación programada aplica los cambios en su próxima ejecución.
       requestBody:
         required: true
         content:
@@ -646,6 +646,7 @@ components:
       properties:
         dias_aviso: {type: integer, minimum: 1, maximum: 365, default: 7, description: Genera el aviso medio cuando la cobertura es menor a este valor}
         dias_urgencia: {type: integer, minimum: 0, maximum: 364, default: 2, description: Genera el aviso alto cuando la cobertura es menor o igual a este valor. Debe ser menor que dias_aviso.}
+        dias_aviso_bajo: {type: [integer, 'null'], minimum: 2, maximum: 365, description: Genera el nivel bajo cuando la cobertura es menor a este valor y no alcanza el nivel medio. Debe ser mayor que dias_aviso. Nulo lo deshabilita y omitirlo conserva el valor actual.}
     StockSignedGrams:
       description: "Gramos enteros exactos dentro del rango del inventario decimal(18,6); no floats, fracciones ni notación científica. Máximo absoluto 999999999999."
       oneOf: [{"type":"integer","format":"int64","minimum":-999999999999,"maximum":999999999999},{"type":"string","pattern":"^-?[0-9]+$"}]
@@ -950,7 +951,7 @@ components:
                 allOf:
                   - {$ref: '#/components/schemas/FeedCoverageThresholdsInput'}
                   - type: object
-                    required: [unidad_productiva_id]
+                    required: [unidad_productiva_id, dias_aviso_bajo]
                     properties:
                       unidad_productiva_id: {type: integer}
     FeedOperationResponse:

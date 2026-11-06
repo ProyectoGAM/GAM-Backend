@@ -40,7 +40,7 @@ final class WeighingContractTest extends TestCase
         }
 
         // Verificación: no hay rutas públicas sin documentar ni operaciones sobrantes.
-        $this->assertCount(14, $actual);
+        $this->assertCount(16, $actual);
         $this->assertEqualsCanonicalizing($expected, $actual);
     }
 
@@ -71,6 +71,8 @@ final class WeighingContractTest extends TestCase
             'total_weight' => ['value' => '20.0', 'unit' => 'g'],
             'average_weight' => ['value' => '20.000000', 'unit' => 'g'],
             'outside_expected_range' => false,
+            'anomaly_reviewed_at' => null,
+            'anomaly_reviewed_by' => null,
             'version' => 1,
             'created_by' => 1,
             'measurements' => [],

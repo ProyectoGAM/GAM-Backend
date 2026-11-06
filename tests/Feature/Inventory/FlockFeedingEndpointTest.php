@@ -121,6 +121,7 @@ final class FlockFeedingEndpointTest extends LotsTestCase
         $this->assertSame($unit->id, $notice->production_unit_id);
         $this->assertSame('medio', $notice->urgency->value);
         $this->assertSame('management_plans', $notice->module);
+        $this->assertSame('/administracion/inventario/existencias/raciones', $notice->target_path);
         $this->patchJson('/api/v1/notificaciones/'.$notice->public_id.'/lectura')->assertOk();
 
         // Evaluación: dos días exactos elevan el mismo aviso a alto y vuelven a marcarlo como no leído.
@@ -153,6 +154,75 @@ final class FlockFeedingEndpointTest extends LotsTestCase
         $this->artisan('alimentacion:evaluar-cobertura')->assertExitCode(0);
         $this->assertSame(2, (clone $alerts)->count());
         $this->assertSame('alto', (clone $alerts)->whereNull('resolved_at')->sole()->urgency->value);
+
+        // Solicitud: habilita el nivel bajo y comprueba que la actualización anterior conserva el valor opcional.
+        $this->putJson($settings, ['dias_aviso' => 9, 'dias_urgencia' => 3, 'dias_aviso_bajo' => 12])
+            ->assertOk()->assertJsonPath('data.dias_aviso_bajo', 12);
+        $this->putJson($settings, ['dias_aviso' => 9, 'dias_urgencia' => 3])->assertOk()->assertJsonPath('data.dias_aviso_bajo', 12);
+        $balance->forceFill(['quantity_grams' => 100000])->save();
+        $this->artisan('alimentacion:evaluar-cobertura')->assertExitCode(0);
+        $this->assertSame('bajo', (clone $alerts)->whereNull('resolved_at')->sole()->urgency->value);
+    }
+
+    // Flujo: la ración manual escala a los 21 y 29 días y una confirmación reinicia el plazo.
+    public function test_manual_feeding_review_escalates_and_confirmation_preserves_the_ration(): void
+    {
+        // Preparación: crea un lote en automático con permisos para operar y configurar alertas.
+        $start = CarbonImmutable::parse('2026-10-05 12:00', 'America/Montevideo');
+        $this->travelTo($start);
+        $actor = $this->signIn(['can_manage_flocks', 'can_view_notifications', 'can_manage_alert_thresholds']);
+        $flock = $this->admitted();
+        $path = $this->feedingUrl($flock);
+        $confirmationPath = $path.'/manual/confirmacion';
+        $alerts = AppNotification::query()->where('type', 'manual_feeding_review_due');
+
+        // Request: una pauta automática no se puede confirmar.
+        $automatic = $this->getJson('/api/v1'.$path)->assertOk()->json('data.id');
+        $this->command('POST', $confirmationPath, ['configuracion_id' => $automatic])->assertConflict();
+        $original = $this->command('POST', $path.'/manual', ['cantidad_diaria_g' => '6000'])->assertCreated()->json('data.feeding.id');
+
+        // Consulta: verifica el límite inicial y la ruta directa a Alimentación.
+        $this->travelTo($start->addDays(20));
+        $this->artisan('alimentacion:evaluar-revision-manual')->assertSuccessful();
+        $this->assertSame(0, (clone $alerts)->count());
+        $this->travelTo($start->addDays(21));
+        $this->artisan('alimentacion:evaluar-revision-manual')->assertSuccessful();
+        $notice = (clone $alerts)->sole();
+        $this->getJson('/api/v1/notificaciones/'.$notice->public_id)->assertOk()
+            ->assertJsonPath('data.urgencia', 'medio')
+            ->assertJsonPath('data.entidad.ruta', '/administracion/lotes/lotes/'.$flock->public_id.'/alimentacion');
+
+        // Mutación: guardar la misma pauta conserva la fecha y una configuración anterior no se puede confirmar.
+        $current = $this->command('POST', $path.'/manual', ['cantidad_diaria_g' => '6000'])->assertCreated()->json('data.feeding.id');
+        $this->command('POST', $confirmationPath, ['configuracion_id' => $original])->assertConflict();
+        $this->travelTo($start->addDays(28));
+        $this->artisan('alimentacion:evaluar-revision-manual')->assertSuccessful();
+        $this->assertSame('medio', $notice->refresh()->urgency->value);
+        $this->travelTo($start->addDays(29));
+        $this->artisan('alimentacion:evaluar-revision-manual')->assertSuccessful();
+        $this->assertSame('alto', $notice->refresh()->urgency->value);
+
+        // Request: confirma una sola vez, conserva la cantidad y resuelve el aviso inmediatamente.
+        $key = (string) Str::uuid();
+        $receipt = $this->command('POST', $confirmationPath, ['configuracion_id' => $current], $key)->assertCreated()
+            ->assertJsonPath('data.confirmacion.cantidad_diaria_g', '6000')
+            ->assertJsonPath('data.confirmacion.confirmada_por', $actor->id);
+        $this->command('POST', $confirmationPath, ['configuracion_id' => $current], $key)->assertCreated()
+            ->assertJsonPath('data.operation_id', $receipt->json('data.operation_id'));
+        $this->assertSame(1, AuditEntry::query()->where('event', 'flock_feeding_manual_confirmed')->count());
+        $this->assertNotNull($notice->refresh()->resolved_at);
+        $this->getJson('/api/v1'.$path)->assertOk()->assertJsonPath('data.id', $current)
+            ->assertJsonPath('data.cantidad_diaria_g', '6000')->assertJsonPath('data.confirmada_por', $actor->id);
+
+        // Request: configura una escala más corta y comprueba que el plazo vuelve a correr desde la confirmación.
+        $settings = '/api/v1/unidades-productivas/'.$flock->production_unit_id.'/umbrales-alertas/manual_feeding_review_due';
+        $this->putJson($settings, ['bajo' => null, 'medio' => 2, 'alto' => 4])->assertOk();
+        $this->travelTo($start->addDays(31));
+        $this->artisan('alimentacion:evaluar-revision-manual')->assertSuccessful();
+        $this->assertSame('medio', (clone $alerts)->whereNull('resolved_at')->sole()->urgency->value);
+        $this->command('POST', $path.'/manual', ['cantidad_diaria_g' => '6200'])->assertCreated();
+        $this->artisan('alimentacion:evaluar-revision-manual')->assertSuccessful();
+        $this->assertSame(0, (clone $alerts)->whereNull('resolved_at')->count());
     }
 
     // Una nueva etapa cambia la receta evaluada aunque todavía no exista una cuenta de saldo.

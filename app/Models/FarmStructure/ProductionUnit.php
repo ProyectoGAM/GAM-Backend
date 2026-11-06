@@ -25,6 +25,8 @@ use Illuminate\Support\Str;
  * @property ProductionUnitStatus $status
  * @property int $feed_coverage_warning_days
  * @property int $feed_coverage_urgent_days
+ * @property int|null $feed_coverage_low_days
+ * @property array<string, array{bajo: ?int, medio: ?int, alto: int}>|null $alert_timing_thresholds
  * @property int|null $poultry_houses_count
  * @property-read Locality|null $locality
  * @property-read Carbon $created_at
@@ -45,6 +47,8 @@ class ProductionUnit extends Model
             'status' => ProductionUnitStatus::class,
             'feed_coverage_warning_days' => 'integer',
             'feed_coverage_urgent_days' => 'integer',
+            'feed_coverage_low_days' => 'integer',
+            'alert_timing_thresholds' => 'array',
         ];
     }
 

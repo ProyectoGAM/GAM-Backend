@@ -33,6 +33,11 @@ return [
             'description' => 'Ver y marcar como leídas las notificaciones propias.',
             'requires' => [], 'admin_only' => false,
         ],
+        'can_manage_alert_thresholds' => [
+            'module' => 'notifications', 'label' => 'Configurar umbrales de alertas',
+            'description' => 'Consultar y configurar los días de cada nivel de alerta por unidad productiva.',
+            'requires' => ['can_view_notifications'], 'admin_only' => false,
+        ],
         'can_view_admin_dashboard' => [
             'module' => 'identity', 'label' => 'Ver inicio administrativo',
             'description' => 'Acceder al inicio del área de administración.',

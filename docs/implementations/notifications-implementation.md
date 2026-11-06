@@ -22,6 +22,8 @@ En `GET /api/v1/notificaciones`, el filtro `estado_resolucion=vigente` incluye a
 
 ## Entrega y autorización
 
+La bandeja usa `entidad.ruta` para abrir Alimentación en revisiones de ración manual, Postura en avisos de falta de recolección, Pesajes en anomalías de peso, el plan vigente del lote en actividades programadas y Existencias de raciones en cobertura de stock. Una migración completa las rutas faltantes de actividades programadas y cobertura de stock. Cada pantalla aplica sus propios permisos.
+
 Después de confirmar la escritura, Laravel envía `notifications.changed` a Reverb mediante la cola Redis existente. Angular/Ionic recibe la señal con Echo y consulta la API para actualizar la bandeja y el contador. La conexión transporta una señal vacía. La API entrega el contenido y verifica destinatario, permiso y UP. Abrir la app, volver a primer plano o suscribirse de nuevo recupera las notificaciones persistidas.
 
 Cada sesión usa un canal privado propio. El endpoint de suscripción usa Sanctum y las mismas verificaciones de sesión, permisos y equipo que la bandeja. Antes de emitir se excluyen sesiones expiradas o revocadas y, en equipos compartidos, sesiones inactivas o con una generación o UP inválida.

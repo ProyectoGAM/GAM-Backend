@@ -28,6 +28,8 @@ final readonly class EvaluateFeedCoverageAlertsAction
 
     private const string MODULE = 'management_plans';
 
+    private const string TARGET_PATH = '/administracion/inventario/existencias/raciones';
+
     public function __construct(
         private FlockFeedingResolver $feeding,
         private PublishNotificationAction $publish,
@@ -80,6 +82,7 @@ final readonly class EvaluateFeedCoverageAlertsAction
                         productionUnitId: $unitId,
                         entityType: 'feed_recipe',
                         entityId: (string) $recipeId,
+                        targetPath: self::TARGET_PATH,
                         urgency: $shortage['urgency'],
                         module: self::MODULE,
                         isAlert: true,
@@ -100,17 +103,25 @@ final readonly class EvaluateFeedCoverageAlertsAction
 
         foreach ($demand as $recipeId => $dailyGrams) {
             $stock = BigInteger::of(max(0, (int) ($balances[$recipeId] ?? 0)));
-            if ($stock->isGreaterThanOrEqualTo($dailyGrams->multipliedBy($unit->feed_coverage_warning_days))) {
+            $urgency = match (true) {
+                $stock->isLessThanOrEqualTo($dailyGrams->multipliedBy($unit->feed_coverage_urgent_days)) => NotificationUrgency::High,
+                $stock->isLessThan($dailyGrams->multipliedBy($unit->feed_coverage_warning_days)) => NotificationUrgency::Medium,
+                $unit->feed_coverage_low_days !== null && $stock->isLessThan($dailyGrams->multipliedBy($unit->feed_coverage_low_days)) => NotificationUrgency::Low,
+                default => null,
+            };
+            if ($urgency === null) {
                 continue;
             }
 
-            $urgent = $stock->isLessThanOrEqualTo($dailyGrams->multipliedBy($unit->feed_coverage_urgent_days));
+            $description = match ($urgency) {
+                NotificationUrgency::High => "{$unit->feed_coverage_urgent_days} días o menos",
+                NotificationUrgency::Medium => "menos de {$unit->feed_coverage_warning_days} días",
+                NotificationUrgency::Low => "menos de {$unit->feed_coverage_low_days} días",
+            };
             $shortages[$recipeId] = [
-                'urgency' => $urgent ? NotificationUrgency::High : NotificationUrgency::Medium,
-                'title' => $urgent ? 'Cobertura urgente de ración' : 'Cobertura baja de ración',
-                'message' => $urgent
-                    ? "La ración «{$recipes[$recipeId]}» en «{$unit->name}» alcanza para {$unit->feed_coverage_urgent_days} días o menos."
-                    : "La ración «{$recipes[$recipeId]}» en «{$unit->name}» alcanza para menos de {$unit->feed_coverage_warning_days} días.",
+                'urgency' => $urgency,
+                'title' => $urgency === NotificationUrgency::High ? 'Cobertura urgente de ración' : 'Cobertura baja de ración',
+                'message' => "La ración «{$recipes[$recipeId]}» en «{$unit->name}» alcanza para {$description}.",
             ];
         }
 
@@ -151,10 +162,10 @@ final readonly class EvaluateFeedCoverageAlertsAction
     /** @param array{urgency: NotificationUrgency, title: string, message: string} $shortage */
     private function updateNotice(AppNotification $notice, array $shortage): void
     {
-        if ($notice->urgency === NotificationUrgency::Medium && $shortage['urgency'] === NotificationUrgency::High) {
+        if ($shortage['urgency']->rank() > $notice->urgency->rank()) {
             $notice->read_at = null;
         }
-        $notice->fill($shortage);
+        $notice->fill(['target_path' => self::TARGET_PATH, ...$shortage]);
 
         if ($notice->isDirty()) {
             $notice->save();

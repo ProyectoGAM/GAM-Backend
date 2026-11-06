@@ -228,7 +228,7 @@ final class NotificationEndpointTest extends TestCase
         $unit = ProductionUnit::factory()->create();
         $otherUnit = ProductionUnit::factory()->create();
         $user = User::factory()->devicePin($unit)->create();
-        $user->roles()->firstOrFail()->givePermissionTo(['can_login_shared', 'can_view_notifications']);
+        $user->roles()->firstOrFail()->givePermissionTo(['can_login_shared', 'can_view_notifications', 'can_manage_alert_thresholds']);
         $secret = 'notification-device-test-secret';
         $device = SharedDevice::query()->create([
             'name' => 'Equipo de prueba', 'production_unit_id' => $unit->id, 'credential_hash' => hash('sha256', $secret),
@@ -250,6 +250,14 @@ final class NotificationEndpointTest extends TestCase
         $channels = app(NotificationChannel::class);
         $this->assertCount(1, $channels->forRecipient($user->id, $unit->id));
         $this->assertSame([], $channels->forRecipient($user->id, $otherUnit->id));
+
+        // Solicitud: el permiso de configuración permite editar solo la unidad de la sesión.
+        $ownThresholds = '/api/v1/unidades-productivas/'.$unit->id.'/umbrales-alertas/daily_egg_collection_missing';
+        $foreignThresholds = '/api/v1/unidades-productivas/'.$otherUnit->id.'/umbrales-alertas/daily_egg_collection_missing';
+        $thresholds = ['bajo' => 2, 'medio' => 4, 'alto' => 8];
+        $this->putJson($ownThresholds, $thresholds)->assertOk()->assertJsonPath('data.alto', 8);
+        $this->getJson($foreignThresholds)->assertNotFound();
+        $this->putJson($foreignThresholds, $thresholds)->assertNotFound();
 
         // Mutación: cambia la generación del dispositivo y comprueba el descarte del canal.
         $device->increment('session_generation');

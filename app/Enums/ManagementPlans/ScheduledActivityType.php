@@ -17,15 +17,6 @@ enum ScheduledActivityType: string
         return $this === self::BeakTrimming ? self::ManualPractice->value : $this->value;
     }
 
-    public function warningDays(): int
-    {
-        return match ($this) {
-            self::Vaccination, self::Medication => 7,
-            self::BeakTrimming => 3,
-            default => 0,
-        };
-    }
-
     public function title(): string
     {
         return match ($this) {

@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Lots;
 
 use App\Actions\Lots\AddDailyWeighingEntryAction;
+use App\Actions\Lots\ConfirmWeighingAnomalyAction;
 use App\Actions\Lots\DeleteDailyWeighingEntryAction;
 use App\Http\Requests\Lots\AddDailyWeighingEntryRequest;
+use App\Http\Requests\Lots\ConfirmWeighingAnomalyRequest;
 use App\Http\Requests\Lots\DailyWeighingDistributionRequest;
 use App\Http\Requests\Lots\DeleteDailyWeighingEntryRequest;
 use App\Http\Requests\Lots\ListDailyWeighingsRequest;
@@ -57,6 +59,15 @@ final readonly class DailyWeighingController
     {
         abort_unless($ingreso->daily_weighing_id === $jornada->id, 404);
         $operation = $action->execute($jornada, $ingreso, $request->attributesForAction(), $request->actor());
+
+        return response()->json(['data' => ['operation_id' => $operation->operation_id, ...$operation->result]]);
+    }
+
+    public function confirmAnomaly(ConfirmWeighingAnomalyRequest $request, DailyWeighing $jornada, DailyWeighingEntry $ingreso, ConfirmWeighingAnomalyAction $action): JsonResponse
+    {
+        abort_unless($ingreso->daily_weighing_id === $jornada->id, 404);
+        $data = $request->attributesForAction();
+        $operation = $action->daily($jornada, $ingreso, $data['version'], $data['idempotency_key'], $request->actor());
 
         return response()->json(['data' => ['operation_id' => $operation->operation_id, ...$operation->result]]);
     }

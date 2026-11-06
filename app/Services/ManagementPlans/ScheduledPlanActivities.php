@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * @phpstan-type Execution array{id: int, flock_id: int, activity_id: string, catalog_id: ?int, practice_type: ?string, local_day: string, recorded_at: string, record_order: int, invalidated_at: ?string, invalidation_order: int}
- * @phpstan-type Pending array{entity_id: string, activity: string, flock: string, due: CarbonImmutable, invalidated: bool}
+ * @phpstan-type Pending array{entity_id: string, activity: string, flock: string, flock_id: string, due: CarbonImmutable, invalidated: bool}
  */
 final class ScheduledPlanActivities
 {
@@ -152,7 +152,8 @@ final class ScheduledPlanActivities
                     $key = $type->value.':'.$ids[array_key_last($ids)].':'.$due->toDateString();
                     yield $key => [
                         'entity_id' => $activity->public_id, 'activity' => $activity->title,
-                        'flock' => $plan->flock->code, 'due' => $due, 'invalidated' => isset($invalidated[$index]),
+                        'flock' => $plan->flock->code, 'flock_id' => $plan->flock->public_id,
+                        'due' => $due, 'invalidated' => isset($invalidated[$index]),
                     ];
                 }
             }

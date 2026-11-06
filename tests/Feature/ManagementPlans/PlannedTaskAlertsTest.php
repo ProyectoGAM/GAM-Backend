@@ -211,5 +211,6 @@ final class PlannedTaskAlertsTest extends LotsTestCase
         $notice = AppNotification::query()->sole();
         $this->assertSame('beak_trimming_due', $notice->type);
         $this->assertSame($activity->public_id, $notice->entity_id);
+        $this->assertSame('/administracion/manejo-lotes/planes/lotes/'.$flock->public_id, $notice->target_path);
     }
 }

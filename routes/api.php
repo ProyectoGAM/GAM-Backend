@@ -48,6 +48,7 @@ use App\Http\Controllers\ManagementPlans\FlockManagementHistoryController;
 use App\Http\Controllers\ManagementPlans\FlockPlanController;
 use App\Http\Controllers\ManagementPlans\ManagementExecutionController;
 use App\Http\Controllers\ManagementPlans\PlanTemplateController;
+use App\Http\Controllers\Notifications\AlertTimingThresholdController;
 use App\Http\Controllers\Notifications\NotificationController;
 use App\Http\Controllers\ReferenceData\ReferenceOptionsController;
 use App\Http\Controllers\ReportingAndAnalytics\ReportExportController;
@@ -103,6 +104,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/{notificacion}', [NotificationController::class, 'show'])->whereUlid('notificacion')->name('show');
             Route::patch('/{notificacion}/lectura', [NotificationController::class, 'markRead'])->whereUlid('notificacion')->name('read');
         });
+        Route::get('/unidades-productivas/{productionUnit}/umbrales-alertas/{alertType}', [AlertTimingThresholdController::class, 'show'])->name('notifications.thresholds.show');
+        Route::put('/unidades-productivas/{productionUnit}/umbrales-alertas/{alertType}', [AlertTimingThresholdController::class, 'update'])->name('notifications.thresholds.update');
         Route::patch('/auth/contrasena', [OwnCredentialController::class, 'update'])->defaults('credential', 'password')->middleware('throttle:credentials')->name('auth.password.update');
         Route::patch('/auth/pin', [OwnCredentialController::class, 'update'])->defaults('credential', 'access_pin')->middleware('throttle:credentials')->name('auth.pin.update');
         Route::put('/auth/pin-operativo', [OwnCredentialController::class, 'update'])->defaults('credential', 'operation_pin')->middleware('throttle:credentials')->name('auth.operation-pin.update');
@@ -181,6 +184,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/lotes/{lote}/pesajes-diarios/ingresos', [DailyWeighingController::class, 'storeEntry'])->name('daily.entries.store');
             Route::get('/pesajes-diarios/{jornada}/distribucion', [DailyWeighingController::class, 'distribution'])->name('daily.distribution');
             Route::delete('/pesajes-diarios/{jornada}/ingresos/{ingreso}', [DailyWeighingController::class, 'deleteEntry'])->name('daily.entries.delete');
+            Route::post('/pesajes-diarios/{jornada}/ingresos/{ingreso}/confirmacion-anomalia', [DailyWeighingController::class, 'confirmAnomaly'])->name('daily.entries.confirm-anomaly');
             Route::get('/pesajes-diarios/{jornada}', [DailyWeighingController::class, 'show'])->name('daily.show');
             Route::get('/configuracion-pesajes', [WeighingController::class, 'settings'])->name('settings.show');
             Route::put('/configuracion-pesajes', [WeighingController::class, 'updateSettings'])->name('settings.update');
@@ -190,6 +194,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/pesajes/{pesaje}/distribucion', [WeighingController::class, 'distribution'])->name('distribution');
             Route::get('/pesajes/{pesaje}', [WeighingController::class, 'show'])->name('show');
             Route::patch('/pesajes/{pesaje}', [WeighingController::class, 'update'])->name('update');
+            Route::post('/pesajes/{pesaje}/confirmacion-anomalia', [WeighingController::class, 'confirmAnomaly'])->name('confirm-anomaly');
         });
 
         Route::name('lots.')->group(function (): void {
@@ -402,6 +407,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/lotes/{flock}/alimentacion', [FlockFeedingController::class, 'show'])->name('feeding.show');
             Route::get('/lotes/{flock}/alimentacion/historial', [FlockFeedingController::class, 'history'])->name('feeding.history');
             Route::post('/lotes/{flock}/alimentacion/manual', [FlockFeedingController::class, 'manual'])->name('feeding.manual');
+            Route::post('/lotes/{flock}/alimentacion/manual/confirmacion', [FlockFeedingController::class, 'confirmManual'])->name('feeding.manual.confirm');
             Route::post('/lotes/{flock}/alimentacion/automatico', [FlockFeedingController::class, 'automatic'])->name('feeding.automatic');
             Route::get('/lotes/{flock}/consumos-alimento', [FeedConsumptionController::class, 'index'])->name('consumptions.index');
             Route::get('/lotes/{flock}/consumos-alimento/{consumption}', [FeedConsumptionController::class, 'show'])->whereNumber('consumption')->name('consumptions.show');

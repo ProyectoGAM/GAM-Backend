@@ -18,6 +18,8 @@ $cleanupSchedule->withoutOverlapping()->onOneServer();
 
 Schedule::command('alimentacion:consumir')->dailyAt('00:00')->timezone('America/Montevideo')->withoutOverlapping()->onOneServer();
 Schedule::command('alimentacion:evaluar-cobertura')->everyFiveMinutes()->withoutOverlapping(30)->onOneServer();
+Schedule::command('alimentacion:evaluar-revision-manual')->everyFiveMinutes()->withoutOverlapping(30)->onOneServer();
 Schedule::command('manejo:evaluar-sanidad')->everyFiveMinutes()->withoutOverlapping(30)->onOneServer();
 Schedule::command('manejo:evaluar-tareas')->everyFiveMinutes()->withoutOverlapping(30)->onOneServer();
+Schedule::command('lotes:evaluar-recolecciones-diarias')->everyFiveMinutes()->withoutOverlapping(30)->onOneServer();
 Schedule::command('app:recover-pending-report-exports')->everyFiveMinutes()->withoutOverlapping()->onOneServer();

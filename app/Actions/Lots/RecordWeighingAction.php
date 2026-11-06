@@ -17,6 +17,7 @@ use App\Services\Lots\FlockState;
 use App\Services\Lots\LotsHistory;
 use App\Services\Lots\LotsSnapshots;
 use App\Services\Lots\RunLotsCommand;
+use App\Services\Lots\WeighingAnomalyAlerts;
 use App\Services\Lots\WeighingBuilder;
 use App\Services\Lots\WeighingFlockProjection;
 use App\Services\Lots\WeighingPresenter;
@@ -37,6 +38,7 @@ final readonly class RecordWeighingAction
         private LotsSnapshots $snapshots,
         private Clock $clock,
         private PlanActivityLinker $planActivities,
+        private WeighingAnomalyAlerts $anomalyAlerts,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -102,6 +104,9 @@ final readonly class RecordWeighingAction
                 $this->saveMeasurements($weighing, $built['measurements']);
                 $after = $this->presenter->weighing($weighing->fresh(['flock', 'measurements']));
                 $this->history->audit($weighing, $actor, 'weighing_recorded', 'Pesaje registrado', $operationId, [], $after, $built['production_unit_id'], $source);
+                if ($weighing->outside_expected_range) {
+                    $this->anomalyAlerts->publish($weighing->setRelation('flock', $locked), $operationId);
+                }
                 $this->activities->record($locked, $operationId, 'weighing', 'weighing.record');
                 event(new WeighingRecorded($operationId, [$locked->public_id], $actor->id));
 

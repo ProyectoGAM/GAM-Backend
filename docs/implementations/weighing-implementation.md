@@ -30,6 +30,14 @@ Cada recurso independiente de `/pesajes` fotografía la configuración aplicada:
 
 La migración [add_breed_weighing_ranges_and_reference_origin](../../database/migrations/2026_10_09_064128_add_breed_weighing_ranges_and_reference_origin.php) agrega rangos opcionales en `breeds` y la procedencia de la referencia en `weighings` y `daily_weighings`. Las razas preexistentes tienen los cuatro límites en `null` y siguen heredando los valores globales. Los pesajes anteriores conservan su snapshot; cuando su procedencia no estaba almacenada, la API la presenta como `global`.
 
+## Revisión posterior de un pesaje anómalo
+
+Guardar un pesaje independiente con filas fuera de rango emite un aviso `weighing_anomaly` de urgencia `alto` por destinatario para el pesaje completo. `entidad.id` contiene el identificador de `/api/v1/pesajes/{pesaje}` y `entidad.ruta` abre la sección Pesajes del lote.
+
+`POST /api/v1/pesajes/{pesaje}/confirmacion-anomalia` requiere `can_manage_weighings`, `Idempotency-Key` y el `version` vigente. Devuelve el pesaje con `anomaly_reviewed_at` y `anomaly_reviewed_by`. La confirmación deja constancia de quién revisó los valores fuera de rango, audita el cambio y resuelve el aviso para todos sus destinatarios. Una rectificación con nuevos valores anómalos o con otro lote, fecha o modalidad requiere una nueva revisión. Si una rectificación elimina todas las anomalías, resuelve el aviso anterior. Las observaciones pueden corregirse conservando la revisión.
+
+Las columnas nuevas son anulables y la migración conserva los pesajes anteriores. [Flujo de revisión de ingresos diarios](daily-weighing-implementation.md#revisión-de-anomalías)
+
 ## Unidades, precisión y fórmulas
 
 Los cálculos exactos usan `Brick\Math\BigDecimal`; no se usa `float` para conversión, sumas, promedios, rangos, varianza ni bins. La evaluación de `exp()` de la densidad normal es la única parte necesariamente flotante.
