@@ -118,6 +118,14 @@ Verificados PHP 8.5.10, Laravel 13.29.0, PostgreSQL 18.4, Sanctum 4.3.3, Permiss
 
 Boost MCP no está expuesto en esta sesión; se inspeccionó el esquema con Artisan y se consultó la documentación oficial de [validación](https://laravel.com/framework/docs/13.x/validation) y [transacciones](https://laravel.com/framework/docs/13.x/database), además de los patrones de pruebas existentes.
 
+## Avisos de medicación del Plan de Manejo
+
+La tarea `manejo:evaluar-sanidad` evalúa medicamentos y vacunas cada cinco minutos. Una medicación programada pendiente genera un aviso `medio` entre siete y un día antes de la fecha prevista. Desde el día previsto es `alto`. Al escalar conserva el ID del aviso y vuelve a figurar sin leer.
+
+La evaluación usa el plan vigente de cada lote y toma el último día del período cuando la actividad se programa por semana o por rango cerrado. Una aplicación válida del mismo lote, vinculada a la actividad y al medicamento de catálogo cuando se especifica, resuelve el aviso en el siguiente ciclo. Si se anula esa aplicación y la dosis sigue pendiente, se publica otro aviso y se conserva el anterior como resuelto. Para pautas recurrentes, cada día con aplicación válida cubre la fecha pendiente más antigua.
+
+La bandeja devuelve `tipo: medication_due`, `modulo: management_plans` y la actividad de origen en `entidad`. Los destinatarios requieren permisos para consultar Planes de Manejo y notificaciones, con alcance por UP para las cuentas PIN. La bandeja se actualiza mediante `notifications.changed`. [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)
+
 ## Aplicaciones sanitarias sin cantidad ni stock
 
 Cambio del 30/10/2026, compartido por medicamentos y vacunas. Los endpoints `POST /api/v1/flocks/{flock}/medicaciones` y `POST /api/v1/flocks/{flock}/vacunaciones` crean únicamente un registro sanitario. No requieren existencia, cantidad aplicada, ubicación de inventario ni saldo clínico. Enviar `quantity` o `stock_consumption` con contenido devuelve 422; las Actions también bloquean esos campos en llamadas internas, incluso si se habilita la bandera futura de sanidad.

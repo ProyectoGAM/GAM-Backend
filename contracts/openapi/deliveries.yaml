@@ -103,6 +103,7 @@ paths:
     post:
       tags: [Repartos]
       summary: Inicia un reparto y reserva la carga de huevos
+      description: Una carga inicial que deja negativo el stock de huevos de su UP abre o actualiza la alerta alta de Inventario.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -185,7 +186,12 @@ paths:
     post:
       tags: [Repartos]
       summary: Registra una visita y contabiliza cargo y pago de forma transaccional
-      description: Nuevas entregas requieren accounting_version 2, client_event_id igual a Idempotency-Key y payment explícito. Una cola vieja no confirmada exige revisión con 409; su ausencia de cobro no significa fiado. Los replays confirmados conservan su resultado sin generar deuda nueva.
+      description: >-
+        Nuevas entregas requieren accounting_version 2, client_event_id igual a Idempotency-Key y payment explícito.
+        Una cola vieja no confirmada exige revisión con 409 porque la ausencia de cobro no significa fiado.
+        Los reintentos confirmados conservan su resultado sin generar deuda nueva. Se admite entregar más huevos de
+        los cargados en presentaciones del reparto. El saldo negativo del reparto genera una alerta alta separada
+        de la alerta de stock de la UP.
       security: [{ bearerAuth: [] }]
       parameters:
         - { name: reparto, in: path, required: true, schema: { type: string } }
@@ -237,6 +243,7 @@ paths:
     post:
       tags: [Repartos]
       summary: Agrega una carga de huevos durante un reparto activo y actualiza inventario
+      description: Si la carga deja negativo el stock de huevos de su UP, abre o actualiza la alerta alta de Inventario.
       security: [{ bearerAuth: [] }]
       parameters:
         - { name: reparto, in: path, required: true, schema: { type: string } }
@@ -290,6 +297,9 @@ paths:
     post:
       tags: [Repartos]
       summary: Cierra el reparto y registra el sobrante como devolución al stock
+      description: >-
+        Una devolución de huevos sobrantes genera una alerta baja. Si las entregas y devoluciones superan
+        la carga, el cierre conserva el saldo negativo y genera una alerta alta del reparto.
       security: [{ bearerAuth: [] }]
       parameters:
         - { name: reparto, in: path, required: true, schema: { type: string } }
@@ -426,7 +436,7 @@ components:
         loaded_amount: { type: string, description: Cantidad exacta en esta presentación }
         delivered_amount: { type: string, description: Cantidad entregada en esta presentación }
         returned_amount: { type: string, description: Cantidad descargada al cerrar en esta presentación }
-        remaining_amount: { type: string, nullable: true, description: Nulo si existen entregas o devoluciones antiguas sin presentación }
+        remaining_amount: { type: string, nullable: true, description: Saldo con signo de la presentación. Nulo si existen entregas o devoluciones antiguas sin presentación. }
         loaded_eggs: { type: integer }
         delivered_eggs: { type: integer }
     DeliveryUnitBalances:
@@ -498,7 +508,7 @@ components:
     CloseDelivery:
       type: object
       required: [pin]
-      description: Enviar returned_items para la descarga por presentaciones. La descarga debe incluir todos los huevos sobrantes para cerrar el reparto. returned_quantity se conserva para cierres anteriores sin desglose; no enviar ambos.
+      description: Enviar returned_items para la descarga por presentaciones. Para cerrar, el saldo final debe ser cero o negativo. returned_quantity se conserva para cierres anteriores sin desglose; no enviar ambos.
       oneOf:
         - required: [returned_items]
         - required: [returned_quantity]
@@ -555,7 +565,7 @@ components:
         financial_summary: { $ref: '#/components/schemas/DeliveryFinancialSummary' }
         closed_financial_summary: { $ref: '#/components/schemas/DeliveryFinancialSummary', nullable: true, description: Snapshot de cierre original; no se reescribe por pagos o correcciones posteriores }
         account_movements: { type: array, items: { $ref: './customers-and-accounts.yaml#/components/schemas/Movement' } }
-        remaining_quantity: { type: integer }
+        remaining_quantity: { type: integer, description: Huevos cargados menos entregados y devueltos. Puede ser negativo. }
         unit_balances: { $ref: '#/components/schemas/DeliveryUnitBalances', description: Disponible cuando se consultan las cargas y visitas del reparto }
         stops_summary: { type: object }
         latest_location: { $ref: '#/components/schemas/DeliveryLocation', nullable: true }

@@ -83,6 +83,8 @@ final readonly class WeighingPresenter
             'total_weight' => ['value' => $total, 'unit' => 'g'],
             'average_weight' => ['value' => $average, 'unit' => 'g'],
             'outside_expected_range' => (bool) ($data['outside_expected_range'] ?? false),
+            'anomaly_reviewed_at' => $this->date($weighing instanceof Weighing ? $weighing->anomaly_reviewed_at : ($data['anomaly_reviewed_at'] ?? null)),
+            'anomaly_reviewed_by' => isset($data['anomaly_reviewed_by']) ? (int) $data['anomaly_reviewed_by'] : null,
             'version' => (int) ($data['version'] ?? 0),
             'created_by' => isset($data['created_by']) ? (int) $data['created_by'] : null,
             'measurements' => $measurements,

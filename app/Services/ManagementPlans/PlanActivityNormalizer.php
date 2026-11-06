@@ -37,6 +37,10 @@ final readonly class PlanActivityNormalizer
         if (($activity['conditional'] ?? false) && empty($activity['condition'])) {
             throw new LotsConflict('Indica la condición de la actividad condicional.');
         }
+        $practiceType = $activity['practice_type'] ?? null;
+        if ($practiceType !== null && ($type !== 'manual_practice' || ! in_array($practiceType, ['beak_trimming', 'nest_placement', 'other'], true))) {
+            throw new LotsConflict('El subtipo solo corresponde a una práctica manual válida.');
+        }
 
         [$catalogType, $catalogId, $catalogSnapshot] = $this->catalog($type, $activity['catalog_ref'] ?? null);
         $grams = null;
@@ -55,6 +59,7 @@ final readonly class PlanActivityNormalizer
 
         return [
             'sort_order' => $sortOrder, 'type' => $type, 'title' => trim($activity['title']),
+            'practice_type' => $practiceType,
             'timing_kind' => $timing, 'start_day' => $startDay, 'end_day' => $endDay,
             'start_week' => $startWeek, 'end_week' => $endWeek, 'interval_days' => $interval,
             'conditional' => (bool) ($activity['conditional'] ?? false),

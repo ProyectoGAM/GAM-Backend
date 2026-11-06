@@ -25,8 +25,19 @@ return [
         'vehicles' => 'Vehículos',
         'feed_stock' => 'Alimento e ingredientes',
         'flock_feeding' => 'Alimentación de lotes',
+        'notifications' => 'Notificaciones',
     ],
     'permissions' => [
+        'can_view_notifications' => [
+            'module' => 'notifications', 'label' => 'Consultar notificaciones',
+            'description' => 'Ver y marcar como leídas las notificaciones propias.',
+            'requires' => [], 'admin_only' => false,
+        ],
+        'can_manage_alert_thresholds' => [
+            'module' => 'notifications', 'label' => 'Configurar umbrales de alertas',
+            'description' => 'Consultar y configurar los días de cada nivel de alerta por unidad productiva.',
+            'requires' => ['can_view_notifications'], 'admin_only' => false,
+        ],
         'can_view_admin_dashboard' => [
             'module' => 'identity', 'label' => 'Ver inicio administrativo',
             'description' => 'Acceder al inicio del área de administración.',
@@ -101,6 +112,16 @@ return [
             'module' => 'management_plans', 'label' => 'Registrar manejos',
             'description' => 'Registrar y corregir aplicaciones sanitarias y prácticas de manejo.',
             'requires' => ['can_view_management_plans'], 'admin_only' => false,
+        ],
+        'can_record_beak_trimming' => [
+            'module' => 'management_plans', 'label' => 'Registrar despique',
+            'description' => 'Registrar un despique realizado en un lote.',
+            'requires' => ['can_execute_management_plans'], 'admin_only' => false,
+        ],
+        'can_reverse_beak_trimming' => [
+            'module' => 'management_plans', 'label' => 'Invalidar registro de despique',
+            'description' => 'Invalidar un registro de despique con motivo y conservar el historial.',
+            'requires' => ['can_execute_management_plans'], 'admin_only' => false,
         ],
         'can_manage_medicine_stock' => [
             'module' => 'health', 'label' => 'Ajustar contador de medicamentos',

@@ -12,6 +12,7 @@ use App\Services\Lots\DailyWeighingPresenter;
 use App\Services\Lots\DailyWeighingTotals;
 use App\Services\Lots\LotsHistory;
 use App\Services\Lots\RunLotsCommand;
+use App\Services\Lots\WeighingAnomalyAlerts;
 
 final readonly class DeleteDailyWeighingEntryAction
 {
@@ -21,6 +22,7 @@ final readonly class DeleteDailyWeighingEntryAction
         private DailyWeighingTotals $totals,
         private DailyWeighingPresenter $presenter,
         private LotsHistory $history,
+        private WeighingAnomalyAlerts $anomalyAlerts,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -48,6 +50,9 @@ final readonly class DeleteDailyWeighingEntryAction
                 $this->totals->recalculate($locked);
                 $after = $this->presenter->daily($locked->fresh());
                 $this->history->audit($locked, $actor, 'daily_weighing_entry_deleted', 'Ingreso de pesaje diario eliminado', $operationId, ['daily_weighing' => $before, 'entry' => $entrySnapshot], ['daily_weighing' => $after, 'deleted_entry' => $entrySnapshot], $locked->flock->production_unit_id, reason: $data['reason']);
+                if ($currentEntry->outside_expected_range) {
+                    $this->anomalyAlerts->resolve($currentEntry, $locked->flock->production_unit_id);
+                }
 
                 return ['daily_weighing' => $after, 'deleted_entry_id' => $entry->public_id];
             },

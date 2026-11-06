@@ -4,10 +4,12 @@ namespace App\Models\Vehicles;
 
 use App\Models\User;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 #[Fillable(['plate', 'plate_normalized', 'make', 'model', 'year', 'admitted_at', 'status', 'status_reason', 'capacity_kg', 'habitual_driver_id', 'notes', 'version'])]
@@ -55,6 +57,15 @@ class Vehicle extends Model
     public function readings(): HasMany
     {
         return $this->hasMany(VehicleMeterReading::class);
+    }
+
+    /** @return HasOne<VehicleMeterReading, $this> */
+    public function latestEffectiveOdometer(): HasOne
+    {
+        return $this->readings()->one()->ofMany(
+            ['recorded_at' => 'max', 'id' => 'max'],
+            fn (Builder $query) => $query->effective()->where('meter_type', 'odometer'),
+        );
     }
 
     /** @return HasMany<VehicleFuelEntry, $this> */

@@ -136,6 +136,38 @@ paths:
         "404": { "$ref": "#/components/responses/NotFound" }
         "409": { "$ref": "#/components/responses/Conflict" }
         "422": { "$ref": "#/components/responses/InvalidInput" }
+  "/pesajes-diarios/{jornada}/ingresos/{ingreso}/confirmacion-anomalia":
+    post:
+      tags: ["Pesajes diarios"]
+      operationId: confirmDailyWeighingEntryAnomaly
+      summary: "Confirma tras revisar una medición anómala de la jornada"
+      description: "Resuelve los avisos de ese ingreso para todos sus destinatarios. Conserva el peso y la marca de anomalía. Requiere la versión vigente de la jornada."
+      security:
+        - bearerAuth: []
+        - sanctumCookie: []
+          csrf: []
+        - bearerAuth: []
+          sharedDeviceHeader: []
+          sharedSessionHeader: []
+        - sanctumCookie: []
+          sharedDeviceCookie: []
+          sharedSessionHeader: []
+          csrf: []
+      x-permission: can_manage_weighings
+      parameters:
+        - "$ref": "#/components/parameters/DailyWeighingPath"
+        - "$ref": "#/components/parameters/DailyWeighingEntryPath"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content: { application/json: { schema: { "$ref": "#/components/schemas/ConfirmWeighingAnomaly" } } }
+      responses:
+        "200": { description: "Jornada e ingreso revisados.", content: { application/json: { schema: { "$ref": "#/components/schemas/DailyWeighingOperationResponse" } } } }
+        "401": { "$ref": "#/components/responses/Unauthenticated" }
+        "403": { "$ref": "#/components/responses/Forbidden" }
+        "404": { "$ref": "#/components/responses/NotFound" }
+        "409": { "$ref": "#/components/responses/Conflict" }
+        "422": { "$ref": "#/components/responses/InvalidInput" }
   "/pesajes-diarios/{jornada}/distribucion":
     get:
       tags: ["Pesajes diarios"]
@@ -283,6 +315,40 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/OperationResponse"
+        "401": { "$ref": "#/components/responses/Unauthenticated" }
+        "403": { "$ref": "#/components/responses/Forbidden" }
+        "404": { "$ref": "#/components/responses/NotFound" }
+        "409": { "$ref": "#/components/responses/Conflict" }
+        "422": { "$ref": "#/components/responses/InvalidInput" }
+  "/pesajes/{pesaje}/confirmacion-anomalia":
+    post:
+      tags: ["Pesajes"]
+      operationId: confirmWeighingAnomaly
+      summary: "Confirma tras revisar los datos anómalos de un pesaje independiente"
+      description: "Confirma los datos fuera de rango del pesaje completo y resuelve sus avisos. Conserva los pesos y sus marcas de anomalía."
+      security:
+        - bearerAuth: []
+        - sanctumCookie: []
+          csrf: []
+        - bearerAuth: []
+          sharedDeviceHeader: []
+          sharedSessionHeader: []
+        - sanctumCookie: []
+          sharedDeviceCookie: []
+          sharedSessionHeader: []
+          csrf: []
+      x-permission: can_manage_weighings
+      parameters:
+        - name: pesaje
+          in: path
+          required: true
+          schema: { type: string }
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content: { application/json: { schema: { "$ref": "#/components/schemas/ConfirmWeighingAnomaly" } } }
+      responses:
+        "200": { description: "Pesaje revisado.", content: { application/json: { schema: { "$ref": "#/components/schemas/OperationResponse" } } } }
         "401": { "$ref": "#/components/responses/Unauthenticated" }
         "403": { "$ref": "#/components/responses/Forbidden" }
         "404": { "$ref": "#/components/responses/NotFound" }
@@ -485,7 +551,7 @@ components:
     DailyWeighingEntry:
       type: object
       additionalProperties: false
-      required: [id, occurred_at, mode, weight_g, bird_count, total_weight_g, average_weight_g, outside_expected_range]
+      required: [id, occurred_at, mode, weight_g, bird_count, total_weight_g, average_weight_g, outside_expected_range, anomaly_reviewed_at, anomaly_reviewed_by]
       properties:
         id: { type: string }
         occurred_at: { type: string, format: date-time, description: "Instante almacenado en UTC." }
@@ -495,6 +561,8 @@ components:
         total_weight_g: { type: string }
         average_weight_g: { type: string }
         outside_expected_range: { type: boolean }
+        anomaly_reviewed_at: { type: [string, "null"], format: date-time, description: "Fecha de la confirmación posterior, si existe." }
+        anomaly_reviewed_by: { type: [integer, "null"], description: "Identificador de quien confirmó la anomalía." }
     DailyWeighing:
       type: object
       required: [id, flock_id, date, status, expected_range, version, represented_bird_count, total_weight_g, average_weight_g, anomalous_entry_count, last_entry]
@@ -568,6 +636,12 @@ components:
       properties:
         version: { type: integer, minimum: 1 }
         reason: { type: string, minLength: 3, maxLength: 1000 }
+    ConfirmWeighingAnomaly:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer, minimum: 1, maximum: 2147483647 }
     DailyWeighingOperationResponse:
       type: object
       required: [data]
@@ -789,7 +863,7 @@ components:
     Weighing:
       type: object
       additionalProperties: false
-      required: [id, flock_id, plan_activity_id, origin_operation_id, poultry_house_id, production_unit_id, mode, occurred_at, unit, captured_unit, notes, stage, expected_range, reference, represented_bird_count, total_weight_g, average_weight_g, total_weight, average_weight, outside_expected_range, version, created_by, measurements]
+      required: [id, flock_id, plan_activity_id, origin_operation_id, poultry_house_id, production_unit_id, mode, occurred_at, unit, captured_unit, notes, stage, expected_range, reference, represented_bird_count, total_weight_g, average_weight_g, total_weight, average_weight, outside_expected_range, anomaly_reviewed_at, anomaly_reviewed_by, version, created_by, measurements]
       properties:
         id: { type: string }
         flock_id: { type: string }
@@ -837,6 +911,8 @@ components:
         total_weight: { type: object }
         average_weight: { type: object }
         outside_expected_range: { type: boolean }
+        anomaly_reviewed_at: { type: [string, "null"], format: date-time, description: "Fecha de la confirmación posterior, si existe." }
+        anomaly_reviewed_by: { type: [integer, "null"], description: "Identificador de quien confirmó la anomalía." }
         version: { type: integer }
         created_by: { type: [integer, "null"] }
         measurements:

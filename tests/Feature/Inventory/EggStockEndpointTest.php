@@ -4,6 +4,7 @@ namespace Tests\Feature\Inventory;
 
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\StockLocation;
+use App\Models\Notifications\AppNotification;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\SuppliersAndCatalogs\Supplier;
 use App\Models\User;
@@ -50,6 +51,75 @@ final class EggStockEndpointTest extends TestCase
         // Consulta: confirma que las cuentas de huevo permiten saldo negativo.
         $this->getJson("/api/v1/production-units/{$unit->id}/egg-stock")->assertOk()->assertJsonPath('data.balance', -5);
         $this->assertDatabaseCount('egg_stock_transactions', 2);
+    }
+
+    // Flujo: mantiene un aviso por UP mientras el saldo sea negativo y abre otro episodio tras recuperarlo.
+    public function test_negative_stock_alert_tracks_the_committed_balance(): void
+    {
+        // Preparación: registra una cuenta con diez huevos y permiso para ver su stock en la bandeja.
+        $actor = $this->signIn(['can_view_egg_stock', 'can_move_egg_stock', 'can_adjust_egg_stock', 'can_view_notifications']);
+        $unit = ProductionUnit::factory()->create();
+        $path = "/production-units/{$unit->id}/egg-stock";
+        $this->command('POST', $path.'/receipts', ['quantity' => 10, 'reason' => 'Ingreso'])->assertCreated();
+        $this->assertDatabaseCount('app_notifications', 0);
+
+        // Requests: dos pérdidas actualizan el mismo aviso alto con el saldo de la UP.
+        $issue = $this->command('POST', $path.'/issues', [
+            'quantity' => 15, 'type' => 'loss', 'reason' => 'Rotura', 'occurred_at' => '2026-08-01T10:00:00-03:00',
+        ])->assertCreated()->json('data.transaction');
+        $notice = AppNotification::query()->sole();
+        $this->command('POST', $path.'/issues', ['quantity' => 2, 'type' => 'loss', 'reason' => 'Rotura adicional'])->assertCreated();
+        $noticeUrl = '/api/v1/notificaciones/'.$notice->public_id;
+        $this->assertSame($actor->id, $notice->recipient_id);
+        $this->assertStringContainsString('-7', $notice->refresh()->message);
+        $this->getJson($noticeUrl)->assertOk()
+            ->assertJsonPath('data.tipo', 'egg_stock_negative')
+            ->assertJsonPath('data.urgencia', 'alto')
+            ->assertJsonPath('data.entidad.id', (string) $unit->id)
+            ->assertJsonPath('data.entidad.ruta', '/administracion/inventario/existencias/huevos');
+
+        // Request: cambiar la fecha compensa y vuelve a aplicar el egreso sin cerrar ni duplicar el aviso.
+        $this->command('PATCH', "/egg-stock/movements/{$issue}", [
+            'version' => 1, 'occurred_at' => '2026-08-02T10:00:00-03:00', 'correction_reason' => 'Fecha corregida',
+        ])->assertOk();
+        $this->assertNull($notice->refresh()->resolved_at);
+        $this->assertDatabaseCount('app_notifications', 1);
+
+        // Requests: llegar a cero resuelve el aviso; cancelar ese ingreso abre un episodio nuevo.
+        $receipt = $this->command('POST', $path.'/receipts', ['quantity' => 7, 'reason' => 'Reposición'])->assertCreated()->json('data.transaction');
+        $this->getJson($noticeUrl)->assertOk()->assertJsonPath('data.estado_resolucion', 'resuelto');
+        $this->command('POST', "/egg-stock/movements/{$receipt}/cancellation", [
+            'version' => 1, 'correction_reason' => 'Ingreso duplicado',
+        ])->assertOk();
+        $reopened = AppNotification::query()->whereNull('resolved_at')->sole();
+        $this->assertNotSame($notice->id, $reopened->id);
+        $this->assertStringContainsString('-7', $reopened->message);
+    }
+
+    // Flujo: recupera un saldo negativo existente y archiva los avisos anteriores de carga.
+    public function test_scheduled_evaluation_reconciles_existing_negative_stock_and_legacy_notices(): void
+    {
+        // Preparación: deja una UP en negativo antes de habilitar el acceso a su stock.
+        $actor = $this->signIn(['can_move_egg_stock', 'can_view_notifications']);
+        $unit = ProductionUnit::factory()->create();
+        $this->command('POST', "/production-units/{$unit->id}/egg-stock/issues", [
+            'quantity' => 4, 'type' => 'loss', 'reason' => 'Rotura',
+        ])->assertCreated();
+        $this->assertDatabaseCount('app_notifications', 0);
+        $legacy = AppNotification::factory()->create([
+            'recipient_id' => $actor->id, 'production_unit_id' => $unit->id,
+            'module' => 'deliveries', 'type' => 'delivery_egg_stock_negative', 'urgency' => 'alto', 'is_alert' => true,
+        ]);
+        $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_view_egg_stock', 'web'));
+
+        // Consulta: el comando reemplaza el pendiente anterior y repetirlo no duplica el nuevo.
+        $this->artisan('inventario:evaluar-stock-huevos')->assertSuccessful();
+        $this->artisan('inventario:evaluar-stock-huevos')->assertSuccessful();
+        $notice = AppNotification::query()->whereNull('resolved_at')->sole();
+        $this->assertSame('egg_stock_negative', $notice->type);
+        $this->assertSame($actor->id, $notice->recipient_id);
+        $this->assertNotNull($legacy->refresh()->resolved_at);
+        $this->assertDatabaseCount('app_notifications', 2);
     }
 
     /** Flujo: impide que el inventario genérico modifique el producto o ubicación técnicos. */

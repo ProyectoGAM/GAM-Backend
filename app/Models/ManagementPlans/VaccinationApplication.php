@@ -8,13 +8,20 @@ use App\Models\Lots\Flock;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\SuppliersAndCatalogs\Vaccine;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Database\Factories\ManagementPlans\VaccinationApplicationFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
-/** @property string $public_id @property string $operation_id @property array<string, mixed> $vaccine_snapshot @property array<string, mixed> $product_snapshot */
+/**
+ * @property string $public_id
+ * @property string $operation_id
+ * @property array<string, mixed> $vaccine_snapshot
+ * @property array<string, mixed> $product_snapshot
+ * @property CarbonImmutable $occurred_at
+ */
 class VaccinationApplication extends Model
 {
     /** @use HasFactory<VaccinationApplicationFactory> */

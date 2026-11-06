@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\Vehicles\Vehicle;
 use App\Models\Vehicles\VehicleMaintenance;
 use App\Models\Vehicles\VehicleMaintenancePlan;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -35,7 +36,8 @@ final readonly class ManageVehicleMaintenanceAction
                 'vehicle_id' => $vehicle->getKey(), 'created_by' => $actor->getKey(), 'type' => $data['type'],
                 'status' => 'planned', 'immobilizes_vehicle' => $data['immobilizes_vehicle'] ?? false,
                 'workshop' => $data['workshop'] ?? null, 'description' => $data['description'], 'notes' => $data['notes'] ?? null,
-                'planned_at' => $data['planned_at'] ?? null, 'odometer_km' => $data['odometer_km'] ?? null,
+                'planned_at' => isset($data['planned_at']) ? CarbonImmutable::parse($data['planned_at'], VehicleMaintenance::TIMEZONE) : null,
+                'odometer_km' => $data['odometer_km'] ?? null,
                 'cost_amount' => $data['cost_amount'] ?? '0.000',
                 'cost_currency' => 'UYU', 'idempotency_key' => $data['idempotency_key'], 'request_hash' => $requestHash,
             ]);

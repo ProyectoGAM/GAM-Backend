@@ -2,13 +2,16 @@
 
 namespace App\Http\Requests\ManagementPlans;
 
+use App\Services\Lots\LotsAuthorization;
 use Illuminate\Validation\Validator;
 
 final class StoreManualPracticeRequest extends ManagementExecutionRequest
 {
     public function authorize(): bool
     {
-        return $this->authorizeFlockExecution();
+        return $this->authorizeFlockExecution()
+            && ($this->input('practice_type') !== 'beak_trimming'
+                || LotsAuthorization::allows($this->actor(), 'can_record_beak_trimming'));
     }
 
     /** @return array<string, array<int, mixed>> */
@@ -19,7 +22,7 @@ final class StoreManualPracticeRequest extends ManagementExecutionRequest
             ...$this->activityLinkRules(),
             'practice_type' => ['required', 'string', 'in:beak_trimming,nest_placement,other'],
             'title' => ['required_if:practice_type,other', 'nullable', 'string', 'min:1', 'max:200'],
-            'notes' => ['required', 'string', 'min:1', 'max:5000'],
+            'notes' => ['required_unless:practice_type,beak_trimming', 'nullable', 'string', 'min:1', 'max:5000'],
         ];
     }
 

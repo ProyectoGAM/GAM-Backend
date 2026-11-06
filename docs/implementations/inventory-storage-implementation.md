@@ -2,6 +2,8 @@
 
 Entrega del 28/10/2026. Completa las restricciones que el formulario de ajustes y pérdidas sólo podía aplicar en el cliente. El servidor comparte `StockProductCompatibility` entre productos permitidos y los comandos de stock, dentro de la transacción de cada movimiento.
 
+El saldo por ubicación y su mínimo alimentan la [alerta de stock mínimo de Inventarios](alerts-and-notifications-implementation-plan.md#6-stock-mínimo-de-inventarios).
+
 ## Alcance vigente del catálogo
 
 El alta genérica (`POST /api/v1/products`) y `GET /api/v1/reference/options` ofrecen únicamente **Insumo** (`supply`), **Materia prima** (`raw_material`) y **Otros** (`other`). Insumo y Otros pertenecen al depósito de insumos; las materias primas conservan las plantas de ración y gramos. Crear o convertir un producto a `egg`, `medicine`, `vaccine` o `finished_feed` devuelve 422 en `kind`; las Actions también impiden el bypass interno. La edición de metadata histórica puede conservar su tipo actual, respetando las protecciones de cada dominio.

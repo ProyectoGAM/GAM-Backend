@@ -4,6 +4,16 @@ La sección de Vacunas pertenece funcionalmente a **06 — Manejo productivo y s
 
 **Estado funcional: catálogo global de Vacunas implementado; stock físico y sanidad por UP deshabilitados y reservados para el futuro.** Las aplicaciones e historial se integran en Planes de manejo. El alta mantiene su producto como identidad de catálogo con `stock_tracked: false`, sin ubicación, saldo ni movimiento físico. Las aplicaciones se registran sin cantidad ni stock: `reason` es obligatorio fuera del plan de manejo y opcional con una actividad válida del plan vigente. `quantity` y `stock_consumption` con contenido devuelven 422. La regla, ejemplos, migración, auditoría y pruebas compartidas están en [aplicaciones sanitarias](medication-implementation-plan.md#aplicaciones-sanitarias-sin-cantidad-ni-stock). Se preserva la historia existente; véase la [guía de almacenamiento](inventory-storage-implementation.md). La programación, próximas aplicaciones y notificaciones conservan el alcance de sus módulos. El seguimiento local se registra en [notion.md](../notion.md) sin mover la tarjeta completa del módulo a `Do Test`.
 
+## Avisos de vacunas del Plan de Manejo
+
+`manejo:evaluar-sanidad` se ejecuta cada cinco minutos para vacunas y medicamentos. `manejo:evaluar-vacunaciones` permite evaluar únicamente las vacunas de forma manual. Revisa los lotes sin finalizar de UP activas según su plan vigente. El calendario usa la fecha base del plan y la zona horaria de Lotes. Para actividades de una semana o de un rango cerrado usa el último día del período. Las actividades condicionales y las que carecen de fecha límite quedan fuera de la evaluación.
+
+Una fecha pendiente genera un aviso `medio` de siete a un día antes y pasa a `alto` el día previsto. Al escalar, el aviso conserva su ID y vuelve a figurar sin leer. Se entrega a usuarios con `can_view_management_plans` y `can_view_notifications`, respetando la UP de las cuentas PIN.
+
+Para satisfacer una dosis se requiere una aplicación del mismo lote vinculada a la actividad y, si el plan especifica la vacuna de catálogo, con esa vacuna. Se reconocen aplicaciones en revisiones consecutivas con una única actividad equivalente por revisión. En una pauta recurrente, cada día con una aplicación válida cubre una fecha, empezando por la pendiente más antigua. Las aplicaciones anuladas mediante una corrección se excluyen. Si la dosis vuelve a quedar pendiente, se abre un nuevo aviso y se conserva el anterior como resuelto.
+
+La bandeja devuelve `tipo: vaccination_due`, `modulo: management_plans` y la referencia a la actividad vigente del plan mediante `entidad.tipo: flock_plan_activity`. La aplicación y su corrección se reflejan en la próxima evaluación. Las altas, los cambios de urgencia y las resoluciones reutilizan la señal `notifications.changed`. [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)
+
 ## Alcance y decisiones confirmadas
 
 - El SKU identifica el producto de catálogo de la vacuna y no se implementan variantes.

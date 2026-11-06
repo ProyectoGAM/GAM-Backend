@@ -46,6 +46,7 @@ use Database\Seeders\Lots\LotsDemoSeeder;
 use Database\Seeders\Lots\WeighingDemoSeeder;
 use Database\Seeders\Lots\WeighingDesignDemoSeeder;
 use Database\Seeders\ManagementPlans\ManagementPlanDemoSeeder;
+use Database\Seeders\Notifications\NotificationsDemoSeeder;
 use Database\Seeders\ReportingAndAnalytics\ReportingDemoSeeder;
 use Database\Seeders\SuppliersAndCatalogs\MedicineDemoSeeder;
 use Database\Seeders\SuppliersAndCatalogs\VaccineDemoSeeder;
@@ -96,6 +97,7 @@ final class LocalDemoDataSeeder extends Seeder
         app(PrepareStockStorageAction::class)->execute($admin);
         $this->call(HealthStockDemoSeeder::class);
         $this->call(VehiclesDemoSeeder::class);
+        $this->call(NotificationsDemoSeeder::class);
     }
 
     /** @return array<string, Locality> */

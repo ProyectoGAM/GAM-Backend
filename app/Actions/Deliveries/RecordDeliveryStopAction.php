@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Services\CustomersAndAccounts\CustomerAccountLedger;
 use App\Services\CustomersAndAccounts\CustomerAmounts;
 use App\Services\CustomersAndAccounts\CustomerOperationRunner;
+use App\Services\Deliveries\DeliveryEggAlerts;
 use App\Services\Deliveries\DeliveryPricing;
 use App\Services\Deliveries\DeliveryUnitBalance;
 use App\Services\IdentityAndAccess\AccessControl;
@@ -27,7 +28,8 @@ use Illuminate\Support\Facades\Validator;
 final readonly class RecordDeliveryStopAction
 {
     public function __construct(private AuditRecorder $audit, private DeliveryUnitBalance $balances,
-        private DeliveryPricing $pricing, private CustomerOperationRunner $operations, private CustomerAccountLedger $ledger) {}
+        private DeliveryPricing $pricing, private CustomerOperationRunner $operations, private CustomerAccountLedger $ledger,
+        private DeliveryEggAlerts $eggAlerts) {}
 
     public function execute(Delivery $delivery, User $actor, array $data, string $idempotencyKey): DeliveryStop
     {
@@ -99,10 +101,7 @@ final readonly class RecordDeliveryStopAction
                     }
                     $allocated = $isDelivered ? $this->balances->allocate($lockedDelivery->load(['loads', 'stops']), $data['items']) : null;
                     $quantity = $allocated['quantity'] ?? 0;
-                    $delivered = (int) DeliveryStop::query()->where('delivery_id', $lockedDelivery->id)->where('status', DeliveryStopStatus::Delivered)->sum('delivered_quantity');
-                    if ($isDelivered && ($quantity < 1 || $delivered + $quantity > $lockedDelivery->loaded_quantity)) {
-                        throw new DeliveryConflict('La cantidad entregada debe ser positiva y no superar la carga disponible.');
-                    }
+                    $delivered = $isDelivered ? (int) $lockedDelivery->stops->where('status', DeliveryStopStatus::Delivered)->sum('delivered_quantity') : 0;
                     $priced = $allocated === null ? ['items' => [], 'total_amount' => '0.000'] : $this->pricing->calculate($allocated['items'], $data['items']);
                     $occurredAt = $data['occurred_at'] ?? now();
                     $attributes = ['status' => $data['status'], 'customer_id' => $customer->id,
@@ -140,6 +139,10 @@ final readonly class RecordDeliveryStopAction
                         properties: ['delivery_id' => $lockedDelivery->public_id, 'client_reference' => $stop->client_reference,
                             'status' => $stop->status->value, 'delivered_quantity' => $quantity, 'items' => $priced['items'],
                             'total_amount' => $priced['total_amount'], 'currency' => 'UYU', 'result' => 'success']));
+
+                    if ($isDelivered) {
+                        $this->eggAlerts->negativeDeliveryBalance($lockedDelivery, $lockedDelivery->loaded_quantity - $delivered - $quantity);
+                    }
 
                     return ['stop_id' => $stop->id];
                 });

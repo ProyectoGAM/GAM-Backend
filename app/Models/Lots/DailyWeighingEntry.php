@@ -17,8 +17,11 @@ use Illuminate\Support\Str;
  * @property string $total_weight_g
  * @property string $average_weight_g
  * @property bool $outside_expected_range
+ * @property CarbonImmutable|null $anomaly_reviewed_at
+ * @property int|null $anomaly_reviewed_by
  * @property CarbonImmutable $occurred_at
  * @property CarbonImmutable|null $deleted_at
+ * @property-read DailyWeighing $dailyWeighing
  */
 class DailyWeighingEntry extends Model
 {
@@ -42,6 +45,8 @@ class DailyWeighingEntry extends Model
         return [
             'bird_count' => 'integer',
             'outside_expected_range' => 'boolean',
+            'anomaly_reviewed_at' => 'immutable_datetime',
+            'anomaly_reviewed_by' => 'integer',
             'occurred_at' => 'immutable_datetime',
             'deleted_at' => 'immutable_datetime',
         ];

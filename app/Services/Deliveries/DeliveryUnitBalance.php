@@ -102,8 +102,8 @@ final class DeliveryUnitBalance
         $quantity = 0;
         foreach ($requestedByKey as $key => $milli) {
             $row = $available[$key];
-            if ($milli < 1 || $milli > $this->milli($row['remaining_amount'])) {
-                throw ValidationException::withMessages(['items' => 'La cantidad supera el saldo disponible de '.$row['label'].'.']);
+            if ($milli < 1 || $milli > intdiv(2147483647 * 1000, $row['eggs_per_unit'])) {
+                throw ValidationException::withMessages(['items' => 'La cantidad debe ser positiva y no superar el máximo de huevos permitido.']);
             }
             $eggsScaled = $milli * $row['eggs_per_unit'];
             if ($eggsScaled % 1000 !== 0) {
@@ -138,6 +138,8 @@ final class DeliveryUnitBalance
 
     private function amount(int $milli): string
     {
-        return rtrim(rtrim(sprintf('%d.%03d', intdiv($milli, 1000), $milli % 1000), '0'), '.');
+        $magnitude = abs($milli);
+
+        return ($milli < 0 ? '-' : '').rtrim(rtrim(sprintf('%d.%03d', intdiv($magnitude, 1000), $magnitude % 1000), '0'), '.');
     }
 }

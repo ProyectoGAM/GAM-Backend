@@ -1,0 +1,107 @@
+# Plan de implementación de notificaciones en la app
+
+Alcance acordado el 5 de noviembre de 2026. La primera entrega incluye la publicación interna de notificaciones y la bandeja dentro de GAM. Las alertas operativas se incorporarán en entregas posteriores por módulo. Push y escritorio quedan fuera del alcance.
+
+## 1. Primera entrega — notificaciones dentro de GAM
+
+- Crear un contrato interno que reciba tipo, destinatario, clave de origen, título y mensaje en español, fecha, UP cuando corresponda y una referencia opcional al registro de origen. El servicio depende de Usuarios y Permisos. Los módulos podrán llamarlo con los datos mínimos que deban mostrarse en la bandeja.
+- Persistir una notificación por destinatario en PostgreSQL, con identificador público y fecha de lectura. Una clave única por destinatario y origen evita duplicados en reintentos y procesos concurrentes. Si la publicación forma parte de una transacción de negocio en la misma base, su rollback revierte también la notificación.
+- Aplicar permisos de consulta en el catálogo central y limitar cada bandeja a su destinatario. Para cuentas de dispositivo/PIN, aplicar el alcance de UP en listado, detalle, contador y cambios de lectura. Los enlaces a entidades se abren mediante las rutas del módulo de origen, que conservan sus propias autorizaciones.
+- Proponer `GET /api/v1/notificaciones`, `GET /api/v1/notificaciones/resumen`, `GET /api/v1/notificaciones/{notificacion}` y `PATCH /api/v1/notificaciones/{notificacion}/lectura`. Usar FormRequests dedicados, paginación y filtro por estado de lectura. Documentar la API en OpenAPI junto con su implementación.
+- Usar Laravel Reverb como servicio WebSocket en Docker, detrás de Nginx con `wss://` en producción. Laravel emite la señal de actualización por la cola Redis existente después de confirmar la transacción en PostgreSQL. La señal lleva únicamente la indicación de que cambió la bandeja. Autorizar el canal privado con Sanctum, la sesión vigente, los permisos y el alcance de UP de la API. [Laravel Reverb](https://laravel.com/docs/13.x/reverb) · [Laravel Broadcasting](https://laravel.com/docs/13.x/broadcasting)
+- Conectar Angular/Ionic con Laravel Echo y `pusher-js`. Al recibir la señal en primer plano, actualizar el contador y la bandeja consultando la API. Resincronizar al abrir la app, volver al primer plano o reconectar. Cerrar la suscripción al salir de la sesión.
+- Verificar el flujo con notificaciones de prueba. Cubrir publicación repetida, rollback, lectura idempotente y aislamiento entre destinatarios y UP. Comprobar que el contador cambia sin recargar la pantalla y que una reconexión recupera las notificaciones guardadas durante el corte.
+
+## 2. Entregas posteriores — alertas operativas por módulo
+
+Al integrar el primer caso operativo, agregar el contrato común de alertas con entidad, fecha, responsable, prioridad configurable y estado de resolución auditado. Cada módulo define sus disparadores, responsables y condiciones de cierre. El motor registra el pendiente y usa el servicio de notificaciones para avisar al destinatario. La lectura se registra en la bandeja y la resolución se refleja en el módulo donde se realiza la tarea.
+
+Los cinco casos de Notas3 se integran como entregas independientes.
+
+| Caso | Cuándo se genera | Qué completa el pendiente |
+| --- | --- | --- |
+| Cambio de ración | Alimentación de lotes detecta un cambio efectivo de receta o cantidad configurada para un lote del galpón. Incluye los cambios desde Planes de manejo y las transiciones efectivas por etapa. La alerta muestra el valor anterior, el nuevo y la fecha. | El responsable confirma la revisión en Alimentación. Se deduplica por cambio efectivo y se excluyen las variaciones de consumo por censo que no cambian la pauta. |
+| Vacuna próxima o vencida | Implementado en Planes de manejo. Publica con urgencia `medio` entre siete y un día antes y `alto` a partir del día previsto. Cada dosis tiene su propio aviso. | Una aplicación válida vinculada a la actividad del lote cierra el aviso. La reevaluación considera correcciones, revisiones y la UP actual. |
+| Dato de pesaje fuera del rango esperado | Lotes emite una alerta alta al guardar un dato anómalo confirmado. La referencia vigente define el rango de cada peso individual o promedio grupal. | Confirmar la anomalía desde Pesajes, rectificar el dato dentro del rango o eliminar el ingreso diario resuelve el aviso. |
+| Cliente no visitado | Clientes calcula el vencimiento a partir de una frecuencia operativa estructurada y de la última visita válida. El campo `visit_frequency` actual es texto libre. Para clientes sin visitas, usar una primera fecha acordada. Una visita sin entrega cuenta como visita si quedó registrada, y puede generar por separado una tarea de revisita. | Una visita válida cierra el ciclo y calcula la próxima fecha. Para clientes sin frecuencia ni fecha, mantener visible que falta configurar el seguimiento. |
+| Acción de reparto pendiente | Repartos emite por un pendiente comprobable en el servidor. Se propone empezar con una parada asignada que quedó pendiente al cierre o con una visita sin entrega marcada para seguimiento. El repartidor es el responsable inicial cuando su alcance lo permite. | El módulo registra la acción que faltaba, por ejemplo una nueva visita válida vinculada al pendiente. Una entrega fiada es una operación válida. El seguimiento de sincronizaciones se puede incorporar cuando exista evidencia persistida en el servidor. |
+
+Los avisos de vacunas se calculan a partir de las actividades y revisiones de cada lote. Repartos ya distingue visitas pendientes, realizadas con entrega y realizadas sin entrega. Su listado de clientes ofrece la última entrega real, por lo que el cálculo de visitas requiere consultar las visitas registradas, incluidas las que terminaron sin entrega. [Avisos de vacunas](vaccination-implementation.md#avisos-de-vacunas-del-plan-de-manejo) · [Contrato de repartos](../../contracts/openapi/deliveries.yaml)
+
+Quedan por acordar el criterio de peso, la frecuencia de visita, los pendientes de reparto que requieren seguimiento y la asignación de responsables de esas alertas.
+
+Planes de manejo ya emite avisos de cobertura de ración con umbrales configurables por UP. El mismo contrato permite incorporar stock de maíz, mantenimiento de vehículos, pedidos incompletos y sensores. Inventario publica `FeedBalanceEvaluated` para comparar el saldo con un mínimo en gramos. [Avisos de cobertura de ración](flock-feeding-implementation.md#avisos-por-cobertura-de-ración) · [Evento de saldo de alimento](../../app/Events/Inventory/FeedBalanceEvaluated.php)
+
+La verificación de los avisos sanitarios y de la bandeja pasó 14 pruebas con 198 aserciones en PostgreSQL de pruebas. Incluyó los límites de siete y cero días, la repetición de la evaluación, el cierre y reapertura de avisos y la separación entre medicaciones y vacunas. Pint y el análisis PHPStan de las fuentes sanitarias modificadas pasaron. `schedule:list` confirmó el intervalo de cinco minutos. La verificación de esta integración se realizó en el backend local.
+
+## 3. Despique y tareas obligatorias del lote
+
+Las plantillas y revisiones de los lotes aceptan `practice_type` para actividades `manual_practice`. El subtipo se copia al asignar el plan. Las actividades históricas mantienen el subtipo vacío y pueden tiparse en una revisión. El título es descriptivo y no clasifica el despique.
+
+`POST /api/v1/flocks/{flock}/practicas` admite `practice_type: beak_trimming`, la fecha y hora, el responsable y detalles opcionales. El responsable predeterminado es el usuario que registra. Una actividad vinculada debe pertenecer al plan vigente del lote y coincidir con el subtipo si está definido. Historial conserva la ejecución, su responsable y los detalles. Una corrección de carga se agrega por `POST /api/v1/flocks/{flock}/manejos/manual_practice/{execution}/correcciones` con motivo obligatorio. El original permanece en Historial y la corrección referencia su identificador. Ambas operaciones usan la clave de idempotencia y registran auditoría en la transacción de la operación.
+
+El permiso general `can_execute_management_plans` se complementa con `can_record_beak_trimming` para registrar y `can_reverse_beak_trimming` para invalidar. En una instalación existente, aplicar la migración y ejecutar `php artisan db:seed --class=IdentityPermissionSeeder --force --no-interaction` para sincronizar el catálogo. Administradores reciben ambos permisos y los roles operativos pueden recibirlos por separado. [Contrato de Planes de manejo](../../contracts/openapi/management-plans.yaml)
+
+`manejo:evaluar-tareas` se ejecuta cada cinco minutos. Un despique obligatorio programado genera `medio` entre tres y un día antes y `alto` a partir del día previsto. Si se invalida el registro que acreditaba su ejecución, el aviso vuelve a abrirse como `alto`, incluso antes de la fecha. Las demás prácticas, movimientos, recolecciones y registros de mortalidad obligatorios generan únicamente `alto` desde el día previsto, inclusive. Se usa el último día de la semana o del rango cerrado en el calendario del lote. Quedan fuera las actividades condicionales, las que no tienen fecha límite, pesaje y ración.
+
+Cada ocurrencia se acredita con una ejecución válida vinculada del mismo lote. En pautas recurrentes, se acredita la primera fecha pendiente con una ejecución por día. Las correcciones de despique reabren la ocurrencia que acreditaba el original. La bandeja usa el módulo `management_plans`, con una referencia a la actividad, y los códigos `beak_trimming_due`, `manual_practice_due`, `flock_movement_due`, `egg_collection_due` y `mortality_due`. La evaluación serializa por tipo y UP. Resolver una alerta conserva su episodio, y escalar de medio a alto devuelve el aviso a no leído. Los destinatarios necesitan acceso al plan y a notificaciones, con alcance por UP en cuentas PIN. [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)
+
+La regresión de Planes de manejo, Notificaciones y gestión de roles pasó 82 pruebas y 956 aserciones en PostgreSQL aislado. Incluyó permisos separados, registro sin detalles, historial, invalidación anticipada, recurrencias y exclusiones de alcance. Pint y PHPStan aprobaron los cambios PHP y `schedule:list` confirmó el intervalo de cinco minutos. La comprobación se realizó en el backend local de pruebas.
+
+## 4. Umbrales configurables por unidad productiva
+
+`GET` y `PUT /api/v1/unidades-productivas/{productionUnit}/umbrales-alertas/{alertType}` consultan y actualizan `bajo`, `medio` y `alto` para recolección diaria de huevos, vacunas, medicamentos, despique y cada tipo de tarea obligatoria. Requieren `can_manage_alert_thresholds`. Una cuenta PIN opera dentro de su UP. Las actualizaciones guardan un cambio auditado por tipo, sin duplicar la auditoría al repetir el mismo valor.
+
+Para recolección diaria se usan jornadas locales cerradas consecutivas sin recolecciones vigentes, con valores de 1 a 365. Para actividades previstas, los valores de −365 a 365 indican días respecto de la fecha límite. Un valor negativo anticipa, cero corresponde al día previsto y un valor positivo indica atraso. Los niveles activos deben tener valores estrictamente ascendentes. `bajo` y `medio` admiten `null` para deshabilitarlos. Cada UP hereda los valores iniciales por tipo hasta guardar una configuración propia. La invalidación de un despique sigue reabriendo su alerta con prioridad alta.
+
+La migración agrega la configuración temporal y el umbral bajo opcional de ración a `production_units`. Cobertura conserva su endpoint y permite editarlo también con el nuevo permiso. Aplicar la migración y sincronizar el catálogo con `IdentityPermissionSeeder` para que los roles puedan recibir el permiso. Los cambios se aplican en el siguiente ciclo de evaluación. [Contrato de notificaciones](../../contracts/openapi/notifications.yaml) · [Aviso por falta de recolección diaria](egg-production-implementation.md#aviso-por-falta-de-recolección-diaria) · [Cobertura de ración](flock-feeding-implementation.md#avisos-por-cobertura-de-ración)
+
+Pasaron 63 pruebas de pesaje, alimentación, alertas de manejo y bandeja. La segunda corrida pasó 34 pruebas de permisos, contratos, bandeja y pesaje e incluyó una sesión PIN real con lectura y escritura denegadas para otra UP. Pint, PHPStan, el análisis YAML de los contratos y `schedule:list` pasaron. La verificación usó PostgreSQL aislado de pruebas.
+
+## 5. Capacidad de Galpones
+
+En las UP activas, un galpón avícola con más aves vivas que su `bird_capacity` genera un aviso de urgencia `medio` desde siete días antes de la adultez. El aviso pasa a `alto` al comenzar la semana de adultez y vuelve a aparecer como no leído si ya se había leído. Se usa la fecha de ingreso del lote abierto, incluida la cuarentena, con el calendario de Lotes y la semana global `adult_from_week` de Pesajes. Sin esa configuración no se emite el aviso.
+
+Se mantiene un aviso vigente por galpón y destinatario. Cuando la ocupación llega al máximo o queda por debajo, el aviso pasa al historial de resueltos. Un nuevo exceso que cumple la condición de edad abre otro aviso. La redistribución y su reversión reevalúan la UP al confirmar la operación. El comando `galpones:evaluar-capacidad` se ejecuta cada cinco minutos para detectar cambios de edad, capacidad y ocupación y reconciliar la bandeja.
+
+El aviso usa el módulo `farm_structure` y el código `poultry_house_over_capacity`. El vínculo abre el detalle del galpón. Los destinatarios requieren `can_view_poultry_houses` y `can_view_notifications`, con el alcance por UP de las cuentas PIN. [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)
+
+## 6. Stock mínimo de Inventarios
+
+Cada saldo de un producto activo con control de stock se compara con el mínimo de su ubicación. En cámaras de insumos y plantas de ración activas se evalúan los saldos compatibles. Si el saldo coincide exactamente con el mínimo, incluido cero, la urgencia es `medio`. Si queda por debajo, la urgencia pasa a `alto` y un aviso leído vuelve a no leído. Si el saldo supera el mínimo, el aviso se resuelve. La comparación conserva los seis decimales del saldo.
+
+`inventario:evaluar-minimos` sincroniza la bandeja cada cinco minutos. Mantiene un aviso vigente por saldo y destinatario. Publica `stock_minimum_reached` en el módulo `inventory`, con un vínculo a Existencias. Requiere `can_view_inventory` y `can_view_notifications`. Las cuentas PIN sólo reciben avisos de su UP. Los avisos de ubicaciones generales llegan a las cuentas personales autorizadas. [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)
+
+## 7. Huevos en Repartos
+
+- Las cargas iniciales y adicionales pueden abrir o actualizar la [alerta de stock negativo de la UP](#10-stock-negativo-de-huevos-por-up).
+- Cuando las entregas y devoluciones registradas superan los huevos cargados, el reparto conserva su saldo negativo y genera `delivery_egg_balance_negative` con urgencia `alto`. Se publica un aviso por reparto y destinatario desde la primera operación que deja ese saldo en negativo.
+- Un cierre que devuelve huevos sobrantes a stock genera `delivery_egg_surplus` con la urgencia normal de la bandeja, `bajo`, e informa cuántos huevos se devolvieron.
+
+Las entregas y devoluciones admiten cantidades reales por encima del saldo teórico en presentaciones cargadas, conservan la equivalencia en huevos enteros y registran los efectos contables habituales. Si el saldo final queda positivo, el cierre requiere registrar los huevos pendientes de devolución. Una devolución con saldo final negativo puede emitir a la vez el aviso de sobrante y el de saldo negativo del reparto.
+
+Los avisos del reparto se guardan en la misma transacción de la operación y conservan una referencia al reparto en el módulo `deliveries`. Los reintentos no los duplican. Los reciben quienes tienen `can_view_notifications` y permiso para consultar el historial o monitorear Repartos. Una cuenta PIN sólo recibe avisos de repartos íntegramente dentro de su UP. [Contrato de Repartos](../../contracts/openapi/deliveries.yaml) · [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)
+
+## 8. Intervenciones previstas de Vehículos
+
+Una intervención con fecha prevista genera un aviso normal (`bajo`) desde tres días antes y durante todo el día previsto. Pasa a `alto` desde el día siguiente si sigue planificada o en curso. Se usan días calendario de Montevideo. Al programar una intervención, una fecha sin desfase se interpreta en esa zona y una fecha con desfase conserva su instante.
+
+`vehiculos:evaluar-intervenciones` actualiza la bandeja cada cinco minutos. Mantiene un aviso por intervención fechada y destinatario. Si el aviso estaba leído, la escalada lo devuelve a no leído. Al completar o anular la intervención, el aviso se resuelve en el siguiente ciclo. El mismo comando aplica las reglas de los planes preventivos descritas en la sección 9.
+
+El código `vehicle_maintenance_due` pertenece al módulo `vehicles` y enlaza a la ficha del vehículo. Lo reciben las cuentas personales con `can_view_vehicle_maintenance` y `can_view_notifications`. [Contrato de Vehículos](../../contracts/openapi/vehicles.yaml) · [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)
+
+## 9. Planes preventivos y documentos de Vehículos
+
+Los planes activos de vehículos que no están retirados generan `vehicle_maintenance_plan_due` con urgencia normal (`bajo`) al quedar 30 días o 500 km para un límite. La urgencia sube a `alto` al alcanzar la fecha o el kilometraje, lo que ocurra primero. Para el kilometraje se toma la última lectura efectiva y se respeta el ciclo del tablero. El límite de fecha se evalúa aunque falte una lectura válida. Si una intervención vinculada ya tiene aviso por su fecha, la bandeja conserva el aviso de esa intervención con la mayor urgencia aplicable. Si se anula y el plan sigue pendiente, vuelve a mostrarse el plan.
+
+`vehiculos:evaluar-documentos` publica `vehicle_document_expiring` para documentos de vehículos que no están retirados. El aviso es normal desde 30 días antes y durante el vencimiento, y alto desde el día siguiente. Para un mismo vehículo, tipo y título, comparados sin distinguir mayúsculas ni espacios exteriores, se evalúa el mayor vencimiento. Una copia con la misma fecha conserva el aviso original. Un archivo sin vencimiento queda fuera de la evaluación. Cargar la renovación resuelve el aviso anterior y mantiene los archivos históricos en la ficha.
+
+Ambas evaluaciones usan el calendario de Montevideo y se ejecutan cada cinco minutos. Para recibir avisos, una cuenta personal necesita acceso a notificaciones y permiso de lectura del área correspondiente, mantenimiento o documentación. [Contrato de Vehículos](../../contracts/openapi/vehicles.yaml) · [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)
+
+## 10. Stock negativo de huevos por UP
+
+`egg_stock_negative` es un aviso alto de Inventario. Se evalúa el saldo confirmado de la cuenta técnica de la UP después de ingresos, pérdidas, donaciones, cargas, devoluciones, correcciones y cancelaciones. Las correcciones compuestas se evalúan con su saldo final. Hay un aviso vigente por UP y destinatario, que actualiza su mensaje mientras el saldo sea negativo. Al recuperar cero o más, pasa al historial de resueltos. Una nueva caída bajo cero abre un episodio nuevo.
+
+`inventario:evaluar-stock-huevos` revisa las UP cada cinco minutos para cubrir saldos existentes y recuperar evaluaciones pendientes. También resuelve los avisos anteriores `delivery_egg_stock_negative` por carga y los conserva en el historial. Los avisos de saldo negativo del reparto y de sobrantes al cierre tienen sus propios disparadores.
+
+Los destinatarios requieren `can_view_egg_stock` y `can_view_notifications`. Las cuentas PIN reciben sólo los avisos de su UP. El vínculo abre Stock de huevos y el aviso identifica la UP y su saldo. [Contrato de Stock de huevos](../../contracts/openapi/lots.yaml) · [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)

@@ -120,6 +120,39 @@ paths:
           description: 'Conflicto de estado, idempotencia, receta o límite de almacenamiento.'
         422:
           description: 'Entrada inválida con mensajes de validación en español.'
+  '/lotes/{flock}/alimentacion/manual/confirmacion':
+    parameters:
+      - $ref: '#/components/parameters/Flock'
+    post:
+      tags: ['Alimentación de lotes']
+      operationId: confirmManualFlockFeeding
+      summary: Confirma la receta y cantidad manual vigentes
+      description: Requiere can_manage_flock_feeding. Registra la revisión auditada y resuelve el aviso sin modificar la receta ni la cantidad.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/SharedDeviceToken'
+        - $ref: '#/components/parameters/SharedSession'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [configuracion_id]
+              properties:
+                configuracion_id: {type: integer, minimum: 1, description: ID de la configuración manual que se revisó}
+      responses:
+        201:
+          description: Confirmación registrada o recuperada por idempotencia
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OperationEnvelope'}
+        401: {description: Sesión inválida}
+        403: {description: Falta el permiso de gestión de alimentación}
+        404: {description: Lote no disponible}
+        409: {description: 'Lote finalizado, configuración distinta a la revisada, modo automático o conflicto de idempotencia'}
+        422: {description: Datos de confirmación inválidos}
   '/lotes/{flock}/alimentacion/automatico':
     parameters:
       -
@@ -449,6 +482,9 @@ components:
         - poblacion
         - edad_dias
         - fecha_vigencia
+        - revision_manual_desde
+        - confirmada_en
+        - confirmada_por
         - etapa
         - finalizado
       properties:
@@ -477,6 +513,9 @@ components:
         fecha_vigencia:
           type: string
           format: date
+        revision_manual_desde: {type: [string, 'null'], format: date}
+        confirmada_en: {type: [string, 'null'], format: date-time}
+        confirmada_por: {type: [integer, 'null']}
         etapa:
           $ref: '#/components/schemas/Stage'
         finalizado:
@@ -729,3 +768,13 @@ components:
               type: object
               description: 'Rectificación registrada con receta, cantidad efectiva, motivo y movimientos.'
               additionalProperties: true
+            confirmacion:
+              type: object
+              required: [configuracion_id, feed_recipe_id, cantidad_diaria_g, confirmada_en, confirmada_por, revision_manual_desde]
+              properties:
+                configuracion_id: {type: integer}
+                feed_recipe_id: {type: integer}
+                cantidad_diaria_g: {type: string}
+                confirmada_en: {type: string, format: date-time}
+                confirmada_por: {type: integer}
+                revision_manual_desde: {type: string, format: date}

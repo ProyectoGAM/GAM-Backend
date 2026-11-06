@@ -18,6 +18,7 @@ final readonly class RecordEggStockTransactionAction
     public function __construct(
         private EnsureEggStockAccountAction $accounts,
         private RecordInventoryMovementAction $inventory,
+        private EvaluateEggStockAlertsAction $alerts,
     ) {}
 
     /**
@@ -78,6 +79,8 @@ final readonly class RecordEggStockTransactionAction
                 eggAccountOperation: true,
             ), $actor, $source, requiredPermission: null);
 
+            $this->evaluateAlertsAfterCommit($unit->id);
+
             return ['transaction' => $transaction->load(['account', 'revisions']), 'movement' => $movement];
         }, 3);
     }
@@ -89,7 +92,7 @@ final readonly class RecordEggStockTransactionAction
         }
         $account = $transaction->account()->firstOrFail();
 
-        return $this->inventory->execute(new InventoryMovementCommand(
+        $movement = $this->inventory->execute(new InventoryMovementCommand(
             type: InventoryMovementType::Adjustment,
             lines: [[
                 'product_id' => $account->product_id,
@@ -103,6 +106,18 @@ final readonly class RecordEggStockTransactionAction
             occurredAt: $occurredAt ?? $transaction->occurred_at->toIso8601String(),
             eggAccountOperation: true,
         ), $actor, $source, requiredPermission: null);
+
+        $this->evaluateAlertsAfterCommit($transaction->production_unit_id);
+
+        return $movement;
+    }
+
+    private function evaluateAlertsAfterCommit(int $unitId): void
+    {
+        // Una rectificación puede compensar y volver a registrar el movimiento en la misma transacción.
+        DB::afterCommit(function () use ($unitId): void {
+            rescue(fn () => $this->alerts->execute($unitId));
+        });
     }
 
     private function movementType(string $logicalType, int $sign): InventoryMovementType

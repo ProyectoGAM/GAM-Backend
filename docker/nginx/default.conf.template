@@ -8,6 +8,11 @@ map $http_x_forwarded_proto $gam_forwarded_proto {
     ""      $scheme;
 }
 
+map $http_upgrade $gam_connection_upgrade {
+    default upgrade;
+    ""      close;
+}
+
 server {
     listen 8080;
     server_name _;
@@ -24,6 +29,17 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $gam_forwarded_proto;
         proxy_pass http://swagger-ui:8080/docs/;
+    }
+
+    location ^~ /app/ {
+        resolver 127.0.0.11 valid=10s ipv6=off;
+        set $gam_reverb reverb:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $gam_connection_upgrade;
+        proxy_read_timeout 120s;
+        proxy_pass http://$gam_reverb;
     }
 
     location / {
