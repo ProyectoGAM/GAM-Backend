@@ -57,3 +57,11 @@ Para recolección diaria se usan jornadas locales cerradas consecutivas sin reco
 La migración agrega la configuración temporal y el umbral bajo opcional de ración a `production_units`. Cobertura conserva su endpoint y permite editarlo también con el nuevo permiso. Aplicar la migración y sincronizar el catálogo con `IdentityPermissionSeeder` para que los roles puedan recibir el permiso. Los cambios se aplican en el siguiente ciclo de evaluación. [Contrato de notificaciones](../../contracts/openapi/notifications.yaml) · [Aviso por falta de recolección diaria](egg-production-implementation.md#aviso-por-falta-de-recolección-diaria) · [Cobertura de ración](flock-feeding-implementation.md#avisos-por-cobertura-de-ración)
 
 Pasaron 63 pruebas de pesaje, alimentación, alertas de manejo y bandeja. La segunda corrida pasó 34 pruebas de permisos, contratos, bandeja y pesaje e incluyó una sesión PIN real con lectura y escritura denegadas para otra UP. Pint, PHPStan, el análisis YAML de los contratos y `schedule:list` pasaron. La verificación usó PostgreSQL aislado de pruebas.
+
+## 5. Capacidad de Galpones
+
+En las UP activas, un galpón avícola con más aves vivas que su `bird_capacity` genera un aviso de urgencia `medio` desde siete días antes de la adultez. El aviso pasa a `alto` al comenzar la semana de adultez y vuelve a aparecer como no leído si ya se había leído. Se usa la fecha de ingreso del lote abierto, incluida la cuarentena, con el calendario de Lotes y la semana global `adult_from_week` de Pesajes. Sin esa configuración no se emite el aviso.
+
+Se mantiene un aviso vigente por galpón y destinatario. Cuando la ocupación llega al máximo o queda por debajo, el aviso pasa al historial de resueltos. Un nuevo exceso que cumple la condición de edad abre otro aviso. La redistribución y su reversión reevalúan la UP al confirmar la operación. El comando `galpones:evaluar-capacidad` se ejecuta cada cinco minutos para detectar cambios de edad, capacidad y ocupación y reconciliar la bandeja.
+
+El aviso usa el módulo `farm_structure` y el código `poultry_house_over_capacity`. El vínculo abre el detalle del galpón. Los destinatarios requieren `can_view_poultry_houses` y `can_view_notifications`, con el alcance por UP de las cuentas PIN. [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)

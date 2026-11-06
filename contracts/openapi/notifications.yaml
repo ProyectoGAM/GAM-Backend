@@ -229,7 +229,7 @@ components:
         id: {type: string, format: ulid}
         tipo:
           type: string
-          description: Código estable del aviso emitido por el módulo. Lotes publica daily_egg_collection_missing y weighing_anomaly. Las anomalías de pesaje tienen urgencia alta y referencian un ingreso diario o un pesaje independiente. Planes de manejo publica feed_coverage, manual_feeding_review_due, vaccination_due, medication_due, beak_trimming_due, manual_practice_due, flock_movement_due, egg_collection_due y mortality_due.
+          description: Código estable del aviso emitido por el módulo. Lotes publica daily_egg_collection_missing y weighing_anomaly. Las anomalías de pesaje tienen urgencia alta y referencian un ingreso diario o un pesaje independiente. Planes de manejo publica feed_coverage, manual_feeding_review_due, vaccination_due, medication_due, beak_trimming_due, manual_practice_due, flock_movement_due, egg_collection_due y mortality_due. Instalaciones publica poultry_house_over_capacity con una referencia al galpón, urgencia media durante los siete días previos a la adultez y alta desde la adultez si la ocupación supera la capacidad. El aviso se resuelve al llegar a la capacidad máxima o quedar por debajo.
           example: medication_due
         urgencia: {$ref: '#/components/schemas/Urgencia'}
         modulo: {$ref: '#/components/schemas/Modulo'}

@@ -28,7 +28,7 @@ El listado `GET /api/v1/production-units/{productionUnit}/poultry-houses`, el de
 
 La alerta requiere `current_occupancy > bird_capacity`; al igualar o bajar del límite devuelve `false`, `0` y `null`. Se recalcula al consultar con el proveedor público de Lotes, incluyendo cuarentena y sin consultas individuales por cada galpón del listado. Las plantas de ración devuelven `capacity_exceeded=false`, con ocupación, exceso y mensaje en `null`. La disponibilidad informativa es `max(0, capacidad - ocupación)`.
 
-Integración de interfaz: el frontend debe mostrar `capacity_alert` cuando `capacity_exceeded=true` y refrescar los galpones después de una operación de aves. Este repositorio entrega el contrato backend; no incorpora una pantalla ni notificaciones persistidas, correos o alertas push.
+El mensaje `capacity_alert` describe el exceso al consultar el galpón. La [alerta operativa de Galpones](alerts-and-notifications-implementation-plan.md#5-capacidad-de-galpones) se publica en la bandeja cuando se acerca la adultez o ya se alcanzó.
 
 Se conservan los permisos funcionales, un único lote abierto por galpón, estados operativos, controles de cantidad, versiones, idempotencia, bloqueos y auditoría de las operaciones existentes. No se agregan endpoints, permisos, migraciones, cambios de datos ni dependencias. Las rutas de galpones conservan sus nombres públicos actuales por compatibilidad.
 
