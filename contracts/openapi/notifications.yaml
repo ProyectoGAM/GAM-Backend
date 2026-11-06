@@ -16,6 +16,10 @@ paths:
         - name: estado_lectura
           in: query
           schema: {type: string, enum: [leida, no_leida]}
+        - name: estado_resolucion
+          in: query
+          description: Vigente incluye notificaciones informativas y alertas pendientes. Resuelto incluye alertas cerradas. Al omitirlo se incluyen todos los avisos.
+          schema: {type: string, enum: [vigente, resuelto]}
         - name: urgencia
           in: query
           schema: {$ref: '#/components/schemas/Urgencia'}
@@ -154,16 +158,27 @@ components:
       example: management_plans
     Notificacion:
       type: object
-      required: [id, tipo, urgencia, modulo, titulo, mensaje, fecha, leida_en, entidad]
+      required: [id, tipo, urgencia, modulo, titulo, mensaje, fecha, leida_en, estado_resolucion, resuelta_en, entidad]
       properties:
         id: {type: string, format: ulid}
-        tipo: {type: string}
+        tipo:
+          type: string
+          description: Código estable del aviso emitido por el módulo. Planes de manejo publica vaccination_due para vacunas pendientes y medication_due para medicaciones pendientes.
+          example: medication_due
         urgencia: {$ref: '#/components/schemas/Urgencia'}
         modulo: {$ref: '#/components/schemas/Modulo'}
         titulo: {type: string}
         mensaje: {type: string}
         fecha: {type: string, format: date-time}
         leida_en: {type: [string, 'null'], format: date-time}
+        estado_resolucion:
+          type: [string, 'null']
+          enum: [no_resuelto, resuelto, null]
+          description: Estado operativo del aviso de alerta. Las notificaciones informativas tienen valor nulo.
+        resuelta_en:
+          type: [string, 'null']
+          format: date-time
+          description: Fecha de la primera resolución del aviso de alerta.
         entidad:
           type: [object, 'null']
           required: [tipo, id, ruta]

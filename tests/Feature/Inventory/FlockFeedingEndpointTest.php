@@ -11,6 +11,7 @@ use App\Enums\Inventory\FeedRecipeStatus;
 use App\Events\Inventory\FeedBalanceEvaluated;
 use App\Exceptions\Lots\LotsConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
+use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\FeedBalance;
@@ -20,6 +21,7 @@ use App\Models\Inventory\FlockFeedingChange;
 use App\Models\Lots\Breed;
 use App\Models\Lots\Flock;
 use App\Models\ManagementPlans\PlanTemplate;
+use App\Models\Notifications\AppNotification;
 use App\Models\SharedDevice;
 use App\Models\User;
 use App\Services\IdentityAndAccess\AuthSessionService;
@@ -41,7 +43,7 @@ final class FlockFeedingEndpointTest extends LotsTestCase
     }
 
     /** @param list<array<string,mixed>> $stages */
-    private function admitted(int $quantity = 100, array $stages = []): Flock
+    private function admitted(int $quantity = 100, array $stages = [], ?ProductionUnit $unit = null): Flock
     {
         $actor = User::query()->findOrFail(auth()->id());
         $activities = [];
@@ -56,7 +58,10 @@ final class FlockFeedingEndpointTest extends LotsTestCase
             ];
         }
         $plan = $this->createPublishedPlanSelection($actor, $activities);
-        $house = PoultryHouse::factory()->create(['bird_capacity' => max(100, $quantity)]);
+        $house = PoultryHouse::factory()->create([
+            'bird_capacity' => max(100, $quantity),
+            'production_unit_id' => $unit?->id ?? ProductionUnit::factory(),
+        ]);
         $id = $this->command('POST', '/flocks', [
             'code' => 'FEED-'.Str::upper(Str::random(8)), 'breed_id' => Breed::factory()->create()->id,
             'origin' => 'Cría de prueba', 'poultry_house_id' => $house->id, 'initial_quantity' => $quantity,
@@ -79,6 +84,118 @@ final class FlockFeedingEndpointTest extends LotsTestCase
     private function consume(Flock $flock, string $date): FeedConsumption
     {
         return $this->app->make(RecordDailyFeedConsumptionAction::class)->execute($flock->id, $date);
+    }
+
+    // Suma los lotes por receta y UP, escala el aviso y lo resuelve cuando se recupera el saldo.
+    public function test_feed_coverage_alerts_follow_the_effective_ration_and_configurable_thresholds(): void
+    {
+        // Preparación: crea dos lotes de la misma receta y configura un total manual en uno.
+        $this->localTime('2026-10-05 12:00');
+        $actor = $this->signIn(['can_manage_flocks', 'can_view_feed_stock', 'can_view_notifications', 'can_manage_feed_minimums']);
+        $unit = ProductionUnit::factory()->create();
+        $recipe = FeedRecipe::factory()->create();
+        $stages = [['day' => 1, 'grams' => 40, 'recipe' => $recipe]];
+        $this->admitted(stages: $stages, unit: $unit);
+        $manual = $this->admitted(stages: $stages, unit: $unit);
+        $this->command('POST', $this->feedingUrl($manual).'/manual', ['cantidad_diaria_g' => '6000'])->assertCreated();
+        $balance = FeedBalance::factory()->create([
+            'feed_recipe_id' => $recipe->id, 'production_unit_id' => $unit->id, 'quantity_grams' => 70000,
+        ]);
+
+        // Preparación: agrega cuentas ajenas a la UP o sin permiso para recibir el aviso.
+        config(['identity.pin.pepper' => 'test-only-temporary-value']);
+        $otherUnit = ProductionUnit::factory()->create();
+        $otherEmployee = User::factory()->devicePin($otherUnit)->create();
+        $otherEmployee->syncRoles([$actor->roles()->firstOrFail()]);
+        User::factory()->create();
+        $alerts = AppNotification::query()->where('type', 'feed_coverage');
+
+        // Evaluación: siete días exactos alcanzan y una fracción menos genera un único aviso medio.
+        $this->artisan('alimentacion:evaluar-cobertura')->assertExitCode(0);
+        $this->assertSame(0, (clone $alerts)->count());
+        $balance->forceFill(['quantity_grams' => 69999])->save();
+        $this->artisan('alimentacion:evaluar-cobertura')->assertExitCode(0);
+        $this->artisan('alimentacion:evaluar-cobertura')->assertExitCode(0);
+        $notice = (clone $alerts)->sole();
+        $this->assertSame($actor->id, $notice->recipient_id);
+        $this->assertSame($unit->id, $notice->production_unit_id);
+        $this->assertSame('medio', $notice->urgency->value);
+        $this->assertSame('management_plans', $notice->module);
+        $this->patchJson('/api/v1/notificaciones/'.$notice->public_id.'/lectura')->assertOk();
+
+        // Evaluación: dos días exactos elevan el mismo aviso a alto y vuelven a marcarlo como no leído.
+        $balance->forceFill(['quantity_grams' => 20000])->save();
+        $this->artisan('alimentacion:evaluar-cobertura')->assertExitCode(0);
+        $this->getJson('/api/v1/notificaciones/'.$notice->public_id)->assertOk()
+            ->assertJsonPath('data.urgencia', 'alto')->assertJsonPath('data.leida_en', null);
+        $balance->forceFill(['quantity_grams' => 20001])->save();
+        $this->artisan('alimentacion:evaluar-cobertura')->assertExitCode(0);
+        $this->assertSame('medio', $notice->refresh()->urgency->value);
+
+        // Solicitud: configura los umbrales de la UP y vuelve a evaluar la misma existencia.
+        $settings = '/api/v1/unidades-productivas/'.$unit->id.'/alertas-cobertura-racion';
+        $this->getJson($settings)->assertOk()->assertJsonPath('data.dias_aviso', 7)->assertJsonPath('data.dias_urgencia', 2);
+        $this->putJson($settings, ['dias_aviso' => 3, 'dias_urgencia' => 3])->assertUnprocessable()
+            ->assertJsonValidationErrors('dias_urgencia');
+        $this->putJson($settings, ['dias_aviso' => 9, 'dias_urgencia' => 3])->assertOk()
+            ->assertJsonPath('data.dias_aviso', 9)->assertJsonPath('data.dias_urgencia', 3);
+        $entry = AuditEntry::query()->where('event', 'feed_coverage_thresholds_changed')->sole();
+        $this->assertSame($unit->id, $entry->up_id);
+        $this->assertSame($actor->id, $entry->causer_id);
+        $this->artisan('alimentacion:evaluar-cobertura')->assertExitCode(0);
+        $this->assertSame('alto', $notice->refresh()->urgency->value);
+
+        // Evaluación: la reposición resuelve el aviso y un faltante posterior abre un nuevo episodio.
+        $balance->forceFill(['quantity_grams' => 90000])->save();
+        $this->artisan('alimentacion:evaluar-cobertura')->assertExitCode(0);
+        $this->assertNotNull($notice->refresh()->resolved_at);
+        $balance->forceFill(['quantity_grams' => -10])->save();
+        $this->artisan('alimentacion:evaluar-cobertura')->assertExitCode(0);
+        $this->assertSame(2, (clone $alerts)->count());
+        $this->assertSame('alto', (clone $alerts)->whereNull('resolved_at')->sole()->urgency->value);
+    }
+
+    // Una nueva etapa cambia la receta evaluada aunque todavía no exista una cuenta de saldo.
+    public function test_feed_coverage_follows_the_active_plan_stage_without_a_balance(): void
+    {
+        // Preparación: asigna dos etapas de plan con recetas distintas y sin existencias registradas.
+        $this->localTime('2026-10-05 12:00');
+        $this->signIn(['can_manage_flocks', 'can_view_feed_stock', 'can_view_notifications']);
+        $initial = FeedRecipe::factory()->create();
+        $next = FeedRecipe::factory()->create();
+        $this->admitted(stages: [
+            ['day' => 1, 'grams' => 40, 'recipe' => $initial],
+            ['day' => 2, 'grams' => 60, 'recipe' => $next],
+        ]);
+        $alerts = AppNotification::query()->where('type', 'feed_coverage');
+
+        // Evaluación: la ausencia de saldo cuenta como cobertura cero de la receta vigente.
+        $this->artisan('alimentacion:evaluar-cobertura')->assertExitCode(0);
+        $first = (clone $alerts)->sole();
+        $this->assertSame((string) $initial->id, $first->entity_id);
+        $this->assertSame('alto', $first->urgency->value);
+
+        // Evaluación: al entrar en la siguiente etapa cierra el aviso anterior y abre el de la nueva receta.
+        $this->localTime('2026-10-06 00:10');
+        $this->artisan('alimentacion:evaluar-cobertura')->assertExitCode(0);
+        $this->assertNotNull($first->refresh()->resolved_at);
+        $this->assertSame((string) $next->id, (clone $alerts)->whereNull('resolved_at')->sole()->entity_id);
+        $this->assertDatabaseCount('feed_balances', 0);
+    }
+
+    // La consulta de umbrales y su edición requieren los permisos de inventario correspondientes.
+    public function test_feed_coverage_thresholds_require_stock_and_minimum_permissions(): void
+    {
+        // Preparación: crea una UP y autentica primero a un usuario sin permisos de stock.
+        $unit = ProductionUnit::factory()->create();
+        $settings = '/api/v1/unidades-productivas/'.$unit->id.'/alertas-cobertura-racion';
+        $this->signIn([]);
+
+        // Solicitud: deniega la consulta y permite solo lectura con el permiso de stock.
+        $this->getJson($settings)->assertForbidden();
+        $this->signIn(['can_view_feed_stock']);
+        $this->getJson($settings)->assertOk();
+        $this->putJson($settings, ['dias_aviso' => 9, 'dias_urgencia' => 3])->assertForbidden();
     }
 
     // Flujo: inicia automático y calcula la jornada de creación con mortalidad al cierre.

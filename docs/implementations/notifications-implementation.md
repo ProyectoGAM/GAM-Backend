@@ -12,6 +12,14 @@ La combinación de destinatario, tipo y clave de origen identifica una publicaci
 
 El listado, el detalle y la respuesta al marcar como leída incluyen `urgencia` (`bajo`, `medio`, `alto`) y `modulo`. El listado usa fecha descendente por defecto. `GET /api/v1/notificaciones?orden=urgencia` ordena de alto a bajo antes de paginar, con los avisos más recientes primero dentro de cada nivel. Los filtros `urgencia`, `modulo` y `estado_lectura` se pueden combinar. Por ejemplo, `GET /api/v1/notificaciones?urgencia=alto&modulo=management_plans`.
 
+## Mostrar el estado de una alerta
+
+Publicar con `isAlert: true` para que la bandeja devuelva `estado_resolucion: no_resuelto`. Cuando el flujo operativo cierre la alerta, el módulo emisor puede invocar `ResolveAlertNotificationAction` sobre el aviso publicado. La API devuelve `estado_resolucion: resuelto` y `resuelta_en` con la primera fecha de resolución. La acción emite la señal de actualización después de confirmar la transacción. Leer el aviso mantiene su estado operativo.
+
+La API devuelve ambos campos como `null` para las notificaciones informativas, incluidas las que ya existían al aplicar la migración. El estado guardado en la bandeja corresponde al aviso de cada destinatario. El módulo de origen define la autorización, ejecuta y audita el cierre operativo, y sincroniza los avisos que haya publicado. Las reglas y disparadores de cada módulo se integran por separado.
+
+En `GET /api/v1/notificaciones`, el filtro `estado_resolucion=vigente` incluye avisos informativos (`null`) y alertas pendientes (`no_resuelto`). `estado_resolucion=resuelto` incluye las alertas cerradas. Al omitir el parámetro se devuelven todos los avisos. El filtro se aplica antes de paginar y se combina con lectura, módulo, urgencia y orden.
+
 ## Entrega y autorización
 
 Después de confirmar la escritura, Laravel envía `notifications.changed` a Reverb mediante la cola Redis existente. Angular/Ionic recibe la señal con Echo y consulta la API para actualizar la bandeja y el contador. La conexión transporta una señal vacía. La API entrega el contenido y verifica destinatario, permiso y UP. Abrir la app, volver a primer plano o suscribirse de nuevo recupera las notificaciones persistidas.

@@ -29,6 +29,12 @@ final class NotificationController
             default => null,
         };
 
+        match ($request->validated('estado_resolucion')) {
+            'vigente' => $query->whereNull('resolved_at'),
+            'resuelto' => $query->whereNotNull('resolved_at'),
+            default => null,
+        };
+
         if ($request->validated('orden') === 'urgencia') {
             $query->orderByRaw('CASE urgency WHEN ? THEN 1 WHEN ? THEN 2 ELSE 3 END', [
                 NotificationUrgency::High->value,

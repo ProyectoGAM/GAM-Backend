@@ -175,7 +175,7 @@ En el ejemplo de San José, iniciador con `saldo_g=800000` y `minimo_g=300000` e
 
 La señal contiene una instantánea inmutable con ID de cuenta, receta, UP, cantidad, mínimo nullable, estado, motivo técnico y UUID de la operación. Los motivos son `manufacture`, `feed_adjustment`, `cancellation`, `consumption`, `consumption_correction` y `minimum_changed`. Incluye estados suficientes y sin configurar para que Alertas pueda resolver una condición anterior. Los reintentos idempotentes de operaciones de stock no generan otra evaluación. Las rectificaciones que cambian receta evalúan ambas cuentas afectadas; un delta cero no modifica stock ni necesita señal nueva.
 
-No se incorporan notificaciones, listeners ni historial de alertas en esta entrega. El futuro módulo de Alertas gestionará apertura, resolución, deduplicación y entrega; podrá contrastar el saldo vigente al procesar señales concurrentes. El evento en memoria no sustituye un mecanismo persistente de entrega o recuperación que ese módulo pueda necesitar.
+El evento queda disponible para avisos por mínimo en gramos. Los avisos de cobertura en días se evalúan por separado a partir del saldo vigente y la demanda de los lotes. [Cobertura de ración](flock-feeding-implementation.md#avisos-por-cobertura-de-ración)
 
 ### Migración de mínimos
 

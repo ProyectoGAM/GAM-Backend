@@ -25,6 +25,7 @@ use App\Http\Controllers\Inventory\FeedAdjustmentController;
 use App\Http\Controllers\Inventory\FeedBalanceController;
 use App\Http\Controllers\Inventory\FeedBalanceMinimumController;
 use App\Http\Controllers\Inventory\FeedConsumptionController;
+use App\Http\Controllers\Inventory\FeedCoverageThresholdController;
 use App\Http\Controllers\Inventory\FeedManufactureController;
 use App\Http\Controllers\Inventory\FeedRecipeController;
 use App\Http\Controllers\Inventory\FeedStockController;
@@ -414,6 +415,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/saldos-alimento', [FeedBalanceController::class, 'index'])->name('balances.index');
             Route::get('/unidades-productivas/{productionUnit}/recetas/{recipe}/saldo', [FeedBalanceController::class, 'show'])->name('balances.show');
             Route::patch('/unidades-productivas/{productionUnit}/recetas/{recipe}/minimo', [FeedBalanceMinimumController::class, 'update'])->name('balances.minimum');
+            Route::get('/unidades-productivas/{productionUnit}/alertas-cobertura-racion', [FeedCoverageThresholdController::class, 'show'])->name('coverage-alerts.show');
+            Route::put('/unidades-productivas/{productionUnit}/alertas-cobertura-racion', [FeedCoverageThresholdController::class, 'update'])->name('coverage-alerts.update');
             Route::get('/ajustes-alimentacion', [FeedAdjustmentController::class, 'index'])->name('adjustments.index');
             Route::post('/unidades-productivas/{productionUnit}/recetas/{recipe}/ajustes', [FeedAdjustmentController::class, 'feed'])->name('adjustments.feed');
             Route::post('/plantas-racion/{poultryHouse}/ingredientes/{product}/ajustes', [FeedAdjustmentController::class, 'ingredient'])->name('adjustments.ingredient');

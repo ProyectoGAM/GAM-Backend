@@ -24,6 +24,34 @@ tags:
   - name: Recetas
     description: Catálogo global sin asignaciones por unidad productiva.
 paths:
+  /unidades-productivas/{productionUnit}/alertas-cobertura-racion:
+    parameters:
+      - {$ref: '#/components/parameters/ProductionUnitId'}
+    get:
+      operationId: getFeedCoverageAlertThresholds
+      summary: Consulta los umbrales de alerta de cobertura por unidad productiva
+      description: Requiere can_view_feed_stock. Las cuentas de dispositivo consultan su propia unidad.
+      responses:
+        '200': {$ref: '#/components/responses/FeedCoverageThresholds'}
+        '401': {description: Sesión inválida}
+        '403': {description: Falta el permiso de stock de alimento}
+        '404': {description: Unidad productiva no disponible}
+    put:
+      operationId: updateFeedCoverageAlertThresholds
+      summary: Guarda ambos umbrales de alerta de cobertura
+      description: Requiere can_manage_feed_minimums. La evaluación programada aplica los cambios en su próxima ejecución.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/FeedCoverageThresholdsInput'}
+            example: {dias_aviso: 7, dias_urgencia: 2}
+      responses:
+        '200': {$ref: '#/components/responses/FeedCoverageThresholds'}
+        '401': {description: Sesión inválida}
+        '403': {description: Falta el permiso para configurar umbrales}
+        '404': {description: Unidad productiva no disponible}
+        '422': {description: Umbrales inválidos}
   /recetas:
     get:
       tags: [Recetas]
@@ -612,6 +640,12 @@ components:
       description: UUID por actor para alta y nuevas operaciones; no se admite en el cuerpo.
       schema: {type: string, format: uuid}
   schemas:
+    FeedCoverageThresholdsInput:
+      type: object
+      required: [dias_aviso, dias_urgencia]
+      properties:
+        dias_aviso: {type: integer, minimum: 1, maximum: 365, default: 7, description: Genera el aviso medio cuando la cobertura es menor a este valor}
+        dias_urgencia: {type: integer, minimum: 0, maximum: 364, default: 2, description: Genera el aviso alto cuando la cobertura es menor o igual a este valor. Debe ser menor que dias_aviso.}
     StockSignedGrams:
       description: "Gramos enteros exactos dentro del rango del inventario decimal(18,6); no floats, fracciones ni notación científica. Máximo absoluto 999999999999."
       oneOf: [{"type":"integer","format":"int64","minimum":-999999999999,"maximum":999999999999},{"type":"string","pattern":"^-?[0-9]+$"}]
@@ -904,6 +938,21 @@ components:
             type: array
             items: {type: string}
   responses:
+    FeedCoverageThresholds:
+      description: Configuración efectiva de cobertura
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data:
+                allOf:
+                  - {$ref: '#/components/schemas/FeedCoverageThresholdsInput'}
+                  - type: object
+                    required: [unidad_productiva_id]
+                    properties:
+                      unidad_productiva_id: {type: integer}
     FeedOperationResponse:
       description: "Operación histórica con instantánea, saldos y referencias."
       content:

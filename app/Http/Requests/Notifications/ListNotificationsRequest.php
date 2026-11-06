@@ -12,6 +12,7 @@ final class ListNotificationsRequest extends NotificationRequest
     {
         return [
             'estado_lectura' => ['sometimes', 'in:leida,no_leida'],
+            'estado_resolucion' => ['sometimes', 'in:vigente,resuelto'],
             'urgencia' => ['sometimes', 'in:'.implode(',', array_column(NotificationUrgency::cases(), 'value'))],
             'modulo' => ['sometimes', 'string', 'regex:'.NotificationData::MODULE_PATTERN],
             'orden' => ['sometimes', 'in:fecha,urgencia'],
@@ -24,6 +25,7 @@ final class ListNotificationsRequest extends NotificationRequest
     public function messages(): array
     {
         return [
+            'estado_resolucion.in' => 'El estado de resolución debe ser vigente o resuelto.',
             'urgencia.in' => 'La urgencia debe ser bajo, medio o alto.',
             'modulo.regex' => 'El módulo debe ser un código en minúsculas de hasta 80 caracteres.',
             'orden.in' => 'El orden debe ser fecha o urgencia.',

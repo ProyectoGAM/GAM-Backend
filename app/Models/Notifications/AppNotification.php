@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/** @property NotificationUrgency $urgency */
 final class AppNotification extends Model
 {
     /** @use HasFactory<AppNotificationFactory> */
@@ -20,12 +21,18 @@ final class AppNotification extends Model
 
     protected $fillable = [
         'public_id', 'recipient_id', 'production_unit_id', 'type', 'source_key', 'urgency', 'module', 'title', 'message',
-        'entity_type', 'entity_id', 'target_path', 'occurred_at', 'read_at',
+        'entity_type', 'entity_id', 'target_path', 'occurred_at', 'read_at', 'is_alert',
     ];
 
     protected function casts(): array
     {
-        return ['urgency' => NotificationUrgency::class, 'occurred_at' => 'immutable_datetime', 'read_at' => 'immutable_datetime'];
+        return [
+            'urgency' => NotificationUrgency::class,
+            'occurred_at' => 'immutable_datetime',
+            'read_at' => 'immutable_datetime',
+            'is_alert' => 'boolean',
+            'resolved_at' => 'immutable_datetime',
+        ];
     }
 
     /** @return Builder<self> */

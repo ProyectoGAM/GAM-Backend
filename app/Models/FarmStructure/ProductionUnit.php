@@ -23,6 +23,8 @@ use Illuminate\Support\Str;
  * @property string $latitude
  * @property string $longitude
  * @property ProductionUnitStatus $status
+ * @property int $feed_coverage_warning_days
+ * @property int $feed_coverage_urgent_days
  * @property int|null $poultry_houses_count
  * @property-read Locality|null $locality
  * @property-read Carbon $created_at
@@ -41,6 +43,8 @@ class ProductionUnit extends Model
             'latitude' => 'decimal:6',
             'longitude' => 'decimal:6',
             'status' => ProductionUnitStatus::class,
+            'feed_coverage_warning_days' => 'integer',
+            'feed_coverage_urgent_days' => 'integer',
         ];
     }
 

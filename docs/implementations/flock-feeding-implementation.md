@@ -6,7 +6,17 @@ La entrega de roles y permisos exige sesión válida y permisos del rol: consult
 
 El tercer bloque consume exclusivamente alimento elaborado desde `FeedBalance`, por receta y UP del lote. No descuenta ingredientes, modifica elaboraciones ni aplica sus restricciones de cancelación. Permite saldos cero o negativos sin elaboración previa, con aritmética exacta y límites comprobados.
 
-Incluye etapas de alimentación del plan, inicialización automática al admitir aves, configuración manual fija, regreso explícito a automático, integración con mortalidad y redistribuciones, recuperación de días pendientes, consultas y rectificaciones con compensación. No incorpora frontend, comidas individuales, pausa, alertas, notificaciones ni eliminación/cancelación de consumos.
+Incluye etapas de alimentación del plan, inicialización automática al admitir aves, configuración manual fija, regreso explícito a automático, integración con mortalidad y redistribuciones, recuperación de días pendientes, consultas y rectificaciones con compensación. Los avisos de cobertura se integran con la bandeja de notificaciones.
+
+## Avisos por cobertura de ración
+
+Cada cinco minutos, `alimentacion:evaluar-cobertura` agrupa la demanda vigente por receta y unidad productiva. En automático usa los gramos por ave de la etapa vigente y la población actual. En manual usa el total diario configurado. Incluye lotes activos y en cuarentena con pauta vigente. Una cuenta sin saldo o con saldo negativo equivale a cero días. La cobertura es una estimación a partir de la pauta del día.
+
+Con los valores iniciales, el aviso es `medio` con menos de 7 días de cobertura y `alto` con 2 días o menos. Compara el saldo con la demanda multiplicada por cada umbral antes de redondear. Si la cobertura llega al umbral de aviso o deja de haber demanda, se resuelve el aviso. Un faltante posterior abre un nuevo episodio. Escalar de medio a alto vuelve a marcar el mismo aviso como no leído.
+
+Los avisos aparecen con `modulo: management_plans`, `tipo: feed_coverage` y una referencia a la receta. Los reciben quienes tienen `can_view_feed_stock` y `can_view_notifications` dentro del alcance de la UP. La evaluación serializa por UP y confirma cada unidad por separado. PostgreSQL permite un solo aviso abierto por destinatario, receta y UP.
+
+El frontend puede consultar y guardar los umbrales de cada UP con `GET` y `PUT /api/v1/unidades-productivas/{productionUnit}/alertas-cobertura-racion`. El cuerpo del `PUT` incluye `dias_aviso` de 1 a 365 y `dias_urgencia` entre 0 y un día menos que el umbral de aviso. La consulta requiere `can_view_feed_stock` y la edición `can_manage_feed_minimums`. La escritura registra un evento de auditoría en la misma transacción y el siguiente ciclo aplica los nuevos valores. [Contrato de configuración](../../contracts/openapi/feed-recipes.yaml) · [Bandeja de avisos](notifications-implementation.md)
 
 Se confirmó con el usuario que el total manual debe ser positivo; una rectificación puede establecer cero. También se confirmó que revisar el plan del lote aplica sus nuevas etapas desde el día de la revisión, preservando días anteriores y cualquier configuración manual vigente. Las transiciones automáticas evalúan la disponibilidad al inicio del día: si la receta estaba activa a medianoche, la etapa queda vigente aunque se desactive durante esa jornada.
 

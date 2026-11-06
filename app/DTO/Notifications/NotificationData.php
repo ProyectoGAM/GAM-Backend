@@ -23,6 +23,7 @@ final readonly class NotificationData
         public ?string $targetPath = null,
         public NotificationUrgency $urgency = NotificationUrgency::Low,
         public string $module = 'general',
+        public bool $isAlert = false,
     ) {
         if (preg_match(self::MODULE_PATTERN, $module) !== 1) {
             throw new InvalidArgumentException('El módulo debe ser un código en minúsculas de hasta 80 caracteres.');

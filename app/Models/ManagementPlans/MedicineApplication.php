@@ -5,13 +5,18 @@ namespace App\Models\ManagementPlans;
 use App\Models\Lots\Flock;
 use App\Models\SuppliersAndCatalogs\Medicine;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Database\Factories\ManagementPlans\MedicineApplicationFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
-/** @property string $public_id @property string $operation_id */
+/**
+ * @property string $public_id
+ * @property string $operation_id
+ * @property CarbonImmutable $occurred_at
+ */
 class MedicineApplication extends Model
 {
     /** @use HasFactory<MedicineApplicationFactory> */
