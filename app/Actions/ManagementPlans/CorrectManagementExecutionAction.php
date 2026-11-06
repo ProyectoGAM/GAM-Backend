@@ -19,6 +19,7 @@ use App\Models\ManagementPlans\VaccinationApplication;
 use App\Models\User;
 use App\Services\Lots\FlockActivityJournal;
 use App\Services\Lots\FlockState;
+use App\Services\Lots\LotsAuthorization;
 use App\Services\Lots\RunLotsCommand;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
@@ -115,6 +116,15 @@ final readonly class CorrectManagementExecutionAction
 
                 return ['management_execution_correction' => $snapshot, 'warnings' => []];
             },
+            authorize: $executionType === 'manual_practice'
+                ? function (User $currentActor) use ($flock, $executionPublicId): void {
+                    $practice = ManualPractice::query()->where('flock_id', $flock->id)
+                        ->where('public_id', $executionPublicId)->firstOrFail();
+                    if ($practice->practice_type === 'beak_trimming') {
+                        LotsAuthorization::ensure($currentActor, 'can_reverse_beak_trimming');
+                    }
+                }
+            : null,
         );
     }
 

@@ -324,7 +324,7 @@ final class PlanTemplateEndpointTest extends LotsTestCase
     public function test_revision_preserves_prior_execution_link_and_activity(): void
     {
         // Preparación: asigna una práctica prevista y registra su ejecución explícita.
-        $this->signIn(['can_view_management_plans', 'can_manage_management_plans', 'can_execute_management_plans']);
+        $this->signIn(['can_view_management_plans', 'can_manage_management_plans', 'can_execute_management_plans', 'can_record_beak_trimming']);
         $flock = $this->flockWithPlan(100, activities: [[
             'type' => 'manual_practice', 'title' => 'Despique previsto', 'timing_kind' => 'week', 'start_week' => 12,
         ]]);

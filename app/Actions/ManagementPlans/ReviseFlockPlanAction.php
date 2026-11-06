@@ -101,6 +101,7 @@ final readonly class ReviseFlockPlanAction
                 'created_at' => $revision->created_at->toIso8601String(),
                 'activities' => $revision->activities->map(fn (FlockPlanActivity $activity): array => [
                     'id' => $activity->public_id, 'type' => $activity->type,
+                    'practice_type' => $activity->practice_type,
                     'title' => $activity->title, 'timing_kind' => $activity->timing_kind,
                     'start_day' => $activity->start_day, 'end_day' => $activity->end_day,
                     'start_week' => $activity->start_week, 'end_week' => $activity->end_week,

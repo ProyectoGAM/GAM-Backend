@@ -163,7 +163,7 @@ components:
         id: {type: string, format: ulid}
         tipo:
           type: string
-          description: Código estable del aviso emitido por el módulo. Planes de manejo publica vaccination_due para vacunas pendientes y medication_due para medicaciones pendientes.
+          description: Código estable del aviso emitido por el módulo. Planes de manejo publica vaccination_due, medication_due, beak_trimming_due, manual_practice_due, flock_movement_due, egg_collection_due y mortality_due.
           example: medication_due
         urgencia: {$ref: '#/components/schemas/Urgencia'}
         modulo: {$ref: '#/components/schemas/Modulo'}

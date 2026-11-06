@@ -161,6 +161,7 @@ final readonly class SavePlanTemplateAction
             'version_status' => $version->status,
             'activities' => $version->activities->map(fn (PlanTemplateActivity $activity): array => [
                 'id' => $activity->public_id, 'type' => $activity->type, 'title' => $activity->title,
+                'practice_type' => $activity->practice_type,
                 'timing_kind' => $activity->timing_kind, 'start_day' => $activity->start_day,
                 'end_day' => $activity->end_day, 'start_week' => $activity->start_week,
                 'end_week' => $activity->end_week, 'interval_days' => $activity->interval_days,

@@ -108,6 +108,16 @@ return [
             'description' => 'Registrar y corregir aplicaciones sanitarias y prácticas de manejo.',
             'requires' => ['can_view_management_plans'], 'admin_only' => false,
         ],
+        'can_record_beak_trimming' => [
+            'module' => 'management_plans', 'label' => 'Registrar despique',
+            'description' => 'Registrar un despique realizado en un lote.',
+            'requires' => ['can_execute_management_plans'], 'admin_only' => false,
+        ],
+        'can_reverse_beak_trimming' => [
+            'module' => 'management_plans', 'label' => 'Invalidar registro de despique',
+            'description' => 'Invalidar un registro de despique con motivo y conservar el historial.',
+            'requires' => ['can_execute_management_plans'], 'admin_only' => false,
+        ],
         'can_manage_medicine_stock' => [
             'module' => 'health', 'label' => 'Ajustar contador de medicamentos',
             'description' => 'Ajustar el contador clínico global de medicamentos, sin stock físico por UP.',

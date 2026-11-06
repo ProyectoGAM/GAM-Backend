@@ -303,7 +303,7 @@ paths:
     post:
       tags: [Ejecuciones]
       summary: Registra una práctica manual tipada
-      description: Requiere can_execute_management_plans. Admite despique, colocación de nidos y otras prácticas.
+      description: Requiere can_execute_management_plans. El despique exige además can_record_beak_trimming y permite omitir los detalles. Si se vincula una actividad con subtipo, la práctica debe coincidir.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -312,7 +312,9 @@ paths:
             schema: { $ref: '#/components/schemas/PracticeInput' }
       responses:
         '201': { $ref: '#/components/responses/ExecutionCreated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Validation' }
   /flocks/{flock}/manejos/{executionType}/{execution}/correcciones:
     parameters:
       - $ref: '#/components/parameters/Flock'
@@ -327,7 +329,7 @@ paths:
     post:
       tags: [Ejecuciones]
       summary: Registra una corrección compensatoria
-      description: Requiere can_execute_management_plans. Conserva la aplicación original; compensa el stock cuando corresponde.
+      description: Requiere can_execute_management_plans. Para invalidar un registro de despique exige además can_reverse_beak_trimming. Conserva el registro original y compensa el stock cuando corresponde.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -341,7 +343,9 @@ paths:
                 reason: { type: string, maxLength: 500 }
       responses:
         '201': { $ref: '#/components/responses/ExecutionCreated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Validation' }
   /medicines/{medicine}/ajustes-stock:
     parameters: [{ $ref: '#/components/parameters/Medicine' }]
     post:
@@ -524,6 +528,10 @@ components:
           type: string
           enum: [vaccination, medication, ration_change, weighing, manual_practice, flock_movement, egg_collection, mortality]
         title: { type: string, maxLength: 200 }
+        practice_type:
+          type: [string, 'null']
+          enum: [beak_trimming, nest_placement, other, null]
+          description: Subtipo opcional de manual_practice. Usar beak_trimming para programar los avisos específicos de despique.
         timing_kind: { type: string, enum: [day, week, week_range, day_recurrence, unscheduled] }
         start_day: { type: [integer, 'null'], minimum: 1 }
         end_day: { type: [integer, 'null'], minimum: 1 }
@@ -552,6 +560,7 @@ components:
         id: { $ref: '#/components/schemas/Ulid' }
         type: { type: string }
         title: { type: string }
+        practice_type: { type: [string, 'null'], enum: [beak_trimming, nest_placement, other, null] }
         timing_kind: { type: string, enum: [day, week, week_range, day_recurrence, unscheduled] }
         start_day: { type: [integer, 'null'] }
         end_day: { type: [integer, 'null'] }
@@ -734,11 +743,18 @@ components:
       allOf:
         - $ref: '#/components/schemas/ExecutionBase'
         - type: object
-          required: [practice_type, notes, occurred_at]
+          required: [practice_type, occurred_at]
+          if:
+            properties:
+              practice_type: { const: beak_trimming }
+          else:
+            required: [notes]
+            properties:
+              notes: { type: string }
           properties:
             practice_type: { type: string, enum: [beak_trimming, nest_placement, other] }
             title: { type: string, maxLength: 200 }
-            notes: { type: string }
+            notes: { type: [string, 'null'], minLength: 1, maxLength: 5000 }
     ExecutionEnvelope:
       type: object
       required: [data]

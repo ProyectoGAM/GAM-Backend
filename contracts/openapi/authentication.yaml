@@ -764,7 +764,7 @@ components:
     PermissionSelection:
       type: array
       uniqueItems: true
-      maxItems: 84
+      maxItems: 87
       items: { type: string, pattern: '^can_[a-z0-9_]+$' }
       example: [can_view_feed_stock, can_adjust_feed_stock]
     UserRoleSelection:
