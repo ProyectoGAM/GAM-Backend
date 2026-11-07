@@ -9,8 +9,17 @@ use Carbon\CarbonImmutable;
 
 final class VehicleMaintenanceSchedule
 {
-    public function status(VehicleMaintenancePlan $plan, ?VehicleMeterReading $odometer, ?CarbonImmutable $today = null): string
-    {
+    public const int NOTICE_DAYS = 30;
+
+    public const int NOTICE_KILOMETERS = 500;
+
+    public function status(
+        VehicleMaintenancePlan $plan,
+        ?VehicleMeterReading $odometer,
+        ?CarbonImmutable $today = null,
+        int $noticeDays = self::NOTICE_DAYS,
+        int $noticeKilometers = self::NOTICE_KILOMETERS,
+    ): string {
         $today ??= CarbonImmutable::today(VehicleMaintenance::TIMEZONE);
         $dueDate = $plan->next_due_at?->toDateString();
         $hasKmLimit = $plan->next_due_odometer_km !== null;
@@ -23,8 +32,8 @@ final class VehicleMaintenanceSchedule
         if ($dueByDate || $dueByKm) {
             return 'overdue';
         }
-        $dueSoonByDate = $dueDate !== null && $dueDate <= $today->addDays(30)->toDateString();
-        $dueSoonByKm = $hasKmLimit && $odometerEpochMatches && ((float) $plan->next_due_odometer_km - (float) $odometer->value) <= 500;
+        $dueSoonByDate = $dueDate !== null && $dueDate <= $today->addDays($noticeDays)->toDateString();
+        $dueSoonByKm = $hasKmLimit && $odometerEpochMatches && ((float) $plan->next_due_odometer_km - (float) $odometer->value) <= $noticeKilometers;
         if ($dueSoonByDate || $dueSoonByKm) {
             return 'upcoming';
         }

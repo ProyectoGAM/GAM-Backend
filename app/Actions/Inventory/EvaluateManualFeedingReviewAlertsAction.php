@@ -7,6 +7,7 @@ use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Enums\Lots\FlockStatus;
 use App\Enums\Notifications\AlertTimingType;
 use App\Enums\Notifications\NotificationUrgency;
+use App\Enums\Notifications\OperationalAlertType;
 use App\Interfaces\Clock;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\FlockFeedingChange;
@@ -26,7 +27,7 @@ final readonly class EvaluateManualFeedingReviewAlertsAction
             $unit = ProductionUnit::query()->findOrFail($unitId);
             $evaluatedAt = $this->clock->now()->setTimezone(FlockFeedingResolver::TIMEZONE);
             $pending = $unit->status === ProductionUnitStatus::Active ? $this->pending($unit, $evaluatedAt) : [];
-            $this->synchronize->execute($unitId, 'management_plans', $type->value, 'can_view_flock_feeding', 'flock', $evaluatedAt, $pending);
+            $this->synchronize->execute($unitId, OperationalAlertType::ManualFeedingReviewDue, 'can_view_flock_feeding', 'flock', $evaluatedAt, $pending);
         }, 3);
     }
 

@@ -48,6 +48,7 @@ use App\Http\Controllers\ManagementPlans\FlockManagementHistoryController;
 use App\Http\Controllers\ManagementPlans\FlockPlanController;
 use App\Http\Controllers\ManagementPlans\ManagementExecutionController;
 use App\Http\Controllers\ManagementPlans\PlanTemplateController;
+use App\Http\Controllers\Notifications\AlertConfigurationController;
 use App\Http\Controllers\Notifications\AlertTimingThresholdController;
 use App\Http\Controllers\Notifications\NotificationController;
 use App\Http\Controllers\ReferenceData\ReferenceOptionsController;
@@ -106,6 +107,10 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         });
         Route::get('/unidades-productivas/{productionUnit}/umbrales-alertas/{alertType}', [AlertTimingThresholdController::class, 'show'])->name('notifications.thresholds.show');
         Route::put('/unidades-productivas/{productionUnit}/umbrales-alertas/{alertType}', [AlertTimingThresholdController::class, 'update'])->name('notifications.thresholds.update');
+        Route::get('/configuracion-alertas', [AlertConfigurationController::class, 'index'])->name('notifications.configuration.index');
+        Route::patch('/configuracion-alertas/{operationalAlertType}', [AlertConfigurationController::class, 'update'])->name('notifications.configuration.update');
+        Route::get('/unidades-productivas/{productionUnit}/configuracion-alertas', [AlertConfigurationController::class, 'index'])->name('notifications.unit-configuration.index');
+        Route::patch('/unidades-productivas/{productionUnit}/configuracion-alertas/{operationalAlertType}', [AlertConfigurationController::class, 'updateUnit'])->name('notifications.unit-configuration.update');
         Route::patch('/auth/contrasena', [OwnCredentialController::class, 'update'])->defaults('credential', 'password')->middleware('throttle:credentials')->name('auth.password.update');
         Route::patch('/auth/pin', [OwnCredentialController::class, 'update'])->defaults('credential', 'access_pin')->middleware('throttle:credentials')->name('auth.pin.update');
         Route::put('/auth/pin-operativo', [OwnCredentialController::class, 'update'])->defaults('credential', 'operation_pin')->middleware('throttle:credentials')->name('auth.operation-pin.update');

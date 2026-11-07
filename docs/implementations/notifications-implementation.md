@@ -36,7 +36,42 @@ Ejecutar `php artisan db:seed --class=IdentityPermissionSeeder --force --no-inte
 
 Si el entorno local ya tiene el volumen de dependencias PHP, actualizarlo antes de iniciar Reverb. Ejecutar `docker compose -f compose.dev.yaml exec -T -u root api composer install --no-interaction --no-scripts`, luego `docker compose -f compose.dev.yaml exec -T api php artisan package:discover --no-interaction` y recrear el gateway para cargar su ruta WebSocket. Las versiones de Guzzle y PSR-7 del lock se ajustaron a las que admite Reverb 1.12.
 
+## Configurar alertas operativas
+
+El catálogo incluye los 19 tipos de alerta operativa que emite GAM. Cada tipo tiene un nombre en español y su código coincide con `tipo` en la bandeja. El alcance general cubre Vehículos, las ubicaciones generales de Inventario y los repartos sin UP o con datos de varias UP. Los ajustes de una unidad son independientes de los ajustes generales.
+
+| Operación | Ruta |
+| --- | --- |
+| Listar el catálogo general | `GET /api/v1/configuracion-alertas` |
+| Guardar una alerta general | `PATCH /api/v1/configuracion-alertas/{operationalAlertType}` |
+| Listar el catálogo de una UP | `GET /api/v1/unidades-productivas/{productionUnit}/configuracion-alertas` |
+| Guardar una alerta de una UP | `PATCH /api/v1/unidades-productivas/{productionUnit}/configuracion-alertas/{operationalAlertType}` |
+
+Para construir el formulario, usar `nombre` y `modulo` para presentar cada alerta, `configuracion` para cargar sus valores efectivos y `campos` para conocer los controles admitidos, sus valores iniciales y sus límites u opciones. Enviar a `ruta` sólo los campos modificados. Por ejemplo, `{"dias_anticipacion": 14, "urgencia_fija": "medio"}` adelanta el aviso de vencimiento de documentos a 14 días y lo muestra con urgencia media.
+
+Todas las alertas admiten `habilitada` y `urgencia_fija`. Usar `null` en `urgencia_fija` para recuperar la urgencia calculada, que puede subir conforme se acerca el vencimiento o empeora la condición. Para restablecer otro campo, enviar el valor `predeterminado` que informa el catálogo.
+
+| Alerta | Parámetros adicionales |
+| --- | --- |
+| Capacidad de galpón | Días antes de la adultez y exceso mínimo de aves sobre la capacidad física |
+| Stock negativo de huevos y saldo negativo del reparto | Déficit mínimo en huevos, inclusive |
+| Huevos sobrantes del reparto | Cantidad mínima devuelta a stock, inclusive |
+| Intervención prevista y documento de vehículo | Días de anticipación en el calendario de Montevideo |
+| Plan preventivo de vehículo | Días y kilómetros de anticipación. Basta alcanzar uno de los límites |
+| Cobertura de ración y avisos temporales de lotes y planes | Valores vigentes y ruta de edición en `criterio_relacionado` |
+| Stock mínimo por ubicación y anomalía de pesaje | `criterio_relacionado` enlaza con la configuración de mínimos o la referencia de pesaje |
+
+`criterio_relacionado` incluye el método HTTP y la ruta de la API que administra el criterio. En cobertura y umbrales temporales incluye los valores efectivos para la UP. En stock mínimo, completar `{stockBalance}` con el saldo del producto en la ubicación. La capacidad física se sigue editando en Galpones y la edad de adultez en Pesajes. Cada API relacionada conserva su validación y permisos. [Contrato de alertas](../../contracts/openapi/notifications.yaml) · [Cobertura de ración](../../contracts/openapi/feed-recipes.yaml) · [Pesajes](../../contracts/openapi/weighings.yaml)
+
+El permiso `can_manage_alert_thresholds` habilita la lectura y escritura. Las sesiones PIN operan en su propia UP y reciben 403 en el catálogo general. Una UP ajena o un tipo que no se configura en el ámbito de la ruta devuelve 404.
+
+Los evaluadores aplican las preferencias en la siguiente ejecución. Al deshabilitar una alerta periódica, sus avisos vigentes pasan al historial de resueltos. Los avisos emitidos al registrar un pesaje o una operación de reparto conservan su historial y la nueva configuración se aplica a futuras publicaciones. En Vehículos, una intervención habilitada puede reunir el aviso de un plan preventivo vinculado. Se conserva la mayor urgencia aplicable, salvo que la intervención tenga una urgencia fija.
+
+Aplicar la migración de `alert_configurations` antes de ejecutar el backend y los evaluadores de esta versión. La tabla guarda únicamente las diferencias frente a los valores iniciales y mantiene una fila única por ámbito y tipo. Las preferencias y umbrales anteriores siguen disponibles. El evento de auditoría `alert_configuration_changed` guarda actor, UP cuando aplica y valores anteriores y nuevos dentro de la misma transacción. Las escrituras simultáneas se serializan por ámbito y tipo. Repetir un cambio efectivo idéntico devuelve la configuración sin agregar otro evento.
+
 ## Verificación local
+
+La configuración operativa pasó 97 pruebas con 1.229 aserciones en PostgreSQL aislado. La regresión cubrió el catálogo y sus valores existentes, la validación, el aislamiento de sesiones PIN, la auditoría idempotente y la aplicación de los cambios en los evaluadores y publicaciones por evento. Pint y PHPStan pasaron en los archivos modificados. Se comprobó el YAML de OpenAPI, sus referencias internas y la coincidencia de sus 19 códigos con los del backend. La integración se verificó desde la API y los comandos del backend.
 
 Se comprobó una suscripción privada real a través del proxy de Angular y Nginx. Publicar un aviso y marcar otro como leído emitieron la señal por la cola y Reverb. Las consultas HTTP confirmaron el contenido, la fecha de lectura y el contador. La prueba del cliente cubrió resincronización al recibir una señal, reconexión y cierre al salir. La compilación del frontend completó con un aviso de optimización por el formato CommonJS de `pusher-js`.
 
