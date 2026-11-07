@@ -259,6 +259,17 @@ final class NotificationEndpointTest extends TestCase
         $this->getJson($foreignThresholds)->assertNotFound();
         $this->putJson($foreignThresholds, $thresholds)->assertNotFound();
 
+        // Solicitud: el catálogo y la escritura tampoco amplían el alcance de la sesión PIN.
+        $ownConfiguration = '/api/v1/unidades-productivas/'.$unit->id.'/configuracion-alertas';
+        $foreignConfiguration = '/api/v1/unidades-productivas/'.$otherUnit->id.'/configuracion-alertas';
+        $this->getJson($ownConfiguration)->assertOk()->assertJsonPath('data.0.unidad_productiva_id', $unit->id);
+        $this->patchJson($ownConfiguration.'/daily_egg_collection_missing', ['habilitada' => false])
+            ->assertOk()->assertJsonPath('data.configuracion.habilitada', false);
+        $this->getJson($foreignConfiguration)->assertNotFound();
+        $this->patchJson($foreignConfiguration.'/daily_egg_collection_missing', ['habilitada' => false])->assertNotFound();
+        $this->getJson('/api/v1/configuracion-alertas')->assertForbidden();
+        $this->patchJson('/api/v1/configuracion-alertas/stock_minimum_reached', ['habilitada' => false])->assertForbidden();
+
         // Mutación: cambia la generación del dispositivo y comprueba el descarte del canal.
         $device->increment('session_generation');
         $this->assertSame([], $channels->forRecipient($user->id, $unit->id));

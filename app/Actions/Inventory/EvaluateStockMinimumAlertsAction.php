@@ -7,6 +7,7 @@ use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Enums\Inventory\StockLocationStatus;
 use App\Enums\Inventory\StockLocationType;
 use App\Enums\Notifications\NotificationUrgency;
+use App\Enums\Notifications\OperationalAlertType;
 use App\Enums\SuppliersAndCatalogs\ProductStatus;
 use App\Interfaces\Clock;
 use App\Models\FarmStructure\ProductionUnit;
@@ -28,7 +29,7 @@ final readonly class EvaluateStockMinimumAlertsAction
             $active = $unitId === null || ProductionUnit::query()->whereKey($unitId)->where('status', ProductionUnitStatus::Active)->exists();
             $pending = $active ? $this->pending($unitId) : [];
 
-            $this->synchronize->execute($unitId, 'inventory', 'stock_minimum_reached', 'can_view_inventory', 'stock_balance', $this->clock->now(), $pending);
+            $this->synchronize->execute($unitId, OperationalAlertType::StockMinimumReached, 'can_view_inventory', 'stock_balance', $this->clock->now(), $pending);
         }, 3);
     }
 

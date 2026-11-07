@@ -7,6 +7,7 @@ use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Enums\Lots\FlockStatus;
 use App\Enums\Notifications\AlertTimingType;
 use App\Enums\Notifications\NotificationUrgency;
+use App\Enums\Notifications\OperationalAlertType;
 use App\Interfaces\Clock;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Lots\EggCollection;
@@ -26,7 +27,7 @@ final readonly class EvaluateDailyEggCollectionAlertsAction
             $evaluatedAt = $this->clock->now()->setTimezone((string) config('lots.timezone'));
             $pending = $unit->status === ProductionUnitStatus::Active ? $this->pending($unit, $evaluatedAt) : [];
 
-            $this->synchronize->execute($unitId, 'lots', AlertTimingType::DailyEggCollectionMissing->value, 'can_view_egg_collections', 'flock', $evaluatedAt, $pending);
+            $this->synchronize->execute($unitId, OperationalAlertType::DailyEggCollectionMissing, 'can_view_egg_collections', 'flock', $evaluatedAt, $pending);
         }, 3);
     }
 

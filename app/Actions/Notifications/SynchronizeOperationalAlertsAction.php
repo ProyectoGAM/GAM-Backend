@@ -4,8 +4,10 @@ namespace App\Actions\Notifications;
 
 use App\DTO\Notifications\NotificationData;
 use App\Enums\Notifications\NotificationUrgency;
+use App\Enums\Notifications\OperationalAlertType;
 use App\Events\Notifications\NotificationInboxChanged;
 use App\Models\Notifications\AppNotification;
+use App\Services\Notifications\AlertConfiguration;
 use App\Services\Notifications\AlertRecipients;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
@@ -16,18 +18,28 @@ final readonly class SynchronizeOperationalAlertsAction
         private AlertRecipients $recipients,
         private PublishNotificationAction $publish,
         private ResolveAlertNotificationAction $resolve,
+        private AlertConfiguration $configuration,
     ) {}
 
     /**
      * Sincroniza una evaluación ya serializada por tipo y alcance, sea general o de una unidad productiva.
      *
      * @param  array<string, array{entity_id: string, target_path: string, urgency: NotificationUrgency, title: string, message: string}>  $pending
+     * @param  array<string, bool|int|string|null>|null  $settings
      */
-    public function execute(?int $unitId, string $module, string $type, string $permission, string $entityType, CarbonImmutable $evaluatedAt, array $pending): void
+    public function execute(?int $unitId, OperationalAlertType $type, string $permission, string $entityType, CarbonImmutable $evaluatedAt, array $pending, ?array $settings = null): void
     {
+        $settings ??= $this->configuration->get($type, $unitId);
+        if (! $settings['habilitada']) {
+            $pending = [];
+        }
+        foreach ($pending as $key => $alert) {
+            $pending[$key]['urgency'] = $this->configuration->urgency($settings, $alert['urgency']);
+        }
+
         $recipients = $pending === [] ? [] : $this->recipients->ids($unitId, $permission);
         $open = [];
-        $notices = AppNotification::query()->where('module', $module)->where('type', $type)
+        $notices = AppNotification::query()->where('module', $type->module())->where('type', $type->value)
             ->where('production_unit_id', $unitId)->where('is_alert', true)->whereNull('resolved_at');
 
         foreach ($notices->lazyById(100) as $notice) {
@@ -58,7 +70,7 @@ final readonly class SynchronizeOperationalAlertsAction
 
                 $this->publish->execute(new NotificationData(
                     recipientId: $recipientId,
-                    type: $type,
+                    type: $type->value,
                     sourceKey: $key.':'.Str::uuid(),
                     title: $alert['title'],
                     message: $alert['message'],
@@ -68,7 +80,7 @@ final readonly class SynchronizeOperationalAlertsAction
                     entityId: $alert['entity_id'],
                     targetPath: $alert['target_path'],
                     urgency: $alert['urgency'],
-                    module: $module,
+                    module: $type->module(),
                     isAlert: true,
                 ));
             }

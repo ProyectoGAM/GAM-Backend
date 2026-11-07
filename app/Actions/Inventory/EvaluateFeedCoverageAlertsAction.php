@@ -8,6 +8,7 @@ use App\DTO\Notifications\NotificationData;
 use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Enums\Lots\FlockStatus;
 use App\Enums\Notifications\NotificationUrgency;
+use App\Enums\Notifications\OperationalAlertType;
 use App\Events\Notifications\NotificationInboxChanged;
 use App\Interfaces\Clock;
 use App\Models\FarmStructure\ProductionUnit;
@@ -16,6 +17,7 @@ use App\Models\Inventory\FeedRecipe;
 use App\Models\Inventory\FlockFeedingChange;
 use App\Models\Notifications\AppNotification;
 use App\Services\Inventory\FlockFeedingResolver;
+use App\Services\Notifications\AlertConfiguration;
 use App\Services\Notifications\AlertRecipients;
 use Brick\Math\BigInteger;
 use Carbon\CarbonImmutable;
@@ -24,9 +26,7 @@ use Illuminate\Support\Str;
 
 final readonly class EvaluateFeedCoverageAlertsAction
 {
-    private const string TYPE = 'feed_coverage';
-
-    private const string MODULE = 'management_plans';
+    private const OperationalAlertType TYPE = OperationalAlertType::FeedCoverage;
 
     private const string TARGET_PATH = '/administracion/inventario/existencias/raciones';
 
@@ -36,6 +36,7 @@ final readonly class EvaluateFeedCoverageAlertsAction
         private ResolveAlertNotificationAction $resolve,
         private AlertRecipients $recipients,
         private Clock $clock,
+        private AlertConfiguration $configuration,
     ) {}
 
     public function execute(int $unitId): void
@@ -44,11 +45,15 @@ final readonly class EvaluateFeedCoverageAlertsAction
             DB::statement('SELECT pg_advisory_xact_lock(hashtext(?))', ['feed-coverage:'.$unitId]);
             $unit = ProductionUnit::query()->findOrFail($unitId);
             $evaluatedAt = $this->clock->now()->setTimezone(FlockFeedingResolver::TIMEZONE);
-            $shortages = $unit->status === ProductionUnitStatus::Active ? $this->shortages($unit, $evaluatedAt) : [];
+            $settings = $this->configuration->get(self::TYPE, $unitId);
+            $shortages = $settings['habilitada'] && $unit->status === ProductionUnitStatus::Active ? $this->shortages($unit, $evaluatedAt) : [];
+            foreach ($shortages as $recipeId => $shortage) {
+                $shortages[$recipeId]['urgency'] = $this->configuration->urgency($settings, $shortage['urgency']);
+            }
             $recipients = $shortages === [] ? [] : $this->recipients->ids($unitId, 'can_view_feed_stock');
             $open = [];
 
-            $notices = AppNotification::query()->where('module', self::MODULE)->where('type', self::TYPE)
+            $notices = AppNotification::query()->where('module', self::TYPE->module())->where('type', self::TYPE->value)
                 ->where('production_unit_id', $unitId)->where('is_alert', true)->whereNull('resolved_at');
 
             foreach ($notices->lazyById(100) as $notice) {
@@ -74,7 +79,7 @@ final readonly class EvaluateFeedCoverageAlertsAction
 
                     $this->publish->execute(new NotificationData(
                         recipientId: $recipientId,
-                        type: self::TYPE,
+                        type: self::TYPE->value,
                         sourceKey: 'feed-coverage:'.$unitId.':'.$recipeId.':'.Str::uuid(),
                         title: $shortage['title'],
                         message: $shortage['message'],
@@ -84,7 +89,7 @@ final readonly class EvaluateFeedCoverageAlertsAction
                         entityId: (string) $recipeId,
                         targetPath: self::TARGET_PATH,
                         urgency: $shortage['urgency'],
-                        module: self::MODULE,
+                        module: self::TYPE->module(),
                         isAlert: true,
                     ));
                 }

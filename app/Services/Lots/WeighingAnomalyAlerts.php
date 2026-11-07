@@ -6,19 +6,22 @@ use App\Actions\Notifications\PublishNotificationAction;
 use App\Actions\Notifications\ResolveAlertNotificationAction;
 use App\DTO\Notifications\NotificationData;
 use App\Enums\Notifications\NotificationUrgency;
+use App\Enums\Notifications\OperationalAlertType;
 use App\Models\Lots\DailyWeighingEntry;
 use App\Models\Lots\Weighing;
 use App\Models\Notifications\AppNotification;
+use App\Services\Notifications\AlertConfiguration;
 use App\Services\Notifications\AlertRecipients;
 
 final readonly class WeighingAnomalyAlerts
 {
-    private const string TYPE = 'weighing_anomaly';
+    private const OperationalAlertType TYPE = OperationalAlertType::WeighingAnomaly;
 
     public function __construct(
         private AlertRecipients $recipients,
         private PublishNotificationAction $publish,
         private ResolveAlertNotificationAction $resolve,
+        private AlertConfiguration $configuration,
     ) {}
 
     public function publish(DailyWeighingEntry|Weighing $measurement, string $operationId): void
@@ -34,10 +37,15 @@ final readonly class WeighingAnomalyAlerts
             $detail = '';
         }
 
+        $settings = $this->configuration->get(self::TYPE, $unitId);
+        if (! $settings['habilitada']) {
+            return;
+        }
+
         foreach ($this->recipients->ids($unitId, 'can_view_weighings') as $recipientId => $_) {
             $this->publish->execute(new NotificationData(
                 recipientId: $recipientId,
-                type: self::TYPE,
+                type: self::TYPE->value,
                 sourceKey: $measurement->public_id.':'.$operationId,
                 title: 'Pesaje anómalo pendiente de revisión',
                 message: "Revisá el dato de peso fuera del rango esperado en el lote «{$flock->code}».",
@@ -46,8 +54,8 @@ final readonly class WeighingAnomalyAlerts
                 entityType: $this->entityType($measurement),
                 entityId: $measurement->public_id,
                 targetPath: '/administracion/lotes/lotes/'.$flock->public_id.'/pesajes'.$detail,
-                urgency: NotificationUrgency::High,
-                module: 'lots',
+                urgency: $this->configuration->urgency($settings, NotificationUrgency::High),
+                module: self::TYPE->module(),
                 isAlert: true,
             ));
         }
@@ -55,7 +63,7 @@ final readonly class WeighingAnomalyAlerts
 
     public function resolve(DailyWeighingEntry|Weighing $measurement, int $unitId): void
     {
-        $alerts = AppNotification::query()->where('module', 'lots')->where('type', self::TYPE)
+        $alerts = AppNotification::query()->where('module', self::TYPE->module())->where('type', self::TYPE->value)
             ->where('production_unit_id', $unitId)
             ->where('entity_type', $this->entityType($measurement))->where('entity_id', $measurement->public_id)
             ->where('is_alert', true)->whereNull('resolved_at');

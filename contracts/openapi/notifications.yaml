@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Notificaciones de GAM
   version: 1.0.0
-  description: Bandeja personal de notificaciones con actualizaciones dentro de la aplicación.
+  description: Bandeja personal de notificaciones y configuración de alertas operativas.
 servers:
   - url: /
 security:
@@ -164,17 +164,106 @@ paths:
         '403': {description: Falta el permiso de configuración de umbrales}
         '404': {description: Unidad productiva o tipo de alerta no disponible}
         '422': {description: Umbrales inválidos}
+  /api/v1/configuracion-alertas:
+    get:
+      summary: Lista la configuración de alertas de alcance general
+      description: Requiere can_manage_alert_thresholds y una sesión personal. Incluye Vehículos, ubicaciones generales de Inventario y repartos de alcance general.
+      responses:
+        '200': {$ref: '#/components/responses/CatalogoAlertas'}
+        '401': {description: Sesión ausente o inválida}
+        '403': {description: Permiso o alcance general insuficiente}
+  /api/v1/configuracion-alertas/{operationalAlertType}:
+    parameters:
+      - $ref: '#/components/parameters/TipoAlertaOperativa'
+    patch:
+      summary: Actualiza los campos enviados de una alerta general
+      description: Requiere can_manage_alert_thresholds y una sesión personal. Cada alerta admite sólo las claves anunciadas en campos.
+      requestBody:
+        $ref: '#/components/requestBodies/CambioConfiguracionAlerta'
+      responses:
+        '200': {$ref: '#/components/responses/ConfiguracionAlerta'}
+        '401': {description: Sesión ausente o inválida}
+        '403': {description: Permiso o alcance general insuficiente}
+        '404': {description: Tipo de alerta no disponible en el ámbito general}
+        '422': {description: Campos desconocidos o valores inválidos}
+  /api/v1/unidades-productivas/{productionUnit}/configuracion-alertas:
+    parameters:
+      - $ref: '#/components/parameters/UnidadProductivaAlertas'
+    get:
+      summary: Lista la configuración de alertas de una unidad productiva
+      description: Requiere can_manage_alert_thresholds. Una cuenta PIN puede consultar su propia unidad productiva.
+      responses:
+        '200': {$ref: '#/components/responses/CatalogoAlertas'}
+        '401': {description: Sesión ausente o inválida}
+        '403': {description: Falta el permiso de configuración de alertas}
+        '404': {description: Unidad productiva no disponible}
+  /api/v1/unidades-productivas/{productionUnit}/configuracion-alertas/{operationalAlertType}:
+    parameters:
+      - $ref: '#/components/parameters/UnidadProductivaAlertas'
+      - $ref: '#/components/parameters/TipoAlertaOperativa'
+    patch:
+      summary: Actualiza los campos enviados de una alerta de la unidad productiva
+      description: Requiere can_manage_alert_thresholds. Cada alerta admite sólo las claves anunciadas en campos.
+      requestBody:
+        $ref: '#/components/requestBodies/CambioConfiguracionAlerta'
+      responses:
+        '200': {$ref: '#/components/responses/ConfiguracionAlerta'}
+        '401': {description: Sesión ausente o inválida}
+        '403': {description: Falta el permiso de configuración de alertas}
+        '404': {description: Unidad productiva o tipo de alerta no disponible en ese ámbito}
+        '422': {description: Campos desconocidos o valores inválidos}
 components:
   securitySchemes:
     sesionWeb: {type: apiKey, in: cookie, name: gam_session, description: Sesión web de Sanctum con CSRF en escrituras}
     tokenPersonal: {type: http, scheme: bearer, description: En equipos compartidos también se requiere la credencial de equipo y X-GAM-Session}
   parameters:
+    UnidadProductivaAlertas:
+      name: productionUnit
+      in: path
+      required: true
+      schema: {type: integer, minimum: 1}
+    TipoAlertaOperativa:
+      name: operationalAlertType
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/TipoAlertaOperativa'}
     Notificacion:
       name: notificacion
       in: path
       required: true
       schema: {type: string, format: ulid}
+  requestBodies:
+    CambioConfiguracionAlerta:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/CambioConfiguracionAlerta'}
+          examples:
+            ampliar_anticipacion:
+              value: {dias_anticipacion: 14}
+            restablecer_urgencia_calculada:
+              value: {urgencia_fija: null}
   responses:
+    CatalogoAlertas:
+      description: Configuraciones efectivas y campos disponibles en el ámbito solicitado
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data:
+                type: array
+                items: {$ref: '#/components/schemas/ConfiguracionAlerta'}
+    ConfiguracionAlerta:
+      description: Configuración efectiva después de aplicar el cambio
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data: {$ref: '#/components/schemas/ConfiguracionAlerta'}
     UmbralesTemporales:
       description: Configuración efectiva de umbrales
       content:
@@ -202,6 +291,83 @@ components:
             properties:
               data: {$ref: '#/components/schemas/Notificacion'}
   schemas:
+    TipoAlertaOperativa:
+      type: string
+      enum:
+        - daily_egg_collection_missing
+        - manual_feeding_review_due
+        - vaccination_due
+        - medication_due
+        - beak_trimming_due
+        - manual_practice_due
+        - flock_movement_due
+        - egg_collection_due
+        - mortality_due
+        - feed_coverage
+        - poultry_house_over_capacity
+        - stock_minimum_reached
+        - egg_stock_negative
+        - weighing_anomaly
+        - delivery_egg_surplus
+        - delivery_egg_balance_negative
+        - vehicle_maintenance_due
+        - vehicle_maintenance_plan_due
+        - vehicle_document_expiring
+    CambioConfiguracionAlerta:
+      type: object
+      additionalProperties: false
+      properties:
+        habilitada: {type: boolean}
+        urgencia_fija:
+          description: Con null se usa la urgencia calculada por la regla operativa.
+          oneOf:
+            - $ref: '#/components/schemas/Urgencia'
+            - type: 'null'
+        dias_anticipacion: {type: integer, minimum: 0, maximum: 365}
+        kilometros_anticipacion: {type: integer, minimum: 0, maximum: 1000000}
+        exceso_minimo_aves: {type: integer, minimum: 1, maximum: 2147483647}
+        deficit_minimo_huevos: {type: integer, minimum: 1, maximum: 2147483647}
+        sobrante_minimo_huevos: {type: integer, minimum: 1, maximum: 2147483647}
+    CampoConfiguracionAlerta:
+      type: object
+      required: [clave, etiqueta, tipo, predeterminado]
+      properties:
+        clave: {type: string, example: dias_anticipacion}
+        etiqueta: {type: string}
+        tipo: {type: string, enum: [booleano, seleccion, entero]}
+        predeterminado: {type: [boolean, integer, string, 'null']}
+        opciones:
+          type: array
+          items: {enum: [null, bajo, medio, alto]}
+        minimo: {type: integer}
+        maximo: {type: integer}
+    ConfiguracionAlerta:
+      type: object
+      required: [tipo, nombre, modulo, unidad_productiva_id, ruta, configuracion, campos, criterio_relacionado]
+      properties:
+        tipo: {$ref: '#/components/schemas/TipoAlertaOperativa'}
+        nombre: {type: string}
+        modulo: {$ref: '#/components/schemas/Modulo'}
+        unidad_productiva_id: {type: [integer, 'null'], description: Null identifica el ámbito general}
+        ruta: {type: string, description: Ruta PATCH que acepta las claves anunciadas en campos}
+        configuracion:
+          allOf:
+            - $ref: '#/components/schemas/CambioConfiguracionAlerta'
+            - required: [habilitada, urgencia_fija]
+        campos:
+          type: array
+          items: {$ref: '#/components/schemas/CampoConfiguracionAlerta'}
+        criterio_relacionado:
+          type: [object, 'null']
+          description: Parámetros administrados por su API original. Si dependen de una entidad, la ruta incluye su parámetro y los valores son null.
+          required: [nombre, ruta, metodo, valores]
+          properties:
+            nombre: {type: string}
+            ruta: {type: string}
+            metodo: {type: string, enum: [PUT, PATCH]}
+            valores:
+              type: [object, 'null']
+              additionalProperties: {type: [integer, 'null']}
     TipoUmbralTemporal:
       type: string
       enum: [daily_egg_collection_missing, manual_feeding_review_due, vaccination_due, medication_due, beak_trimming_due, manual_practice_due, flock_movement_due, egg_collection_due, mortality_due]

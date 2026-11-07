@@ -4,21 +4,22 @@ namespace App\Actions\Vehicles;
 
 use App\Actions\Notifications\SynchronizeOperationalAlertsAction;
 use App\Enums\Notifications\NotificationUrgency;
+use App\Enums\Notifications\OperationalAlertType;
 use App\Interfaces\Clock;
 use App\Models\Vehicles\VehicleMaintenance;
 use App\Models\Vehicles\VehicleMaintenancePlan;
+use App\Services\Notifications\AlertConfiguration;
 use App\Services\Vehicles\VehicleMaintenanceSchedule;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 final readonly class EvaluateVehicleMaintenanceAlertsAction
 {
-    private const int NOTICE_DAYS = 3;
-
     public function __construct(
         private SynchronizeOperationalAlertsAction $synchronize,
         private Clock $clock,
         private VehicleMaintenanceSchedule $schedule,
+        private AlertConfiguration $configuration,
     ) {}
 
     public function execute(): void
@@ -27,15 +28,27 @@ final readonly class EvaluateVehicleMaintenanceAlertsAction
             DB::statement('SELECT pg_advisory_xact_lock(hashtext(?))', ['vehicle-maintenance-alerts']);
             $evaluatedAt = $this->clock->now()->setTimezone(VehicleMaintenance::TIMEZONE);
             $today = $evaluatedAt->startOfDay();
-            [$interventions, $interventionByPlan] = $this->pendingInterventions($today);
+            $interventionType = OperationalAlertType::VehicleMaintenanceDue;
+            $planType = OperationalAlertType::VehicleMaintenancePlanDue;
+            $interventionSettings = $this->configuration->get($interventionType, null);
+            $planSettings = $this->configuration->get($planType, null);
+            [$interventions, $interventionByPlan] = $interventionSettings['habilitada']
+                ? $this->pendingInterventions($today, (int) $interventionSettings['dias_anticipacion'])
+                : [[], []];
             $plans = [];
             $activePlans = VehicleMaintenancePlan::query()->where('active', true)
                 ->whereHas('vehicle', fn ($vehicle) => $vehicle->where('status', '!=', 'retired'))
                 ->with(['vehicle:id,public_id,plate', 'vehicle.latestEffectiveOdometer']);
 
-            foreach ($activePlans->lazyById(100) as $plan) {
+            foreach ($planSettings['habilitada'] ? $activePlans->lazyById(100) : [] as $plan) {
                 $vehicle = $plan->vehicle;
-                $urgency = match ($this->schedule->status($plan, $vehicle->latestEffectiveOdometer, $today)) {
+                $urgency = match ($this->schedule->status(
+                    $plan,
+                    $vehicle->latestEffectiveOdometer,
+                    $today,
+                    (int) $planSettings['dias_anticipacion'],
+                    (int) $planSettings['kilometros_anticipacion'],
+                )) {
                     'overdue' => NotificationUrgency::High,
                     'upcoming' => NotificationUrgency::Low,
                     default => null,
@@ -44,18 +57,20 @@ final readonly class EvaluateVehicleMaintenanceAlertsAction
                     continue;
                 }
 
+                $overdue = $urgency === NotificationUrgency::High;
                 $interventionKey = $interventionByPlan[$plan->id] ?? null;
                 if ($interventionKey !== null) {
-                    if ($urgency->rank() > $interventions[$interventionKey]['urgency']->rank()) {
-                        $interventions[$interventionKey]['urgency'] = $urgency;
-                        $interventions[$interventionKey]['title'] = 'Intervención con un plan preventivo vencido';
-                        $interventions[$interventionKey]['message'] .= ' Tiene asociado un plan preventivo vencido.';
+                    $planUrgency = $this->configuration->urgency($planSettings, $urgency);
+                    if ($planUrgency->rank() > $interventions[$interventionKey]['urgency']->rank()) {
+                        $interventions[$interventionKey]['urgency'] = $planUrgency;
+                        $state = $overdue ? 'vencido' : 'próximo a vencer';
+                        $interventions[$interventionKey]['title'] = "Intervención con un plan preventivo {$state}";
+                        $interventions[$interventionKey]['message'] .= " Tiene asociado un plan preventivo {$state}.";
                     }
 
                     continue;
                 }
 
-                $overdue = $urgency === NotificationUrgency::High;
                 $state = $overdue ? 'alcanzó un límite de mantenimiento' : 'se acerca a un límite de mantenimiento';
                 $plans['vehicle-maintenance-plan:'.$plan->public_id] = [
                     'entity_id' => $plan->public_id,
@@ -66,17 +81,17 @@ final readonly class EvaluateVehicleMaintenanceAlertsAction
                 ];
             }
 
-            $this->synchronize->execute(null, 'vehicles', 'vehicle_maintenance_due', 'can_view_vehicle_maintenance', 'vehicle_maintenance', $evaluatedAt, $interventions);
-            $this->synchronize->execute(null, 'vehicles', 'vehicle_maintenance_plan_due', 'can_view_vehicle_maintenance', 'vehicle_maintenance_plan', $evaluatedAt, $plans);
+            $this->synchronize->execute(null, $interventionType, 'can_view_vehicle_maintenance', 'vehicle_maintenance', $evaluatedAt, $interventions, $interventionSettings);
+            $this->synchronize->execute(null, $planType, 'can_view_vehicle_maintenance', 'vehicle_maintenance_plan', $evaluatedAt, $plans, $planSettings);
         }, 3);
     }
 
     /** @return array{array<string, array{entity_id: string, target_path: string, urgency: NotificationUrgency, title: string, message: string}>, array<int, string>} */
-    private function pendingInterventions(CarbonImmutable $today): array
+    private function pendingInterventions(CarbonImmutable $today, int $noticeDays): array
     {
         $maintenances = VehicleMaintenance::query()
             ->whereIn('status', ['planned', 'in_progress'])
-            ->where('planned_at', '<', $today->addDays(self::NOTICE_DAYS + 1)->toIso8601String())
+            ->where('planned_at', '<', $today->addDays($noticeDays + 1)->toIso8601String())
             ->with(['vehicle:id,public_id,plate', 'items:id,maintenance_id,plan_id']);
         $pending = [];
         $interventionByPlan = [];

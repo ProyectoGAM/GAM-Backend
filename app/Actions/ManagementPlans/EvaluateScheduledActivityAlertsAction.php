@@ -7,6 +7,7 @@ use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Enums\ManagementPlans\ScheduledActivityType;
 use App\Enums\Notifications\AlertTimingType;
 use App\Enums\Notifications\NotificationUrgency;
+use App\Enums\Notifications\OperationalAlertType;
 use App\Interfaces\Clock;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Services\ManagementPlans\ScheduledPlanActivities;
@@ -48,7 +49,7 @@ final readonly class EvaluateScheduledActivityAlertsAction
                 }
             }
 
-            $this->synchronize->execute($unitId, 'management_plans', $alertType->value, 'can_view_management_plans', 'flock_plan_activity', $evaluatedAt, $pending);
+            $this->synchronize->execute($unitId, OperationalAlertType::from($alertType->value), 'can_view_management_plans', 'flock_plan_activity', $evaluatedAt, $pending);
         }, 3);
     }
 

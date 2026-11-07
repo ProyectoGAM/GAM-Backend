@@ -4,23 +4,31 @@ namespace App\Actions\Vehicles;
 
 use App\Actions\Notifications\SynchronizeOperationalAlertsAction;
 use App\Enums\Notifications\NotificationUrgency;
+use App\Enums\Notifications\OperationalAlertType;
 use App\Interfaces\Clock;
 use App\Models\Vehicles\VehicleDocument;
 use App\Models\Vehicles\VehicleMaintenance;
+use App\Services\Notifications\AlertConfiguration;
 use Illuminate\Support\Facades\DB;
 
 final readonly class EvaluateVehicleDocumentAlertsAction
 {
-    public function __construct(private SynchronizeOperationalAlertsAction $synchronize, private Clock $clock) {}
+    public function __construct(
+        private SynchronizeOperationalAlertsAction $synchronize,
+        private Clock $clock,
+        private AlertConfiguration $configuration,
+    ) {}
 
     public function execute(): void
     {
         DB::transaction(function (): void {
             DB::statement('SELECT pg_advisory_xact_lock(hashtext(?))', ['vehicle-document-alerts']);
             $evaluatedAt = $this->clock->now()->setTimezone(VehicleMaintenance::TIMEZONE);
+            $type = OperationalAlertType::VehicleDocumentExpiring;
+            $settings = $this->configuration->get($type, null);
             $today = $evaluatedAt->toDateString();
             $documents = VehicleDocument::query()->currentExpiring()
-                ->where('expires_at', '<=', $evaluatedAt->addDays(VehicleDocument::EXPIRY_NOTICE_DAYS)->toDateString())
+                ->where('expires_at', '<=', $evaluatedAt->addDays((int) $settings['dias_anticipacion'])->toDateString())
                 ->whereHas('vehicle', fn ($vehicle) => $vehicle->where('status', '!=', 'retired'))
                 ->with('vehicle:id,public_id,plate');
             $pending = [];
@@ -39,7 +47,7 @@ final readonly class EvaluateVehicleDocumentAlertsAction
                 ];
             }
 
-            $this->synchronize->execute(null, 'vehicles', 'vehicle_document_expiring', 'can_view_vehicle_documents', 'vehicle_document', $evaluatedAt, $pending);
+            $this->synchronize->execute(null, $type, 'can_view_vehicle_documents', 'vehicle_document', $evaluatedAt, $pending, $settings);
         }, 3);
     }
 }
