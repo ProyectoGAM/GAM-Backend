@@ -23,14 +23,31 @@ final readonly class GetEggProductionMetricsQuery
             throw new LotsConflict('El período de métricas debe comprender entre 1 y 366 días.');
         }
 
-        $query = EggCollection::query()
-            ->where('status', 'recorded')
-            ->where('occurred_at', '>=', $from->toIso8601String())
-            ->where('occurred_at', '<', $until->addDay()->toIso8601String());
+        $query = EggCollection::query()->where('status', 'recorded');
         $this->applyFilters($query, $filters);
-        $rows = $query->selectRaw('(occurred_at AT TIME ZONE ?)::date AS period, SUM(quantity) AS total', [$timezone])->groupBy('period')->orderBy('period')->toBase()->get();
+        $current = (clone $query)
+            ->where('occurred_at', '>=', $from->toIso8601String())
+            ->where('occurred_at', '<', $until->addDay()->toIso8601String())
+            ->selectRaw('(occurred_at AT TIME ZONE ?)::date AS period, SUM(quantity) AS total', [$timezone])
+            ->groupBy('period')->toBase();
+
+        $compare = (bool) ($filters['comparar_anterior'] ?? false);
+        $previousFrom = $from->subDays($days);
+        if ($compare) {
+            $current->unionAll($query
+                ->where('occurred_at', '>=', $previousFrom->toIso8601String())
+                ->where('occurred_at', '<', $from->toIso8601String())
+                ->selectRaw('NULL::date AS period, COALESCE(SUM(quantity), 0) AS total')->toBase());
+        }
+
+        $previousTotal = 0;
         $periods = [];
-        foreach ($rows as $row) {
+        foreach ($current->orderBy('period')->get() as $row) {
+            if ($row->period === null) {
+                $previousTotal = (int) $row->total;
+
+                continue;
+            }
             $date = (string) $row->period;
             $periods[$date] = ['date' => $date, 'quantity' => (int) $row->total, 'collected_eggs' => (int) $row->total];
         }
@@ -39,11 +56,22 @@ final readonly class GetEggProductionMetricsQuery
         $monthly = $this->group($periods, 'month');
         $total = array_sum(array_column($periods, 'quantity'));
 
-        return [
+        $result = [
             'date_from' => $from->toDateString(), 'date_to' => $until->toDateString(), 'timezone' => $timezone,
             'total_eggs' => $total, 'collected_eggs' => $total, 'daily_average' => round($total / $days, 2),
             'by_day' => array_values($periods), 'by_week' => array_values($weekly), 'by_month' => array_values($monthly),
         ];
+
+        if ($compare) {
+            $result['comparacion'] = [
+                'desde' => $previousFrom->toDateString(),
+                'hasta' => $from->subDay()->toDateString(),
+                'total_huevos' => $previousTotal,
+                'variacion_porcentual' => $previousTotal > 0 ? round(($total - $previousTotal) / $previousTotal * 100, 2) : null,
+            ];
+        }
+
+        return $result;
     }
 
     /** @param Builder<EggCollection> $query @param array<string, mixed> $filters */

@@ -9,6 +9,7 @@ use App\Events\Notifications\NotificationInboxChanged;
 use App\Models\Notifications\AppNotification;
 use App\Services\Notifications\AlertConfiguration;
 use App\Services\Notifications\AlertRecipients;
+use App\Services\Notifications\OperationalAlertProjection;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
 
@@ -19,6 +20,7 @@ final readonly class SynchronizeOperationalAlertsAction
         private PublishNotificationAction $publish,
         private ResolveAlertNotificationAction $resolve,
         private AlertConfiguration $configuration,
+        private OperationalAlertProjection $operationalAlerts,
     ) {}
 
     /**
@@ -36,6 +38,7 @@ final readonly class SynchronizeOperationalAlertsAction
         foreach ($pending as $key => $alert) {
             $pending[$key]['urgency'] = $this->configuration->urgency($settings, $alert['urgency']);
         }
+        $this->operationalAlerts->synchronize($unitId, $type, $permission, $entityType, $evaluatedAt, $pending);
 
         $recipients = $pending === [] ? [] : $this->recipients->ids($unitId, $permission);
         $open = [];

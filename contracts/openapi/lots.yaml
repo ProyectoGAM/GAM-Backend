@@ -32,6 +32,71 @@ tags:
     name: "Stock de huevos"
     description: "Cuenta corriente por unidad productiva, movimientos y correcciones."
 paths:
+  "/lotes/resumen":
+    get:
+      tags: ["Lotes"]
+      operationId: "summarizeLiveBirds"
+      summary: "Total actual de aves vivas"
+      description: "Suma la ocupación de lotes activos y en cuarentena, con mínimo de cero por galpón. Una sesión PIN queda limitada a su UP."
+      x-permission: "can_view_flocks"
+      parameters:
+        - "$ref": "#/components/parameters/SummaryUnit"
+      responses:
+        "200":
+          description: "Total del alcance autorizado."
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [up_id, aves_vivas, consultado_en]
+                    properties:
+                      up_id: {type: [integer, 'null'], minimum: 1}
+                      aves_vivas: {type: integer, minimum: 0}
+                      consultado_en: {type: string, format: date-time}
+        "401": {"$ref": "#/components/responses/Unauthenticated"}
+        "403": {"$ref": "#/components/responses/Forbidden"}
+        "404": {"$ref": "#/components/responses/NotFound"}
+        "422": {"$ref": "#/components/responses/InvalidInput"}
+  "/mortalidades/resumen":
+    get:
+      tags: ["Mortalidad"]
+      operationId: "summarizeMortality"
+      summary: "Bajas registradas y tasa de mortalidad por período y unidad productiva"
+      description: "La tasa divide las bajas vigentes por la población al inicio más los ingresos externos del período. El rango inclusive admite hasta 366 días. Una sesión PIN queda limitada a su UP."
+      x-permission: "can_view_mortality"
+      parameters:
+        - "$ref": "#/components/parameters/SummaryUnit"
+        - {name: desde, in: query, required: true, schema: {type: string, format: date}}
+        - {name: hasta, in: query, required: true, schema: {type: string, format: date}}
+      responses:
+        "200":
+          description: "Total del alcance autorizado."
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [up_id, desde, hasta, zona_horaria, bajas_registradas, poblacion_referencia, tasa_porcentual, estado_tasa]
+                    properties:
+                      up_id: {type: [integer, 'null'], minimum: 1}
+                      desde: {type: string, format: date}
+                      hasta: {type: string, format: date}
+                      zona_horaria: {type: string, example: America/Montevideo}
+                      bajas_registradas: {type: integer, minimum: 0}
+                      poblacion_referencia: {type: [integer, 'null'], minimum: 0}
+                      tasa_porcentual: {type: [number, 'null'], minimum: 0}
+                      estado_tasa: {type: string, enum: [calculada, sin_poblacion, historial_indeterminado, bajas_superan_poblacion]}
+        "401": {"$ref": "#/components/responses/Unauthenticated"}
+        "403": {"$ref": "#/components/responses/Forbidden"}
+        "404": {"$ref": "#/components/responses/NotFound"}
+        "422": {"$ref": "#/components/responses/InvalidInput"}
   "/flocks":
     get:
       tags: ["Lotes"]
@@ -490,8 +555,8 @@ paths:
     get:
       tags: ["Mortalidad"]
       operationId: "listMortality"
-      summary: "Consulta mortalidad por lote, galpón histórico y fecha"
-      description: "Permiso requerido: can_view_mortality. El acceso es global dentro de la empresa."
+      summary: "Consulta mortalidad por lote, galpón histórico, unidad productiva y fecha"
+      description: "Permiso requerido: can_view_mortality. Una sesión PIN queda limitada a su UP."
       x-permission: "can_view_mortality"
       parameters:
         -
@@ -506,6 +571,7 @@ paths:
           "$ref": "#/components/parameters/HouseFilter"
         -
           "$ref": "#/components/parameters/FlockFilter"
+        - "$ref": "#/components/parameters/UnitFilter"
         -
           "$ref": "#/components/parameters/RecordStatus"
       responses:
@@ -604,6 +670,7 @@ paths:
           "$ref": "#/components/parameters/HouseFilter"
         -
           "$ref": "#/components/parameters/FlockFilter"
+        - "$ref": "#/components/parameters/UnitFilter"
         -
           "$ref": "#/components/parameters/RecordStatus"
       responses:
@@ -793,13 +860,15 @@ paths:
       tags: ["Recolección"]
       operationId: "showEggProductionMetrics"
       summary: "Consulta producción por día, semana y mes"
-      description: "Permiso requerido: can_view_egg_collections. Sólo cuentan recolecciones vigentes de huevo genérico."
+      description: "Permiso requerido: can_view_egg_collections. Sólo cuentan recolecciones vigentes de huevo genérico. Las series omiten días sin registros. Una sesión PIN queda limitada a su UP."
       x-permission: "can_view_egg_collections"
       parameters:
         - "$ref": "#/components/parameters/From"
         - "$ref": "#/components/parameters/To"
         - "$ref": "#/components/parameters/HouseFilter"
         - "$ref": "#/components/parameters/FlockFilter"
+        - "$ref": "#/components/parameters/UnitFilter"
+        - "$ref": "#/components/parameters/ComparePrevious"
       responses:
         "200":
           description: "Consulta u operación completada."
@@ -919,6 +988,9 @@ paths:
           "$ref": "#/components/parameters/From"
         -
           "$ref": "#/components/parameters/To"
+        - "$ref": "#/components/parameters/HouseFilter"
+        - "$ref": "#/components/parameters/UnitFilter"
+        - "$ref": "#/components/parameters/ComparePrevious"
       responses:
         "200":
           description: "Consulta u operación completada."
@@ -1239,6 +1311,16 @@ components:
       schema:
         type: "integer"
         minimum: 1
+    SummaryUnit:
+      name: up_id
+      in: query
+      description: "UP seleccionada. Al omitirla se usa el alcance efectivo de la sesión."
+      schema: {type: integer, minimum: 1}
+    ComparePrevious:
+      name: comparar_anterior
+      in: query
+      description: "Con 1 devuelve la comparación con el período inmediatamente anterior de igual duración."
+      schema: {type: integer, enum: [0, 1], default: 0}
     BreedFilter:
       name: "breed_id"
       in: "query"
@@ -2330,6 +2412,17 @@ components:
           type: "array"
           items:
             "$ref": "#/components/schemas/MonthlyEggMetric"
+        comparacion:
+          type: object
+          additionalProperties: false
+          required: [desde, hasta, total_huevos, variacion_porcentual]
+          properties:
+            desde: {type: string, format: date}
+            hasta: {type: string, format: date}
+            total_huevos: {type: integer, minimum: 0}
+            variacion_porcentual:
+              type: [number, 'null']
+              description: "Cambio relativo porcentual respecto del período anterior. Null cuando el total anterior es cero."
     DailyEggMetric:
       type: "object"
       additionalProperties: false

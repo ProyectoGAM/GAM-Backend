@@ -14,6 +14,7 @@ final class DeliveryStopResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'version' => $this->version,
             'client_reference' => $this->client_reference,
             'client_name' => $this->client_name,
             'address' => $this->address,

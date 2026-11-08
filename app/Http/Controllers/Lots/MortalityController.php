@@ -7,12 +7,15 @@ use App\Actions\Lots\RecordMortalityAction;
 use App\Http\Requests\Lots\CancelMortalityRequest;
 use App\Http\Requests\Lots\CorrectMortalityRequest;
 use App\Http\Requests\Lots\ListMortalityRequest;
+use App\Http\Requests\Lots\MortalitySummaryRequest;
 use App\Http\Requests\Lots\StoreMortalityRequest;
 use App\Http\Resources\Lots\LotsOperationResource;
 use App\Http\Resources\Lots\MortalityResource;
 use App\Models\Lots\Flock;
 use App\Models\Lots\MortalityRecord;
+use App\Queries\Lots\GetMortalitySummaryQuery;
 use App\Queries\Lots\ListMortalityQuery;
+use App\Services\IdentityAndAccess\ProductionUnitAccess;
 use App\Services\Lots\LotsSnapshots;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -22,6 +25,15 @@ final readonly class MortalityController
     public function index(ListMortalityRequest $request, ListMortalityQuery $query): AnonymousResourceCollection
     {
         return MortalityResource::collection($query->execute($request->attributesForAction()));
+    }
+
+    public function summary(MortalitySummaryRequest $request, GetMortalitySummaryQuery $query, ProductionUnitAccess $access): JsonResponse
+    {
+        return response()->json(['data' => $query->execute(
+            $request->string('desde')->toString(),
+            $request->string('hasta')->toString(),
+            $request->integer('up_id') ?: $access->unitId(),
+        )]);
     }
 
     public function byFlock(ListMortalityRequest $request, Flock $flock, ListMortalityQuery $query): AnonymousResourceCollection

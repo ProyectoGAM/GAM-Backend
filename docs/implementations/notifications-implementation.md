@@ -2,6 +2,8 @@
 
 La bandeja personal muestra avisos persistidos en PostgreSQL. Una campana en Administración y Repartos muestra el número de no leídas. Los avisos operativos se integran por módulo según el plan. [Plan de implementación](alerts-and-notifications-implementation-plan.md)
 
+El [resumen operativo](operational-summary-implementation.md#alertas-operativas) lista y cuenta episodios abiertos con permisos de origen y filtros por UP y urgencia. Cada episodio tiene su propio identificador, independiente de los avisos de la bandeja.
+
 ## Publicar desde un módulo
 
 Inyectar `PublishNotificationAction` y pasarle un `NotificationData` con usuario destinatario, tipo, clave estable de origen, título y mensaje en español y fecha del hecho. Para empleados con dispositivo/PIN, incluir la UP del hecho. La referencia opcional acepta el tipo y el ID público de la entidad, además de una ruta interna de GAM. Usar textos que el destinatario esté autorizado a ver.

@@ -31,7 +31,8 @@ final readonly class ReverseCustomerMovementAction
                 $current = Customer::query()->whereKey($customer->id)->lockForUpdate()->firstOrFail();
                 $account = $this->ledger->account($current);
                 $original = CustomerAccountMovement::query()->whereKey($movement->id)->where('customer_account_id', $account->id)->firstOrFail();
-                if (! in_array($original->type->value, ['payment', 'adjustment_increase', 'adjustment_decrease'], true)) {
+                if (! in_array($original->type->value, ['payment', 'adjustment_increase', 'adjustment_decrease'], true)
+                    || ($original->type->value !== 'payment' && $original->delivery_stop_id !== null)) {
                     throw new CustomerAccountConflict('Este movimiento se corrige desde su operación de origen.');
                 }
                 if ($original->reversal()->exists()) {

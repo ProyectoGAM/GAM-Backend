@@ -29,6 +29,8 @@ Cada guía describe el alcance entregado, las decisiones de negocio, el contrato
 - [Clientes y cuenta corriente — plan y decisiones de alcance](customers-and-accounts-implementation-plan.md)
 - [Notificaciones en la app y futuras alertas por módulo — plan de implementación](alerts-and-notifications-implementation-plan.md)
 - [Notificaciones en la app — API y tiempo real](notifications-implementation.md)
+- [Resumen operativo — plan de backend y guía de consumo de la API](operational-summary-implementation-plan.md)
+- [Resumen operativo — API entregada e integración](operational-summary-implementation.md)
 
 ## Qué registrar en cada cambio
 

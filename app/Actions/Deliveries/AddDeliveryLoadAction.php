@@ -5,6 +5,7 @@ namespace App\Actions\Deliveries;
 use App\Actions\Inventory\RecordEggStockTransactionAction;
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Enums\Deliveries\DeliveryStatus;
+use App\Enums\Deliveries\DeliveryStopStatus;
 use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Exceptions\Deliveries\DeliveryConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
@@ -12,6 +13,7 @@ use App\Models\Deliveries\Delivery;
 use App\Models\Deliveries\DeliveryLoad;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
+use App\Services\Deliveries\DeliveryEggAlerts;
 use App\Services\Deliveries\DeliveryLoadUnits;
 use App\Services\IdentityAndAccess\AccessControl;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +24,7 @@ final readonly class AddDeliveryLoadAction
         private RecordEggStockTransactionAction $stock,
         private AuditRecorder $audit,
         private DeliveryLoadUnits $units,
+        private DeliveryEggAlerts $eggAlerts,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -103,6 +106,9 @@ final readonly class AddDeliveryLoadAction
                 properties: ['quantity' => $quantity, 'production_unit_id' => $unit->getKey(), 'result' => 'success'],
                 upId: $unit->getKey(),
             ));
+
+            $delivered = $locked->stops()->where('status', DeliveryStopStatus::Delivered)->sum('delivered_quantity');
+            $this->eggAlerts->negativeDeliveryBalance($locked, $locked->loaded_quantity - (int) $delivered);
 
             return $this->load($locked);
         }, 3);

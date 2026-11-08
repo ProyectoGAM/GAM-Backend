@@ -51,7 +51,9 @@ use App\Http\Controllers\ManagementPlans\PlanTemplateController;
 use App\Http\Controllers\Notifications\AlertConfigurationController;
 use App\Http\Controllers\Notifications\AlertTimingThresholdController;
 use App\Http\Controllers\Notifications\NotificationController;
+use App\Http\Controllers\Notifications\OperationalAlertController;
 use App\Http\Controllers\ReferenceData\ReferenceOptionsController;
+use App\Http\Controllers\ReportingAndAnalytics\ExpenseSummaryController;
 use App\Http\Controllers\ReportingAndAnalytics\ReportExportController;
 use App\Http\Controllers\ReportingAndAnalytics\ReportOptionsController;
 use App\Http\Controllers\ReportingAndAnalytics\ReportPresetController;
@@ -108,6 +110,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('/unidades-productivas/{productionUnit}/umbrales-alertas/{alertType}', [AlertTimingThresholdController::class, 'show'])->name('notifications.thresholds.show');
         Route::put('/unidades-productivas/{productionUnit}/umbrales-alertas/{alertType}', [AlertTimingThresholdController::class, 'update'])->name('notifications.thresholds.update');
         Route::get('/configuracion-alertas', [AlertConfigurationController::class, 'index'])->name('notifications.configuration.index');
+        Route::get('/alertas-operativas', [OperationalAlertController::class, 'index'])->name('notifications.operational-alerts.index');
+        Route::get('/alertas-operativas/resumen', [OperationalAlertController::class, 'summary'])->name('notifications.operational-alerts.summary');
         Route::patch('/configuracion-alertas/{operationalAlertType}', [AlertConfigurationController::class, 'update'])->name('notifications.configuration.update');
         Route::get('/unidades-productivas/{productionUnit}/configuracion-alertas', [AlertConfigurationController::class, 'index'])->name('notifications.unit-configuration.index');
         Route::patch('/unidades-productivas/{productionUnit}/configuracion-alertas/{operationalAlertType}', [AlertConfigurationController::class, 'updateUnit'])->name('notifications.unit-configuration.update');
@@ -203,6 +207,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         });
 
         Route::name('lots.')->group(function (): void {
+            Route::get('/lotes/resumen', [FlockController::class, 'summary'])->name('summary');
             Route::get('/flocks', [FlockController::class, 'index'])->name('index');
             Route::post('/flocks', [FlockController::class, 'store'])->name('store');
             Route::get('/flocks/{flock}', [FlockController::class, 'show'])->name('show');
@@ -217,6 +222,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/breeds', [BreedController::class, 'store'])->name('breeds.store');
             Route::patch('/breeds/{breed}', [BreedController::class, 'update'])->name('breeds.update');
             Route::get('/mortalities', [MortalityController::class, 'index'])->name('mortality.index');
+            Route::get('/mortalidades/resumen', [MortalityController::class, 'summary'])->name('mortality.summary');
             Route::get('/mortalities/{mortality}', [MortalityController::class, 'show'])->name('mortality.show');
             Route::get('/flocks/{flock}/mortalities', [MortalityController::class, 'byFlock'])->name('mortality.by-flock');
             Route::post('/flocks/{flock}/mortalities', [MortalityController::class, 'store'])->name('mortality.store');
@@ -261,6 +267,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             ->middleware('throttle:delivery-commands')
             ->name('deliveries.stops.store');
         Route::post('/repartos/{reparto}/cobros', [DeliveryController::class, 'payment'])->middleware('throttle:delivery-commands')->name('deliveries.payments.store');
+        Route::post('/repartos/{reparto}/entregas/{entrega}/rectificaciones', [DeliveryController::class, 'correctStop'])
+            ->whereNumber('entrega')->middleware('throttle:delivery-commands')->name('deliveries.stops.correct');
         Route::post('/repartos/{reparto}/cargas', [DeliveryController::class, 'load'])
             ->middleware('throttle:delivery-commands')
             ->name('deliveries.loads.store');
@@ -327,6 +335,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('/audit/entries', [AuditEntryController::class, 'index'])->name('audit.entries.index');
         Route::get('/auditoria/entradas/{auditEntry}', [AuditEntryController::class, 'show'])->whereNumber('auditEntry')->name('audit.entries.show');
         Route::get('/auditoria/responsables', [AuditActorController::class, 'index'])->name('audit.actors.index');
+        Route::get('/gastos/resumen', ExpenseSummaryController::class)->name('reports.expenses.summary');
 
         Route::middleware(['shared.device:any', 'shared.session.conditional'])->group(function (): void {
             Route::get('/reports/sources', [ReportSourceController::class, 'index'])->name('reports.sources.index');

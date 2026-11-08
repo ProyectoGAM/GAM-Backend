@@ -9,6 +9,69 @@ security:
   - sesionWeb: []
   - tokenPersonal: []
 paths:
+  /alertas-operativas:
+    get:
+      operationId: listOperationalAlerts
+      summary: Lista alertas operativas abiertas visibles para la sesión
+      description: Requiere can_view_notifications y el permiso del módulo emisor por alerta. Para saldo negativo de reparto se acepta can_view_delivery_history o can_monitor_deliveries. Un episodio se cuenta una sola vez aunque se haya notificado a varios destinatarios.
+      parameters:
+        - {$ref: '#/components/parameters/FiltroUpAlertas'}
+        - {$ref: '#/components/parameters/FiltroUrgenciaAlertas'}
+        - {name: page, in: query, schema: {type: integer, minimum: 1, maximum: 100000}}
+        - {name: per_page, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      responses:
+        '200':
+          description: Alertas ordenadas desde la más reciente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, links, meta]
+                properties:
+                  data:
+                    type: array
+                    items: {$ref: '#/components/schemas/AlertaOperativa'}
+                  links: {type: object, additionalProperties: true}
+                  meta: {type: object, additionalProperties: true}
+        '401': {description: Se requiere autenticación}
+        '403': {description: Permiso insuficiente}
+        '404': {description: Unidad fuera del alcance de la sesión PIN}
+        '422': {description: Filtros inválidos}
+  /alertas-operativas/resumen:
+    get:
+      operationId: summarizeOperationalAlerts
+      summary: Cuenta las alertas operativas abiertas por urgencia
+      description: Aplica el mismo alcance y permisos que el listado. El filtro de urgencia conserva las tres claves y devuelve cero para las demás urgencias.
+      parameters:
+        - {$ref: '#/components/parameters/FiltroUpAlertas'}
+        - {$ref: '#/components/parameters/FiltroUrgenciaAlertas'}
+      responses:
+        '200':
+          description: Conteos anteriores a la paginación
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [up_id, consultado_en, total, por_urgencia]
+                    properties:
+                      up_id: {type: [integer, 'null'], minimum: 1}
+                      consultado_en: {type: string, format: date-time}
+                      total: {type: integer, minimum: 0}
+                      por_urgencia:
+                        type: object
+                        required: [alto, medio, bajo]
+                        properties:
+                          alto: {type: integer, minimum: 0}
+                          medio: {type: integer, minimum: 0}
+                          bajo: {type: integer, minimum: 0}
+        '401': {description: Se requiere autenticación}
+        '403': {description: Permiso insuficiente}
+        '404': {description: Unidad fuera del alcance de la sesión PIN}
+        '422': {description: Filtros inválidos}
   /api/v1/notificaciones:
     get:
       summary: Lista las notificaciones propias de más reciente a más antigua
@@ -217,6 +280,15 @@ components:
     sesionWeb: {type: apiKey, in: cookie, name: gam_session, description: Sesión web de Sanctum con CSRF en escrituras}
     tokenPersonal: {type: http, scheme: bearer, description: En equipos compartidos también se requiere la credencial de equipo y X-GAM-Session}
   parameters:
+    FiltroUpAlertas:
+      name: up_id
+      in: query
+      description: Al omitirlo, la sesión PIN consulta su UP y la sesión personal consulta la empresa, incluidas las alertas generales autorizadas.
+      schema: {type: integer, minimum: 1}
+    FiltroUrgenciaAlertas:
+      name: urgencia
+      in: query
+      schema: {type: string, enum: [alto, medio, bajo]}
     UnidadProductivaAlertas:
       name: productionUnit
       in: path
@@ -291,6 +363,24 @@ components:
             properties:
               data: {$ref: '#/components/schemas/Notificacion'}
   schemas:
+    AlertaOperativa:
+      type: object
+      required: [id, tipo, modulo, up_id, urgencia, titulo, ocurrida_en, entidad]
+      properties:
+        id: {type: string, format: ulid}
+        tipo: {$ref: '#/components/schemas/TipoAlertaOperativa'}
+        modulo: {type: string}
+        up_id: {type: [integer, 'null'], minimum: 1}
+        urgencia: {type: string, enum: [alto, medio, bajo]}
+        titulo: {type: string}
+        ocurrida_en: {type: string, format: date-time}
+        entidad:
+          type: object
+          required: [tipo, id, ruta]
+          properties:
+            tipo: {type: string}
+            id: {type: string}
+            ruta: {type: [string, 'null']}
     TipoAlertaOperativa:
       type: string
       enum:
@@ -407,8 +497,9 @@ components:
             igualar el mínimo y alta por debajo del mínimo. El aviso se resuelve cuando el saldo supera el mínimo.
             Inventario publica egg_stock_negative con urgencia alta mientras el saldo de huevos de la UP sea
             negativo. Los avisos históricos delivery_egg_stock_negative quedan resueltos al reevaluar la UP.
-            Repartos publica delivery_egg_balance_negative con urgencia alta si las entregas y devoluciones
-            superan la carga del reparto y delivery_egg_surplus con urgencia baja al devolver huevos sobrantes.
+            Repartos publica delivery_egg_balance_negative con urgencia alta si las entregas superan la carga.
+            Al regularizar el saldo, resuelve la alerta. El aviso informativo delivery_egg_surplus se publica
+            con urgencia baja al ingresar el sobrante en la UP de destino.
             Vehículos publica vehicle_maintenance_due con urgencia baja desde tres días antes y alta a partir del
             día posterior a la fecha prevista si la intervención sigue pendiente. Completarla o anularla resuelve el aviso.
             vehicle_maintenance_plan_due avisa a 30 días o 500 km del límite y sube a alta al alcanzarlo.

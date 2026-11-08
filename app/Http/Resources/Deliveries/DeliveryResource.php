@@ -95,6 +95,7 @@ final class DeliveryResource extends JsonResource
             ),
             'loads' => DeliveryLoadResource::collection($this->whenLoaded('loads')),
             'stops' => DeliveryStopResource::collection($this->whenLoaded('stops')),
+            'rectificaciones_entregas' => $this->whenLoaded('stopCorrections', fn () => $this->stopCorrections->pluck('result')->all()),
             'locations' => DeliveryLocationResource::collection($this->whenLoaded('locations')),
         ];
     }

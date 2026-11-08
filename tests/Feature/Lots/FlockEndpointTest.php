@@ -7,6 +7,7 @@ use App\Events\Lots\FlockCreated;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Interfaces\FarmStructure\PoultryHouseOccupancyProvider;
 use App\Models\FarmStructure\PoultryHouse;
+use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Lots\Breed;
 use App\Models\Lots\Flock;
 use App\Models\ManagementPlans\PlanTemplate;
@@ -68,6 +69,24 @@ final class FlockEndpointTest extends LotsTestCase
             (int) $quarantinedHouse->getKey() => 40,
             (int) $finishedHouse->getKey() => 0,
         ], $occupancies);
+    }
+
+    // Flujo: la ocupación física se agrega por UP sin descontar saldos negativos de otros galpones.
+    public function test_live_bird_summary_uses_physical_occupancy_and_unit_filter(): void
+    {
+        // Preparación: crea dos galpones con saldos opuestos y un lote de otra UP.
+        $this->signIn(['can_view_flocks']);
+        $unit = ProductionUnit::factory()->create();
+        $house = PoultryHouse::factory()->for($unit)->create();
+        $negativeHouse = PoultryHouse::factory()->for($unit)->create();
+        Flock::factory()->quarantined()->create(['poultry_house_id' => $house->id, 'current_quantity' => 40]);
+        Flock::factory()->create(['poultry_house_id' => $negativeHouse->id, 'current_quantity' => -2]);
+        $this->flock(60);
+
+        // Consulta: el total global y el de una UP se calculan antes de paginar.
+        $this->getJson('/api/v1/lotes/resumen')->assertOk()->assertJsonPath('data.up_id', null)->assertJsonPath('data.aves_vivas', 100);
+        $this->getJson('/api/v1/lotes/resumen?up_id='.$unit->id)->assertOk()
+            ->assertJsonPath('data.up_id', $unit->id)->assertJsonPath('data.aves_vivas', 40)->assertJsonStructure(['data' => ['consultado_en']]);
     }
 
     // Flujo: registra un lote, cuenta ocupación y comprueba auditoría y semana.

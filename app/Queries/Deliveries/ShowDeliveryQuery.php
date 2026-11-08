@@ -15,6 +15,7 @@ final readonly class ShowDeliveryQuery
                 'loads.productionUnit:id,name,latitude,longitude',
                 'returnProductionUnit:id,name,latitude,longitude',
                 'stops',
+                'stopCorrections',
                 'accountMovements.account.customer', 'accountMovements.operation', 'accountMovements.delivery', 'accountMovements.reversal', 'accountMovements.original',
                 'latestLocation',
                 'vehicleUsage.fuelEntries',

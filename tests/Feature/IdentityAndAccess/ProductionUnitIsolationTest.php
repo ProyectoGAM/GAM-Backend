@@ -15,6 +15,8 @@ use App\Models\Inventory\StockLocation;
 use App\Models\Lots\EggCollection;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockMovement;
+use App\Models\Lots\MortalityRecord;
+use App\Models\Notifications\OperationalAlert;
 use App\Models\SharedDevice;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\User;
@@ -73,6 +75,40 @@ final class ProductionUnitIsolationTest extends TestCase
         $this->getJson('/api/v1/poultry-houses/'.$house->id)->assertNotFound();
         $this->getJson('/api/v1/inventory/balances?production_unit_id='.$other->id)->assertNotFound();
         $this->getJson('/api/v1/reference/options')->assertOk()->assertJsonMissing(['value' => $other->id, 'label' => $other->name]);
+    }
+
+    // Flujo: los agregados PIN usan la UP del dispositivo aunque el cliente omita el filtro.
+    public function test_pin_summary_queries_scope_before_aggregating(): void
+    {
+        // Preparación: crea hechos propios, ajenos y una alerta de alcance general.
+        [$user, , $secret] = $this->fixture();
+        Role::findByName('employee', 'web')->givePermissionTo(['can_view_flocks', 'can_view_mortality', 'can_view_egg_collections', 'can_view_notifications']);
+        $ownHouse = PoultryHouse::factory()->create(['production_unit_id' => $user->production_unit_id]);
+        $own = Flock::factory()->create(['poultry_house_id' => $ownHouse->id, 'current_quantity' => 25]);
+        $foreign = Flock::factory()->create(['current_quantity' => 75]);
+        $occurredAt = now(config('lots.timezone'))->startOfDay()->addHour();
+        foreach ([[$own, 2], [$foreign, 7]] as [$flock, $quantity]) {
+            MortalityRecord::factory()->for($flock)->create(['quantity' => $quantity, 'occurred_at' => $occurredAt]);
+            EggCollection::factory()->for($flock)->create(['quantity' => $quantity, 'occurred_at' => $occurredAt]);
+        }
+        foreach ([$own->production_unit_id, $foreign->production_unit_id, null] as $unitId) {
+            OperationalAlert::factory()->create(['production_unit_id' => $unitId, 'source_key' => 'condition',
+                'type' => 'poultry_house_over_capacity', 'view_permission' => 'can_view_poultry_houses', 'entity_type' => 'poultry_house',
+                'entity_id' => 'condition', 'urgency' => 'alto', 'title' => 'Alerta de prueba', 'occurred_at' => $occurredAt]);
+        }
+        $this->login($user, $secret);
+
+        // Consulta: comprueba los totales y rechaza seleccionar otra UP explícitamente.
+        $date = $occurredAt->toDateString();
+        $mortality = '/api/v1/mortalidades/resumen?desde='.$date.'&hasta='.$date;
+        $this->getJson($mortality)->assertOk()->assertJsonPath('data.up_id', $own->production_unit_id)->assertJsonPath('data.bajas_registradas', 2);
+        $this->getJson($mortality.'&up_id='.$foreign->production_unit_id)->assertNotFound();
+        $this->getJson('/api/v1/lotes/resumen')->assertOk()->assertJsonPath('data.aves_vivas', 25);
+        $this->getJson('/api/v1/lotes/resumen?up_id='.$foreign->production_unit_id)->assertNotFound();
+        $this->getJson('/api/v1/collections/metrics?comparar_anterior=1&date_from='.$date.'&date_to='.$date)->assertOk()->assertJsonPath('data.total_eggs', 2);
+        $this->getJson('/api/v1/alertas-operativas/resumen')->assertOk()->assertJsonPath('data.total', 1);
+        $this->getJson('/api/v1/alertas-operativas?up_id='.$foreign->production_unit_id)->assertNotFound();
+        $this->getJson('/api/v1/gastos/resumen?desde='.$date.'&hasta='.$date)->assertOk()->assertJsonPath('data.up_id', $own->production_unit_id);
     }
 
     /** Un PAT compartido no funciona sin la credencial física y generación. */

@@ -8,6 +8,13 @@ use Illuminate\Validation\ValidationException;
 
 final class DeliveryUnitBalance
 {
+    public function canReturnTo(Delivery $delivery, int $unitId): bool
+    {
+        $origins = $delivery->loadMissing('loads')->loads->pluck('production_unit_id')->filter();
+
+        return $origins->isEmpty() ? $delivery->production_unit_id === $unitId : $origins->contains($unitId);
+    }
+
     /** @return array{rows:list<array<string, mixed>>,unallocated_delivered_eggs:int,unallocated_returned_eggs:int} */
     public function summarize(Delivery $delivery): array
     {
@@ -46,13 +53,16 @@ final class DeliveryUnitBalance
             }
         }
 
-        $unallocatedReturn = $delivery->returned_items === null ? (int) $delivery->returned_quantity : 0;
+        $allocatedReturn = 0;
         foreach ($delivery->returned_items ?? [] as $item) {
             $key = $this->key($item);
+            $amount = $this->milli((string) $item['amount']);
+            $allocatedReturn += intdiv($amount * (int) $item['eggs_per_unit'], 1000);
             if (isset($rows[$key])) {
-                $rows[$key]['returned_milli'] += $this->milli((string) $item['amount']);
+                $rows[$key]['returned_milli'] += $amount;
             }
         }
+        $unallocatedReturn = max(0, (int) $delivery->returned_quantity - $allocatedReturn);
 
         return [
             'rows' => array_values(array_map(function (array $row) use ($unallocated, $unallocatedReturn): array {

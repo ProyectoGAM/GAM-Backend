@@ -20,6 +20,7 @@ final class FlockMetricsRequest extends LotsRequest
             'flock_id' => ['sometimes', 'ulid'],
             'poultry_house_id' => ['sometimes', 'integer', 'exists:poultry_houses,id'],
             'production_unit_id' => ['sometimes', 'integer', 'exists:production_units,id'],
+            'comparar_anterior' => ['sometimes', 'boolean'],
         ];
     }
 }
