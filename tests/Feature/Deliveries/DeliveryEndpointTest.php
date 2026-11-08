@@ -568,55 +568,69 @@ final class DeliveryEndpointTest extends TestCase
             ->assertJsonPath('data.loads.0.items.0.eggs', 12);
     }
 
+    // Flujo: verifica el saldo de cada presentación después de las entregas, la recarga y el reintento.
     public function test_delivery_items_decrement_only_their_real_loaded_presentation_and_replay_safely(): void
     {
+        // Preparación: inicia un reparto con huevos sueltos y maples.
         $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
-        $deliveryId = $this->command('POST', '/repartos', [
+        $started = $this->command('POST', '/repartos', [
             'production_unit_id' => $unit->id,
             'items' => [
                 ['unit' => 'huevo', 'amount' => '5', 'eggs_per_unit' => 1],
                 ['unit' => 'maple', 'amount' => '2', 'eggs_per_unit' => 30],
             ],
-        ])->assertCreated()
-            ->assertJsonPath('data.unit_balances.rows.0.loaded_amount', '5')
-            ->assertJsonPath('data.unit_balances.rows.1.loaded_amount', '2')
-            ->json('data.id');
+        ])->assertCreated();
+        $deliveryId = $started->json('data.id');
+        $rows = array_column($started->json('data.unit_balances.rows'), null, 'unit');
+        $this->assertSame('5', $rows['huevo']['loaded_amount']);
+        $this->assertSame('2', $rows['maple']['loaded_amount']);
 
         $key = (string) Str::uuid();
         $first = ['client_reference' => '01K00000000000000000000001', 'status' => 'delivered', 'items' => [
             ['unit' => 'maple', 'amount' => '1', 'eggs_per_unit' => 30],
             ['unit' => 'huevo', 'amount' => '3', 'eggs_per_unit' => 1],
         ]];
+        // Request: registra ambas presentaciones y comprueba la equivalencia del maple.
         $this->command('POST', "/repartos/{$deliveryId}/entregas", $first, $key)->assertOk()
             ->assertJsonPath('data.delivered_quantity', 33)
             ->assertJsonPath('data.items.0.eggs', 30);
+        // Request: exige el desglose por presentación y comprueba que el reintento no duplica la entrega.
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
             'client_reference' => '01K00000000000000000000002', 'status' => 'delivered', 'delivered_quantity' => 1,
         ])->assertUnprocessable();
         $this->command('POST', "/repartos/{$deliveryId}/entregas", $first, $key)->assertOk();
         $this->assertDatabaseCount('delivery_stops', 1);
-        $this->getJson("/api/v1/repartos/{$deliveryId}")->assertOk()
+        // Consulta: verifica los saldos por presentación sin depender de la posición de sus filas.
+        $detail = $this->getJson("/api/v1/repartos/{$deliveryId}")->assertOk()
             ->assertJsonPath('data.delivered_quantity', 33)
-            ->assertJsonPath('data.remaining_quantity', 32)
-            ->assertJsonPath('data.unit_balances.rows.0.delivered_amount', '3')
-            ->assertJsonPath('data.unit_balances.rows.0.remaining_amount', '2')
-            ->assertJsonPath('data.unit_balances.rows.1.delivered_amount', '1')
-            ->assertJsonPath('data.unit_balances.rows.1.remaining_amount', '1');
+            ->assertJsonPath('data.remaining_quantity', 32);
+        $rows = array_column($detail->json('data.unit_balances.rows'), null, 'unit');
+        $this->assertSame('3', $rows['huevo']['delivered_amount']);
+        $this->assertSame('2', $rows['huevo']['remaining_amount']);
+        $this->assertSame('1', $rows['maple']['delivered_amount']);
+        $this->assertSame('1', $rows['maple']['remaining_amount']);
 
+        // Request: rechaza la equivalencia incorrecta y registra la recarga de maples.
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
             'client_reference' => '01K00000000000000000000002', 'status' => 'delivered',
             'items' => [['unit' => 'maple', 'amount' => '2', 'eggs_per_unit' => 29]],
         ])->assertUnprocessable()->assertJsonValidationErrors('items.0.unit');
-        $this->command('POST', "/repartos/{$deliveryId}/cargas", [
+        $reloaded = $this->command('POST', "/repartos/{$deliveryId}/cargas", [
             'items' => [['unit' => 'maple', 'amount' => '1', 'eggs_per_unit' => 30]],
-        ])->assertOk()->assertJsonPath('data.unit_balances.rows.1.remaining_amount', '2');
+        ])->assertOk();
+        $rows = array_column($reloaded->json('data.unit_balances.rows'), null, 'unit');
+        $this->assertSame('2', $rows['maple']['remaining_amount']);
+
+        // Request y consulta: entrega los maples restantes y comprueba que los huevos sueltos quedan en el reparto.
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
             'client_reference' => '01K00000000000000000000002', 'status' => 'delivered',
             'items' => [['unit' => 'maple', 'amount' => '2', 'eggs_per_unit' => 30]],
         ])->assertOk()->assertJsonPath('data.delivered_quantity', 60);
-        $this->getJson("/api/v1/repartos/{$deliveryId}")->assertOk()
-            ->assertJsonPath('data.unit_balances.rows.1.remaining_amount', '0');
+        $detail = $this->getJson("/api/v1/repartos/{$deliveryId}")->assertOk();
+        $rows = array_column($detail->json('data.unit_balances.rows'), null, 'unit');
+        $this->assertSame('0', $rows['maple']['remaining_amount']);
+        $this->assertSame('2', $rows['huevo']['remaining_amount']);
     }
 
     public function test_fractional_delivery_uses_the_load_conversion_snapshot(): void
