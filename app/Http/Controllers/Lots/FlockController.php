@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Lots;
 
 use App\Actions\Lots\CreateFlockAction;
 use App\Actions\Lots\UpdateFlockAction;
+use App\Http\Requests\Lots\FlockSummaryRequest;
 use App\Http\Requests\Lots\ListFlockHistoryRequest;
 use App\Http\Requests\Lots\ListFlocksRequest;
 use App\Http\Requests\Lots\StoreFlockRequest;
@@ -12,9 +13,12 @@ use App\Http\Requests\Lots\ViewFlockRequest;
 use App\Http\Resources\Lots\FlockMovementResource;
 use App\Http\Resources\Lots\FlockResource;
 use App\Http\Resources\Lots\LotsOperationResource;
+use App\Interfaces\Clock;
 use App\Models\Lots\Flock;
 use App\Queries\Lots\GetFlockHistoryQuery;
 use App\Queries\Lots\ListFlocksQuery;
+use App\Services\IdentityAndAccess\ProductionUnitAccess;
+use App\Services\Lots\LotsPoultryHouseOccupancyProvider;
 use App\Services\Lots\LotsSnapshots;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -24,6 +28,17 @@ final readonly class FlockController
     public function index(ListFlocksRequest $request, ListFlocksQuery $query): AnonymousResourceCollection
     {
         return FlockResource::collection($query->execute($request->attributesForAction()));
+    }
+
+    public function summary(FlockSummaryRequest $request, LotsPoultryHouseOccupancyProvider $occupancy, ProductionUnitAccess $access, Clock $clock): JsonResponse
+    {
+        $unitId = $request->integer('up_id') ?: $access->unitId();
+
+        return response()->json(['data' => [
+            'up_id' => $unitId,
+            'aves_vivas' => $occupancy->totalOccupancy($unitId),
+            'consultado_en' => $clock->now()->toIso8601String(),
+        ]]);
     }
 
     public function store(StoreFlockRequest $request, CreateFlockAction $action): JsonResponse

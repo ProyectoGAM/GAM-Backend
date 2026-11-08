@@ -724,7 +724,7 @@ paths:
           $ref: '#/components/responses/Conflict'
         422:
           $ref: '#/components/responses/ValidationError'
-      description: 'Sólo administrador activo. Conserva el original y permite una única reversión. Otro cliente da 404; un cargo de venta se corrige desde su operación de origen.'
+      description: 'Sólo administrador activo. Conserva el original y permite una única reversión. Otro cliente da 404. Un cargo de venta y su compensación vinculada se gestionan desde la entrega.'
       requestBody:
         required: true
         content:

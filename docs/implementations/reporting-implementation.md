@@ -22,6 +22,8 @@ La actualización de [acceso por UP](access-methods-and-production-unit-implemen
 | `vehicles.maintenance` | Intervenciones, estado y costos | `can_view_vehicle_maintenance` |
 | `commerce.egg-outflow` | Vendidos, donados y total, excluyendo cargas/ajustes/pérdidas | `can_view_delivery_history` y `can_view_egg_stock` |
 
+La [guía del resumen operativo](operational-summary-implementation.md#valor-entregado-y-gastos) documenta el valor global entregado con cobertura de importes y `GET /gastos/resumen`, con totales por moneda para la empresa o una UP.
+
 El servidor define filtros, columnas, ordenamientos, dimensiones, métricas, opciones, consultas estándar y capacidades. La UI ofrece las consultas estándar antes de las opciones avanzadas. Las nuevas fuentes admiten todo el historial registrado (`max_range_days=0`), con 100 filas por página y 50.000 por XLSX. PDF se limita a 2.000 filas. No se recortan archivos silenciosamente: superar el límite produce un fallo accionable.
 
 ## Alimentación registrada y estimada

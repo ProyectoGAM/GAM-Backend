@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Deliveries;
 use App\Actions\CustomersAndAccounts\RecordCustomerPaymentAction;
 use App\Actions\Deliveries\AddDeliveryLoadAction;
 use App\Actions\Deliveries\CloseDeliveryAction;
+use App\Actions\Deliveries\CorrectDeliveryStopAction;
 use App\Actions\Deliveries\PublishDeliveryLocationsAction;
 use App\Actions\Deliveries\RecordDeliveryStopAction;
 use App\Actions\Deliveries\StartDeliveryAction;
 use App\Enums\Deliveries\DeliveryStatus;
 use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Http\Requests\Deliveries\CloseDeliveryRequest;
+use App\Http\Requests\Deliveries\CorrectDeliveryStopRequest;
 use App\Http\Requests\Deliveries\CurrentDeliveriesRequest;
 use App\Http\Requests\Deliveries\ListDeliveriesRequest;
 use App\Http\Requests\Deliveries\ListDeliveryClientsRequest;
@@ -115,6 +117,13 @@ final readonly class DeliveryController
             $request->attributesForAction(),
             $request->idempotencyKey(),
         ));
+    }
+
+    public function correctStop(CorrectDeliveryStopRequest $request, Delivery $reparto, string $entrega, CorrectDeliveryStopAction $action): JsonResponse
+    {
+        $operation = $action->execute($reparto, (int) $entrega, $request->actor(), $request->attributesForAction(), $request->idempotencyKey());
+
+        return response()->json(['data' => $operation->result]);
     }
 
     public function locations(StoreDeliveryLocationsRequest $request, Delivery $reparto, PublishDeliveryLocationsAction $action): JsonResponse

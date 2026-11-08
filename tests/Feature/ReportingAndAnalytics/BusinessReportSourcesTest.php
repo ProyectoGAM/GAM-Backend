@@ -5,6 +5,11 @@ namespace Tests\Feature\ReportingAndAnalytics;
 use App\Actions\Inventory\RecordManualEggStockAction;
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
+use App\Models\Deliveries\Delivery;
+use App\Models\Deliveries\DeliveryLoad;
+use App\Models\Deliveries\DeliveryStop;
+use App\Models\FarmStructure\Maintenance;
+use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\FeedBalance;
 use App\Models\Lots\DailyWeighing;
@@ -16,6 +21,10 @@ use App\Models\Lots\WeighingMeasurement;
 use App\Models\ManagementPlans\FeedSupply;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\User;
+use App\Models\Vehicles\Vehicle;
+use App\Models\Vehicles\VehicleFuelEntry;
+use App\Models\Vehicles\VehicleMaintenance;
+use App\Models\Vehicles\VehicleUsage;
 use App\Services\Lots\RunLotsCommand;
 use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -31,6 +40,76 @@ use Tests\TestCase;
 final class BusinessReportSourcesTest extends TestCase
 {
     use LazilyRefreshDatabase;
+
+    // Flujo: el valor entregado conserva los importes conocidos e identifica los históricos sin precio.
+    public function test_delivery_metrics_distinguish_missing_prices_zero_and_empty_periods(): void
+    {
+        // Preparación: crea entregas con importe, sin precio y con cero explícito.
+        $actor = $this->actor(['can_view_reports', 'can_view_delivery_history']);
+        Sanctum::actingAs($actor);
+        $delivery = Delivery::factory()->completed()->create();
+        foreach ([['2026-11-01', '10.125'], ['2026-11-02', null], ['2026-11-03', '0.000']] as $index => [$date, $amount]) {
+            DeliveryStop::query()->create([
+                'delivery_id' => $delivery->id, 'client_reference' => 'cliente-'.$index, 'client_name' => 'Cliente', 'address' => 'Dirección',
+                'latitude' => '-34.9000000', 'longitude' => '-56.2000000', 'sequence' => $index + 1, 'status' => 'delivered',
+                'visited_at' => Carbon::parse($date.'T12:00:00-03:00'), 'total_amount' => $amount, 'delivered_quantity' => 1,
+            ]);
+        }
+
+        // Consulta: los conteos distinguen cobertura parcial, ausencia de precio y ausencia de hechos.
+        $path = '/api/v1/reportes/deliveries.deliveries/previsualizaciones';
+        $metrics = ['merchandise_total', 'delivery_count', 'unpriced_delivery_count'];
+        foreach ([['2026-11-01', '2026-11-03', '10.125', '3', '1'], ['2026-11-02', '2026-11-02', null, '1', '1'],
+            ['2026-11-03', '2026-11-03', '0.000', '1', '0'], ['2026-11-04', '2026-11-04', null, '0', '0']] as [$from, $to, $value, $count, $missing]) {
+            $this->postJson($path, ['from' => $from, 'to' => $to, 'metrics' => $metrics])->assertOk()
+                ->assertJsonPath('data.rows.0', ['merchandise_total' => $value, 'delivery_count' => $count, 'unpriced_delivery_count' => $missing]);
+        }
+    }
+
+    // Flujo: los gastos agregan sólo importes efectivos y separan moneda, UP y permisos de origen.
+    public function test_expense_summary_groups_recorded_costs_by_currency_and_scope(): void
+    {
+        // Preparación: crea mantenimiento activo, anulado y costos generales de vehículos.
+        config(['lots.timezone' => 'America/Montevideo']);
+        $actor = $this->actor(['can_view_poultry_houses', 'can_view_vehicle_fuel', 'can_view_vehicle_maintenance']);
+        $unit = ProductionUnit::factory()->create();
+        $house = PoultryHouse::factory()->for($unit)->create();
+        $date = '2026-11-01';
+        $time = Carbon::parse($date.'T12:00:00-03:00');
+        Maintenance::factory()->create(['poultry_house_id' => $house->id, 'maintenance_date' => $date, 'cost_currency' => 'USD', 'cost_amount' => '10.50']);
+        Maintenance::factory()->cancelled()->create(['poultry_house_id' => $house->id, 'maintenance_date' => $date]);
+        Maintenance::factory()->create(['maintenance_date' => $date, 'cost_amount' => '30.00']);
+        $vehicle = Vehicle::factory()->create();
+        $delivery = Delivery::factory()->create(['production_unit_id' => $unit->id]);
+        $usage = VehicleUsage::query()->create(['vehicle_id' => $vehicle->id, 'delivery_id' => $delivery->id, 'purpose' => 'Reparto',
+            'started_at' => $time, 'vehicle_snapshot' => [], 'idempotency_key' => Str::uuid()->toString()]);
+        foreach ([[$usage->id, '11.125'], [null, '3.000']] as [$usageId, $amount]) {
+            VehicleFuelEntry::query()->create(['vehicle_id' => $vehicle->id, 'usage_id' => $usageId, 'occurred_at' => $time,
+                'liters' => '1.000', 'fuel_type' => 'diesel', 'amount' => $amount, 'idempotency_key' => Str::uuid()->toString()]);
+        }
+        VehicleMaintenance::query()->create(['vehicle_id' => $vehicle->id, 'type' => 'corrective', 'status' => 'completed', 'completed_at' => $time,
+            'description' => 'Servicio', 'cost_amount' => '6.875', 'idempotency_key' => Str::uuid()->toString(), 'request_hash' => hash('sha256', 'maintenance')]);
+        Sanctum::actingAs($actor);
+
+        // Consulta: incluye gastos generales en empresa y separa los importes de distinta moneda.
+        $path = '/api/v1/gastos/resumen?desde='.$date.'&hasta='.$date;
+        $this->getJson($path)->assertOk()->assertJsonPath('data.totales.0.moneda', 'USD')->assertJsonPath('data.totales.0.importe', '10.5000')
+            ->assertJsonPath('data.totales.1.moneda', 'UYU')->assertJsonPath('data.totales.1.importe', '51.0000');
+        $this->getJson($path.'&up_id='.$unit->id)->assertOk()->assertJsonPath('data.totales.0.importe', '10.5000')
+            ->assertJsonPath('data.totales.1.importe', '11.125')->assertJsonPath('data.totales.1.por_fuente.0.fuente', 'combustible');
+
+        // Mutación y consulta: una carga de otra UP vuelve general el combustible de ese reparto.
+        DeliveryLoad::query()->create(['delivery_id' => $delivery->id, 'production_unit_id' => ProductionUnit::factory()->create()->id,
+            'created_by' => $actor->id, 'quantity' => 1, 'idempotency_key' => Str::uuid()->toString()]);
+        $this->getJson($path.'&up_id='.$unit->id)->assertOk()->assertJsonCount(1, 'data.totales')
+            ->assertJsonPath('data.totales.0.moneda', 'USD');
+        $this->getJson($path)->assertOk()->assertJsonPath('data.totales.1.importe', '51.0000');
+
+        // Consulta: una cuenta sin permisos de vehículos recibe únicamente el gasto de galpones.
+        Sanctum::actingAs($this->actor(['can_view_poultry_houses']));
+        $this->getJson($path)->assertOk()->assertJsonPath('data.fuentes_sin_permiso', ['combustible', 'mantenimiento_vehiculos'])
+            ->assertJsonPath('data.totales.1.importe', '30.0000');
+    }
 
     // Flujo: todas las fuentes de negocio ejecutan detalle y consultas estándar con el contrato público.
     public function test_catalog_and_queries_are_executable(): void

@@ -24,7 +24,7 @@ Una entrega confirmada contabiliza su valor exacto y, si existe, un pago separad
 
 **Ajustar deuda** permite aumentar o disminuir mediante importe positivo y motivo obligatorio de hasta 2000 caracteres. Envía `expected_version`: un cambio concurrente devuelve `409` y exige consultar el saldo y confirmar otra vez. Sólo un administrador activo puede ajustar o revertir, también al invocar directamente una Action. El saldo no es un campo editable del cliente.
 
-Los movimientos no tienen rutas de edición o eliminación. Un pago o ajuste incorrecto se compensa mediante una reversión exacta, vinculada y con motivo obligatorio, una sola vez. La corrección de mercadería no se implementa mediante una reversión financiera genérica.
+Los movimientos conservan su registro original. Un pago o ajuste general incorrecto se compensa mediante una reversión exacta, vinculada y con motivo obligatorio, una sola vez. La [rectificación de mercadería](operational-summary-implementation.md#rectificar-una-entrega-y-su-cargo) crea un `adjustment_decrease` ligado a la entrega cuando se redujo un cargo contabilizado. Para proteger la coherencia con las cantidades, esa compensación se gestiona desde Repartos.
 
 ## Contratos y puntos de entrada
 
@@ -124,7 +124,7 @@ Las entregas preexistentes quedan `legacy_unreconciled`, sin cargos ni cobros de
 
 `financial_summary` distingue mercadería, cobrado, variación de cuenta y subtotales por medio; incluye cobros sin mercadería, pagos adicionales y compensaciones. Las cuentas históricas por cliente muestran el saldo de sus operaciones, que puede diferir del saldo vigente por movimientos externos al reparto. Si hay entregas antiguas sin conciliar, el total cobrado desconocido es `null`; `recorded_collected_amount` identifica sólo lo registrado.
 
-Cerrar conserva PIN, descarga total de sobrantes, una UP de destino y sincronización previa. Guarda `closed_financial_summary` sin volver a contabilizar. Una reversión posterior modifica el resumen vigente, conserva el de cierre y aparece en el historial de la cuenta. Administración muestra ambos y enlaza las fichas de clientes. Un pago administrativo general no altera el efectivo cobrado por el repartidor.
+Cerrar conserva PIN y sincronización previa, exige saldo físico final cero y requiere una UP de destino explícita cuando se descargan sobrantes. Guarda `closed_financial_summary` sin volver a contabilizar. Una reversión posterior modifica el resumen vigente, conserva el de cierre y aparece en el historial de la cuenta. Administración muestra ambos y enlaza las fichas de clientes. Un pago administrativo general no altera el efectivo cobrado por el repartidor.
 
 ## Instalación y datos locales
 

@@ -28,6 +28,8 @@ class CustomerOperation extends Model
 
     public const UPDATED_AT = null;
 
+    public const string DELIVERY_STOP_CORRECTION = 'delivery_stop_correction';
+
     protected $dateFormat = 'Y-m-d H:i:sP';
 
     protected function casts(): array

@@ -65,22 +65,22 @@ final readonly class CloseDeliveryAction
             if ($returned > 0 && $lockedDelivery->loaded_quantity === 0) {
                 throw new DeliveryConflict('El reparto debe tener una carga para registrar una devolución.');
             }
-            $origins = $lockedDelivery->loads->pluck('production_unit_id')->filter()->unique()->values();
-            if ($origins->isEmpty()) {
-                $origins->push($lockedDelivery->production_unit_id);
-            }
-            $returnUnitId = $returned > 0 ? ($data['return_production_unit_id'] ?? ($origins->count() === 1 ? $origins->first() : null)) : null;
-            if ($returned > 0 && ($returnUnitId === null || ! $origins->contains((int) $returnUnitId))) {
+            $returnUnitId = $returned > 0 ? ($data['return_production_unit_id'] ?? null) : null;
+            if ($returned > 0 && ($returnUnitId === null || ! $this->balances->canReturnTo($lockedDelivery, (int) $returnUnitId))) {
                 throw ValidationException::withMessages(['return_production_unit_id' => 'Seleccioná una de las unidades productivas de las cargas para descargar todos los sobrantes.']);
             }
             $remaining = $lockedDelivery->loaded_quantity - $delivered - $returned;
+            if ($remaining < 0) {
+                throw new DeliveryConflict('Ajustá el reparto antes de cerrar. Las entregas y la devolución superan la carga registrada.');
+            }
             if ($remaining > 0) {
                 throw new DeliveryConflict('La descarga final debe incluir todos los huevos sobrantes para cerrar el reparto.');
             }
 
-            if ($returned > 0) {
+            $returnUnit = $returnUnitId === null ? null : ProductionUnit::query()->whereKey($returnUnitId)->lockForUpdate()->firstOrFail();
+            if ($returnUnit !== null) {
                 $this->stock->execute(
-                    unit: ProductionUnit::query()->whereKey($returnUnitId)->lockForUpdate()->firstOrFail(),
+                    unit: $returnUnit,
                     type: 'distribution_return',
                     quantity: $returned,
                     operationId: $idempotencyKey,
@@ -130,8 +130,8 @@ final readonly class CloseDeliveryAction
                 ],
             ));
 
-            if ($returned > 0) {
-                $this->eggAlerts->surplus($lockedDelivery, (int) $returnUnitId, $returned);
+            if ($returnUnit !== null) {
+                $this->eggAlerts->surplus($lockedDelivery, $returnUnit, $returned);
             }
             $this->eggAlerts->negativeDeliveryBalance($lockedDelivery, $remaining);
 

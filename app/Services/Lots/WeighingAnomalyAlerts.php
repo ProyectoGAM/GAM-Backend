@@ -12,6 +12,7 @@ use App\Models\Lots\Weighing;
 use App\Models\Notifications\AppNotification;
 use App\Services\Notifications\AlertConfiguration;
 use App\Services\Notifications\AlertRecipients;
+use App\Services\Notifications\OperationalAlertProjection;
 
 final readonly class WeighingAnomalyAlerts
 {
@@ -22,6 +23,7 @@ final readonly class WeighingAnomalyAlerts
         private PublishNotificationAction $publish,
         private ResolveAlertNotificationAction $resolve,
         private AlertConfiguration $configuration,
+        private OperationalAlertProjection $operationalAlerts,
     ) {}
 
     public function publish(DailyWeighingEntry|Weighing $measurement, string $operationId): void
@@ -42,19 +44,28 @@ final readonly class WeighingAnomalyAlerts
             return;
         }
 
+        $entityType = $this->entityType($measurement);
+        $targetPath = '/administracion/lotes/lotes/'.$flock->public_id.'/pesajes'.$detail;
+        $title = 'Pesaje anómalo pendiente de revisión';
+        $urgency = $this->configuration->urgency($settings, NotificationUrgency::High);
+        $occurredAt = now()->toImmutable();
+        $this->operationalAlerts->open($unitId, self::TYPE, 'can_view_weighings', $entityType, $entityType.':'.$measurement->public_id, $occurredAt, [
+            'entity_id' => $measurement->public_id, 'target_path' => $targetPath, 'title' => $title, 'urgency' => $urgency,
+        ]);
+
         foreach ($this->recipients->ids($unitId, 'can_view_weighings') as $recipientId => $_) {
             $this->publish->execute(new NotificationData(
                 recipientId: $recipientId,
                 type: self::TYPE->value,
                 sourceKey: $measurement->public_id.':'.$operationId,
-                title: 'Pesaje anómalo pendiente de revisión',
+                title: $title,
                 message: "Revisá el dato de peso fuera del rango esperado en el lote «{$flock->code}».",
-                occurredAt: now(),
+                occurredAt: $occurredAt,
                 productionUnitId: $unitId,
-                entityType: $this->entityType($measurement),
+                entityType: $entityType,
                 entityId: $measurement->public_id,
-                targetPath: '/administracion/lotes/lotes/'.$flock->public_id.'/pesajes'.$detail,
-                urgency: $this->configuration->urgency($settings, NotificationUrgency::High),
+                targetPath: $targetPath,
+                urgency: $urgency,
                 module: self::TYPE->module(),
                 isAlert: true,
             ));
@@ -63,9 +74,11 @@ final readonly class WeighingAnomalyAlerts
 
     public function resolve(DailyWeighingEntry|Weighing $measurement, int $unitId): void
     {
+        $entityType = $this->entityType($measurement);
+        $this->operationalAlerts->resolve($unitId, self::TYPE, $entityType.':'.$measurement->public_id, now()->toImmutable());
         $alerts = AppNotification::query()->where('module', self::TYPE->module())->where('type', self::TYPE->value)
             ->where('production_unit_id', $unitId)
-            ->where('entity_type', $this->entityType($measurement))->where('entity_id', $measurement->public_id)
+            ->where('entity_type', $entityType)->where('entity_id', $measurement->public_id)
             ->where('is_alert', true)->whereNull('resolved_at');
 
         foreach ($alerts->lazyById(100) as $alert) {

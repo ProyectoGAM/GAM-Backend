@@ -8,6 +8,31 @@ use Laravel\Sanctum\Sanctum;
 
 final class WeighingAnomalyAlertTest extends LotsTestCase
 {
+    // Flujo: el despliegue recupera una sola alerta por pesaje histórico que sigue pendiente.
+    public function test_migration_recovers_only_verifiable_unreviewed_weighings(): void
+    {
+        // Preparación: registra dos pesajes anómalos, cada uno notificado a dos destinatarios.
+        $this->signIn(['can_view_weighings', 'can_view_notifications']);
+        $this->signIn(['can_view_weighings', 'can_manage_weighings', 'can_manage_weighing_settings', 'can_view_notifications']);
+        $this->setRange('20.0');
+        $flock = $this->flockWithHistory();
+        $payload = ['flock_id' => $flock->public_id, 'mode' => 'individual', 'unit' => 'g',
+            'measurements' => [['weight' => '25.0']], 'confirm_out_of_range' => true];
+        $pending = $this->command('POST', '/pesajes', $payload)->assertCreated()->json('data.weighing.id');
+        $reviewed = $this->command('POST', '/pesajes', $payload)->assertCreated()->json('data.weighing.id');
+
+        // Mutación: resuelve uno de los pesajes y recrea la proyección como en un despliegue.
+        $this->command('POST', '/pesajes/'.$reviewed.'/confirmacion-anomalia', ['version' => 1])->assertOk();
+        $migration = require database_path('migrations/2026_11_07_232605_create_operational_alerts_table.php');
+        $migration->down();
+        $migration->up();
+
+        // Consulta: recupera el pendiente una sola vez y conserva los avisos históricos.
+        $this->getJson('/api/v1/alertas-operativas')->assertOk()->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.entidad.id', $pending);
+        $this->assertDatabaseCount('app_notifications', 4);
+    }
+
     // Flujo: el ingreso confirmado genera una alerta alta y una revisión posterior la resuelve.
     public function test_daily_anomaly_requires_a_separate_review_and_resolves_for_every_recipient(): void
     {
@@ -42,6 +67,14 @@ final class WeighingAnomalyAlertTest extends LotsTestCase
             ->assertJsonPath('data.entidad.id', $entryId)
             ->assertJsonPath('data.entidad.ruta', '/administracion/lotes/lotes/'.$flock->public_id.'/pesajes/'.$dailyId);
 
+        // Consulta y mutación: dos avisos forman una alerta y leer uno no cambia su estado operativo.
+        $this->getJson('/api/v1/alertas-operativas?per_page=1&urgencia=alto&up_id='.$flock->production_unit_id)
+            ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.entidad.id', $entryId);
+        $this->patchJson('/api/v1/notificaciones/'.$notice->public_id.'/lectura')->assertOk();
+        $this->getJson('/api/v1/alertas-operativas/resumen')->assertOk()->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.por_urgencia', ['bajo' => 0, 'medio' => 0, 'alto' => 1]);
+        $this->getJson('/api/v1/alertas-operativas/resumen?urgencia=medio')->assertOk()->assertJsonPath('data.total', 0);
+
         // Request: impide revisar sin permiso o con una versión anterior a la observada.
         Sanctum::actingAs($viewer, ['api:access']);
         $this->command('POST', $reviewUrl, ['version' => $version])->assertForbidden();
@@ -63,6 +96,7 @@ final class WeighingAnomalyAlertTest extends LotsTestCase
         $this->assertDatabaseCount('app_notifications', 2);
         $this->assertSame(0, AppNotification::query()->whereNull('resolved_at')->count());
         $this->getJson('/api/v1/notificaciones/'.$notice->public_id)->assertOk()->assertJsonPath('data.estado_resolucion', 'resuelto');
+        $this->getJson('/api/v1/alertas-operativas/resumen')->assertOk()->assertJsonPath('data.total', 0);
     }
 
     // Flujo: la rectificación distingue un cambio de notas de un cambio en el dato verificado.

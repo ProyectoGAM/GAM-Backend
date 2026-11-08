@@ -4,6 +4,7 @@ namespace App\Models\Deliveries;
 
 use App\Enums\Deliveries\DeliveryStatus;
 use App\Models\CustomersAndAccounts\CustomerAccountMovement;
+use App\Models\CustomersAndAccounts\CustomerOperation;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
 use App\Models\Vehicles\Vehicle;
@@ -120,6 +121,12 @@ class Delivery extends Model
     public function stops(): HasMany
     {
         return $this->hasMany(DeliveryStop::class);
+    }
+
+    /** @return HasMany<CustomerOperation, $this> */
+    public function stopCorrections(): HasMany
+    {
+        return $this->hasMany(CustomerOperation::class)->where('kind', CustomerOperation::DELIVERY_STOP_CORRECTION)->orderBy('id');
     }
 
     /** @return HasMany<DeliveryLocationPoint, $this> */

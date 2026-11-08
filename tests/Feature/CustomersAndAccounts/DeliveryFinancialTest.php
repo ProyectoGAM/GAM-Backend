@@ -8,6 +8,7 @@ use App\Models\Deliveries\Delivery;
 use App\Models\Deliveries\DeliveryStop;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\EggPresentation;
+use App\Models\Notifications\AppNotification;
 use App\Models\User;
 use App\Models\Vehicles\Vehicle;
 use App\Services\IdentityAndAccess\PinHasher;
@@ -20,6 +21,122 @@ use Tests\TestCase;
 final class DeliveryFinancialTest extends TestCase
 {
     use LazilyRefreshDatabase;
+
+    // Flujo: una rectificación reduce el cargo y conserva el pago, el reintento y la historia.
+    public function test_active_shortfall_rectification_compensates_the_sale_and_preserves_payments(): void
+    {
+        // Preparación: registra 36 huevos sobre una carga de 24 y un pago superior al importe corregido.
+        $this->driver();
+        $customer = Customer::factory()->withAccount()->create();
+        [$deliveryId, $presentation] = $this->start();
+        $event = (string) Str::uuid();
+        $stopId = $this->postJson('/api/v1/repartos/'.$deliveryId.'/entregas', [
+            'client_reference' => $customer->public_id, 'status' => 'delivered', 'accounting_version' => 2, 'client_event_id' => $event,
+            'items' => [['unit' => $presentation->code, 'amount' => '1.5', 'eggs_per_unit' => 24]],
+            'payment' => ['amount' => '120.125', 'payment_method' => 'cash'],
+        ], ['Idempotency-Key' => $event])->assertOk()->assertJsonPath('data.version', 1)->json('data.id');
+
+        // Request: el repartidor carece del permiso administrativo para compensar el cargo.
+        $path = '/api/v1/repartos/'.$deliveryId.'/entregas/'.$stopId.'/rectificaciones';
+        $data = ['version' => 1, 'motivo' => 'Cantidad ingresada por error', 'lineas' => [['indice' => 0, 'cantidad' => '1']]];
+        $headers = ['Idempotency-Key' => (string) Str::uuid()];
+        $this->postJson($path, $data, $headers)->assertForbidden();
+        $admin = User::factory()->create();
+        $admin->syncRoles('admin');
+        Sanctum::actingAs($admin, ['api:access']);
+        $presentation->update(['default_unit_price' => 200]);
+
+        // Request: conserva el precio de la entrega, compensa la diferencia y devuelve el mismo historial en reintentos.
+        $correction = $this->postJson($path, $data, $headers)->assertOk()->assertJsonPath('data.antes.importe', '151.500')
+            ->assertJsonPath('data.despues.importe', '101.000')->assertJsonPath('data.despues.version', 2)
+            ->assertJsonPath('data.despues.saldo_huevos', 0);
+        $this->postJson($path, $data, $headers)->assertOk()->assertJsonPath('data.operation_id', $correction->json('data.operation_id'));
+        $this->postJson($path, $data, ['Idempotency-Key' => (string) Str::uuid()])->assertConflict();
+        $this->postJson('/api/v1/repartos/'.$deliveryId.'/entregas/'.($stopId + 1).'/rectificaciones', $data,
+            ['Idempotency-Key' => (string) Str::uuid()])->assertNotFound();
+
+        // Consulta: el importe vigente y el crédito coinciden y la compensación exige su operación de origen.
+        $this->assertDatabaseHas('customer_accounts', ['customer_id' => $customer->id, 'balance' => '-19.125']);
+        $this->assertDatabaseHas('customer_account_movements', ['delivery_stop_id' => $stopId, 'type' => 'adjustment_decrease', 'amount' => '-50.500']);
+        $this->assertDatabaseCount('customer_account_movements', 3);
+        $this->assertDatabaseCount('egg_stock_transactions', 1);
+        $this->assertDatabaseHas('activity_log', ['event' => 'delivery_stop_corrected', 'operation_id' => $correction->json('data.operation_id')]);
+        $this->getJson('/api/v1/repartos/'.$deliveryId)->assertOk()->assertJsonPath('data.remaining_quantity', 0)
+            ->assertJsonPath('data.financial_summary.collected_amount', '120.125')
+            ->assertJsonPath('data.financial_summary.customers.0.merchandise_amount', '101.000')
+            ->assertJsonPath('data.rectificaciones_entregas.0.operation_id', $correction->json('data.operation_id'));
+        $this->postJson('/api/v1/clientes/'.$customer->public_id.'/movimientos/'.$correction->json('data.movimiento_cuenta_id').'/reversion',
+            ['reason' => 'Intento de reversión separada'], ['Idempotency-Key' => (string) Str::uuid()])->assertConflict();
+    }
+
+    // Flujo: un cierre histórico conserva su resumen y acredita el sobrante rectificado en la UP confirmada.
+    public function test_closed_shortfall_can_be_rectified_with_an_explicit_return_unit(): void
+    {
+        // Preparación: registra y contabiliza una entrega antes de simular el cierre negativo legado.
+        $this->driver();
+        $customer = Customer::factory()->withAccount()->create();
+        [$deliveryId, $presentation, $unit] = $this->start();
+        $event = (string) Str::uuid();
+        $stopId = $this->postJson('/api/v1/repartos/'.$deliveryId.'/entregas', [
+            'client_reference' => $customer->public_id, 'status' => 'delivered', 'accounting_version' => 2, 'client_event_id' => $event,
+            'items' => [['unit' => $presentation->code, 'amount' => '1.5', 'eggs_per_unit' => 24]], 'payment' => ['amount' => '0'],
+        ], ['Idempotency-Key' => $event])->assertOk()->json('data.id');
+        Delivery::query()->where('public_id', $deliveryId)->firstOrFail()->forceFill(['status' => 'completed', 'closed_at' => now(),
+            'financial_snapshot' => ['currency' => 'UYU', 'merchandise_amount' => '151.500']])->save();
+        $admin = User::factory()->create();
+        $admin->syncRoles('admin');
+        Sanctum::actingAs($admin, ['api:access']);
+
+        // Request: omitir el destino revierte toda la operación, incluido el ajuste de cuenta.
+        $this->getJson('/api/v1/alertas-operativas')->assertOk()->assertJsonFragment(['tipo' => 'delivery_egg_balance_negative']);
+        $path = '/api/v1/repartos/'.$deliveryId.'/entregas/'.$stopId.'/rectificaciones';
+        $data = ['version' => 1, 'motivo' => 'Confirmación de remanente físico', 'lineas' => [['indice' => 0, 'cantidad' => '0.75']]];
+        $headers = ['Idempotency-Key' => (string) Str::uuid()];
+        $this->postJson($path, $data, $headers)->assertUnprocessable()->assertJsonValidationErrors('return_production_unit_id');
+        $this->assertDatabaseCount('customer_account_movements', 1);
+        $this->assertDatabaseCount('egg_stock_transactions', 1);
+
+        // Request y consulta: acredita seis huevos y conserva el cierre histórico junto al resultado corregido.
+        $this->postJson($path, [...$data, 'return_production_unit_id' => $unit->id], $headers)->assertOk()
+            ->assertJsonPath('data.despues.huevos_devueltos', 6)->assertJsonPath('data.despues.saldo_huevos', 0);
+        $this->assertDatabaseHas('egg_stock_transactions', ['reference_id' => $deliveryId, 'production_unit_id' => $unit->id,
+            'type' => 'distribution_return', 'quantity' => 6]);
+        $this->getJson('/api/v1/repartos/'.$deliveryId)->assertOk()->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.closed_financial_summary.merchandise_amount', '151.500')
+            ->assertJsonPath('data.financial_summary.merchandise_amount', '75.750')->assertJsonPath('data.remaining_quantity', 0);
+        $this->getJson('/api/v1/alertas-operativas')->assertOk()->assertJsonMissing(['tipo' => 'delivery_egg_balance_negative']);
+    }
+
+    // Flujo: recupera una alerta de un reparto legado y corrige su cantidad sin crear una deuda inexistente.
+    public function test_legacy_closed_shortfall_without_lines_keeps_unknown_price_and_accounting_status(): void
+    {
+        // Preparación: crea un reparto con aviso pendiente y una entrega histórica sin líneas ni cargo.
+        $driver = $this->driver();
+        $delivery = Delivery::factory()->completed()->create(['driver_id' => $driver->id, 'loaded_quantity' => 10]);
+        $stop = DeliveryStop::query()->create(['delivery_id' => $delivery->id, 'client_reference' => 'cliente-historico',
+            'client_name' => 'Cliente histórico', 'address' => 'Dirección', 'latitude' => '-34.90', 'longitude' => '-56.20',
+            'sequence' => 1, 'status' => 'delivered', 'delivered_quantity' => 14, 'visited_at' => now()]);
+        $admin = User::factory()->create();
+        $admin->syncRoles('admin');
+        Sanctum::actingAs($admin, ['api:access']);
+        $notice = AppNotification::factory()->create(['recipient_id' => $admin->id, 'type' => 'delivery_egg_balance_negative',
+            'module' => 'deliveries', 'entity_type' => 'delivery', 'entity_id' => $delivery->public_id, 'source_key' => $delivery->public_id,
+            'production_unit_id' => $delivery->production_unit_id, 'is_alert' => true, 'urgency' => 'alto']);
+
+        // Mutación y consulta: recupera sólo un episodio y conserva la referencia al reparto cerrado.
+        $migration = require database_path('migrations/2026_11_07_235210_backfill_delivery_shortfall_alerts.php');
+        $migration->up();
+        $migration->up();
+        $this->getJson('/api/v1/alertas-operativas')->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.entidad.id', $delivery->public_id);
+
+        // Request: corrige la cantidad registrada y resuelve el aviso, conservando el precio como desconocido.
+        $this->postJson('/api/v1/repartos/'.$delivery->public_id.'/entregas/'.$stop->id.'/rectificaciones',
+            ['version' => 1, 'motivo' => 'Recuento histórico', 'cantidad_entregada' => 10],
+            ['Idempotency-Key' => (string) Str::uuid()])->assertOk()->assertJsonPath('data.despues.saldo_huevos', 0)
+            ->assertJsonPath('data.despues.importe', null)->assertJsonPath('data.movimiento_cuenta_id', null);
+        $this->assertDatabaseCount('customer_account_movements', 0);
+        $this->assertNotNull($notice->fresh()->resolved_at);
+    }
 
     private function driver(): User
     {

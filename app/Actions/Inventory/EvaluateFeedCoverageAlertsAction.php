@@ -19,6 +19,7 @@ use App\Models\Notifications\AppNotification;
 use App\Services\Inventory\FlockFeedingResolver;
 use App\Services\Notifications\AlertConfiguration;
 use App\Services\Notifications\AlertRecipients;
+use App\Services\Notifications\OperationalAlertProjection;
 use Brick\Math\BigInteger;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -37,6 +38,7 @@ final readonly class EvaluateFeedCoverageAlertsAction
         private AlertRecipients $recipients,
         private Clock $clock,
         private AlertConfiguration $configuration,
+        private OperationalAlertProjection $operationalAlerts,
     ) {}
 
     public function execute(int $unitId): void
@@ -47,9 +49,17 @@ final readonly class EvaluateFeedCoverageAlertsAction
             $evaluatedAt = $this->clock->now()->setTimezone(FlockFeedingResolver::TIMEZONE);
             $settings = $this->configuration->get(self::TYPE, $unitId);
             $shortages = $settings['habilitada'] && $unit->status === ProductionUnitStatus::Active ? $this->shortages($unit, $evaluatedAt) : [];
+            $pending = [];
             foreach ($shortages as $recipeId => $shortage) {
                 $shortages[$recipeId]['urgency'] = $this->configuration->urgency($settings, $shortage['urgency']);
+                $pending['feed-coverage:'.$unitId.':'.$recipeId] = [
+                    'entity_id' => (string) $recipeId,
+                    'target_path' => self::TARGET_PATH,
+                    'urgency' => $shortages[$recipeId]['urgency'],
+                    'title' => $shortage['title'],
+                ];
             }
+            $this->operationalAlerts->synchronize($unitId, self::TYPE, 'can_view_feed_stock', 'feed_recipe', $evaluatedAt, $pending);
             $recipients = $shortages === [] ? [] : $this->recipients->ids($unitId, 'can_view_feed_stock');
             $open = [];
 

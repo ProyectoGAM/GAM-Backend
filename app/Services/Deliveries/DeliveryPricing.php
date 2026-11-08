@@ -6,6 +6,8 @@ use App\Enums\Deliveries\DeliveryStopStatus;
 use App\Models\Deliveries\DeliveryStop;
 use App\Models\Inventory\EggPresentation;
 use App\ValueObjects\Money;
+use Brick\Math\BigDecimal;
+use Brick\Math\Exception\MathException;
 use Brick\Money\Context\CustomContext;
 use Brick\Money\Money as BrickMoney;
 use Illuminate\Validation\ValidationException;
@@ -62,5 +64,53 @@ final class DeliveryPricing
         }
 
         return ['items' => $items, 'total_amount' => (string) $total->getAmount()];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $original
+     * @param  list<array{indice: int, cantidad: string}>  $reductions
+     * @return array{quantity: int, items: list<array<string, mixed>>, total_amount: string|null}
+     */
+    public function reduce(array $original, array $reductions): array
+    {
+        $changes = array_column($reductions, 'cantidad', 'indice');
+        if (array_diff_key($changes, $original) !== []) {
+            throw ValidationException::withMessages(['lineas' => 'La rectificación contiene una línea que no pertenece a la entrega.']);
+        }
+
+        $context = new CustomContext(3);
+        $total = BrickMoney::of(0, Money::CURRENCY, $context);
+        $priced = true;
+        $items = [];
+        $quantity = 0;
+        foreach ($original as $index => $item) {
+            $previous = BigDecimal::of($item['amount']);
+            $amount = BigDecimal::of($changes[$index] ?? $item['amount']);
+            if ($amount->isNegative() || $amount->isGreaterThan($previous)) {
+                throw ValidationException::withMessages(['lineas' => 'La cantidad rectificada no puede superar la cantidad original.']);
+            }
+            if ($amount->isZero()) {
+                continue;
+            }
+
+            try {
+                $eggs = $amount->multipliedBy($item['eggs_per_unit'])->toInt();
+            } catch (MathException) {
+                throw ValidationException::withMessages(['lineas' => 'La cantidad rectificada debe equivaler a huevos enteros.']);
+            }
+            $item['amount'] = (string) $amount;
+            $item['eggs'] = $eggs;
+            $quantity += $eggs;
+            if (isset($item['unit_price'])) {
+                $line = BrickMoney::of($item['unit_price'], Money::CURRENCY, $context)->multipliedBy($amount);
+                $item['line_amount'] = (string) $line->getAmount();
+                $total = $total->plus($line);
+            } else {
+                $priced = false;
+            }
+            $items[] = $item;
+        }
+
+        return ['quantity' => $quantity, 'items' => $items, 'total_amount' => $priced ? (string) $total->getAmount() : null];
     }
 }

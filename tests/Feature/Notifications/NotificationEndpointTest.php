@@ -4,8 +4,10 @@ namespace Tests\Feature\Notifications;
 
 use App\Actions\Notifications\PublishNotificationAction;
 use App\Actions\Notifications\ResolveAlertNotificationAction;
+use App\Actions\Notifications\SynchronizeOperationalAlertsAction;
 use App\DTO\Notifications\NotificationData;
 use App\Enums\Notifications\NotificationUrgency;
+use App\Enums\Notifications\OperationalAlertType;
 use App\Events\Notifications\NotificationInboxChanged;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Notifications\AppNotification;
@@ -13,17 +15,54 @@ use App\Models\SharedDevice;
 use App\Models\User;
 use App\Services\IdentityAndAccess\AuthSessionService;
 use App\Services\Notifications\NotificationChannel;
+use Carbon\CarbonImmutable;
 use Database\Seeders\IdentityPermissionSeeder;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 final class NotificationEndpointTest extends TestCase
 {
     use LazilyRefreshDatabase;
+
+    // Flujo: una condición sin destinatarios se cuenta al adquirir permiso y abre otro episodio si reaparece.
+    public function test_operational_alerts_exist_independently_of_recipients_and_apply_source_permissions(): void
+    {
+        // Preparación: evalúa una condición de galpón sin ningún usuario suscrito al dominio.
+        $this->seed(IdentityPermissionSeeder::class);
+        $viewer = User::factory()->create();
+        $role = $viewer->roles()->firstOrFail();
+        $role->syncPermissions(['can_view_notifications']);
+        Sanctum::actingAs($viewer, ['api:access']);
+        $unit = ProductionUnit::factory()->create();
+        $synchronize = app(SynchronizeOperationalAlertsAction::class);
+        $pending = ['house-10' => ['entity_id' => '10', 'title' => 'Galpón con sobreocupación', 'target_path' => '/galpones/10', 'message' => 'Revisar capacidad.', 'urgency' => NotificationUrgency::Medium]];
+        $evaluate = fn (array $conditions) => DB::transaction(fn () => $synchronize->execute(
+            $unit->id, OperationalAlertType::PoultryHouseOverCapacity, 'can_view_poultry_houses', 'poultry_house', CarbonImmutable::now(), $conditions,
+        ));
+        $evaluate($pending);
+
+        // Consulta: sin permiso de galpones no muestra la alerta, aunque exista en la proyección.
+        $this->assertDatabaseCount('app_notifications', 0);
+        $this->getJson('/api/v1/alertas-operativas/resumen')->assertOk()->assertJsonPath('data.total', 0);
+        $role->givePermissionTo(Permission::findByName('can_view_poultry_houses', 'web'));
+        $viewer->unsetRelation('roles');
+        $firstId = $this->getJson('/api/v1/alertas-operativas')->assertOk()->assertJsonPath('meta.total', 1)->json('data.0.id');
+
+        // Mutación y consulta: cambia la urgencia, resuelve y abre un episodio con otro ID.
+        $pending['house-10']['urgency'] = NotificationUrgency::High;
+        $evaluate($pending);
+        $this->getJson('/api/v1/alertas-operativas?urgencia=alto')->assertOk()->assertJsonPath('data.0.id', $firstId);
+        $evaluate([]);
+        $this->getJson('/api/v1/alertas-operativas/resumen')->assertOk()->assertJsonPath('data.total', 0);
+        $evaluate($pending);
+        $secondId = $this->getJson('/api/v1/alertas-operativas')->assertOk()->assertJsonPath('meta.total', 1)->json('data.0.id');
+        $this->assertNotSame($firstId, $secondId);
+    }
 
     // Consulta y marca como leídas únicamente las notificaciones del destinatario.
     public function test_inbox_scopes_listing_count_and_reads_to_the_recipient(): void

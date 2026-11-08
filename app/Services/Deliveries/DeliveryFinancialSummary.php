@@ -29,7 +29,7 @@ final readonly class DeliveryFinancialSummary
             $row = &$customers[$customerId];
             $row['account_delta'] = $row['account_delta']->plus($amount);
             $row['balance_after'] = $movement->balance_after;
-            if ($movement->type->value === 'sale_charge') {
+            if ($movement->type->value === 'sale_charge' || ($movement->type->value === 'adjustment_decrease' && $movement->delivery_stop_id !== null)) {
                 $row['merchandise_amount'] = $row['merchandise_amount']->plus($amount);
             }
             if ($movement->type->value === 'payment' || ($movement->type->value === 'reversal' && $movement->payment_method !== null)) {

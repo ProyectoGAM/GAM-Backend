@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $customer_id
  * @property DeliveryStopStatus $status
  * @property string $accounting_status
+ * @property int $version
  * @property string|null $total_amount
  * @property array|null $items
  * @property CarbonImmutable|null $visited_at
@@ -40,6 +41,7 @@ class DeliveryStop extends Model
             'items' => 'array',
             'total_amount' => 'decimal:3',
             'sequence' => 'integer',
+            'version' => 'integer',
             'visited_at' => 'immutable_datetime',
         ];
     }

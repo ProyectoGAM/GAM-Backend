@@ -149,7 +149,7 @@ final class AlertConfigurationEndpointTest extends TestCase
         $this->patchJson($general, ['sobrante_minimo_huevos' => 3, 'urgencia_fija' => 'alto'])->assertOk();
 
         // Mutación y consulta: la preferencia local no suprime el aviso de un reparto general.
-        app(DeliveryEggAlerts::class)->surplus($delivery, $returnUnit->id, 4);
+        app(DeliveryEggAlerts::class)->surplus($delivery, $returnUnit, 4);
         $notice = AppNotification::query()->sole();
         $this->assertSame($delivery->public_id, $notice->entity_id);
         $this->assertSame('alto', $notice->urgency->value);
