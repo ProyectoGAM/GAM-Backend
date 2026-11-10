@@ -240,7 +240,12 @@ paths:
       tags: ["Lotes"]
       operationId: "changeFlockStatus"
       summary: "Activa o pone en cuarentena un lote abierto"
-      description: "Permiso requerido: can_manage_flocks. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      description: |
+        Requiere can_manage_flocks. Cuando se envía audit_entry_id también requiere can_view_audit y
+        restituye el estado abierto anterior de la última transición verificable del lote. La entrada
+        original se conserva y la compensación queda vinculada a ella en auditoría. Una entrada ajena,
+        incompleta o desplazada por un cambio de estado posterior devuelve 409. La auditoría y todos
+        los efectos se confirman juntos. El reintento idéntico devuelve la respuesta original.
       x-permission: "can_manage_flocks"
       parameters:
         -
@@ -1889,6 +1894,10 @@ components:
           type: "string"
           minLength: 1
           maxLength: 500
+          audit_entry_id:
+            type: "integer"
+            minimum: 1
+            description: "ID de la entrada que se quiere revertir, obtenido de data.id en el detalle de auditoría."
     FinalizeFlock:
       type: "object"
       additionalProperties: false
@@ -1980,12 +1989,12 @@ components:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-          description: "Versión actual obtenida al consultar el recurso."
+          description: "Versión vigente del lote origen del movimiento original."
         destination_version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-          description: "Versión actual obtenida al consultar el recurso."
+          description: "Versión vigente del destinatario original. Obligatoria si origen y destino son lotes distintos."
         reason:
           type: "string"
           minLength: 1

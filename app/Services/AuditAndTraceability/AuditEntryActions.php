@@ -2,19 +2,29 @@
 
 namespace App\Services\AuditAndTraceability;
 
+use App\Enums\Lots\FlockStatus;
+use App\Exceptions\Lots\LotsConflict;
 use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\Inventory\FeedConsumption;
 use App\Models\Inventory\FeedConsumptionCorrection;
 use App\Models\Inventory\FeedStockOperation;
 use App\Models\Inventory\InventoryMovement;
 use App\Models\Lots\Flock;
+use App\Models\Lots\FlockMovement;
 use App\Models\Lots\MortalityRecord;
 use App\Models\User;
 use App\Services\Inventory\InventoryReversalAvailability;
+use App\Services\Lots\FlockStatusReversal;
+use App\Services\Lots\RedistributionReversal;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 final readonly class AuditEntryActions
 {
-    public function __construct(private InventoryReversalAvailability $inventory) {}
+    public function __construct(
+        private InventoryReversalAvailability $inventory,
+        private FlockStatusReversal $statusReversal,
+        private RedistributionReversal $redistributionReversal,
+    ) {}
 
     /** @return array<string, mixed> */
     public function forEntry(AuditEntry $entry, User $viewer): array
@@ -63,11 +73,102 @@ final readonly class AuditEntryActions
         if (in_array($entry->event, ['mortality_recorded', 'mortality_corrected', 'mortality_cancelled', 'flock_mortality_applied', 'flock_mortality_corrected'], true)) {
             return $this->mortality($entry, $viewer);
         }
+        if ($entry->log_name === 'lots' && in_array($entry->event, ['flock_status_changed', 'flock_finalized', 'flock_redistributed'], true)) {
+            if ($entry->event === 'flock_finalized') {
+                return $this->result('irreversible', 'La finalización explícita del lote no admite reversión.');
+            }
+            if ($entry->subject_type !== (new Flock)->getMorphClass() || $entry->subject_id === null) {
+                return $this->result('unavailable', 'La entrada no conserva una referencia verificable al lote.');
+            }
+
+            return $entry->event === 'flock_status_changed'
+                ? $this->flockStatus($entry, $viewer)
+                : $this->redistribution($entry, $viewer);
+        }
         if (in_array($entry->event, ['user_logged_out', 'shared_pin_login', 'shared_device_pairing_code_created', 'report_export_downloaded', 'report_export_expired'], true)) {
             return $this->result('irreversible', 'Este hecho histórico no admite una operación de reversión.');
         }
 
         return $this->result('unknown', 'La disponibilidad de correcciones para esta actividad debe consultarse en su módulo de origen.');
+    }
+
+    /** @return array<string, mixed> */
+    private function flockStatus(AuditEntry $entry, User $viewer): array
+    {
+        $flock = Flock::query()->find($entry->subject_id);
+        if ($flock === null || ($entry->up_id !== null && $entry->up_id !== $flock->production_unit_id)) {
+            return $this->result('unavailable', 'El lote de este cambio de estado ya no está disponible.');
+        }
+        if ($flock->status === FlockStatus::Finished) {
+            return $this->result('irreversible', 'El lote está finalizado y su estado no se puede revertir desde esta entrada.');
+        }
+
+        $target = ['resource' => 'flock', 'id' => $flock->public_id];
+        $reason = null;
+        if (! $viewer->can('changeStatus', $flock)) {
+            $reason = 'No tienes permiso para revertir cambios de estado de lotes.';
+        } else {
+            try {
+                $previous = $this->statusReversal->previousStatus($entry, $flock);
+                $target += ['status' => $previous->value, 'version' => $flock->version];
+            } catch (LotsConflict $conflict) {
+                $reason = $conflict->getMessage();
+            }
+        }
+
+        return $this->lotAction('reverse_flock_status', 'Revertir cambio de estado', $target, $reason,
+            'Puedes restituir el estado anterior del lote conservando el cambio original.');
+    }
+
+    /** @return array<string, mixed> */
+    private function redistribution(AuditEntry $entry, User $viewer): array
+    {
+        $unavailable = 'No se encontró una redistribución verificable para esta entrada.';
+        if ($entry->operation_id === null || $entry->subject_id === null) {
+            return $this->result('unavailable', $unavailable);
+        }
+
+        $movements = FlockMovement::query()->where('operation_id', $entry->operation_id)
+            ->whereIn('type', RedistributionReversal::ORIGINAL_TYPES)
+            ->where(fn ($query) => $query->where('source_flock_id', $entry->subject_id)
+                ->orWhere('destination_flock_id', $entry->subject_id))
+            ->with(['sourceFlock', 'destinationFlock'])
+            ->limit(2)->get();
+        $movement = $movements->count() === 1 ? $movements->first() : null;
+        if ($movement === null || $movement->sourceFlock === null || $movement->destinationFlock === null
+            || ($entry->up_id !== null && ($entry->up_id !== $movement->sourceFlock->production_unit_id
+                || $entry->up_id !== $movement->destinationFlock->production_unit_id))) {
+            return $this->result('unavailable', $unavailable);
+        }
+
+        $target = ['resource' => 'flock_redistribution', 'id' => $movement->public_id];
+        $reason = null;
+        if (! $viewer->can('redistribute', Flock::class)) {
+            $reason = 'No tienes permiso para revertir redistribuciones de lotes.';
+        } else {
+            try {
+                ['source' => $source, 'destination' => $destination] = $this->redistributionReversal->prepare($movement);
+                $target['version'] = $source->version;
+                if ($source->id !== $destination->id) {
+                    $target['destination_version'] = $destination->version;
+                }
+            } catch (ModelNotFoundException) {
+                return $this->result('unavailable', $unavailable);
+            } catch (LotsConflict $conflict) {
+                $reason = $conflict->getMessage();
+            }
+        }
+
+        return $this->lotAction('reverse_flock_redistribution', 'Revertir redistribución', $target, $reason,
+            'Puedes compensar la redistribución conservando el movimiento original.');
+    }
+
+    /** @param array<string, mixed> $target @return array<string, mixed> */
+    private function lotAction(string $kind, string $label, array $target, ?string $reason, string $availableReason): array
+    {
+        return $this->result($reason === null ? 'available' : 'unavailable', $reason ?? $availableReason, [[
+            'kind' => $kind, 'label' => $label, 'available' => $reason === null, 'reason' => $reason, 'target' => $target,
+        ]]);
     }
 
     /** @return array<string, mixed> */

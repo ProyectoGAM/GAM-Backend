@@ -129,7 +129,7 @@ anteriores por compatibilidad; el cliente nuevo debe usar presentation.
 
 ## Acciones actuales y reglas de negocio
 
-Se integran dos acciones:
+El detalle calcula acciones para Inventario, Alimentación y Lotes.
 
 - reverse_inventory_movement: exige la política reverse y verifica compensación
   anterior, operación de origen, productos, ubicaciones/UP operativas,
@@ -139,6 +139,18 @@ Se integran dos acciones:
   lote. La entrada original y las revisiones reemplazadas quedan indisponibles
   para evitar trabajar sobre una versión histórica. La última revisión permite
   registrar otra rectificación.
+- undo_mortality dirige al registro de mortalidad vigente desde su propia entrada
+  o desde el efecto que se auditó sobre el lote.
+- reverse_flock_status expone el estado abierto anterior y la versión vigente del
+  lote si la entrada documenta su última transición de estado. Las ediciones que
+  conservan el estado permiten usar la versión vigente. La finalización explícita
+  y los cambios de estado de un lote actualmente finalizado se presentan como
+  irreversibles en este flujo.
+- reverse_flock_redistribution resuelve el movimiento original por operación y
+  sujeto. El origen y el destino enlazan el mismo ULID con las versiones de los
+  lotes involucrados. Lotes comparte las comprobaciones del detalle y la escritura,
+  con bloqueos en el comando. Una unión total elegible puede restituir el estado
+  del origen como parte de su compensación.
 
 InventoryReversalAvailability comparte las restricciones del origen con
 ReverseInventoryMovementAction. La comprobación final sigue dentro del comando,
@@ -159,6 +171,21 @@ mostrando sus campos reconocidos y su historial.
 Los comandos conservan Idempotency-Key, validación, permisos y compensaciones.
 Abrir un detalle no ejecuta mutaciones. Los destinos son objetos semánticos, sin
 URLs o verbos HTTP proporcionados al cliente.
+
+Historial requiere `can_view_audit` y aplica el límite de UP de la sesión. Cada
+reversión requiere además el permiso vigente del comando de Lotes. Una reversión
+bloqueada sólo expone el identificador del destino si su referencia es verificable
+y accesible. La reversión de estado añade la entrada original como
+`reverses_audit_entry_id` en las propiedades de la nueva compensación. La de
+redistribución conserva el enlace entre movimientos y vuelve a evaluar las alertas
+de capacidad con el flujo existente. La integración utiliza datos ya almacenados
+y se despliega sin migraciones.
+
+La verificación en PostgreSQL aislado cubrió 121 casos de Auditoría, Lotes y
+aislamiento por UP. Tras corregir el YAML, pasaron los 13 casos del bloque
+dirigido de contrato, reversiones y alcance por UP. Pint y Larastan de nivel 5
+pasaron en los archivos PHP de aplicación correspondientes. La verificación
+ejercitó los endpoints del backend.
 
 ## Compatibilidad, límites y despliegue
 

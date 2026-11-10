@@ -252,15 +252,20 @@ interface AuditChange {
 }
 
 interface AuditAction {
-  kind: 'reverse_inventory_movement' | 'correct_feed_consumption';
+  kind: 'reverse_inventory_movement' | 'correct_feed_consumption' | 'undo_mortality'
+    | 'reverse_flock_status' | 'reverse_flock_redistribution';
   label: string;
   available: boolean;
   reason: string | null;
   target: {
-    resource: 'inventory_movement' | 'feed_consumption';
-    id: number;
+    resource: 'inventory_movement' | 'feed_consumption' | 'mortality_record'
+      | 'flock' | 'flock_redistribution';
+    id: number | string;
     flock_id?: string;
     production_unit_id?: number;
+    status?: 'active' | 'quarantined';
+    version?: number;
+    destination_version?: number;
   };
 }
 
@@ -341,8 +346,10 @@ El cliente mantiene este mapeo explícito:
 | --- | --- | --- |
 | reverse_inventory_movement | POST /inventory/movements/{target.id}/reversals | reason, requerido, hasta 255 caracteres. |
 | correct_feed_consumption | POST /lotes/{target.flock_id}/consumos-alimento/{target.id}/rectificaciones | motivo, hasta 2000 caracteres; receta_id, cantidad_g o ambos. |
+| reverse_flock_status | PATCH /flocks/{target.id}/status | `audit_entry_id` de `data.id` del detalle, `status` y `version` del destino, y `reason` obligatorio de hasta 500 caracteres. |
+| reverse_flock_redistribution | POST /redistributions/{target.id}/reversals | `version` del origen original, `destination_version` si aparece en el destino, y `reason` obligatorio de hasta 500 caracteres. |
 
-Ambos comandos usan Idempotency-Key con UUID. En alimentación cantidad_g se envía
+Los comandos usan Idempotency-Key con UUID. En alimentación cantidad_g se envía
 en gramos enteros, puede ser cero y admite hasta 999999999999; el texto de los
 facts no sirve como valor editable. Para editar, consultar el recurso de negocio
 vigente y reutilizar el formulario existente. No enviar idempotency_key en el body.
@@ -356,9 +363,17 @@ sin permiso funcional específico nuevo. Las sesiones compartidas necesitan sus
 credenciales, X-GAM-Session y generación vigentes en el comando; las sesiones web
 mantienen cookies y CSRF según los contratos existentes.
 
+Los destinos de las dos reversiones de Lotes usan ULID. Las entradas del origen
+y del destino de una redistribución apuntan al mismo movimiento original. Una
+acción bloqueada con referencia verificable entrega `available: false`, el motivo
+y un destino con `resource` e `id`. Cuando falta una referencia verificable y
+accesible, se muestra `reversibility.reason`. La confirmación de redistribución pide
+el motivo. El sistema de alertas evalúa la capacidad después de devolver las aves.
+
 available=true es orientativo y puede caducar por concurrencia. Ante 409 mostrar
-el mensaje del comando y refrescar el detalle; no insistir automáticamente con
-otra clave. Ante 401 o 403 actualizar el estado de sesión/permisos.
+`detail` del comando y refrescar el detalle y el listado. Una nueva confirmación
+requiere una acción del operador. Tras una reversión exitosa también se refrescan
+el detalle y el listado. Ante 401 o 403 actualizar el estado de sesión y permisos.
 
 ## Reversibilidad y cobertura
 

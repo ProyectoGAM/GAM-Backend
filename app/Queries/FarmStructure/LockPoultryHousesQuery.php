@@ -26,12 +26,35 @@ final readonly class LockPoultryHousesQuery
         if (DB::transactionLevel() === 0) {
             throw new LogicException('La reserva de capacidad requiere una transacción activa.');
         }
+
+        return $this->load($ids, true);
+    }
+
+    /**
+     * @param  list<int>  $ids
+     * @return array<int, LockedPoultryHouseData>
+     */
+    public function read(array $ids): array
+    {
+        return $this->load($ids, false);
+    }
+
+    /**
+     * @param  list<int>  $ids
+     * @return array<int, LockedPoultryHouseData>
+     */
+    private function load(array $ids, bool $lock): array
+    {
         $ids = array_values(array_unique($ids));
-        $houses = PoultryHouse::query()
+        $query = PoultryHouse::query()
             ->whereIn('id', $ids)
             ->where('type', PoultryHouseType::Poultry)
             ->orderBy('id')
-            ->lockForUpdate()->with('productionUnit')->get();
+            ->with('productionUnit');
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+        $houses = $query->get();
         if ($houses->count() !== count($ids)) {
             if (PoultryHouse::query()->whereIn('id', $ids)->where('type', PoultryHouseType::Feed)->exists()) {
                 throw new LotsConflict('Las plantas de ración no pueden recibir aves ni lotes.');
