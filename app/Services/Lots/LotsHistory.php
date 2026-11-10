@@ -42,12 +42,15 @@ final readonly class LotsHistory
      * @param  array<string, mixed>  $before
      * @param  array<string, mixed>  $after
      */
-    public function audit(Model $subject, User $actor, string $event, string $description, string $operationId, array $before, array $after, ?int $upId = null, string $source = 'api', ?string $reason = null): void
+    public function audit(Model $subject, User $actor, string $event, string $description, string $operationId, array $before, array $after, ?int $upId = null, string $source = 'api', ?string $reason = null, ?int $reversesAuditEntryId = null): void
     {
         $this->auditRecorder->record(AuditEntryData::forSubject(
             subject: $subject, actor: $actor, logName: 'lots', event: $event,
             description: $description, operationId: $operationId, upId: $upId, source: $source,
-            properties: ['result' => 'success', 'subject_snapshot' => $after, 'reason' => $reason],
+            properties: [
+                'result' => 'success', 'subject_snapshot' => $after, 'reason' => $reason,
+                ...($reversesAuditEntryId === null ? [] : ['reverses_audit_entry_id' => $reversesAuditEntryId]),
+            ],
             attributeChanges: ['old' => $before, 'new' => $after],
         ));
     }

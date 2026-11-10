@@ -73,6 +73,9 @@ paths:
         el comando de negocio vuelve a autorizar y validar estado e idempotencia.
         Un estado unknown indica que esta presentación no integra la corrección
         del módulo; no demuestra irreversibilidad.
+        Las reversiones de lotes requieren el permiso del comando correspondiente.
+        Si están disponibles, el destino incluye las versiones para confirmar.
+        Para revertir un cambio de estado se envía data.id como audit_entry_id.
       parameters:
         - name: auditEntry
           in: path
@@ -269,18 +272,26 @@ components:
                 type: object
                 required: [kind, label, available, reason, target]
                 properties:
-                  kind: { type: string, enum: [reverse_inventory_movement, correct_feed_consumption, undo_mortality] }
+                  kind: { type: string, enum: [reverse_inventory_movement, correct_feed_consumption, undo_mortality, reverse_flock_status, reverse_flock_redistribution] }
                   label: { type: string }
                   available: { type: boolean }
                   reason: { type: [string, 'null'] }
                   target:
                     type: object
+                    description: |
+                      Para reverse_flock_status el recurso es flock. Si está disponible, incluye status y version.
+                      Para reverse_flock_redistribution el recurso es flock_redistribution. Si está disponible,
+                      incluye version y también destination_version cuando intervienen dos lotes distintos.
+                      Una reversión bloqueada con referencia verificable entrega únicamente resource e id.
                     required: [resource, id]
                     properties:
-                      resource: { type: string, enum: [inventory_movement, feed_consumption, mortality_record] }
-                      id: { oneOf: [{ type: integer }, { type: string }], description: ID numérico para inventario y consumos; ULID público para mortality_record. }
+                      resource: { type: string, enum: [inventory_movement, feed_consumption, mortality_record, flock, flock_redistribution] }
+                      id: { oneOf: [{ type: integer }, { type: string }], description: "ID numérico para inventario y consumos. ULID público para mortalidad, lote y redistribución." }
                       flock_id: { type: string, description: Identificador público del lote; presente para consumos y mortalidad. }
                       production_unit_id: { type: integer }
+                      status: { type: string, enum: [active, quarantined], description: Estado anterior que se restituye al revertir un cambio de estado. }
+                      version: { type: integer, minimum: 1, description: Versión vigente del lote o del origen original de la redistribución. }
+                      destination_version: { type: integer, minimum: 1, description: Versión vigente del destinatario original cuando es otro lote. }
     ListEntry:
       type: object
       required: [id, log_name, event, description, actor, subject, operation_id, trace_id, source, up_id, properties, attribute_changes, created_at, presentation]

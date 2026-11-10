@@ -6,6 +6,7 @@ use App\Actions\FarmStructure\ChangeProductionUnitStatusAction;
 use App\Actions\IdentityAndAccess\GeneratePairingCodeAction;
 use App\Actions\IdentityAndAccess\UpdateUserProductionUnitAction;
 use App\Enums\FarmStructure\ProductionUnitStatus;
+use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\CustomersAndAccounts\Customer;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\FarmStructure\ProductionUnit;
@@ -75,6 +76,41 @@ final class ProductionUnitIsolationTest extends TestCase
         $this->getJson('/api/v1/poultry-houses/'.$house->id)->assertNotFound();
         $this->getJson('/api/v1/inventory/balances?production_unit_id='.$other->id)->assertNotFound();
         $this->getJson('/api/v1/reference/options')->assertOk()->assertJsonMissing(['value' => $other->id, 'label' => $other->name]);
+    }
+
+    // Flujo: un detalle local no puede habilitar una reversión con un lote de otra UP.
+    public function test_pin_audit_redistribution_hides_a_movement_with_a_foreign_flock(): void
+    {
+        // Preparación: simula un movimiento legado cuyos galpones registrados son locales, pero cuyo lote de destino es ajeno.
+        [$user, , $secret, $admin] = $this->fixture();
+        Role::findByName('employee', 'web')->givePermissionTo(['can_view_audit', 'can_redistribute_flocks']);
+        $sourceHouse = PoultryHouse::factory()->create(['production_unit_id' => $user->production_unit_id]);
+        $localHouse = PoultryHouse::factory()->create(['production_unit_id' => $user->production_unit_id]);
+        $source = Flock::factory()->create(['poultry_house_id' => $sourceHouse->id]);
+        $foreign = Flock::factory()->create();
+        $movement = FlockMovement::factory()->create([
+            'type' => 'partial_existing',
+            'source_flock_id' => $source->id, 'destination_flock_id' => $foreign->id,
+            'source_poultry_house_id' => $sourceHouse->id, 'destination_poultry_house_id' => $localHouse->id,
+            'after' => [$source->public_id => ['version' => 1], $foreign->public_id => ['version' => 1]],
+            'reversal_verified' => true, 'created_by' => $admin->id,
+        ]);
+        $entry = AuditEntry::query()->create([
+            'operation_id' => $movement->operation_id, 'log_name' => 'lots',
+            'event' => 'flock_redistributed', 'description' => 'Redistribución legada',
+            'subject_type' => $source->getMorphClass(), 'subject_id' => $source->id, 'up_id' => $source->production_unit_id,
+        ]);
+
+        // Consulta y request: el permiso funcional no revela el movimiento ni permite ejecutar la reversión.
+        $this->login($user, $secret);
+        $this->getJson('/api/v1/auditoria/entradas/'.$entry->id)->assertOk()
+            ->assertJsonPath('data.presentation.reversibility.state', 'unavailable')
+            ->assertJsonPath('data.presentation.actions', []);
+        $this->withHeader('Idempotency-Key', (string) Str::uuid())
+            ->postJson('/api/v1/redistributions/'.$movement->public_id.'/reversals', [
+                'version' => 1, 'destination_version' => 1, 'reason' => 'Confirmación',
+            ])->assertNotFound();
+        $this->assertDatabaseCount('flock_movements', 1);
     }
 
     // Flujo: los agregados PIN usan la UP del dispositivo aunque el cliente omita el filtro.
