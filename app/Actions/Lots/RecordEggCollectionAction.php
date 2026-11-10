@@ -36,7 +36,7 @@ final readonly class RecordEggCollectionAction
     /** @param array<string, mixed> $data */
     public function execute(Flock $flock, array $data, User $actor, string $source = 'api'): FlockOperation
     {
-        return $this->commands->execute($actor, 'egg-collections.manage', 'eggs.record', $data['idempotency_key'], ['flock' => $flock->public_id, ...$data], function (string $operationId) use ($flock, $data, $actor, $source): array {
+        return $this->commands->execute($actor, 'can_manage_egg_collections', 'eggs.record', $data['idempotency_key'], ['flock' => $flock->public_id, ...$data], function (string $operationId) use ($flock, $data, $actor, $source): array {
             $locked = $this->state->lock([$flock->public_id])->get($flock->public_id);
             $this->state->open($locked);
             $unit = ProductionUnit::query()->whereKey($locked->production_unit_id)->lockForUpdate()->firstOrFail();

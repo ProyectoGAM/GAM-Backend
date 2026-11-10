@@ -37,6 +37,7 @@ class VaccinationApplicationFactory extends Factory
             'responsible_user_id' => User::factory(),
             'responsible_name_snapshot' => fn (array $attributes): string => User::query()->findOrFail($attributes['responsible_user_id'])->name,
             'notes' => null,
+            'reason' => 'Aplicación de prueba fuera del plan.',
             'inventory_quantity' => null,
             'stock_location_id' => null,
             'stock_location_name_snapshot' => null,

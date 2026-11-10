@@ -1,0 +1,431 @@
+openapi: 3.1.0
+info:
+  title: GAM - Vehículos
+  version: 1.0.0
+  description: Flota, usos, lecturas de tablero, combustible y mantenimiento de vehículos. Las rutas son relativas a /api/v1. Las sesiones PIN sólo reciben un selector mínimo y pueden registrar combustible vinculado a su propio uso de un reparto de su UP; la gestión global requiere sesión personal.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /vehiculos/conductores:
+    get:
+      operationId: listVehicleDrivers
+      summary: Listar repartidores para el conductor habitual o un uso manual
+      description: Requiere can_manage_vehicles. Solo devuelve cuentas activas con rol repartidor.
+      responses:
+        '200': { description: Repartidores habilitados. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /vehiculos:
+    get:
+      operationId: listVehicles
+      summary: Listar vehículos
+      description: Requiere can_view_vehicles, can_manage_vehicles o un permiso específico de vehículo. Permite filtrar por matrícula, marca, modelo, estado y disponibilidad.
+      parameters:
+        - { in: query, name: search, schema: { type: string, maxLength: 120 } }
+        - { in: query, name: status, schema: { type: string, enum: [active, out_of_service, retired] } }
+        - { in: query, name: availability, schema: { type: string, enum: [available, in_use, not_available] } }
+        - { in: query, name: page, schema: { type: integer, minimum: 1 } }
+        - { in: query, name: per_page, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        '200': { description: 'Flota paginada, con estado de disponibilidad y advertencias.' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createVehicle
+      summary: Registrar vehículo
+      description: Requiere can_manage_vehicles. La matrícula se normaliza y debe ser única. Si no se indica estado, el vehículo se crea activo y su historial inicial conserva ese estado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VehicleInput' }
+      responses:
+        '201': { description: Vehículo creado. }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /vehiculos/disponibles:
+    get:
+      operationId: listAvailableVehicles
+      summary: Consultar vehículos disponibles para un reparto
+      description: Requiere can_start_deliveries. El resultado puede cambiar antes del inicio; el servidor vuelve a validar y reservar dentro de la transacción.
+      parameters:
+        - { in: query, name: search, schema: { type: string, maxLength: 120 } }
+      responses:
+        '200': { description: Vehículos activos que no están en uso ni inmovilizados. Puede incluir advertencias no bloqueantes. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /vehiculos/{vehiculo}:
+    parameters:
+      - { $ref: '#/components/parameters/VehicleId' }
+    get:
+      operationId: showVehicle
+      summary: Ver ficha e historial del vehículo
+      description: Requiere can_view_vehicles, can_manage_vehicles o un permiso específico de vehículo. Los listados de combustible, mantenimiento y documentos se filtran por permiso.
+      responses:
+        '200': { description: Ficha del vehículo. }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: updateVehicle
+      summary: Actualizar ficha del vehículo
+      description: Requiere can_manage_vehicles. Usa version para control optimista. El estado se cambia por su operación específica.
+      parameters:
+        - { $ref: '#/components/parameters/VehicleId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VehicleInput' }
+      responses:
+        '200': { description: Ficha actualizada. }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /vehiculos/{vehiculo}/estado:
+    parameters: [{ $ref: '#/components/parameters/VehicleId' }]
+    patch:
+      operationId: changeVehicleStatus
+      summary: Cambiar estado operativo
+      description: Requiere can_manage_vehicles. Se conserva el motivo y responsable. Retirar requiere cerrar primero el uso activo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, reason]
+              properties:
+                status: { type: string, enum: [active, out_of_service, retired] }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '200': { description: Estado actualizado y auditado. }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /vehiculos/{vehiculo}/lecturas:
+    parameters: [{ $ref: '#/components/parameters/VehicleId' }]
+    get:
+      operationId: listVehicleReadings
+      summary: Historial de lecturas
+      responses:
+        '200': { description: 'Lecturas ordenadas por momento del tablero, con hora de recepción.' }
+    post:
+      operationId: recordVehicleReading
+      summary: Registrar lectura manual de tablero
+      description: Requiere can_manage_vehicle_readings. Acepta kilometraje, valida vecinos cronológicos y no reemplaza lecturas originales.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                meter_type: { type: string, enum: [odometer], default: odometer }
+                event_type: { type: string, enum: [reading, correction, reset], default: reading }
+                event_reason: { type: string, maxLength: 500, description: Motivo obligatorio en un reinicio de contador }
+                value: { type: number, minimum: 0 }
+                recorded_at: { type: string, format: date-time }
+                corrects_reading_id: { type: string, format: ulid }
+                correction_reason: { type: string, maxLength: 500 }
+                notes: { type: string, maxLength: 5000 }
+      responses:
+        '201': { description: Lectura registrada o repetición idempotente. }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /vehiculos/{vehiculo}/usos:
+    parameters: [{ $ref: '#/components/parameters/VehicleId' }]
+    get:
+      operationId: listVehicleUsages
+      summary: Historial de uso del vehículo
+      responses:
+        '200': { description: Usos cerrados y en curso. }
+    post:
+      operationId: startVehicleUsage
+      summary: Iniciar uso fuera de reparto
+      description: Requiere can_use_vehicles. El uso reserva el vehículo hasta su cierre.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [purpose]
+              properties:
+                purpose: { type: string, maxLength: 120 }
+                driver_id: { type: integer, description: Repartidor activo responsable; solo can_manage_vehicles }
+                odometer_km: { type: number, minimum: 0 }
+                notes: { type: string, maxLength: 5000 }
+      responses:
+        '201': { description: Uso iniciado. }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /vehiculos/usos/{uso}/cierre:
+    parameters:
+      - { name: uso, in: path, required: true, schema: { type: string, format: ulid } }
+    post:
+      operationId: closeVehicleUsage
+      summary: Cerrar uso fuera de reparto
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                odometer_km: { type: number, minimum: 0 }
+                notes: { type: string, maxLength: 5000 }
+      responses:
+        '200': { description: Uso cerrado y vehículo liberado. }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /vehiculos/{vehiculo}/combustible:
+    parameters: [{ $ref: '#/components/parameters/VehicleId' }]
+    get:
+      operationId: listVehicleFuelEntries
+      summary: Historial de combustible
+      responses:
+        '200': { description: Registros de combustible y gastos en UYU. }
+    post:
+      operationId: recordVehicleFuel
+      summary: Registrar carga de combustible
+      description: Requiere can_manage_vehicle_fuel para administración o can_record_delivery_fuel para registrar combustible en el uso propio. Los importes no se descuentan de cobranzas ni saldos de clientes.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [liters, fuel_type, amount]
+              properties:
+                liters: { type: number, exclusiveMinimum: 0 }
+                fuel_type: { type: string, maxLength: 40 }
+                amount: { type: string, pattern: '^\\d{1,11}(?:\\.\\d{1,3})?$' }
+                occurred_at: { type: string, format: date-time }
+                supplier: { type: string, maxLength: 160 }
+                usage_id: { type: string, format: ulid }
+                odometer_km: { type: number, minimum: 0 }
+                notes: { type: string, maxLength: 5000 }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [liters, fuel_type, amount]
+              properties:
+                liters: { type: number, exclusiveMinimum: 0 }
+                fuel_type: { type: string, maxLength: 40 }
+                amount: { type: string, pattern: '^\\d{1,11}(?:\\.\\d{1,3})?$' }
+                occurred_at: { type: string, format: date-time }
+                supplier: { type: string, maxLength: 160 }
+                usage_id: { type: string, format: ulid }
+                odometer_km: { type: number, minimum: 0 }
+                receipt: { type: string, format: binary }
+                notes: { type: string, maxLength: 5000 }
+      responses:
+        '201': { description: Carga registrada. }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /vehiculos/{vehiculo}/combustible/{combustible}/comprobante:
+    parameters:
+      - { $ref: '#/components/parameters/VehicleId' }
+      - { name: combustible, in: path, required: true, schema: { type: string, format: ulid } }
+    get:
+      operationId: downloadVehicleFuelReceipt
+      summary: Descargar comprobante privado de combustible
+      description: Requiere can_view_vehicle_fuel o can_manage_vehicle_fuel.
+      responses:
+        '200': { description: Archivo privado del registro de combustible. }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /vehiculos/{vehiculo}/planes-mantenimiento:
+    parameters: [{ $ref: '#/components/parameters/VehicleId' }]
+    get:
+      operationId: listVehicleMaintenancePlans
+      summary: Listar planes preventivos
+      responses:
+        '200': { description: Planes y próximos límites. }
+    post:
+      operationId: createVehicleMaintenancePlan
+      summary: Crear plan preventivo
+      description: >-
+        Requiere can_manage_vehicle_maintenance. Se pueden combinar límites de fecha y kilometraje.
+        La bandeja avisa a 30 días o 500 km y sube a urgencia alta al alcanzar el primer límite.
+        Si hay un aviso para la intervención vinculada, ese aviso conserva la mayor urgencia aplicable.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MaintenancePlanInput' }
+      responses:
+        '201': { description: Plan creado. }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /vehiculos/{vehiculo}/planes-mantenimiento/{plan}:
+    parameters:
+      - { $ref: '#/components/parameters/VehicleId' }
+      - { name: plan, in: path, required: true, schema: { type: string, format: ulid } }
+    patch:
+      operationId: updateVehicleMaintenancePlan
+      summary: Actualizar plan preventivo
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MaintenancePlanInput' }
+      responses:
+        '200': { description: Plan actualizado. }
+  /vehiculos/{vehiculo}/mantenimientos:
+    parameters: [{ $ref: '#/components/parameters/VehicleId' }]
+    get:
+      operationId: listVehicleMaintenances
+      summary: Listar intervenciones
+      responses:
+        '200': { description: 'Intervenciones planificadas, en curso y completadas.' }
+    post:
+      operationId: createVehicleMaintenance
+      summary: Planificar intervención
+      description: >-
+        Requiere can_manage_vehicle_maintenance. El costo de reparación se registra aquí una sola vez.
+        Una intervención con fecha prevista genera un aviso de urgencia baja desde tres días antes y alta desde
+        el día siguiente a la fecha prevista si permanece planificada o en curso.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, description, idempotency_key]
+              properties:
+                type: { type: string, enum: [preventive, corrective] }
+                description: { type: string, maxLength: 500 }
+                workshop: { type: string, maxLength: 160 }
+                planned_at: { type: string, format: date-time, description: Una fecha y hora sin desfase explícito se interpreta en la zona de Montevideo. }
+                immobilizes_vehicle: { type: boolean }
+                cost_amount: { type: string, pattern: '^\\d{1,11}(?:\\.\\d{1,3})?$' }
+                idempotency_key: { type: string, format: uuid }
+                items: { type: array, maxItems: 30, items: { type: object } }
+      responses:
+        '201': { description: Intervención creada. }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /vehiculos/mantenimientos/{mantenimiento}/inicio:
+    parameters: [{ name: mantenimiento, in: path, required: true, schema: { type: string, format: ulid } }]
+    post:
+      operationId: startVehicleMaintenance
+      summary: Iniciar intervención
+      responses:
+        '200': { description: 'Intervención iniciada. Si inmoviliza, el vehículo queda fuera de disponibilidad hasta finalizarla.' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /vehiculos/mantenimientos/{mantenimiento}/finalizacion:
+    parameters: [{ name: mantenimiento, in: path, required: true, schema: { type: string, format: ulid } }]
+    post:
+      operationId: completeVehicleMaintenance
+      summary: Completar intervención
+      description: Sólo reinicia los planes asociados a tareas marcadas como realizadas.
+      responses:
+        '200': { description: Intervención completada y bases de mantenimiento actualizadas. }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /vehiculos/mantenimientos/{mantenimiento}/anulacion:
+    parameters: [{ name: mantenimiento, in: path, required: true, schema: { type: string, format: ulid } }]
+    post:
+      operationId: cancelVehicleMaintenance
+      summary: Anular intervención
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [reason], properties: { reason: { type: string, maxLength: 500 } } }
+      responses:
+        '200': { description: Intervención anulada con motivo. Los planes no se reinician. }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /vehiculos/{vehiculo}/mantenimientos/{mantenimiento}/documentos:
+    parameters:
+      - { $ref: '#/components/parameters/VehicleId' }
+      - { name: mantenimiento, in: path, required: true, schema: { type: string, format: ulid } }
+    post:
+      operationId: uploadVehicleMaintenanceDocument
+      summary: Adjuntar comprobante privado a una intervención
+      description: Requiere can_manage_vehicle_maintenance. Solo acepta PDF o imágenes de hasta 10 MB.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201': { description: Comprobante adjuntado y auditado. }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /vehiculos/{vehiculo}/mantenimientos/{mantenimiento}/documentos/{documento}:
+    parameters:
+      - { $ref: '#/components/parameters/VehicleId' }
+      - { name: mantenimiento, in: path, required: true, schema: { type: string, format: ulid } }
+      - { name: documento, in: path, required: true, schema: { type: string, format: ulid } }
+    get:
+      operationId: downloadVehicleMaintenanceDocument
+      summary: Descargar comprobante privado de mantenimiento
+      description: Requiere can_view_vehicle_maintenance o can_manage_vehicle_maintenance.
+      responses:
+        '200': { description: Archivo privado de la intervención. }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /vehiculos/{vehiculo}/documentos:
+    parameters: [{ $ref: '#/components/parameters/VehicleId' }]
+    post:
+      operationId: uploadVehicleDocument
+      summary: Cargar documento privado
+      description: >-
+        Requiere can_manage_vehicle_documents. Acepta PDF, JPEG y PNG de hasta 10 MiB. La descarga usa
+        autorización y almacenamiento privado. Un documento fechado genera un aviso desde 30 días antes
+        del vencimiento. Una fecha posterior para el mismo tipo y título reemplaza el vencimiento anterior
+        en la evaluación y conserva ambos documentos en el historial.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, title, document_type]
+              properties:
+                file: { type: string, format: binary }
+                title: { type: string, maxLength: 160 }
+                document_type: { type: string, maxLength: 60 }
+                expires_at: { type: string, format: date }
+      responses:
+        '201': { description: Documento guardado en almacenamiento privado. }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /vehiculos/{vehiculo}/documentos/{document}:
+    parameters:
+      - { $ref: '#/components/parameters/VehicleId' }
+      - { name: document, in: path, required: true, schema: { type: string, format: ulid } }
+    get:
+      operationId: downloadVehicleDocument
+      summary: Descargar documento privado
+      description: Requiere can_view_vehicle_documents. El documento debe pertenecer al vehículo indicado.
+      responses:
+        '200': { description: Archivo privado como descarga. }
+        '404': { $ref: '#/components/responses/NotFound' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer }
+  parameters:
+    VehicleId: { name: vehiculo, in: path, required: true, schema: { type: string, format: ulid } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, format: uuid } }
+  schemas:
+    VehicleInput:
+      type: object
+      required: [plate, make, model]
+      properties:
+        plate: { type: string, maxLength: 24 }
+        make: { type: string, maxLength: 80 }
+        model: { type: string, maxLength: 100 }
+        year: { type: [integer, 'null'], minimum: 1900, maximum: 2100 }
+        admitted_at: { type: [string, 'null'], format: date }
+        capacity_kg: { type: [number, 'null'], exclusiveMinimum: 0 }
+        habitual_driver_id: { type: [integer, 'null'], description: Cuenta activa con rol repartidor; sólo informativa. }
+        notes: { type: [string, 'null'], maxLength: 5000 }
+        version: { type: integer, minimum: 1 }
+    MaintenancePlanInput:
+      type: object
+      required: [task]
+      properties:
+        task: { type: string, maxLength: 160 }
+        interval_days: { type: [integer, 'null'], minimum: 1 }
+        interval_km: { type: [number, 'null'], exclusiveMinimum: 0 }
+        last_completed_at: { type: [string, 'null'], format: date }
+        last_odometer_km: { type: [number, 'null'], minimum: 0 }
+        next_due_at: { type: [string, 'null'], format: date }
+        next_due_odometer_km: { type: [number, 'null'], minimum: 0 }
+        active: { type: boolean }
+        version: { type: integer, minimum: 1 }
+  responses:
+    Forbidden: { description: Permiso funcional insuficiente. }
+    NotFound: { description: Recurso inexistente. }
+    ValidationError: { description: Datos inválidos o conflicto de disponibilidad. }

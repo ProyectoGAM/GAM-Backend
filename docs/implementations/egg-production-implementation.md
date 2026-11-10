@@ -39,6 +39,16 @@ La Action crea una transacción lógica de tipo `collection_receipt` y un movimi
 
 Corregir o cancelar una recolección no cambia aves ni versión del lote. La recolección continúa disponible aunque el lote se divida, fusione o finalice; sólo se exige una UP operativa para registrar operaciones nuevas.
 
+## Aviso por falta de recolección diaria
+
+`lotes:evaluar-recolecciones-diarias` revisa cada cinco minutos los lotes abiertos con aves en UP activas, con los mismos criterios de estado que el registro de recolección. Usa la fecha efectiva de la última recolección vigente del lote en `LOTS_TIMEZONE` y cuenta jornadas completas consecutivas desde el día siguiente. Si el lote aún no tiene recolecciones vigentes, cuenta desde su jornada de admisión. La jornada actual cuenta al cerrar a medianoche.
+
+El aviso empieza en `bajo` al primer día, sube a `medio` al segundo y a `alto` al séptimo. Se actualiza el mismo aviso por destinatario durante la racha y una escalada vuelve a marcarlo como no leído. Registrar la recolección del día resuelve el aviso en la siguiente evaluación. Las correcciones de fecha y anulaciones recalculan la racha a partir de los registros vigentes.
+
+La API devuelve `modulo: lots`, `tipo: daily_egg_collection_missing` y el lote en `entidad`, con `entidad.ruta` en `/administracion/lotes/lotes/{id}/recoleccion`. Los destinatarios necesitan `can_view_egg_collections` y `can_view_notifications` dentro del alcance de la UP. `GET` y `PUT /api/v1/unidades-productivas/{productionUnit}/umbrales-alertas/daily_egg_collection_missing` requieren `can_manage_alert_thresholds`. La edición de umbrales se audita y repetir los mismos valores conserva el registro original. [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)
+
+Pasaron 55 pruebas en PostgreSQL aislado, incluidas la escalada, el corte local de jornada, la resolución, la anulación y la configuración de umbrales. También se verificaron el horario de evaluación, el contrato OpenAPI y el análisis de tipos. La alerta usa las recolecciones existentes y la configuración común de umbrales.
+
 ## Cuenta corriente de huevos
 
 Las operaciones manuales se ejecutan desde Inventario, siempre sobre la cuenta técnica de una UP:
@@ -51,6 +61,8 @@ Las operaciones manuales se ejecutan desde Inventario, siempre sobre la cuenta t
 | `loss` | `loss` | Huevos caídos, rotos u otra pérdida posterior. |
 
 El saldo se obtiene exclusivamente de `stock_balances` y puede ser negativo para cuentas de huevos. Ningún otro producto o ubicación del inventario puede tener saldo negativo. Los reportes generales de saldos y movimientos exponen UP como columna, filtro y agrupación y aumentan sus versiones de definición.
+
+Cualquier movimiento confirmado que deje este saldo por debajo de cero abre o actualiza el [aviso alto de stock negativo de la UP](alerts-and-notifications-implementation-plan.md#10-stock-negativo-de-huevos-por-up). Al llegar a cero o recuperar un saldo positivo, el aviso se resuelve.
 
 Una UP inactiva o finalizada no admite movimientos nuevos, pero sus operaciones históricas pueden consultarse, corregirse o cancelarse. No se implementan transferencias ni reatribuciones entre UP: la UP fotografiada por una recolección es inmutable.
 
@@ -77,11 +89,11 @@ Las métricas de producción diaria, semanal y mensual cuentan únicamente recol
 
 | Permiso | Alcance |
 |---|---|
-| `egg-collections.view` | Histórico y métricas de recolección. |
-| `egg-collections.manage` | Registro, corrección y cancelación de recolecciones. |
-| `egg-stock.view` | Saldos, movimientos y revisiones de huevos. |
-| `egg-stock.move` | Entradas manuales, preparación de reparto y pérdidas. |
-| `egg-stock.adjust` | Correcciones y cancelaciones de operaciones manuales. |
+| `can_view_egg_collections` | Histórico y métricas de recolección. |
+| `can_manage_egg_collections` | Registro, corrección y cancelación de recolecciones. |
+| `can_view_egg_stock` | Saldos, movimientos y revisiones de huevos. |
+| `can_move_egg_stock` | Entradas manuales, preparación de reparto y pérdidas. |
+| `can_adjust_egg_stock` | Correcciones y cancelaciones de operaciones manuales. |
 
 Los permisos son funcionales y globales dentro de la empresa: no existe asignación usuario–UP ni permisos con IDs de unidades. La auditoría se registra sincrónicamente dentro de la misma transacción y nunca contiene credenciales, tokens ni secretos.
 
@@ -91,21 +103,21 @@ Todas las rutas son relativas a `/api/v1`, usan Bearer token y mantienen errores
 
 | Método | Ruta | Uso | Permiso |
 |---|---|---|---|
-| POST | `/flocks/{flock}/collections` | Registrar cantidad de huevos e ingreso automático en la UP. | `egg-collections.manage` |
-| PATCH | `/collections/{collection}` | Corregir cantidad, fecha u observaciones. | `egg-collections.manage` |
-| POST | `/collections/{collection}/cancellation` | Cancelar y compensar el ingreso. | `egg-collections.manage` |
-| GET | `/flocks/{flock}/collections` | Histórico del lote. | `egg-collections.view` |
-| GET | `/collections` | Histórico global filtrable. | `egg-collections.view` |
-| GET | `/collections/{collection}` | Detalle de la recolección. | `egg-collections.view` |
-| GET | `/collections/metrics` | Producción diaria, semanal y mensual. | `egg-collections.view` |
-| GET | `/flocks/{flock}/metrics` | Métricas acotadas al lote. | `egg-collections.view` |
-| GET | `/production-units/{up}/egg-stock` | Saldo entero actual, incluso negativo. | `egg-stock.view` |
-| GET | `/production-units/{up}/egg-stock/movements` | Cuenta corriente paginada. | `egg-stock.view` |
-| GET | `/egg-stock/movements/{movement}` | Detalle, revisiones y referencias físicas. | `egg-stock.view` |
-| POST | `/production-units/{up}/egg-stock/receipts` | Entrada manual. | `egg-stock.move` |
-| POST | `/production-units/{up}/egg-stock/issues` | Preparación de reparto o pérdida. | `egg-stock.move` |
-| PATCH | `/egg-stock/movements/{movement}` | Corrección de una operación manual. | `egg-stock.adjust` |
-| POST | `/egg-stock/movements/{movement}/cancellation` | Cancelación de una operación manual. | `egg-stock.adjust` |
+| POST | `/flocks/{flock}/collections` | Registrar cantidad de huevos e ingreso automático en la UP. | `can_manage_egg_collections` |
+| PATCH | `/collections/{collection}` | Corregir cantidad, fecha u observaciones. | `can_manage_egg_collections` |
+| POST | `/collections/{collection}/cancellation` | Cancelar y compensar el ingreso. | `can_manage_egg_collections` |
+| GET | `/flocks/{flock}/collections` | Histórico del lote. | `can_view_egg_collections` |
+| GET | `/collections` | Histórico global filtrable. | `can_view_egg_collections` |
+| GET | `/collections/{collection}` | Detalle de la recolección. | `can_view_egg_collections` |
+| GET | `/collections/metrics` | Producción diaria, semanal y mensual. | `can_view_egg_collections` |
+| GET | `/flocks/{flock}/metrics` | Métricas acotadas al lote. | `can_view_egg_collections` |
+| GET | `/production-units/{up}/egg-stock` | Saldo entero actual, incluso negativo. | `can_view_egg_stock` |
+| GET | `/production-units/{up}/egg-stock/movements` | Cuenta corriente paginada. | `can_view_egg_stock` |
+| GET | `/egg-stock/movements/{movement}` | Detalle, revisiones y referencias físicas. | `can_view_egg_stock` |
+| POST | `/production-units/{up}/egg-stock/receipts` | Entrada manual. | `can_move_egg_stock` |
+| POST | `/production-units/{up}/egg-stock/issues` | Preparación de reparto o pérdida. | `can_move_egg_stock` |
+| PATCH | `/egg-stock/movements/{movement}` | Corrección de una operación manual. | `can_adjust_egg_stock` |
+| POST | `/egg-stock/movements/{movement}/cancellation` | Cancelación de una operación manual. | `can_adjust_egg_stock` |
 
 Las cantidades aceptan sólo enteros entre 1 y `2147483647`. Las salidas requieren `kind=distribution_preparation|loss`; motivo y observaciones son texto controlado. Para cambios de UP, dirección o tipo se debe cancelar y registrar una operación nueva.
 

@@ -2,7 +2,7 @@ openapi: "3.1.0"
 info:
   title: "09 — Producción y stock de huevos"
   version: "2.0.0"
-  description: "Contrato de Lotes y producción de huevos para web y mobile. La recolección de huevo genérico ingresa atómicamente a una cuenta corriente por unidad productiva; las correcciones son compensaciones auditadas. No hay borrado ni interfaz mobile en esta entrega. Los valores de status, eventos, tipos y permisos son identificadores estables en inglés."
+  description: "Contrato de Lotes y producción de huevos para web y mobile. La capacidad de aves del galpón es un umbral de alerta: altas, redistribuciones, restituciones y reversiones pueden superarlo; se mantiene un único lote abierto por galpón. Las consultas de galpones informan capacity_exceeded, excess_quantity y capacity_alert. La recolección de huevo genérico ingresa atómicamente a una cuenta corriente por unidad productiva; las correcciones son compensaciones auditadas. No hay borrado ni interfaz mobile en esta entrega. Los valores de status, eventos, tipos y permisos son identificadores estables en inglés."
   license:
     name: "Proprietary"
     identifier: "Proprietary"
@@ -32,13 +32,78 @@ tags:
     name: "Stock de huevos"
     description: "Cuenta corriente por unidad productiva, movimientos y correcciones."
 paths:
+  "/lotes/resumen":
+    get:
+      tags: ["Lotes"]
+      operationId: "summarizeLiveBirds"
+      summary: "Total actual de aves vivas"
+      description: "Suma la ocupación de lotes activos y en cuarentena, con mínimo de cero por galpón. Una sesión PIN queda limitada a su UP."
+      x-permission: "can_view_flocks"
+      parameters:
+        - "$ref": "#/components/parameters/SummaryUnit"
+      responses:
+        "200":
+          description: "Total del alcance autorizado."
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [up_id, aves_vivas, consultado_en]
+                    properties:
+                      up_id: {type: [integer, 'null'], minimum: 1}
+                      aves_vivas: {type: integer, minimum: 0}
+                      consultado_en: {type: string, format: date-time}
+        "401": {"$ref": "#/components/responses/Unauthenticated"}
+        "403": {"$ref": "#/components/responses/Forbidden"}
+        "404": {"$ref": "#/components/responses/NotFound"}
+        "422": {"$ref": "#/components/responses/InvalidInput"}
+  "/mortalidades/resumen":
+    get:
+      tags: ["Mortalidad"]
+      operationId: "summarizeMortality"
+      summary: "Bajas registradas y tasa de mortalidad por período y unidad productiva"
+      description: "La tasa divide las bajas vigentes por la población al inicio más los ingresos externos del período. El rango inclusive admite hasta 366 días. Una sesión PIN queda limitada a su UP."
+      x-permission: "can_view_mortality"
+      parameters:
+        - "$ref": "#/components/parameters/SummaryUnit"
+        - {name: desde, in: query, required: true, schema: {type: string, format: date}}
+        - {name: hasta, in: query, required: true, schema: {type: string, format: date}}
+      responses:
+        "200":
+          description: "Total del alcance autorizado."
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [up_id, desde, hasta, zona_horaria, bajas_registradas, poblacion_referencia, tasa_porcentual, estado_tasa]
+                    properties:
+                      up_id: {type: [integer, 'null'], minimum: 1}
+                      desde: {type: string, format: date}
+                      hasta: {type: string, format: date}
+                      zona_horaria: {type: string, example: America/Montevideo}
+                      bajas_registradas: {type: integer, minimum: 0}
+                      poblacion_referencia: {type: [integer, 'null'], minimum: 0}
+                      tasa_porcentual: {type: [number, 'null'], minimum: 0}
+                      estado_tasa: {type: string, enum: [calculada, sin_poblacion, historial_indeterminado, bajas_superan_poblacion]}
+        "401": {"$ref": "#/components/responses/Unauthenticated"}
+        "403": {"$ref": "#/components/responses/Forbidden"}
+        "404": {"$ref": "#/components/responses/NotFound"}
+        "422": {"$ref": "#/components/responses/InvalidInput"}
   "/flocks":
     get:
       tags: ["Lotes"]
       operationId: "listFlocks"
       summary: "Lista y busca lotes de toda la empresa"
-      description: "Permiso requerido: flocks.view. El acceso es global dentro de la empresa."
-      x-permission: "flocks.view"
+      description: "Permiso requerido: can_view_flocks. El acceso es global dentro de la empresa."
+      x-permission: "can_view_flocks"
       parameters:
         -
           "$ref": "#/components/parameters/Page"
@@ -79,8 +144,8 @@ paths:
       tags: ["Lotes"]
       operationId: "createFlock"
       summary: "Registra una admisión de aves"
-      description: "Permiso requerido: flocks.manage. plan_template_id y plan_template_version son obligatorios y seleccionan una versión publicada; el lote, la copia completa e independiente del plan y la auditoría se confirman en la misma transacción e idempotencia. La plantilla debe seguir activa y la versión publicada seleccionada debe seguir vigente al confirmar el alta. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
-      x-permission: "flocks.manage"
+      description: "Permiso requerido: can_manage_flocks. plan_template_id y plan_template_version son obligatorios y seleccionan una versión publicada; el lote, la copia completa e independiente del plan y la auditoría se confirman en la misma transacción e idempotencia. La plantilla debe seguir activa y la versión publicada seleccionada debe seguir vigente al confirmar el alta. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "can_manage_flocks"
       parameters:
         -
           "$ref": "#/components/parameters/IdempotencyKey"
@@ -116,8 +181,8 @@ paths:
       tags: ["Lotes"]
       operationId: "showFlock"
       summary: "Consulta el lote y su semana actual"
-      description: "Permiso requerido: flocks.view. El acceso es global dentro de la empresa."
-      x-permission: "flocks.view"
+      description: "Permiso requerido: can_view_flocks. El acceso es global dentro de la empresa."
+      x-permission: "can_view_flocks"
       parameters:
         -
           "$ref": "#/components/parameters/Flock"
@@ -140,8 +205,8 @@ paths:
       tags: ["Lotes"]
       operationId: "updateFlock"
       summary: "Modifica el código o las notas del lote"
-      description: "Permiso requerido: flocks.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
-      x-permission: "flocks.manage"
+      description: "Permiso requerido: can_manage_flocks. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "can_manage_flocks"
       parameters:
         -
           "$ref": "#/components/parameters/Flock"
@@ -175,8 +240,13 @@ paths:
       tags: ["Lotes"]
       operationId: "changeFlockStatus"
       summary: "Activa o pone en cuarentena un lote abierto"
-      description: "Permiso requerido: flocks.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
-      x-permission: "flocks.manage"
+      description: |
+        Requiere can_manage_flocks. Cuando se envía audit_entry_id también requiere can_view_audit y
+        restituye el estado abierto anterior de la última transición verificable del lote. La entrada
+        original se conserva y la compensación queda vinculada a ella en auditoría. Una entrada ajena,
+        incompleta o desplazada por un cambio de estado posterior devuelve 409. La auditoría y todos
+        los efectos se confirman juntos. El reintento idéntico devuelve la respuesta original.
+      x-permission: "can_manage_flocks"
       parameters:
         -
           "$ref": "#/components/parameters/Flock"
@@ -210,8 +280,8 @@ paths:
       tags: ["Lotes"]
       operationId: "finalizeFlock"
       summary: "Finaliza con egreso de las aves remanentes y sin borrado"
-      description: "Permiso requerido: flocks.finalize. Pone el saldo en cero y registra sólo el egreso de aves positivas. Si el saldo previo era negativo, registra egreso cero y conserva ese valor en las fotografías y la auditoría. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
-      x-permission: "flocks.finalize"
+      description: "Permiso requerido: can_finalize_flocks. Pone el saldo en cero y registra sólo el egreso de aves positivas. Si el saldo previo era negativo, registra egreso cero y conserva ese valor en las fotografías y la auditoría. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "can_finalize_flocks"
       parameters:
         -
           "$ref": "#/components/parameters/Flock"
@@ -245,8 +315,8 @@ paths:
       tags: ["Redistribuciones"]
       operationId: "redistributeFlock"
       summary: "Redistribuye, une o traslada un lote"
-      description: "Permiso requerido: flocks.redistribute. plan_activity_id es opcional y sólo puede identificar una actividad flock_movement vigente del plan del lote origen; nunca se asocia por fecha o tipo. Una redistribución parcial que crea un lote nuevo copia al plan de destino las actividades futuras del plan origen y conserva su fecha de referencia; los manejos ya realizados aparecen como antecedentes con su operación original. Incorporar aves a un lote receptor existente no modifica el plan de ese receptor. Un traslado total conserva la identidad y el plan del lote. Si la cantidad coincide con todas las aves y se indica un receptor, finaliza el origen y conserva los datos del receptor; sin receptor, traslada el mismo lote a otro galpón. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original. No se permiten movimientos entre UP; fraccionar conserva edad y alimentación, agrupar conserva el modo y plan del receptor."
-      x-permission: "flocks.redistribute"
+      description: "Permiso requerido: can_redistribute_flocks. plan_activity_id es opcional y sólo puede identificar una actividad flock_movement vigente del plan del lote origen; nunca se asocia por fecha o tipo. Una redistribución parcial que crea un lote nuevo copia al plan de destino las actividades futuras del plan origen y conserva su fecha de referencia; los manejos ya realizados aparecen como antecedentes con su operación original. Incorporar aves a un lote receptor existente no modifica el plan de ese receptor. Un traslado total conserva la identidad y el plan del lote. Si la cantidad coincide con todas las aves y se indica un receptor, finaliza el origen y conserva los datos del receptor; sin receptor, traslada el mismo lote a otro galpón. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original. No se permiten movimientos entre UP; fraccionar conserva edad y alimentación, agrupar conserva el modo y plan del receptor."
+      x-permission: "can_redistribute_flocks"
       parameters:
         -
           "$ref": "#/components/parameters/Flock"
@@ -280,8 +350,8 @@ paths:
       tags: ["Redistribuciones"]
       operationId: "reverseRedistribution"
       summary: "Compensa una redistribución sin actividad posterior"
-      description: "Permiso requerido: flocks.redistribute. Sólo se permite cuando ningún lote involucrado tiene actividad de negocio posterior, la operación histórica es verificable y el galpón requerido para devolver las aves está libre, operativo y tiene capacidad. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original. No se permiten movimientos entre UP; fraccionar conserva edad y alimentación, agrupar conserva el modo y plan del receptor."
-      x-permission: "flocks.redistribute"
+      description: "Permiso requerido: can_redistribute_flocks. Sólo se permite cuando ningún lote involucrado tiene actividad de negocio posterior, la operación histórica es verificable y el galpón requerido para devolver las aves está operativo y disponible para ese lote. Superar su capacidad no bloquea la reversión. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original. No se permiten movimientos entre UP; fraccionar conserva edad y alimentación, agrupar conserva el modo y plan del receptor."
+      x-permission: "can_redistribute_flocks"
       parameters:
         -
           "$ref": "#/components/parameters/Redistribution"
@@ -315,8 +385,8 @@ paths:
       tags: ["Redistribuciones"]
       operationId: "listFlockHistory"
       summary: "Consulta movimientos y fotografías históricas de aves"
-      description: "Permiso requerido: flocks.view. El acceso es global dentro de la empresa."
-      x-permission: "flocks.view"
+      description: "Permiso requerido: can_view_flocks. El acceso es global dentro de la empresa."
+      x-permission: "can_view_flocks"
       parameters:
         -
           "$ref": "#/components/parameters/Flock"
@@ -350,8 +420,8 @@ paths:
       tags: ["Lotes"]
       operationId: "listHouseFlocks"
       summary: "Lista lotes en su galpón actual"
-      description: "Permiso requerido: flocks.view. El acceso es global dentro de la empresa."
-      x-permission: "flocks.view"
+      description: "Permiso requerido: can_view_flocks. El acceso es global dentro de la empresa."
+      x-permission: "can_view_flocks"
       parameters:
         -
           "$ref": "#/components/parameters/PoultryHouse"
@@ -393,8 +463,8 @@ paths:
       tags: ["Catálogos"]
       operationId: "listBreeds"
       summary: "Lista y busca razas"
-      description: "Permiso requerido: breeds.view. Cada raza incluye sus límites propios (null significa herencia) y los rangos efectivos calculados con la configuración global."
-      x-permission: "breeds.view"
+      description: "Permiso requerido: can_view_breeds. Cada raza incluye sus límites propios (null significa herencia) y los rangos efectivos calculados con la configuración global."
+      x-permission: "can_view_breeds"
       parameters:
         -
           "$ref": "#/components/parameters/Page"
@@ -423,8 +493,8 @@ paths:
       tags: ["Catálogos"]
       operationId: "createBreed"
       summary: "Crea una raza"
-      description: "Permiso requerido: breeds.manage. Si se omite una pareja de límites, la etapa hereda el rango global. Los límites personalizados se expresan en gramos. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
-      x-permission: "breeds.manage"
+      description: "Permiso requerido: can_manage_breeds. Si se omite una pareja de límites, la etapa hereda el rango global. Los límites personalizados se expresan en gramos. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "can_manage_breeds"
       parameters:
         -
           "$ref": "#/components/parameters/IdempotencyKey"
@@ -456,8 +526,8 @@ paths:
       tags: ["Catálogos"]
       operationId: "updateBreed"
       summary: "Actualiza una raza y sus rangos esperados"
-      description: "Permiso requerido: breeds.manage. Cada pareja mínimo/máximo puede actualizarse por etapa; ambos null restauran la herencia global. Los cambios reclasifican las jornadas abiertas de esa raza y conservan las cerradas. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
-      x-permission: "breeds.manage"
+      description: "Permiso requerido: can_manage_breeds. Cada pareja mínimo/máximo puede actualizarse por etapa; ambos null restauran la herencia global. Los cambios reclasifican las jornadas abiertas de esa raza y conservan las cerradas. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "can_manage_breeds"
       parameters:
         -
           "$ref": "#/components/parameters/Breed"
@@ -490,9 +560,9 @@ paths:
     get:
       tags: ["Mortalidad"]
       operationId: "listMortality"
-      summary: "Consulta mortalidad por lote, galpón histórico y fecha"
-      description: "Permiso requerido: mortality.view. El acceso es global dentro de la empresa."
-      x-permission: "mortality.view"
+      summary: "Consulta mortalidad por lote, galpón histórico, unidad productiva y fecha"
+      description: "Permiso requerido: can_view_mortality. Una sesión PIN queda limitada a su UP."
+      x-permission: "can_view_mortality"
       parameters:
         -
           "$ref": "#/components/parameters/Page"
@@ -506,6 +576,7 @@ paths:
           "$ref": "#/components/parameters/HouseFilter"
         -
           "$ref": "#/components/parameters/FlockFilter"
+        - "$ref": "#/components/parameters/UnitFilter"
         -
           "$ref": "#/components/parameters/RecordStatus"
       responses:
@@ -528,8 +599,8 @@ paths:
       tags: ["Mortalidad"]
       operationId: "showMortality"
       summary: "Consulta una mortalidad, incluso cancelada"
-      description: "Permiso requerido: mortality.view. El acceso es global dentro de la empresa."
-      x-permission: "mortality.view"
+      description: "Permiso requerido: can_view_mortality. El acceso es global dentro de la empresa."
+      x-permission: "can_view_mortality"
       parameters:
         -
           "$ref": "#/components/parameters/Mortality"
@@ -552,8 +623,8 @@ paths:
       tags: ["Mortalidad"]
       operationId: "correctMortality"
       summary: "Rectifica cantidad, categoría o notas con auditoría"
-      description: "Permiso requerido: mortality.manage. Si la corrección devuelve aves a un lote finalizado por mortalidad, exige confirm_reactivation=true y un galpón libre, operativo y con capacidad; sin confirmación responde 409 sin mutación. Un lote finalizado por unión o egreso posterior no se reactiva por esta ruta. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
-      x-permission: "mortality.manage"
+      description: "Permiso requerido: can_manage_mortality. Si la corrección devuelve aves a un lote finalizado por mortalidad, exige confirm_reactivation=true y un galpón libre y operativo; sin confirmación responde 409 sin mutación. Superar la capacidad no bloquea la restitución. Un lote finalizado por unión o egreso posterior no se reactiva por esta ruta. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "can_manage_mortality"
       parameters:
         -
           "$ref": "#/components/parameters/Mortality"
@@ -587,8 +658,8 @@ paths:
       tags: ["Mortalidad"]
       operationId: "listFlockMortality"
       summary: "Lista mortalidad del lote"
-      description: "Permiso requerido: mortality.view. El acceso es global dentro de la empresa."
-      x-permission: "mortality.view"
+      description: "Permiso requerido: can_view_mortality. El acceso es global dentro de la empresa."
+      x-permission: "can_view_mortality"
       parameters:
         -
           "$ref": "#/components/parameters/Flock"
@@ -604,6 +675,7 @@ paths:
           "$ref": "#/components/parameters/HouseFilter"
         -
           "$ref": "#/components/parameters/FlockFilter"
+        - "$ref": "#/components/parameters/UnitFilter"
         -
           "$ref": "#/components/parameters/RecordStatus"
       responses:
@@ -625,8 +697,8 @@ paths:
       tags: ["Mortalidad"]
       operationId: "recordMortality"
       summary: "Registra bajas y descuenta aves vivas"
-      description: "Permiso requerido: mortality.manage. Exige fecha, cantidad entera positiva y motivo textual en notes. Puede dejar saldo negativo y conserva el estado del lote. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
-      x-permission: "mortality.manage"
+      description: "Permiso requerido: can_manage_mortality. Exige fecha, cantidad entera positiva y motivo textual en notes. Puede dejar saldo negativo y conserva el estado del lote. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "can_manage_mortality"
       parameters:
         -
           "$ref": "#/components/parameters/Flock"
@@ -660,8 +732,8 @@ paths:
       tags: ["Mortalidad"]
       operationId: "cancelMortality"
       summary: "Cancela y restituye aves con reactivación confirmada"
-      description: "Permiso requerido: mortality.manage. Si la restitución devuelve aves a un lote finalizado por mortalidad, se requiere confirm_reactivation=true y un galpón libre, operativo y con capacidad. Un lote finalizado por unión o egreso no se reactiva por esta ruta. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
-      x-permission: "mortality.manage"
+      description: "Permiso requerido: can_manage_mortality. Si la restitución devuelve aves a un lote finalizado por mortalidad, se requiere confirm_reactivation=true y un galpón libre y operativo. Superar la capacidad no bloquea la restitución. Un lote finalizado por unión o egreso no se reactiva por esta ruta. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "can_manage_mortality"
       parameters:
         -
           "$ref": "#/components/parameters/Mortality"
@@ -695,8 +767,8 @@ paths:
       tags: ["Recolección"]
       operationId: "listEggCollections"
       summary: "Lista recolecciones con filtros históricos"
-      description: "Permiso requerido: egg-collections.view. El acceso es global dentro de la empresa."
-      x-permission: "egg-collections.view"
+      description: "Permiso requerido: can_view_egg_collections. El acceso es global dentro de la empresa."
+      x-permission: "can_view_egg_collections"
       parameters:
         -
           "$ref": "#/components/parameters/Flock"
@@ -733,8 +805,8 @@ paths:
       tags: ["Recolección"]
       operationId: "recordEggCollection"
       summary: "Registra huevos y aumenta el inventario en una transacción"
-      description: "Permiso requerido: egg-collections.manage. Requiere un lote abierto con saldo mayor que cero; saldo cero o negativo responde 409 sin recolección ni cambios de stock. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
-      x-permission: "egg-collections.manage"
+      description: "Permiso requerido: can_manage_egg_collections. Requiere un lote abierto con saldo mayor que cero; saldo cero o negativo responde 409 sin recolección ni cambios de stock. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "can_manage_egg_collections"
       parameters:
         -
           "$ref": "#/components/parameters/Flock"
@@ -768,8 +840,8 @@ paths:
       tags: ["Recolección"]
       operationId: "listAllEggCollections"
       summary: "Lista el histórico de recolecciones de toda la empresa"
-      description: "Permiso requerido: egg-collections.view. El acceso es global dentro de la empresa."
-      x-permission: "egg-collections.view"
+      description: "Permiso requerido: can_view_egg_collections. El acceso es global dentro de la empresa."
+      x-permission: "can_view_egg_collections"
       parameters:
         - "$ref": "#/components/parameters/Page"
         - "$ref": "#/components/parameters/PerPage"
@@ -793,13 +865,15 @@ paths:
       tags: ["Recolección"]
       operationId: "showEggProductionMetrics"
       summary: "Consulta producción por día, semana y mes"
-      description: "Permiso requerido: egg-collections.view. Sólo cuentan recolecciones vigentes de huevo genérico."
-      x-permission: "egg-collections.view"
+      description: "Permiso requerido: can_view_egg_collections. Sólo cuentan recolecciones vigentes de huevo genérico. Las series omiten días sin registros. Una sesión PIN queda limitada a su UP."
+      x-permission: "can_view_egg_collections"
       parameters:
         - "$ref": "#/components/parameters/From"
         - "$ref": "#/components/parameters/To"
         - "$ref": "#/components/parameters/HouseFilter"
         - "$ref": "#/components/parameters/FlockFilter"
+        - "$ref": "#/components/parameters/UnitFilter"
+        - "$ref": "#/components/parameters/ComparePrevious"
       responses:
         "200":
           description: "Consulta u operación completada."
@@ -816,8 +890,8 @@ paths:
       tags: ["Recolección"]
       operationId: "showEggCollection"
       summary: "Consulta una recolección y su último movimiento de stock"
-      description: "Permiso requerido: egg-collections.view. El acceso es global dentro de la empresa."
-      x-permission: "egg-collections.view"
+      description: "Permiso requerido: can_view_egg_collections. El acceso es global dentro de la empresa."
+      x-permission: "can_view_egg_collections"
       parameters:
         -
           "$ref": "#/components/parameters/EggCollection"
@@ -840,8 +914,8 @@ paths:
       tags: ["Recolección"]
       operationId: "correctEggCollection"
       summary: "Rectifica la recolección y compensa la diferencia de stock"
-      description: "Permiso requerido: egg-collections.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
-      x-permission: "egg-collections.manage"
+      description: "Permiso requerido: can_manage_egg_collections. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "can_manage_egg_collections"
       parameters:
         -
           "$ref": "#/components/parameters/EggCollection"
@@ -875,8 +949,8 @@ paths:
       tags: ["Recolección"]
       operationId: "cancelEggCollection"
       summary: "Cancela sin borrar y retira el stock correspondiente"
-      description: "Permiso requerido: egg-collections.manage. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
-      x-permission: "egg-collections.manage"
+      description: "Permiso requerido: can_manage_egg_collections. La auditoría y todos los efectos se confirman juntos; el reintento idéntico devuelve la respuesta original."
+      x-permission: "can_manage_egg_collections"
       parameters:
         -
           "$ref": "#/components/parameters/EggCollection"
@@ -910,8 +984,8 @@ paths:
       tags: ["Recolección"]
       operationId: "showFlockMetrics"
       summary: "Consulta totales y promedio en un período de hasta 366 días"
-      description: "Permiso requerido: egg-collections.view. El acceso es global dentro de la empresa."
-      x-permission: "egg-collections.view"
+      description: "Permiso requerido: can_view_egg_collections. El acceso es global dentro de la empresa."
+      x-permission: "can_view_egg_collections"
       parameters:
         -
           "$ref": "#/components/parameters/Flock"
@@ -919,6 +993,9 @@ paths:
           "$ref": "#/components/parameters/From"
         -
           "$ref": "#/components/parameters/To"
+        - "$ref": "#/components/parameters/HouseFilter"
+        - "$ref": "#/components/parameters/UnitFilter"
+        - "$ref": "#/components/parameters/ComparePrevious"
       responses:
         "200":
           description: "Consulta u operación completada."
@@ -941,8 +1018,8 @@ paths:
       tags: ["Stock de huevos"]
       operationId: "showEggStockBalance"
       summary: "Consulta el balance de huevos de una unidad productiva"
-      description: "Permiso requerido: egg-stock.view. Una unidad sin movimientos devuelve balance cero."
-      x-permission: "egg-stock.view"
+      description: "Permiso requerido: can_view_egg_stock. Una unidad sin movimientos devuelve balance cero. Un saldo confirmado por debajo de cero genera un aviso alto por unidad productiva y destinatario. El aviso se resuelve al llegar a cero o recuperar un saldo positivo."
+      x-permission: "can_view_egg_stock"
       parameters:
         - "$ref": "#/components/parameters/ProductionUnit"
       responses:
@@ -960,8 +1037,8 @@ paths:
       tags: ["Stock de huevos"]
       operationId: "listEggStockTransactions"
       summary: "Lista la cuenta corriente de huevos"
-      description: "Permiso requerido: egg-stock.view. Filtra por tipo, estado y fechas."
-      x-permission: "egg-stock.view"
+      description: "Permiso requerido: can_view_egg_stock. Filtra por tipo, estado y fechas."
+      x-permission: "can_view_egg_stock"
       parameters:
         - "$ref": "#/components/parameters/ProductionUnit"
         - "$ref": "#/components/parameters/Page"
@@ -986,8 +1063,8 @@ paths:
       tags: ["Stock de huevos"]
       operationId: "recordEggStockReceipt"
       summary: "Registra un ingreso manual de huevos"
-      description: "Permiso requerido: egg-stock.move. Sólo opera la cuenta técnica de la unidad productiva."
-      x-permission: "egg-stock.move"
+      description: "Permiso requerido: can_move_egg_stock. Sólo opera la cuenta técnica de la unidad productiva."
+      x-permission: "can_move_egg_stock"
       parameters:
         - "$ref": "#/components/parameters/ProductionUnit"
         - "$ref": "#/components/parameters/IdempotencyKey"
@@ -1014,8 +1091,8 @@ paths:
       tags: ["Stock de huevos"]
       operationId: "recordEggStockIssue"
       summary: "Registra una salida de huevos"
-      description: "Permiso requerido: egg-stock.move. El tipo admite distribution_preparation o loss y puede dejar balance negativo."
-      x-permission: "egg-stock.move"
+      description: "Permiso requerido: can_move_egg_stock. El tipo admite distribution_preparation o loss y puede dejar balance negativo."
+      x-permission: "can_move_egg_stock"
       parameters:
         - "$ref": "#/components/parameters/ProductionUnit"
         - "$ref": "#/components/parameters/IdempotencyKey"
@@ -1042,8 +1119,8 @@ paths:
       tags: ["Stock de huevos"]
       operationId: "showEggStockTransaction"
       summary: "Consulta un movimiento de la cuenta de huevos"
-      description: "Permiso requerido: egg-stock.view. Incluye revisiones y referencias a Inventario."
-      x-permission: "egg-stock.view"
+      description: "Permiso requerido: can_view_egg_stock. Incluye revisiones y referencias a Inventario."
+      x-permission: "can_view_egg_stock"
       parameters:
         - "$ref": "#/components/parameters/StockMovement"
       responses:
@@ -1060,8 +1137,8 @@ paths:
       tags: ["Stock de huevos"]
       operationId: "correctEggStockTransaction"
       summary: "Corrige una operación manual mediante compensaciones"
-      description: "Permiso requerido: egg-stock.adjust. Las operaciones originadas por recolecciones se corrigen desde Lotes."
-      x-permission: "egg-stock.adjust"
+      description: "Permiso requerido: can_adjust_egg_stock. Las operaciones originadas por recolecciones se corrigen desde Lotes."
+      x-permission: "can_adjust_egg_stock"
       parameters:
         - "$ref": "#/components/parameters/StockMovement"
         - "$ref": "#/components/parameters/IdempotencyKey"
@@ -1088,8 +1165,8 @@ paths:
       tags: ["Stock de huevos"]
       operationId: "cancelEggStockTransaction"
       summary: "Cancela una operación manual sin borrar su historia"
-      description: "Permiso requerido: egg-stock.adjust. Agrega una compensación inversa y conserva la revisión."
-      x-permission: "egg-stock.adjust"
+      description: "Permiso requerido: can_adjust_egg_stock. Agrega una compensación inversa y conserva la revisión."
+      x-permission: "can_adjust_egg_stock"
       parameters:
         - "$ref": "#/components/parameters/StockMovement"
         - "$ref": "#/components/parameters/IdempotencyKey"
@@ -1239,6 +1316,16 @@ components:
       schema:
         type: "integer"
         minimum: 1
+    SummaryUnit:
+      name: up_id
+      in: query
+      description: "UP seleccionada. Al omitirla se usa el alcance efectivo de la sesión."
+      schema: {type: integer, minimum: 1}
+    ComparePrevious:
+      name: comparar_anterior
+      in: query
+      description: "Con 1 devuelve la comparación con el período inmediatamente anterior de igual duración."
+      schema: {type: integer, enum: [0, 1], default: 0}
     BreedFilter:
       name: "breed_id"
       in: "query"
@@ -1308,7 +1395,7 @@ components:
           schema:
             "$ref": "#/components/schemas/Problem"
     Conflict:
-      description: "Conflicto de versión, capacidad, cantidad, estado, período, stock o clave de idempotencia. No se aplican cambios parciales."
+      description: "Conflicto de versión, ocupación por otro lote, cantidad, estado, período, stock o clave de idempotencia. No se aplican cambios parciales."
       content:
         "application/problem+json":
           schema:
@@ -1807,6 +1894,10 @@ components:
           type: "string"
           minLength: 1
           maxLength: 500
+          audit_entry_id:
+            type: "integer"
+            minimum: 1
+            description: "ID de la entrada que se quiere revertir, obtenido de data.id en el detalle de auditoría."
     FinalizeFlock:
       type: "object"
       additionalProperties: false
@@ -1898,12 +1989,12 @@ components:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-          description: "Versión actual obtenida al consultar el recurso."
+          description: "Versión vigente del lote origen del movimiento original."
         destination_version:
           type: "integer"
           minimum: 1
           maximum: 2147483647
-          description: "Versión actual obtenida al consultar el recurso."
+          description: "Versión vigente del destinatario original. Obligatoria si origen y destino son lotes distintos."
         reason:
           type: "string"
           minLength: 1
@@ -2330,6 +2421,17 @@ components:
           type: "array"
           items:
             "$ref": "#/components/schemas/MonthlyEggMetric"
+        comparacion:
+          type: object
+          additionalProperties: false
+          required: [desde, hasta, total_huevos, variacion_porcentual]
+          properties:
+            desde: {type: string, format: date}
+            hasta: {type: string, format: date}
+            total_huevos: {type: integer, minimum: 0}
+            variacion_porcentual:
+              type: [number, 'null']
+              description: "Cambio relativo porcentual respecto del período anterior. Null cuando el total anterior es cero."
     DailyEggMetric:
       type: "object"
       additionalProperties: false

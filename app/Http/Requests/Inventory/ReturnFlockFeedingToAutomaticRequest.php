@@ -4,6 +4,8 @@ namespace App\Http\Requests\Inventory;
 
 final class ReturnFlockFeedingToAutomaticRequest extends FeedOperationRequest
 {
+    protected string $permissionAbility = 'manageFeeding';
+
     /** @return array<string, list<mixed>> */
     public function rules(): array
     {

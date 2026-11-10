@@ -12,10 +12,10 @@ final class ViewPlanTemplateRequest extends ManagementPlanRequest
      */
     public function authorize(): bool
     {
-        if ($this->allowed('management-plans.manage')) {
+        if ($this->allowed('can_manage_management_plans')) {
             return true;
         }
-        if (! $this->allowed('management-plans.view')) {
+        if (! $this->allowed('can_view_management_plans')) {
             return false;
         }
 

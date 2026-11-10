@@ -5,7 +5,6 @@ namespace App\Queries\Lots;
 use App\Models\Lots\Flock;
 use App\Models\Lots\MortalityRecord;
 use App\Services\Lots\LotsSnapshots;
-use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 final readonly class ListMortalityQuery
@@ -15,7 +14,9 @@ final readonly class ListMortalityQuery
     /** @param array<string, mixed> $filters */
     public function execute(array $filters, ?Flock $flock = null): LengthAwarePaginator
     {
-        $query = MortalityRecord::query()->with('flock');
+        $query = MortalityRecord::query()->with('flock')->forReportingPeriod(
+            $filters['date_from'] ?? null, $filters['date_to'] ?? null, $filters['production_unit_id'] ?? null,
+        );
         if ($flock !== null) {
             $query->where('flock_id', $flock->id);
         }
@@ -26,12 +27,6 @@ final readonly class ListMortalityQuery
             if (isset($filters[$field])) {
                 $query->where($field, $filters[$field]);
             }
-        }
-        if (isset($filters['date_from'])) {
-            $query->where('occurred_at', '>=', CarbonImmutable::parse($filters['date_from'], config('lots.timezone'))->startOfDay()->toIso8601String());
-        }
-        if (isset($filters['date_to'])) {
-            $query->where('occurred_at', '<', CarbonImmutable::parse($filters['date_to'], config('lots.timezone'))->addDay()->startOfDay()->toIso8601String());
         }
 
         return $query->orderByDesc('occurred_at')->orderByDesc('id')->paginate($filters['per_page'] ?? 50, ['*'], 'page', $filters['page'] ?? 1)

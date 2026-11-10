@@ -111,7 +111,7 @@ final class AllowedStockProductsEndpointTest extends TestCase
     {
         // Preparación: habilita movimientos y crea productos de las dos clases de ubicación.
         $actor = $this->signIn();
-        $actor->givePermissionTo(Permission::findOrCreate('inventory.move', 'web'));
+        $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_move_inventory', 'web'));
         $warehouse = StockLocation::factory()->create();
         $plant = $this->feedLocation();
         $supply = Product::factory()->create();
@@ -240,7 +240,7 @@ final class AllowedStockProductsEndpointTest extends TestCase
     private function signIn(): User
     {
         $actor = User::factory()->create();
-        $actor->givePermissionTo(Permission::findOrCreate('inventory.view', 'web'));
+        $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_view_inventory', 'web'));
         Sanctum::actingAs($actor, ['*']);
 
         return $actor;

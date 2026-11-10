@@ -54,7 +54,7 @@ Se pueden registrar hechos pasados de galpones o UP actualmente inactivos. Regis
 
 ### Acceso y concurrencia
 
-Se reutilizan `poultry-houses.view` para lecturas y `poultry-houses.manage` para escrituras; el administrador también tiene acceso. Los usuarios desactivados no reciben acceso.
+Se reutilizan `can_view_poultry_houses` para lecturas y `can_manage_poultry_houses` para escrituras; el administrador también tiene acceso. Los usuarios desactivados no reciben acceso.
 
 Los permisos son globales en la empresa. No hay asignaciones usuario–UP, filtros por propietario ni permisos que contengan IDs.
 
@@ -79,7 +79,7 @@ El campo `cost` de salida tiene forma `{"amount": "1250.50", "currency": "UYU"}`
 
 El histórico permite `status`, `date_from`, `date_to`, `per_page` de 1 a 100 (por defecto 50) y `page` de 1 a 100000. Los enlaces de paginación conservan esos filtros. Los errores de autenticación, autorización, validación, inexistencia y conflicto siguen `application/problem+json`.
 
-La auditoría utiliza los eventos `maintenance_created`, `maintenance_corrected` y `maintenance_cancelled`, con actor, sujeto, UP, resultado, cambios y snapshot permitido, además de `operation_id` y `trace_id`. Si falla la auditoría se revierte toda la operación. Sus lecturas continúan requiriendo `audit.view` en el endpoint existente de auditoría.
+La auditoría utiliza los eventos `maintenance_created`, `maintenance_corrected` y `maintenance_cancelled`, con actor, sujeto, UP, resultado, cambios y snapshot permitido, además de `operation_id` y `trace_id`. Si falla la auditoría se revierte toda la operación. Sus lecturas continúan requiriendo `can_view_audit` en el endpoint existente de auditoría.
 
 ### Fuera de alcance
 

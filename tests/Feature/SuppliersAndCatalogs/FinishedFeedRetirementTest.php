@@ -243,9 +243,9 @@ final class FinishedFeedRetirementTest extends TestCase
     private function signIn(): User
     {
         $actor = User::factory()->create();
-        foreach (['products.manage', 'products.view', 'inventory.view', 'management-plans.view', 'management-plans.execute',
-            'egg-stock.move', 'reports.view', 'egg-collections.view'] as $permission) {
-            $actor->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+        foreach (['can_manage_products', 'can_view_products', 'can_view_inventory', 'can_view_management_plans', 'can_execute_management_plans',
+            'can_move_egg_stock', 'can_view_reports', 'can_view_egg_collections'] as $permission) {
+            $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
         Sanctum::actingAs($actor);
 

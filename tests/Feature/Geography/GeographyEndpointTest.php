@@ -36,7 +36,7 @@ final class GeographyEndpointTest extends TestCase
     public function test_valid_payload_creates_department_and_locality_with_audit_entries(): void
     {
         // Preparación: autentica al actor con permiso de gestión.
-        $actor = $this->userWithPermissions(['geography.manage']);
+        $actor = $this->userWithPermissions(['can_manage_geography']);
         Sanctum::actingAs($actor, ['*']);
 
         // Acción 1: crea el departamento.
@@ -77,7 +77,7 @@ final class GeographyEndpointTest extends TestCase
     {
         // Preparación: persiste el departamento original y autentica al gestor.
         Department::factory()->create(['name' => 'Canelones']);
-        Sanctum::actingAs($this->userWithPermissions(['geography.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_geography']), ['*']);
 
         // Acción: intenta registrar el mismo nombre con espacios y mayúsculas.
         $this->postJson('/api/v1/departments', ['name' => '  CANELONES  '])
@@ -92,7 +92,7 @@ final class GeographyEndpointTest extends TestCase
         // Preparación: crea la jerarquía geográfica y autentica al lector.
         $departamento = Department::factory()->create(['name' => 'Rocha']);
         Locality::factory()->for($departamento)->create(['name' => 'Chuy']);
-        Sanctum::actingAs($this->userWithPermissions(['geography.view']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_view_geography']), ['*']);
 
         // Acción 1: lista departamentos aplicando búsqueda y paginación.
         $this->getJson('/api/v1/departments?search=roch&per_page=10')
@@ -114,7 +114,7 @@ final class GeographyEndpointTest extends TestCase
         $user = User::factory()->create();
 
         foreach ($permissions as $permission) {
-            $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+            $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
 
         return $user;

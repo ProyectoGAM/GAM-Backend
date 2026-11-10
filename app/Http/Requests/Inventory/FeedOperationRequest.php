@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Inventory;
 
+use App\Models\Inventory\FeedStockOperation;
 use App\ValueObjects\Inventory\FeedStockGrams;
 use Closure;
 use Illuminate\Validation\Validator;
@@ -11,6 +12,8 @@ abstract class FeedOperationRequest extends FeedRecipeRequest
 {
     private bool $submittedIdempotencyKey = false;
 
+    protected string $permissionAbility = 'viewAny';
+
     protected function prepareForValidation(): void
     {
         if ($this->isMethod('POST')) {
@@ -19,10 +22,10 @@ abstract class FeedOperationRequest extends FeedRecipeRequest
         }
     }
 
-    /** El permiso funcional específico sigue pendiente; conserva la sesión autenticada. */
+    /** Autoriza cada operación mediante la Policy del stock de alimento. */
     public function authorize(): bool
     {
-        return $this->user() !== null;
+        return $this->user()?->can($this->permissionAbility, FeedStockOperation::class) ?? false;
     }
 
     /** @return list<mixed> */

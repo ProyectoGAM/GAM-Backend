@@ -23,7 +23,7 @@ final readonly class ReturnFlockFeedingToAutomaticAction
 
     public function execute(Flock $flock, string $key, User $actor, string $source = 'api'): FlockOperation
     {
-        return $this->commands->execute($actor, null, 'flock.feeding.automatic', $key, ['flock' => $flock->public_id],
+        return $this->commands->execute($actor, 'can_manage_flock_feeding', 'flock.feeding.automatic', $key, ['flock' => $flock->public_id],
             function (string $operationId) use ($flock, $actor, $source): array {
                 $locked = Flock::query()->whereKey($flock->id)->lockForUpdate()->firstOrFail();
                 $this->state->open($locked);

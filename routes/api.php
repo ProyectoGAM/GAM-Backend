@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Controllers\AuditAndTraceability\AuditActorController;
 use App\Http\Controllers\AuditAndTraceability\AuditEntryController;
+use App\Http\Controllers\CustomersAndAccounts\CustomerAccountController;
+use App\Http\Controllers\CustomersAndAccounts\CustomerController;
 use App\Http\Controllers\Deliveries\DeliveryController;
 use App\Http\Controllers\FarmStructure\MaintenanceController;
 use App\Http\Controllers\FarmStructure\PoultryHouseController;
@@ -11,6 +14,8 @@ use App\Http\Controllers\Geography\DepartmentController;
 use App\Http\Controllers\Geography\LocalityController;
 use App\Http\Controllers\IdentityAndAccess\AdminController;
 use App\Http\Controllers\IdentityAndAccess\AuthController;
+use App\Http\Controllers\IdentityAndAccess\OwnCredentialController;
+use App\Http\Controllers\IdentityAndAccess\RoleController;
 use App\Http\Controllers\IdentityAndAccess\SharedDeviceController;
 use App\Http\Controllers\IdentityAndAccess\UserManagementController;
 use App\Http\Controllers\Inventory\EggDonationController;
@@ -20,6 +25,7 @@ use App\Http\Controllers\Inventory\FeedAdjustmentController;
 use App\Http\Controllers\Inventory\FeedBalanceController;
 use App\Http\Controllers\Inventory\FeedBalanceMinimumController;
 use App\Http\Controllers\Inventory\FeedConsumptionController;
+use App\Http\Controllers\Inventory\FeedCoverageThresholdController;
 use App\Http\Controllers\Inventory\FeedManufactureController;
 use App\Http\Controllers\Inventory\FeedRecipeController;
 use App\Http\Controllers\Inventory\FeedStockController;
@@ -42,7 +48,12 @@ use App\Http\Controllers\ManagementPlans\FlockManagementHistoryController;
 use App\Http\Controllers\ManagementPlans\FlockPlanController;
 use App\Http\Controllers\ManagementPlans\ManagementExecutionController;
 use App\Http\Controllers\ManagementPlans\PlanTemplateController;
+use App\Http\Controllers\Notifications\AlertConfigurationController;
+use App\Http\Controllers\Notifications\AlertTimingThresholdController;
+use App\Http\Controllers\Notifications\NotificationController;
+use App\Http\Controllers\Notifications\OperationalAlertController;
 use App\Http\Controllers\ReferenceData\ReferenceOptionsController;
+use App\Http\Controllers\ReportingAndAnalytics\ExpenseSummaryController;
 use App\Http\Controllers\ReportingAndAnalytics\ReportExportController;
 use App\Http\Controllers\ReportingAndAnalytics\ReportOptionsController;
 use App\Http\Controllers\ReportingAndAnalytics\ReportPresetController;
@@ -54,10 +65,16 @@ use App\Http\Controllers\SuppliersAndCatalogs\SupplierController;
 use App\Http\Controllers\SuppliersAndCatalogs\SupplierStatusController;
 use App\Http\Controllers\SuppliersAndCatalogs\VaccineController;
 use App\Http\Controllers\SuppliersAndCatalogs\VaccineStatusController;
+use App\Http\Controllers\Vehicles\VehicleController;
+use App\Http\Middleware\EnforceProductionUnitAccess;
 use App\Http\Middleware\ReportDownloadAccess;
+use App\Http\Middleware\ValidateCurrentAccess;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.v1.')->group(function (): void {
+    Route::get('/health', fn (): JsonResponse => response()->json(['status' => 'ok']))->name('health');
+
     Route::prefix('auth')->name('auth.')->middleware(['throttle:auth', 'throttle:auth-account'])->group(function (): void {
         Route::post('/login', [AuthController::class, 'login'])->name('login');
     });
@@ -82,7 +99,70 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         ->middleware('shared.device:native')
         ->name('shared-device.local-revoke');
 
-    Route::middleware('auth:sanctum')->group(function (): void {
+    Route::middleware(['auth:sanctum', ValidateCurrentAccess::class, EnforceProductionUnitAccess::class])->group(function (): void {
+        Route::prefix('notificaciones')->name('notifications.')->group(function (): void {
+            Route::get('/', [NotificationController::class, 'index'])->name('index');
+            Route::get('/resumen', [NotificationController::class, 'summary'])->name('summary');
+            Route::post('/canal', [NotificationController::class, 'authorizeChannel'])->middleware('throttle:60,1')->name('channel');
+            Route::get('/{notificacion}', [NotificationController::class, 'show'])->whereUlid('notificacion')->name('show');
+            Route::patch('/{notificacion}/lectura', [NotificationController::class, 'markRead'])->whereUlid('notificacion')->name('read');
+        });
+        Route::get('/unidades-productivas/{productionUnit}/umbrales-alertas/{alertType}', [AlertTimingThresholdController::class, 'show'])->name('notifications.thresholds.show');
+        Route::put('/unidades-productivas/{productionUnit}/umbrales-alertas/{alertType}', [AlertTimingThresholdController::class, 'update'])->name('notifications.thresholds.update');
+        Route::get('/configuracion-alertas', [AlertConfigurationController::class, 'index'])->name('notifications.configuration.index');
+        Route::get('/alertas-operativas', [OperationalAlertController::class, 'index'])->name('notifications.operational-alerts.index');
+        Route::get('/alertas-operativas/resumen', [OperationalAlertController::class, 'summary'])->name('notifications.operational-alerts.summary');
+        Route::patch('/configuracion-alertas/{operationalAlertType}', [AlertConfigurationController::class, 'update'])->name('notifications.configuration.update');
+        Route::get('/unidades-productivas/{productionUnit}/configuracion-alertas', [AlertConfigurationController::class, 'index'])->name('notifications.unit-configuration.index');
+        Route::patch('/unidades-productivas/{productionUnit}/configuracion-alertas/{operationalAlertType}', [AlertConfigurationController::class, 'updateUnit'])->name('notifications.unit-configuration.update');
+        Route::patch('/auth/contrasena', [OwnCredentialController::class, 'update'])->defaults('credential', 'password')->middleware('throttle:credentials')->name('auth.password.update');
+        Route::patch('/auth/pin', [OwnCredentialController::class, 'update'])->defaults('credential', 'access_pin')->middleware('throttle:credentials')->name('auth.pin.update');
+        Route::put('/auth/pin-operativo', [OwnCredentialController::class, 'update'])->defaults('credential', 'operation_pin')->middleware('throttle:credentials')->name('auth.operation-pin.update');
+        Route::patch('/usuarios/{user}/unidad-productiva', [UserManagementController::class, 'productionUnit'])->name('users.production-unit.update');
+        Route::get('/vehiculos/conductores', [VehicleController::class, 'drivers'])->name('vehicles.drivers');
+        Route::get('/vehiculos/disponibles', [VehicleController::class, 'available'])->name('vehicles.available');
+        Route::get('/vehiculos', [VehicleController::class, 'index'])->name('vehicles.index');
+        Route::post('/vehiculos', [VehicleController::class, 'store'])->name('vehicles.store');
+        Route::get('/vehiculos/{vehiculo}', [VehicleController::class, 'show'])->name('vehicles.show');
+        Route::patch('/vehiculos/{vehiculo}', [VehicleController::class, 'update'])->name('vehicles.update');
+        Route::patch('/vehiculos/{vehiculo}/estado', [VehicleController::class, 'status'])->name('vehicles.status');
+        Route::get('/vehiculos/{vehiculo}/lecturas', [VehicleController::class, 'readings'])->name('vehicles.readings.index');
+        Route::post('/vehiculos/{vehiculo}/lecturas', [VehicleController::class, 'recordReading'])->name('vehicles.readings.store');
+        Route::get('/vehiculos/{vehiculo}/usos', [VehicleController::class, 'usages'])->name('vehicles.usages.index');
+        Route::post('/vehiculos/{vehiculo}/usos', [VehicleController::class, 'startUsage'])->name('vehicles.usages.store')->middleware('throttle:delivery-commands');
+        Route::post('/vehiculos/usos/{uso}/cierre', [VehicleController::class, 'closeUsage'])->name('vehicles.usages.close')->middleware('throttle:delivery-commands');
+        Route::get('/vehiculos/{vehiculo}/combustible', [VehicleController::class, 'fuel'])->name('vehicles.fuel.index');
+        Route::post('/vehiculos/{vehiculo}/combustible', [VehicleController::class, 'recordFuel'])->name('vehicles.fuel.store')->middleware('throttle:delivery-commands');
+        Route::get('/vehiculos/{vehiculo}/combustible/{combustible}/comprobante', [VehicleController::class, 'downloadFuelReceipt'])->name('vehicles.fuel.receipt');
+        Route::get('/vehiculos/{vehiculo}/planes-mantenimiento', [VehicleController::class, 'plans'])->name('vehicles.plans.index');
+        Route::post('/vehiculos/{vehiculo}/planes-mantenimiento', [VehicleController::class, 'createPlan'])->name('vehicles.plans.store');
+        Route::patch('/vehiculos/{vehiculo}/planes-mantenimiento/{plan}', [VehicleController::class, 'updatePlan'])->name('vehicles.plans.update');
+        Route::get('/vehiculos/{vehiculo}/mantenimientos', [VehicleController::class, 'maintenances'])->name('vehicles.maintenances.index');
+        Route::post('/vehiculos/{vehiculo}/mantenimientos', [VehicleController::class, 'createMaintenance'])->name('vehicles.maintenances.store');
+        Route::post('/vehiculos/mantenimientos/{mantenimiento}/inicio', [VehicleController::class, 'startMaintenance'])->name('vehicles.maintenances.start');
+        Route::post('/vehiculos/mantenimientos/{mantenimiento}/finalizacion', [VehicleController::class, 'completeMaintenance'])->name('vehicles.maintenances.complete');
+        Route::post('/vehiculos/mantenimientos/{mantenimiento}/anulacion', [VehicleController::class, 'cancelMaintenance'])->name('vehicles.maintenances.cancel');
+        Route::post('/vehiculos/{vehiculo}/mantenimientos/{mantenimiento}/documentos', [VehicleController::class, 'uploadMaintenanceDocument'])->name('vehicles.maintenances.documents.store');
+        Route::get('/vehiculos/{vehiculo}/mantenimientos/{mantenimiento}/documentos/{documento}', [VehicleController::class, 'downloadMaintenanceDocument'])->name('vehicles.maintenances.documents.download');
+        Route::post('/vehiculos/{vehiculo}/documentos', [VehicleController::class, 'uploadDocument'])->name('vehicles.documents.store');
+        Route::get('/vehiculos/{vehiculo}/documentos/{document}', [VehicleController::class, 'downloadDocument'])->name('vehicles.documents.download');
+
+        Route::middleware(['shared.device:any', 'shared.session.conditional'])->name('customers.')->group(function (): void {
+            Route::get('/clientes', [CustomerController::class, 'index'])->name('index');
+            Route::post('/clientes', [CustomerController::class, 'store'])->name('store');
+            Route::post('/clientes/validar-ubicacion', [CustomerController::class, 'resolveLocation'])
+                ->middleware('throttle:customer-location')->name('validate-location');
+            Route::get('/clientes/mapa', [CustomerController::class, 'map'])->name('map');
+            Route::get('/clientes/{cliente}', [CustomerController::class, 'show'])->name('show');
+            Route::patch('/clientes/{cliente}', [CustomerController::class, 'update'])->name('update');
+            Route::patch('/clientes/{cliente}/estado', [CustomerController::class, 'status'])->name('status');
+            Route::get('/clientes/{cliente}/entregas', [CustomerController::class, 'deliveries'])->name('deliveries');
+            Route::get('/clientes/{cliente}/cuenta-corriente', [CustomerAccountController::class, 'show'])->name('account');
+            Route::get('/clientes/{cliente}/movimientos', [CustomerAccountController::class, 'index'])->name('movements');
+            Route::post('/clientes/{cliente}/pagos', [CustomerAccountController::class, 'pay'])->name('payments.store');
+            Route::post('/clientes/{cliente}/ajustes', [CustomerAccountController::class, 'adjust'])->name('adjustments.store');
+            Route::post('/clientes/{cliente}/movimientos/{movimiento}/reversion', [CustomerAccountController::class, 'reverse'])->name('movements.reverse');
+        });
         Route::middleware(['shared.device:any', 'shared.session.conditional'])->name('management-plans.')->group(function (): void {
             Route::get('/plantillas-manejo', [PlanTemplateController::class, 'index'])->name('templates.index');
             Route::get('/alimentacion/productos', [FeedSupplyController::class, 'products'])->name('feed.products');
@@ -113,6 +193,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/lotes/{lote}/pesajes-diarios/ingresos', [DailyWeighingController::class, 'storeEntry'])->name('daily.entries.store');
             Route::get('/pesajes-diarios/{jornada}/distribucion', [DailyWeighingController::class, 'distribution'])->name('daily.distribution');
             Route::delete('/pesajes-diarios/{jornada}/ingresos/{ingreso}', [DailyWeighingController::class, 'deleteEntry'])->name('daily.entries.delete');
+            Route::post('/pesajes-diarios/{jornada}/ingresos/{ingreso}/confirmacion-anomalia', [DailyWeighingController::class, 'confirmAnomaly'])->name('daily.entries.confirm-anomaly');
             Route::get('/pesajes-diarios/{jornada}', [DailyWeighingController::class, 'show'])->name('daily.show');
             Route::get('/configuracion-pesajes', [WeighingController::class, 'settings'])->name('settings.show');
             Route::put('/configuracion-pesajes', [WeighingController::class, 'updateSettings'])->name('settings.update');
@@ -122,9 +203,11 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/pesajes/{pesaje}/distribucion', [WeighingController::class, 'distribution'])->name('distribution');
             Route::get('/pesajes/{pesaje}', [WeighingController::class, 'show'])->name('show');
             Route::patch('/pesajes/{pesaje}', [WeighingController::class, 'update'])->name('update');
+            Route::post('/pesajes/{pesaje}/confirmacion-anomalia', [WeighingController::class, 'confirmAnomaly'])->name('confirm-anomaly');
         });
 
         Route::name('lots.')->group(function (): void {
+            Route::get('/lotes/resumen', [FlockController::class, 'summary'])->name('summary');
             Route::get('/flocks', [FlockController::class, 'index'])->name('index');
             Route::post('/flocks', [FlockController::class, 'store'])->name('store');
             Route::get('/flocks/{flock}', [FlockController::class, 'show'])->name('show');
@@ -139,6 +222,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/breeds', [BreedController::class, 'store'])->name('breeds.store');
             Route::patch('/breeds/{breed}', [BreedController::class, 'update'])->name('breeds.update');
             Route::get('/mortalities', [MortalityController::class, 'index'])->name('mortality.index');
+            Route::get('/mortalidades/resumen', [MortalityController::class, 'summary'])->name('mortality.summary');
             Route::get('/mortalities/{mortality}', [MortalityController::class, 'show'])->name('mortality.show');
             Route::get('/flocks/{flock}/mortalities', [MortalityController::class, 'byFlock'])->name('mortality.by-flock');
             Route::post('/flocks/{flock}/mortalities', [MortalityController::class, 'store'])->name('mortality.store');
@@ -171,6 +255,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('/inventario/presentaciones-huevos', [EggPresentationController::class, 'index'])->name('egg-presentations.index');
         Route::post('/inventario/presentaciones-huevos', [EggPresentationController::class, 'store'])->name('egg-presentations.store');
         Route::patch('/inventario/presentaciones-huevos/{presentation}', [EggPresentationController::class, 'update'])->name('egg-presentations.update');
+        Route::delete('/inventario/presentaciones-huevos/{presentation}', [EggPresentationController::class, 'destroy'])->name('egg-presentations.destroy');
 
         Route::get('/repartos/unidades', [DeliveryController::class, 'units'])
             ->name('deliveries.units');
@@ -181,6 +266,9 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::post('/repartos/{reparto}/entregas', [DeliveryController::class, 'stop'])
             ->middleware('throttle:delivery-commands')
             ->name('deliveries.stops.store');
+        Route::post('/repartos/{reparto}/cobros', [DeliveryController::class, 'payment'])->middleware('throttle:delivery-commands')->name('deliveries.payments.store');
+        Route::post('/repartos/{reparto}/entregas/{entrega}/rectificaciones', [DeliveryController::class, 'correctStop'])
+            ->whereNumber('entrega')->middleware('throttle:delivery-commands')->name('deliveries.stops.correct');
         Route::post('/repartos/{reparto}/cargas', [DeliveryController::class, 'load'])
             ->middleware('throttle:delivery-commands')
             ->name('deliveries.loads.store');
@@ -191,43 +279,52 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             ->middleware('throttle:delivery-commands')
             ->name('deliveries.close');
 
+        Route::get('/permisos', [RoleController::class, 'permissions'])->name('permissions.index');
+        Route::get('/roles', [RoleController::class, 'index'])->name('roles.index');
+        Route::post('/roles', [RoleController::class, 'store'])->name('roles.store');
+        Route::get('/roles/{role}', [RoleController::class, 'show'])->whereNumber('role')->name('roles.show');
+        Route::patch('/roles/{role}', [RoleController::class, 'update'])->whereNumber('role')->name('roles.update');
+        Route::put('/roles/{role}/permisos', [RoleController::class, 'updatePermissions'])->whereNumber('role')->name('roles.permissions.update');
+        Route::delete('/roles/{role}', [RoleController::class, 'destroy'])->whereNumber('role')->name('roles.destroy');
+        Route::put('/usuarios/{user}/rol', [UserManagementController::class, 'roles'])->whereNumber('user')->withTrashed()->name('users.role.update');
+
         Route::get('/users', [UserManagementController::class, 'index'])
-            ->middleware('permission:identity.users.manage')
+            ->middleware('permission:can_manage_users')
             ->name('users.index');
         Route::post('/users', [UserManagementController::class, 'store'])
-            ->middleware('permission:identity.users.manage')
+            ->middleware('permission:can_manage_users')
             ->name('users.store');
         Route::patch('/users/{user}/status', [UserManagementController::class, 'status'])
-            ->middleware('permission:identity.users.manage')
+            ->middleware('permission:can_manage_users')
             ->withTrashed()
             ->name('users.status');
         Route::put('/users/{user}/roles', [UserManagementController::class, 'roles'])
-            ->middleware('permission:identity.users.manage')
+            ->middleware('permission:can_manage_users')
             ->name('users.roles');
         Route::put('/users/{user}/pin', [UserManagementController::class, 'setPin'])
-            ->middleware('permission:identity.pins.manage')
+            ->middleware('permission:can_manage_user_pins')
             ->name('users.pin.update');
         Route::delete('/users/{user}/pin', [UserManagementController::class, 'deletePin'])
-            ->middleware('permission:identity.pins.manage')
+            ->middleware('permission:can_manage_user_pins')
             ->name('users.pin.destroy');
         Route::post('/users/{user}/pin/unlock', [UserManagementController::class, 'unlockPin'])
-            ->middleware('permission:identity.pins.manage')
+            ->middleware('permission:can_manage_user_pins')
             ->name('users.pin.unlock');
         Route::put('/users/{user}/password', [UserManagementController::class, 'password'])
-            ->middleware('permission:identity.users.manage')
+            ->middleware('permission:can_manage_users')
             ->name('users.password');
         Route::delete('/users/{user}/sessions', [UserManagementController::class, 'sessions'])
-            ->middleware('permission:identity.sessions.manage')
+            ->middleware('permission:can_manage_user_sessions')
             ->name('users.sessions.revoke');
 
         Route::post('/shared-devices/codes', [SharedDeviceController::class, 'generateCode'])
-            ->middleware('permission:identity.shared-devices.manage')
+            ->middleware('permission:can_manage_shared_devices')
             ->name('shared-devices.codes.store');
         Route::get('/shared-devices', [SharedDeviceController::class, 'managedIndex'])
-            ->middleware('permission:identity.shared-devices.manage')
+            ->middleware('permission:can_manage_shared_devices')
             ->name('shared-devices.index');
         Route::delete('/shared-devices/{sharedDevice}/pairing', [SharedDeviceController::class, 'revokeDevice'])
-            ->middleware('permission:identity.shared-devices.manage')
+            ->middleware('permission:can_manage_shared_devices')
             ->name('shared-devices.revoke');
 
         Route::post('/shared-device/activity', [SharedDeviceController::class, 'activity'])
@@ -236,6 +333,9 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('/reference/options', ReferenceOptionsController::class)->name('reference-options.index');
 
         Route::get('/audit/entries', [AuditEntryController::class, 'index'])->name('audit.entries.index');
+        Route::get('/auditoria/entradas/{auditEntry}', [AuditEntryController::class, 'show'])->whereNumber('auditEntry')->name('audit.entries.show');
+        Route::get('/auditoria/responsables', [AuditActorController::class, 'index'])->name('audit.actors.index');
+        Route::get('/gastos/resumen', ExpenseSummaryController::class)->name('reports.expenses.summary');
 
         Route::middleware(['shared.device:any', 'shared.session.conditional'])->group(function (): void {
             Route::get('/reports/sources', [ReportSourceController::class, 'index'])->name('reports.sources.index');
@@ -321,6 +421,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/lotes/{flock}/alimentacion', [FlockFeedingController::class, 'show'])->name('feeding.show');
             Route::get('/lotes/{flock}/alimentacion/historial', [FlockFeedingController::class, 'history'])->name('feeding.history');
             Route::post('/lotes/{flock}/alimentacion/manual', [FlockFeedingController::class, 'manual'])->name('feeding.manual');
+            Route::post('/lotes/{flock}/alimentacion/manual/confirmacion', [FlockFeedingController::class, 'confirmManual'])->name('feeding.manual.confirm');
             Route::post('/lotes/{flock}/alimentacion/automatico', [FlockFeedingController::class, 'automatic'])->name('feeding.automatic');
             Route::get('/lotes/{flock}/consumos-alimento', [FeedConsumptionController::class, 'index'])->name('consumptions.index');
             Route::get('/lotes/{flock}/consumos-alimento/{consumption}', [FeedConsumptionController::class, 'show'])->whereNumber('consumption')->name('consumptions.show');
@@ -334,6 +435,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/saldos-alimento', [FeedBalanceController::class, 'index'])->name('balances.index');
             Route::get('/unidades-productivas/{productionUnit}/recetas/{recipe}/saldo', [FeedBalanceController::class, 'show'])->name('balances.show');
             Route::patch('/unidades-productivas/{productionUnit}/recetas/{recipe}/minimo', [FeedBalanceMinimumController::class, 'update'])->name('balances.minimum');
+            Route::get('/unidades-productivas/{productionUnit}/alertas-cobertura-racion', [FeedCoverageThresholdController::class, 'show'])->name('coverage-alerts.show');
+            Route::put('/unidades-productivas/{productionUnit}/alertas-cobertura-racion', [FeedCoverageThresholdController::class, 'update'])->name('coverage-alerts.update');
             Route::get('/ajustes-alimentacion', [FeedAdjustmentController::class, 'index'])->name('adjustments.index');
             Route::post('/unidades-productivas/{productionUnit}/recetas/{recipe}/ajustes', [FeedAdjustmentController::class, 'feed'])->name('adjustments.feed');
             Route::post('/plantas-racion/{poultryHouse}/ingredientes/{product}/ajustes', [FeedAdjustmentController::class, 'ingredient'])->name('adjustments.ingredient');

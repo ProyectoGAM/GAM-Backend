@@ -22,11 +22,11 @@ abstract class LotsTestCase extends TestCase
     use LazilyRefreshDatabase;
 
     /** @param list<string> $permissions */
-    protected function signIn(array $permissions = ['flocks.view', 'flocks.manage', 'flocks.redistribute', 'flocks.finalize', 'mortality.view', 'mortality.manage', 'egg-collections.view', 'egg-collections.manage', 'breeds.view', 'breeds.manage']): User
+    protected function signIn(array $permissions = ['can_view_flocks', 'can_manage_flocks', 'can_redistribute_flocks', 'can_finalize_flocks', 'can_view_mortality', 'can_manage_mortality', 'can_view_egg_collections', 'can_manage_egg_collections', 'can_view_breeds', 'can_manage_breeds']): User
     {
         $user = User::factory()->create();
         foreach ($permissions as $permission) {
-            $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+            $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
         Sanctum::actingAs($user, ['api:access']);
 

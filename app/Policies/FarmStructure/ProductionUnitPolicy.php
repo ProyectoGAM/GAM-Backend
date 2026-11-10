@@ -9,7 +9,7 @@ final readonly class ProductionUnitPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $this->hasPermission($user, 'production-units.view');
+        return $this->hasPermission($user, 'can_view_production_units');
     }
 
     public function view(User $user, ProductionUnit $productionUnit): bool
@@ -19,7 +19,7 @@ final readonly class ProductionUnitPolicy
 
     public function create(User $user): bool
     {
-        return $this->hasPermission($user, 'production-units.manage');
+        return $this->hasPermission($user, 'can_manage_production_units');
     }
 
     public function update(User $user, ProductionUnit $productionUnit): bool

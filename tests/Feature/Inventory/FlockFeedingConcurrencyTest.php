@@ -14,6 +14,7 @@ use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\Concurrency;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 final class FlockFeedingConcurrencyTest extends TestCase
@@ -75,6 +76,9 @@ final class FlockFeedingConcurrencyTest extends TestCase
         $date = CarbonImmutable::now('America/Montevideo')->subDay()->setTime(12, 0);
         $this->travelTo($date);
         $actor = User::factory()->create();
+        foreach (['can_manage_flock_feeding', 'can_correct_feed_consumption'] as $permission) {
+            $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+        }
         $template = PlanTemplate::factory()->published()->create(['created_by' => $actor->id]);
         $flock = Flock::factory()->create([
             'initial_quantity' => 100, 'current_quantity' => 100,
@@ -161,7 +165,9 @@ final class FlockFeedingConcurrencyTest extends TestCase
         $fixture = $this->fixture();
         $consumptionId = app(RecordDailyFeedConsumptionAction::class)->execute($fixture['flock']->id, $fixture['date'])->id;
         $firstActorId = $fixture['actor']->id;
-        $secondActorId = User::factory()->create()->id;
+        $secondActor = User::factory()->create();
+        $secondActor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_correct_feed_consumption', 'web'));
+        $secondActorId = $secondActor->id;
 
         // Mutación: ambas correcciones quedan anexadas y el saldo coincide con la última.
         Concurrency::driver('process')->run([

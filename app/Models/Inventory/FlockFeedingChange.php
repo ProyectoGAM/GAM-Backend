@@ -20,6 +20,9 @@ use Illuminate\Database\Eloquent\Model;
  * @property array<string, mixed> $stage_snapshot
  * @property list<array<string, mixed>> $stages
  * @property int|null $created_by
+ * @property CarbonImmutable|null $manual_review_since
+ * @property CarbonImmutable|null $manual_confirmed_at
+ * @property int|null $manual_confirmed_by
  */
 class FlockFeedingChange extends Model
 {
@@ -34,6 +37,12 @@ class FlockFeedingChange extends Model
             'effective_date' => 'immutable_date', 'baseline_date' => 'immutable_date',
             'grams_per_bird' => 'integer', 'daily_quantity_grams' => 'integer',
             'anchor_day' => 'integer', 'stages' => 'array', 'stage_snapshot' => 'array',
+            'manual_review_since' => 'immutable_date', 'manual_confirmed_at' => 'immutable_datetime',
         ];
+    }
+
+    public function manualReviewSince(): CarbonImmutable
+    {
+        return $this->manual_review_since ?? $this->effective_date;
     }
 }

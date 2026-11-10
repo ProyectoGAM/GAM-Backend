@@ -7,6 +7,7 @@ use App\Exceptions\SuppliersAndCatalogs\MedicineConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\FarmStructure\PoultryHouse;
+use App\Models\IdentityAndAccess\Role;
 use App\Models\Inventory\StockBalance;
 use App\Models\Lots\Flock;
 use App\Models\SuppliersAndCatalogs\Medicine;
@@ -20,7 +21,6 @@ use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 final class MedicineEndpointTest extends TestCase
@@ -84,7 +84,7 @@ final class MedicineEndpointTest extends TestCase
 
         // Preparación: concede permisos de catálogo sin conceder el rol administrador.
         $user = User::factory()->create();
-        $user->givePermissionTo(Permission::findOrCreate('products.manage', 'web'), Permission::findOrCreate('products.view', 'web'));
+        $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_manage_products', 'web'), Permission::findOrCreate('can_view_products', 'web'));
         Sanctum::actingAs($user, ['*']);
 
         // Acción: ambos endpoints deben aplicar la policy específica.
@@ -109,8 +109,8 @@ final class MedicineEndpointTest extends TestCase
             $this->assertFalse(Gate::forUser($user)->allows($ability, Medicine::class));
         }
         Sanctum::actingAs($inactive, ['*']);
-        $this->getJson('/api/v1/medicines')->assertForbidden();
-        $this->postJson('/api/v1/medicines', [])->assertForbidden();
+        $this->getJson('/api/v1/medicines')->assertUnauthorized();
+        $this->postJson('/api/v1/medicines', [])->assertUnauthorized();
     }
 
     // Flujo: protege el caso de uso cuando se invoca directamente sin autorización.
@@ -322,7 +322,7 @@ final class MedicineEndpointTest extends TestCase
     private function admin(): User
     {
         $user = User::factory()->create();
-        $user->assignRole(Role::findOrCreate('admin', 'web'));
+        $user->syncRoles([Role::findOrCreate('admin', 'web')]);
 
         return $user;
     }

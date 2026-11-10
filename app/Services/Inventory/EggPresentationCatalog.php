@@ -12,8 +12,8 @@ final class EggPresentationCatalog
     /** Serializa comienzos y escrituras del catálogo dentro de sus transacciones. */
     public function lock(): void
     {
-        // La fila inicial permanece: el catálogo no expone eliminación de presentaciones.
-        EggPresentation::query()->orderBy('id')->lockForUpdate()->firstOrFail();
+        // Las filas eliminadas conservan el punto de sincronización incluso si se vacía el catálogo.
+        EggPresentation::withTrashed()->orderBy('id')->lockForUpdate()->firstOrFail();
     }
 
     public function isLocked(): bool

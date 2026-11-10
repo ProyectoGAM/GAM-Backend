@@ -9,6 +9,7 @@ use App\Models\Lots\FlockOperation;
 use App\Models\ManagementPlans\ManualPractice;
 use App\Models\User;
 use App\Services\Lots\FlockActivityJournal;
+use App\Services\Lots\LotsAuthorization;
 use App\Services\Lots\RunLotsCommand;
 use Illuminate\Support\Str;
 
@@ -26,7 +27,7 @@ final readonly class RecordManualPracticeAction
     {
         return $this->commands->execute(
             $actor,
-            'management-plans.execute',
+            'can_execute_management_plans',
             'management-plans.practice.record',
             $attributes['idempotency_key'],
             ['flock' => $flock->public_id, ...$attributes],
@@ -51,7 +52,7 @@ final readonly class RecordManualPracticeAction
                     'occurred_at' => $context->occurredAt,
                     'responsible_user_id' => $context->responsibleUserId,
                     'responsible_name_snapshot' => $context->responsibleNameSnapshot,
-                    'notes' => trim($attributes['notes']),
+                    'notes' => isset($attributes['notes']) ? trim($attributes['notes']) : null,
                     'created_by' => $actor->getKey(),
                     'operation_id' => $operationId,
                 ])->save();
@@ -86,6 +87,9 @@ final readonly class RecordManualPracticeAction
 
                 return ['manual_practice' => $snapshot, 'warnings' => []];
             },
+            authorize: $attributes['practice_type'] === 'beak_trimming'
+                ? fn (User $currentActor) => LotsAuthorization::ensure($currentActor, 'can_record_beak_trimming')
+                : null,
         );
     }
 }

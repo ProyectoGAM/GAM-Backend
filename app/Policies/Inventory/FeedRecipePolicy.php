@@ -9,7 +9,7 @@ final readonly class FeedRecipePolicy
 {
     public function viewAny(User $user): bool
     {
-        return $this->allowed($user, 'feed-recipes.view');
+        return $this->allowed($user, 'can_view_feed_recipes');
     }
 
     public function view(User $user, FeedRecipe $recipe): bool
@@ -19,7 +19,7 @@ final readonly class FeedRecipePolicy
 
     public function create(User $user): bool
     {
-        return $this->allowed($user, 'feed-recipes.manage');
+        return $this->allowed($user, 'can_manage_feed_recipes');
     }
 
     public function update(User $user, FeedRecipe $recipe): bool

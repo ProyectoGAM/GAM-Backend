@@ -26,7 +26,7 @@ final readonly class ChangeFlockFeedingAction
     /** @param array<string, mixed> $data */
     public function execute(Flock $flock, array $data, User $actor, string $source = 'api'): FlockOperation
     {
-        return $this->commands->execute($actor, null, 'flock.feeding.manual', $data['idempotency_key'], ['flock' => $flock->public_id, ...$data],
+        return $this->commands->execute($actor, 'can_manage_flock_feeding', 'flock.feeding.manual', $data['idempotency_key'], ['flock' => $flock->public_id, ...$data],
             function (string $operationId) use ($flock, $data, $actor, $source): array {
                 $locked = Flock::query()->whereKey($flock->id)->lockForUpdate()->firstOrFail();
                 $snapshot = $this->apply($locked, $data, $actor, $operationId, $source);
@@ -51,6 +51,8 @@ final readonly class ChangeFlockFeedingAction
         $recipeId = isset($data['receta_id']) ? $this->stock->recipe((int) $data['receta_id'])->id : $current['recipe_id'];
         $quantity = $this->stock->grams($data['cantidad_diaria_g'] ?? $current['quantity_grams'], positive: true, allowNegative: false);
         $configuration = $current['configuration'];
+        $sameManualRation = $configuration->mode === 'manual' && $configuration->feed_recipe_id === $recipeId
+            && $configuration->daily_quantity_grams === $quantity;
         $change = new FlockFeedingChange;
         $change->forceFill([
             ...$configuration->only(['flock_id', 'flock_plan_revision_id', 'baseline_date', 'stages']),
@@ -58,6 +60,9 @@ final readonly class ChangeFlockFeedingAction
             'feed_recipe_id' => $recipeId, 'grams_per_bird' => $current['stage']['grams_per_bird'],
             'daily_quantity_grams' => $quantity, 'anchor_day' => $current['age'],
             'stage_snapshot' => $current['stage'], 'created_by' => $actor->id,
+            'manual_review_since' => ($sameManualRation ? $configuration->manualReviewSince() : $date)->toDateString(),
+            'manual_confirmed_at' => $sameManualRation ? $configuration->manual_confirmed_at : null,
+            'manual_confirmed_by' => $sameManualRation ? $configuration->manual_confirmed_by : null,
         ])->save();
         $snapshot = $change->only(['id', 'mode', 'feed_recipe_id', 'daily_quantity_grams', 'effective_date', 'stage_snapshot']);
         $this->history->record($change, $locked, $actor, 'flock_feeding_manual_changed', $operationId,

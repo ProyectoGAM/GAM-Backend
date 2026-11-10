@@ -89,7 +89,7 @@ final class InventoryEndpointTest extends TestCase
     {
         // Preparación: autentica un lector distinto de los responsables de los movimientos.
         $reader = User::factory()->create(['name' => 'Lector de inventario']);
-        $reader->givePermissionTo(Permission::findOrCreate('inventory.view', 'web'));
+        $reader->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_view_inventory', 'web'));
         Sanctum::actingAs($reader, ['*']);
         $responsible = User::factory()->create(['name' => 'Ana Original']);
         $deletedResponsible = User::factory()->create(['name' => 'Luis Histórico']);
@@ -264,8 +264,8 @@ final class InventoryEndpointTest extends TestCase
     private function inventoryScenario(): array
     {
         $actor = User::factory()->create();
-        foreach (['inventory.view', 'inventory.move', 'inventory.adjust', 'inventory.manage'] as $permission) {
-            $actor->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+        foreach (['can_view_inventory', 'can_move_inventory', 'can_adjust_inventory', 'can_manage_inventory'] as $permission) {
+            $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
         Sanctum::actingAs($actor, ['*']);
 

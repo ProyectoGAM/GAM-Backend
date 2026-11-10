@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Inventory;
 
 use App\Actions\Inventory\ChangeFlockFeedingAction;
+use App\Actions\Inventory\ConfirmManualFeedingAction;
 use App\Actions\Inventory\ReturnFlockFeedingToAutomaticAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Inventory\ChangeFlockFeedingRequest;
+use App\Http\Requests\Inventory\ConfirmManualFeedingRequest;
 use App\Http\Requests\Inventory\ListFlockFeedingRequest;
 use App\Http\Requests\Inventory\ReturnFlockFeedingToAutomaticRequest;
 use App\Http\Resources\Inventory\FlockFeedingResource;
@@ -39,5 +41,12 @@ final class FlockFeedingController extends Controller
     public function automatic(ReturnFlockFeedingToAutomaticRequest $request, Flock $flock, ReturnFlockFeedingToAutomaticAction $action): JsonResponse
     {
         return (new LotsOperationResource($action->execute($flock, $request->validated('idempotency_key'), $request->actor())))->response()->setStatusCode(201);
+    }
+
+    public function confirmManual(ConfirmManualFeedingRequest $request, Flock $flock, ConfirmManualFeedingAction $action): JsonResponse
+    {
+        return (new LotsOperationResource($action->execute(
+            $flock, (int) $request->validated('configuracion_id'), $request->validated('idempotency_key'), $request->actor(),
+        )))->response()->setStatusCode(201);
     }
 }

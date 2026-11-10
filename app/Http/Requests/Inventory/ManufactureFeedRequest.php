@@ -4,6 +4,8 @@ namespace App\Http\Requests\Inventory;
 
 final class ManufactureFeedRequest extends FeedOperationRequest
 {
+    protected string $permissionAbility = 'manufacture';
+
     /** @return array<string, list<mixed>> */
     public function rules(): array
     {

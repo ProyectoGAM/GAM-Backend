@@ -17,6 +17,7 @@ final readonly class ReclassifyOpenDailyWeighings
         private DailyWeighingTotals $totals,
         private DailyWeighingPresenter $presenter,
         private LotsHistory $history,
+        private WeighingAnomalyAlerts $anomalyAlerts,
     ) {}
 
     public function execute(WeighingReferenceSettings $settings, User $actor, string $operationId, string $source = 'api', ?int $breedId = null): void
@@ -44,11 +45,20 @@ final readonly class ReclassifyOpenDailyWeighings
                 'reference_breed_id' => $selected['breed_id'],
                 'reference_breed_version' => $selected['breed_version'],
             ])->save();
-            $daily->entries()->orderBy('id')->chunkById(500, function ($entries) use ($selected): void {
+            $daily->entries()->orderBy('id')->chunkById(500, function ($entries) use ($daily, $selected, $operationId): void {
                 foreach ($entries as $entry) {
                     $outside = $this->math->isOutside((string) $entry->average_weight_g, $selected['min_weight_g'], $selected['max_weight_g']);
                     if ($entry->outside_expected_range !== $outside) {
-                        $entry->forceFill(['outside_expected_range' => $outside])->save();
+                        $entry->forceFill([
+                            'outside_expected_range' => $outside,
+                            'anomaly_reviewed_at' => null,
+                            'anomaly_reviewed_by' => null,
+                        ])->save();
+                        if ($outside) {
+                            $this->anomalyAlerts->publish($entry->setRelation('dailyWeighing', $daily), $operationId);
+                        } else {
+                            $this->anomalyAlerts->resolve($entry, $daily->flock->production_unit_id);
+                        }
                     }
                 }
             });

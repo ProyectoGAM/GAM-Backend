@@ -2,6 +2,7 @@
 
 namespace App\Services\Deliveries;
 
+use App\DTO\ReportingAndAnalytics\ReportQueryData;
 use App\DTO\ReportingAndAnalytics\ReportSourceDefinition;
 use App\Services\ReportingAndAnalytics\SqlReportSource;
 use Illuminate\Database\Query\Builder;
@@ -11,7 +12,7 @@ final class DeliveriesReportSource extends SqlReportSource
 {
     public function definition(): ReportSourceDefinition
     {
-        return $this->describe('deliveries.deliveries', 'Reparto', 'Una fila por entrega confirmada. Valor de mercadería y cantidades reales; los cobros y la deuda requieren su registro en el módulo financiero.', 'delivery.history', [
+        return $this->describe('deliveries.deliveries', 'Reparto', 'Una fila por entrega confirmada. Valor de mercadería y cantidades reales; los cobros y la deuda requieren su registro en el módulo financiero.', 'can_view_delivery_history', [
             'date' => ['label' => 'Fecha', 'type' => 'datetime'], 'delivery_id' => ['label' => 'Reparto', 'type' => 'string'],
             'delivery' => ['label' => 'Reparto', 'type' => 'string'], 'client_id' => ['label' => 'Cliente', 'type' => 'string'], 'client' => ['label' => 'Cliente', 'type' => 'string'],
             'quantity' => ['label' => 'Huevos entregados', 'type' => 'quantity', 'unit' => 'huevos'],
@@ -19,12 +20,25 @@ final class DeliveriesReportSource extends SqlReportSource
             'sizes' => ['label' => 'Tipos / tamaños registrados', 'type' => 'string'],
             'merchandise_value' => ['label' => 'Valor de mercadería', 'type' => 'money', 'unit' => 'UYU'], 'notes' => ['label' => 'Comentarios', 'type' => 'string'],
         ], ['egg_count' => ['label' => 'Huevos entregados', 'type' => 'quantity', 'unit' => 'huevos'],
-            'merchandise_total' => ['label' => 'Valor de mercadería', 'type' => 'money', 'unit' => 'UYU']]);
+            'merchandise_total' => ['label' => 'Valor de mercadería', 'type' => 'money', 'unit' => 'UYU'],
+            'delivery_count' => ['label' => 'Entregas confirmadas', 'type' => 'quantity', 'unit' => 'entregas'],
+            'unpriced_delivery_count' => ['label' => 'Entregas sin importe', 'type' => 'quantity', 'unit' => 'entregas']]);
     }
 
     protected function dimensionKeys(): array
     {
         return ['delivery' => 'delivery_id', 'client' => 'client_id'];
+    }
+
+    protected function query(ReportQueryData $query): Builder
+    {
+        $result = parent::query($query);
+        if ($query->groupings === [] && array_intersect($query->metrics, ['delivery_count', 'unpriced_delivery_count']) !== []) {
+            // Cuenta la fila agregada, que existe incluso cuando el período no tiene entregas.
+            return DB::query()->fromSub($result, 'delivery_totals');
+        }
+
+        return $result;
     }
 
     protected function baseQuery(): Builder
@@ -37,6 +51,11 @@ final class DeliveriesReportSource extends SqlReportSource
 
     protected function metricExpressions(): array
     {
-        return ['egg_count' => 'SUM(quantity)', 'merchandise_total' => 'SUM(merchandise_value)'];
+        return [
+            'egg_count' => 'SUM(quantity)',
+            'merchandise_total' => 'SUM(merchandise_value)',
+            'delivery_count' => 'COUNT(*)',
+            'unpriced_delivery_count' => 'COUNT(*) FILTER (WHERE merchandise_value IS NULL)',
+        ];
     }
 }

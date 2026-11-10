@@ -22,7 +22,7 @@ paths:
         - { name: page, in: query, schema: { type: integer, minimum: 1 } }
       responses:
         '200': { description: data vacío; meta con current_page y last_page. No ofrece productos para cargas nuevas. }
-        '403': { description: Requiere management-plans.view o management-plans.execute. }
+        '403': { description: Requiere can_view_management_plans o can_execute_management_plans. }
   /flocks/{flock}/alimentacion:
     parameters:
       - $ref: '#/components/parameters/Flock'
@@ -43,7 +43,7 @@ paths:
                   data: { type: array, items: { $ref: '#/components/schemas/FeedSupply' } }
                   meta: { type: object, additionalProperties: true }
                   links: { type: object, additionalProperties: true }
-        '403': { description: Requiere management-plans.view o management-plans.execute. }
+        '403': { description: Requiere can_view_management_plans o can_execute_management_plans. }
     post:
       summary: Reproduce operaciones históricas de suministro; rechaza cargas nuevas
       deprecated: true
@@ -72,7 +72,7 @@ paths:
       responses:
         '201': { description: Sólo reproducción de un resultado histórico guardado; no registra otro suministro. }
         '410': { description: Las nuevas cargas están retiradas. Respuesta application/problem+json con status 410 y explicación en español. }
-        '403': { description: Requiere management-plans.execute. }
+        '403': { description: Requiere can_execute_management_plans. }
         '409': { description: Conflicto de lote o clave utilizada con otro contenido. }
         '422': { description: Entrada inválida. }
   /flocks/{flock}/alimentacion/{feedSupply}/anulacion:
@@ -96,7 +96,7 @@ paths:
                 reason: { type: string, maxLength: 500 }
       responses:
         '200': { description: 'data incluye operation_id y feed_supply con public_id y status cancelled.' }
-        '403': { description: Requiere management-plans.execute. }
+        '403': { description: Requiere can_execute_management_plans. }
         '404': { description: Suministro inexistente o de otro lote. }
         '409': { description: Suministro ya anulado o clave reutilizada. }
         '422': { description: Entrada inválida. }
@@ -109,7 +109,7 @@ paths:
         - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 10000 } }
       responses:
         '200': { description: data con id y name; meta con current_page y last_page. }
-        '403': { description: Requiere egg-stock.view o egg-stock.move. }
+        '403': { description: Requiere can_view_egg_stock o can_move_egg_stock. }
   /unidades-productivas/{productionUnit}/donaciones:
     parameters:
       - { name: productionUnit, in: path, required: true, schema: { type: integer, minimum: 1 } }
@@ -133,7 +133,7 @@ paths:
                 notes: { type: [string, 'null'], maxLength: 5000 }
       responses:
         '201': { description: data con transaction ULID y movement_id; reintentos no descuentan dos veces. }
-        '403': { description: Requiere egg-stock.move. }
+        '403': { description: Requiere can_move_egg_stock. }
         '409': { description: Unidad inactiva o clave reutilizada con otro contenido. }
         '422': { description: Entrada inválida. }
 components:

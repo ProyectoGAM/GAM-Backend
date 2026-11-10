@@ -10,7 +10,7 @@ final readonly class EggCollectionPolicy
 {
     public function viewAny(User $user): bool
     {
-        return LotsAuthorization::allows($user, 'egg-collections.view');
+        return LotsAuthorization::allows($user, 'can_view_egg_collections');
     }
 
     public function view(User $user, EggCollection $record): bool
@@ -20,7 +20,7 @@ final readonly class EggCollectionPolicy
 
     public function create(User $user): bool
     {
-        return LotsAuthorization::allows($user, 'egg-collections.manage');
+        return LotsAuthorization::allows($user, 'can_manage_egg_collections');
     }
 
     public function update(User $user, EggCollection $record): bool

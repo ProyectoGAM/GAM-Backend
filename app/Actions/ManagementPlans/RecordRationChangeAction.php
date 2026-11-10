@@ -32,7 +32,7 @@ final readonly class RecordRationChangeAction
     {
         return $this->commands->execute(
             $actor,
-            'management-plans.execute',
+            'can_execute_management_plans',
             'management-plans.ration.change',
             $attributes['idempotency_key'],
             ['flock' => $flock->public_id, ...$attributes],

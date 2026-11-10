@@ -10,10 +10,10 @@ final class ListPlanTemplatesRequest extends ManagementPlanRequest
     public function authorize(): bool
     {
         if (array_key_exists('has_draft', $this->all())) {
-            return $this->allowed('management-plans.manage');
+            return $this->allowed('can_manage_management_plans');
         }
 
-        return $this->allowed('management-plans.view') || $this->allowed('management-plans.manage');
+        return $this->allowed('can_view_management_plans') || $this->allowed('can_manage_management_plans');
     }
 
     /**

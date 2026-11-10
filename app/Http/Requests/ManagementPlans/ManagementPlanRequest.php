@@ -43,9 +43,10 @@ abstract class ManagementPlanRequest extends FormRequest
     {
         return [
             'activities' => ['required', 'array', 'min:1', 'max:100'],
-            'activities.*' => ['required', 'array:type,title,timing_kind,start_day,end_day,start_week,end_week,interval_days,conditional,condition,notes,catalog_ref,grams_per_bird'],
+            'activities.*' => ['required', 'array:type,title,timing_kind,start_day,end_day,start_week,end_week,interval_days,conditional,condition,notes,catalog_ref,grams_per_bird,practice_type'],
             'activities.*.type' => ['required', 'in:vaccination,medication,ration_change,weighing,manual_practice,flock_movement,egg_collection,mortality'],
             'activities.*.title' => ['required', 'string', 'max:200'],
+            'activities.*.practice_type' => ['nullable', 'in:beak_trimming,nest_placement,other'],
             'activities.*.timing_kind' => ['required', 'in:day,week,week_range,day_recurrence,unscheduled'],
             'activities.*.start_day' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'activities.*.end_day' => ['nullable', 'integer', 'min:1', 'max:100000'],

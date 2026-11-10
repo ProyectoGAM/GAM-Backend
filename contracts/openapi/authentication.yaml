@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: GAM Identity and Access API
-  version: 1.0.0
-  description: Contrato de autenticación personal, vinculación y sesiones de dispositivos compartidos.
+  version: 3.0.0
+  description: Dos modalidades permanentes de acceso, correo y contraseña o dispositivo vinculado con PIN y una única UP. El backend deniega consultas y operaciones fuera de la UP del usuario PIN. Sin rol impide iniciar sesión. Cambiar contraseña o cualquier PIN revoca todas las sesiones del usuario afectado. Admin puede configurar un PIN operativo; las tareas nuevas que lo exigirán se definirán posteriormente.
 servers:
   - url: /
 tags:
@@ -10,6 +10,267 @@ tags:
   - name: Administración
   - name: Dispositivos compartidos
 paths:
+  /api/v1/auth/contrasena:
+    patch:
+      tags: [Autenticación]
+      summary: Cambia la contraseña propia y cierra todas las sesiones
+      description: Sólo cuentas con correo. Exige la contraseña actual y no permite modificar correo, modalidad, rol ni UP.
+      security: [{ bearerAuth: [] }, { sanctumCookie: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OwnPasswordChange' }
+      responses:
+        '200': { $ref: '#/components/responses/CredentialChanged' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { description: Credencial nueva inválida o campos no permitidos }
+  /api/v1/auth/pin:
+    patch:
+      tags: [Autenticación]
+      summary: Cambia el PIN de acceso propio y cierra todas las sesiones
+      security: [{ bearerAuth: [], sharedDeviceHeader: [], sharedSessionHeader: [] }, { sanctumCookie: [], sharedDeviceCookie: [], sharedSessionHeader: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OwnAccessPinChange' }
+      responses:
+        '200': { $ref: '#/components/responses/CredentialChanged' }
+        '401': { $ref: '#/components/responses/InvalidPin' }
+        '422': { description: PIN inválido o campos no permitidos }
+  /api/v1/auth/pin-operativo:
+    put:
+      tags: [Autenticación]
+      summary: Configura o restablece el PIN operativo propio y cierra todas las sesiones
+      description: Incluye Admin. Exige la contraseña actual. Este PIN confirma tareas dentro de una sesión personal y nunca habilita login compartido. No se incorporan tareas nuevas hasta recibir su definición.
+      security: [{ bearerAuth: [] }, { sanctumCookie: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OwnOperationPinChange' }
+      responses:
+        '200': { $ref: '#/components/responses/CredentialChanged' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { description: PIN inválido o campos no permitidos }
+  /api/v1/usuarios/{user}/unidad-productiva:
+    patch:
+      tags: [Administración]
+      summary: Admin cambia la UP de una cuenta PIN y revoca sus sesiones
+      description: No cambia la modalidad ni la historia. Un reparto activo impide el traslado. El dispositivo conserva su UP y se mueve mediante revocación y nueva vinculación.
+      security: [{ bearerAuth: [] }, { sanctumCookie: [], csrf: [] }]
+      parameters:
+        - { name: user, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [up_id]
+              properties:
+                up_id: { type: integer, description: UP activa de destino }
+      responses:
+        '200': { description: Usuario actualizado }
+        '403': { description: Operación exclusiva de Admin }
+        '409': { description: El usuario mantiene un reparto activo }
+        '422': { description: Modalidad incompatible o UP inválida }
+  /api/v1/permisos:
+    get:
+      tags: [Administración]
+      summary: Consulta el catálogo de permisos agrupado por módulo
+      description: Exclusivo de Admin. Los permisos exclusivos de Admin se muestran como no asignables a otros roles.
+      security: [{ bearerAuth: [] }, { sanctumCookie: [], csrf: [] }]
+      responses:
+        '200':
+          description: Módulos con permisos, etiquetas, descripciones y dependencias
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [modulo, etiqueta, permisos]
+                      properties:
+                        modulo: { type: string, example: feed_stock }
+                        etiqueta: { type: string, example: Alimento e ingredientes }
+                        permisos:
+                          type: array
+                          items: { $ref: '#/components/schemas/PermissionDefinition' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/roles:
+    get:
+      tags: [Administración]
+      summary: Lista roles y cantidad de usuarios asignados
+      description: Exclusivo de Admin. Orden estable por nombre visible e identificador.
+      security: [{ bearerAuth: [] }, { sanctumCookie: [], csrf: [] }]
+      parameters:
+        - { name: buscar, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: por_pagina, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 2147483647 } }
+      responses:
+        '200':
+          description: Página de roles
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, links, meta]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Role' } }
+                  links: { type: object }
+                  meta: { type: object }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    post:
+      tags: [Administración]
+      summary: Crea un rol con los permisos activados
+      description: Exclusivo de Admin. La clave técnica la genera el servidor. Los permisos deben incluir sus dependencias. Se admite una lista vacía.
+      security: [{ bearerAuth: [] }, { sanctumCookie: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [nombre, permisos]
+              properties:
+                nombre: { type: string, maxLength: 120 }
+                descripcion: { type: [string, 'null'], maxLength: 500 }
+                permisos: { $ref: '#/components/schemas/PermissionSelection' }
+      responses:
+        '201': { $ref: '#/components/responses/RoleResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/roles/{role}:
+    parameters:
+      - { name: role, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    get:
+      tags: [Administración]
+      summary: Consulta un rol y sus permisos activados
+      security: [{ bearerAuth: [] }, { sanctumCookie: [], csrf: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/RoleResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: El rol no existe }
+    patch:
+      tags: [Administración]
+      summary: Edita el nombre visible y la descripción de un rol
+      description: Exclusivo de Admin. No cambia la clave técnica. El rol Admin es inmutable.
+      security: [{ bearerAuth: [] }, { sanctumCookie: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version]
+              properties:
+                nombre: { type: string, maxLength: 120 }
+                descripcion: { type: [string, 'null'], maxLength: 500 }
+                version: { type: integer, minimum: 1, maximum: 2147483647 }
+      responses:
+        '200': { $ref: '#/components/responses/RoleResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: El rol no existe }
+        '409': { $ref: '#/components/responses/RoleConflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Administración]
+      summary: Elimina un rol personalizado sin usuarios asignados
+      description: Exclusivo de Admin. Cuenta también usuarios deshabilitados. No elimina roles de sistema ni sus asignaciones.
+      security: [{ bearerAuth: [] }, { sanctumCookie: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version]
+              properties:
+                version: { type: integer, minimum: 1, maximum: 2147483647 }
+      responses:
+        '204': { description: Rol eliminado y operación auditada }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: El rol no existe }
+        '409': { $ref: '#/components/responses/RoleConflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/roles/{role}/permisos:
+    parameters:
+      - { name: role, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    put:
+      tags: [Administración]
+      summary: Activa y desactiva permisos del mismo rol
+      description: Exclusivo de Admin. Guarda la selección completa de permisos activos; los omitidos quedan desactivados. Conserva el rol y todos sus usuarios asignados. Afecta su siguiente solicitud tras el commit. Si no cambia el estado no incrementa versión ni duplica auditoría. Admin no admite recortes.
+      security: [{ bearerAuth: [] }, { sanctumCookie: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [permisos, version]
+              properties:
+                permisos: { $ref: '#/components/schemas/PermissionSelection' }
+                version: { type: integer, minimum: 1, maximum: 2147483647 }
+      responses:
+        '200': { $ref: '#/components/responses/RoleResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: El rol no existe }
+        '409': { $ref: '#/components/responses/RoleConflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/usuarios/{user}/rol:
+    parameters:
+      - { name: user, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    put:
+      tags: [Administración]
+      summary: Configura el único rol del usuario
+      description: Exclusivo de Admin. Admite cuentas deshabilitadas y protege al último Admin activo. No modifica los permisos del rol ni acepta permisos individuales.
+      security: [{ bearerAuth: [] }, { sanctumCookie: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserRoleSelection' }
+      responses:
+        '200': { description: Usuario con rol singular y permisos efectivos }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: El usuario o rol no existe }
+        '409': { $ref: '#/components/responses/RoleConflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/health:
+    get:
+      tags: [Autenticación]
+      summary: Comprueba la disponibilidad de la API
+      security: []
+      responses:
+        '200':
+          description: La API está disponible
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [ok] }
   /sanctum/csrf-cookie:
     get:
       tags: [Autenticación]
@@ -199,8 +460,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [roles]
-              properties: { roles: { type: array, items: { type: string } } }
+              required: [rol_id]
+              additionalProperties: false
+              properties: { rol_id: { type: integer, minimum: 1 } }
       responses:
         '200': { description: Roles actualizados }
         '422': { $ref: '#/components/responses/ValidationError' }
@@ -222,7 +484,8 @@ paths:
   /api/v1/users/{user}/pin:
     put:
       tags: [Administración]
-      summary: Configura un PIN operativo de cuatro dígitos
+      summary: Restablece el PIN de cuatro dígitos según la modalidad y cierra las sesiones del usuario
+      description: En cuentas PIN cambia la credencial de acceso; en cuentas con correo cambia el PIN operativo, incluido Admin si el actor está autorizado. Conserva la modalidad y revoca todas las sesiones del usuario afectado.
       security: [{ bearerAuth: [] }]
       parameters:
         - { name: user, in: path, required: true, schema: { type: integer } }
@@ -284,8 +547,10 @@ paths:
           application/json:
             schema:
               type: object
-              required: [name]
-              properties: { name: { type: string, maxLength: 100 } }
+              required: [name, up_id]
+              properties:
+                name: { type: string, maxLength: 100 }
+                up_id: { type: integer, description: UP activa elegida por Admin y conservada durante el canje }
       responses:
         '201':
           description: Código visible una sola vez
@@ -487,6 +752,40 @@ components:
     sharedSessionHeader: { type: apiKey, in: header, name: X-GAM-Session }
     csrf: { type: apiKey, in: header, name: X-XSRF-TOKEN }
   schemas:
+    PermissionDefinition:
+      type: object
+      required: [nombre, etiqueta, descripcion, requiere, asignable]
+      properties:
+        nombre: { type: string, pattern: '^can_[a-z0-9_]+$', example: can_adjust_feed_stock }
+        etiqueta: { type: string }
+        descripcion: { type: string }
+        requiere: { type: array, items: { type: string } }
+        asignable: { type: boolean }
+    PermissionSelection:
+      type: array
+      uniqueItems: true
+      maxItems: 88
+      items: { type: string, pattern: '^can_[a-z0-9_]+$' }
+      example: [can_view_feed_stock, can_adjust_feed_stock]
+    UserRoleSelection:
+      type: object
+      additionalProperties: false
+      required: [rol_id]
+      properties:
+        rol_id: { type: integer, minimum: 1 }
+    Role:
+      type: object
+      required: [id, clave, nombre, descripcion, version, protegido, editable, permisos]
+      properties:
+        id: { type: integer }
+        clave: { type: string, description: Clave técnica estable generada por el servidor }
+        nombre: { type: string }
+        descripcion: { type: [string, 'null'] }
+        version: { type: integer, minimum: 1 }
+        protegido: { type: boolean, description: No admite eliminación }
+        editable: { type: boolean, description: Permite configurar el rol; false para Admin }
+        permisos: { type: array, items: { type: string }, uniqueItems: true }
+        usuarios_count: { type: integer, minimum: 0 }
     PasswordLogin:
       type: object
       required: [email, password]
@@ -506,13 +805,58 @@ components:
         password_confirmation: { type: string, format: password }
     ManagedUserCreate:
       type: object
-      required: [name, email, password, password_confirmation, role]
+      additionalProperties: false
+      required: [name, rol_id]
+      description: Alta exclusiva de Admin. Con correo requiere contraseña; sin correo requiere PIN y una UP activa. Sin rol es válido para registrar pero no permite iniciar sesión. La modalidad elegida queda fija.
+      oneOf:
+        - required: [email, password, password_confirmation]
+          properties:
+            email: { type: string, format: email }
+          not:
+            anyOf:
+              - required: [pin]
+              - required: [pin_confirmation]
+              - required: [up_id]
+        - required: [pin, pin_confirmation, up_id]
+          properties:
+            email: { type: 'null' }
+          not:
+            anyOf:
+              - required: [password]
+              - required: [password_confirmation]
       properties:
         name: { type: string }
-        email: { type: string, format: email }
+        email: { type: [string, 'null'], format: email }
         password: { type: string, format: password, minLength: 8 }
         password_confirmation: { type: string, format: password }
-        role: { type: string, enum: [admin, employee, delivery] }
+        pin: { type: string, pattern: '^[0-9]{4}$' }
+        pin_confirmation: { type: string, pattern: '^[0-9]{4}$' }
+        up_id: { type: integer, minimum: 1 }
+        rol_id: { type: integer, minimum: 1, description: Identificador de un único rol existente del guard web }
+    OwnPasswordChange:
+      type: object
+      additionalProperties: false
+      required: [current_password, password, password_confirmation]
+      properties:
+        current_password: { type: string, format: password }
+        password: { type: string, format: password, minLength: 8 }
+        password_confirmation: { type: string, format: password }
+    OwnAccessPinChange:
+      type: object
+      additionalProperties: false
+      required: [current_pin, pin, pin_confirmation]
+      properties:
+        current_pin: { type: string, pattern: '^[0-9]{4}$' }
+        pin: { type: string, pattern: '^[0-9]{4}$' }
+        pin_confirmation: { type: string, pattern: '^[0-9]{4}$' }
+    OwnOperationPinChange:
+      type: object
+      additionalProperties: false
+      required: [current_password, pin, pin_confirmation]
+      properties:
+        current_password: { type: string, format: password }
+        pin: { type: string, pattern: '^[0-9]{4}$' }
+        pin_confirmation: { type: string, pattern: '^[0-9]{4}$' }
     PinUpdate:
       type: object
       required: [pin, pin_confirmation]
@@ -544,12 +888,21 @@ components:
         password: { type: string, format: password }
     User:
       type: object
-      required: [id, name, email, roles, permissions]
+      required: [id, name, email, modalidad_acceso, up_id, pin_operativo_configurado, rol, permissions]
       properties:
         id: { type: integer }
         name: { type: string }
-        email: { type: string, format: email }
-        roles: { type: array, items: { type: string } }
+        email: { type: [string, 'null'], format: email }
+        modalidad_acceso: { type: string, enum: [email_password, device_pin] }
+        up_id: { type: [integer, 'null'], description: Obligatoria para cuentas PIN; cuentas con correo sin UP tienen alcance empresarial sujeto a permisos }
+        pin_operativo_configurado: { type: boolean }
+        rol:
+          type: object
+          required: [id, clave, nombre]
+          properties:
+            id: { type: integer }
+            clave: { type: string }
+            nombre: { type: string }
         permissions:
           type: array
           description: Permisos efectivos del usuario. El rol admin recibe todos los permisos registrados de la aplicación; el cliente debe refrescar el perfil después de una actualización de permisos.
@@ -561,6 +914,7 @@ components:
         id: { type: string, format: uuid }
         kind: { type: string, enum: [personal, shared_user] }
         auth_method: { type: string, enum: [password, pin] }
+        up_id: { type: [integer, 'null'], description: UP de emisión obligatoria en sesiones compartidas }
         expires_at: { type: string, format: date-time, nullable: true }
         idle_timeout_seconds: { type: integer, nullable: true }
     PersonalLoginResponse:
@@ -587,10 +941,11 @@ components:
         session: { $ref: '#/components/schemas/Session' }
     SharedDevice:
       type: object
-      required: [id, name, expires_at]
+      required: [id, name, up_id, expires_at]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
+        up_id: { type: integer, description: UP fija de la vinculación }
         expires_at: { type: string, format: date-time, nullable: true }
         revoked_at: { type: string, format: date-time, nullable: true }
         active_session_id: { type: string, format: uuid, nullable: true }
@@ -624,6 +979,37 @@ components:
       properties:
         message: { type: string }
   responses:
+    CredentialChanged:
+      description: Credencial actualizada; todas las sesiones del usuario fueron revocadas y se conserva la vinculación física del dispositivo
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [message, requiere_reingreso]
+            properties:
+              message: { type: string }
+              requiere_reingreso: { type: boolean, const: true }
+    Forbidden:
+      description: No tienes autorización para realizar esta acción
+    RoleResponse:
+      description: Rol con los permisos activados
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data: { $ref: '#/components/schemas/Role' }
+    RoleConflict:
+      description: Versión obsoleta, rol asignado o intento de retirar al último Admin activo
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            properties:
+              status: { type: integer, const: 409 }
+              code: { type: string, enum: [ROLE_VERSION_CONFLICT, ROLE_IN_USE, LAST_ADMIN] }
+              message: { type: string }
     InvalidCredentials:
       description: Credenciales inválidas
       content:

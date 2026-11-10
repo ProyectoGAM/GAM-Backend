@@ -10,7 +10,7 @@ final readonly class MortalityRecordPolicy
 {
     public function viewAny(User $user): bool
     {
-        return LotsAuthorization::allows($user, 'mortality.view');
+        return LotsAuthorization::allows($user, 'can_view_mortality');
     }
 
     public function view(User $user, MortalityRecord $record): bool
@@ -20,7 +20,7 @@ final readonly class MortalityRecordPolicy
 
     public function create(User $user): bool
     {
-        return LotsAuthorization::allows($user, 'mortality.manage');
+        return LotsAuthorization::allows($user, 'can_manage_mortality');
     }
 
     public function update(User $user, MortalityRecord $record): bool

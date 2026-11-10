@@ -16,6 +16,7 @@ use App\Services\Lots\FlockState;
 use App\Services\Lots\LotsHistory;
 use App\Services\Lots\LotsSnapshots;
 use App\Services\Lots\RunLotsCommand;
+use App\Services\Lots\WeighingAnomalyAlerts;
 use App\Services\Lots\WeighingBuilder;
 use App\Services\Lots\WeighingFlockProjection;
 use App\Services\Lots\WeighingMath;
@@ -35,6 +36,7 @@ final readonly class CorrectWeighingAction
         private LotsHistory $history,
         private LotsSnapshots $snapshots,
         private Clock $clock,
+        private WeighingAnomalyAlerts $anomalyAlerts,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -42,7 +44,7 @@ final readonly class CorrectWeighingAction
     {
         return $this->commands->execute(
             $actor,
-            'weighings.manage',
+            'can_manage_weighings',
             'weighing.correct',
             $data['idempotency_key'],
             ['weighing' => $weighing->public_id, ...$data],
@@ -73,7 +75,13 @@ final readonly class CorrectWeighingAction
                 $historicalReference = $this->referenceFromCurrent($current);
                 $built = $this->builder->build($merged, $destination, $historical, $settings, $historicalReference, $occurredAt);
                 $before = $this->presenter->weighing($current->fresh(['flock', 'measurements']));
-                $this->ensureChangedOutlierConfirmation($current, $built, (bool) ($data['confirm_out_of_range'] ?? false));
+                $changedOutliers = $this->confirmChangedOutliers($current, $built, (bool) ($data['confirm_out_of_range'] ?? false));
+                $wasAnomalous = $current->outside_expected_range;
+                $previousUnitId = $current->production_unit_id;
+                $contextChanged = $current->flock_id !== $destination->id
+                    || $previousUnitId !== $built['production_unit_id']
+                    || $current->mode !== $built['mode']
+                    || ! $current->occurred_at->equalTo($occurredAt);
 
                 $reference = $built['reference'];
                 $current->forceFill([
@@ -103,7 +111,14 @@ final readonly class CorrectWeighingAction
                     'average_weight_g' => $built['average_weight_g'],
                     'outside_expected_range' => $built['outside_expected_range'],
                     'version' => $current->version + 1,
-                ])->save();
+                ]);
+                $newReview = $current->outside_expected_range
+                    && ($changedOutliers || $contextChanged);
+                $superseded = $wasAnomalous && (! $current->outside_expected_range || $newReview);
+                if ($superseded) {
+                    $current->forceFill(['anomaly_reviewed_at' => null, 'anomaly_reviewed_by' => null]);
+                }
+                $current->save();
                 WeighingMeasurement::query()->where('weighing_id', $current->id)->delete();
                 foreach ($built['measurements'] as $measurement) {
                     $row = new WeighingMeasurement;
@@ -111,6 +126,12 @@ final readonly class CorrectWeighingAction
                 }
                 $after = $this->presenter->weighing($current->fresh(['flock', 'measurements']));
                 $this->history->audit($current, $actor, 'weighing_corrected', 'Pesaje rectificado', $operationId, $before, $after, $built['production_unit_id'], $source, $data['correction_reason']);
+                if ($superseded) {
+                    $this->anomalyAlerts->resolve($current, $previousUnitId);
+                }
+                if ($newReview) {
+                    $this->anomalyAlerts->publish($current->setRelation('flock', $destination), $operationId);
+                }
                 $this->activities->recordMany([$currentFlock, $destination], $operationId, 'weighing_correction', 'weighing.correct');
                 event(new WeighingCorrected($operationId, [$currentFlock->public_id, $destination->public_id], $actor->id));
 
@@ -184,7 +205,7 @@ final readonly class CorrectWeighingAction
     }
 
     /** @param array<string, mixed> $built */
-    private function ensureChangedOutlierConfirmation(Weighing $current, array $built, bool $confirmed): void
+    private function confirmChangedOutliers(Weighing $current, array $built, bool $confirmed): bool
     {
         $current->loadMissing('measurements');
         $changed = $this->rangeChanged($current, $built);
@@ -217,6 +238,8 @@ final readonly class CorrectWeighingAction
                 meta: ['rows' => $rows],
             );
         }
+
+        return $rows !== [];
     }
 
     /** @param array<string, mixed> $built */

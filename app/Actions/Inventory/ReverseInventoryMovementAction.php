@@ -7,16 +7,17 @@ use App\Enums\Inventory\InventoryMovementType;
 use App\Exceptions\Inventory\InventoryConflict;
 use App\Models\Inventory\InventoryMovement;
 use App\Models\User;
+use App\Services\Inventory\InventoryReversalAvailability;
 use App\Services\Lots\LotsAuthorization;
 use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
 
 final readonly class ReverseInventoryMovementAction
 {
-    public function __construct(private RecordInventoryMovementAction $recordMovement) {}
+    public function __construct(private RecordInventoryMovementAction $recordMovement, private InventoryReversalAvailability $availability) {}
 
     /** @param array<string, mixed> $attributes */
-    public function execute(InventoryMovement $movement, array $attributes, User $actor, string $source = 'api', string $requiredPermission = 'inventory.adjust'): InventoryMovement
+    public function execute(InventoryMovement $movement, array $attributes, User $actor, string $source = 'api', string $requiredPermission = 'can_adjust_inventory'): InventoryMovement
     {
         return DB::transaction(function () use ($movement, $attributes, $actor, $source, $requiredPermission): InventoryMovement {
             $currentActor = User::query()->whereKey($actor->getKey())->lockForUpdate()->firstOrFail();
@@ -26,17 +27,9 @@ final readonly class ReverseInventoryMovementAction
                 ->lockForUpdate()
                 ->firstOrFail()
                 ->load('lines');
-            if ($locked->reference_type === 'stock_regularization') {
-                throw new InventoryConflict('Una regularización no puede revertirse reintroduciendo stock incompatible.');
-            }
-            if (in_array($locked->reference_type, ['feed_manufacture', 'feed_manufacture_cancellation', 'feed_ingredient_adjustment'], true)) {
-                throw new InventoryConflict('Los movimientos de alimento deben corregirse desde su operación de elaboración o ajuste.');
-            }
-            if (in_array($locked->reference_type, ['vaccination_application', 'medicine_application'], true) && $requiredPermission !== 'management-plans.execute') {
-                throw new InventoryConflict('Los consumos sanitarios deben corregirse desde su aplicación.');
-            }
-            if (InventoryMovement::query()->where('reverses_movement_id', $locked->getKey())->exists()) {
-                throw new InventoryConflict('El movimiento ya fue revertido.');
+            $restriction = $this->availability->restriction($locked, $requiredPermission);
+            if ($restriction !== null) {
+                throw new InventoryConflict($restriction);
             }
 
             $lines = array_map(static fn ($line): array => [

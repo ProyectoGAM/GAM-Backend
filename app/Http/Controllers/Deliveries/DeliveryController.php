@@ -2,16 +2,17 @@
 
 namespace App\Http\Controllers\Deliveries;
 
+use App\Actions\CustomersAndAccounts\RecordCustomerPaymentAction;
 use App\Actions\Deliveries\AddDeliveryLoadAction;
 use App\Actions\Deliveries\CloseDeliveryAction;
+use App\Actions\Deliveries\CorrectDeliveryStopAction;
 use App\Actions\Deliveries\PublishDeliveryLocationsAction;
 use App\Actions\Deliveries\RecordDeliveryStopAction;
 use App\Actions\Deliveries\StartDeliveryAction;
-use App\Actions\IdentityAndAccess\AuthenticateSharedPinAction;
 use App\Enums\Deliveries\DeliveryStatus;
 use App\Enums\FarmStructure\ProductionUnitStatus;
-use App\Exceptions\IdentityAndAccess\IdentityException;
 use App\Http\Requests\Deliveries\CloseDeliveryRequest;
+use App\Http\Requests\Deliveries\CorrectDeliveryStopRequest;
 use App\Http\Requests\Deliveries\CurrentDeliveriesRequest;
 use App\Http\Requests\Deliveries\ListDeliveriesRequest;
 use App\Http\Requests\Deliveries\ListDeliveryClientsRequest;
@@ -20,27 +21,39 @@ use App\Http\Requests\Deliveries\ShowDeliveryRequest;
 use App\Http\Requests\Deliveries\StartDeliveryRequest;
 use App\Http\Requests\Deliveries\StoreDeliveryLoadRequest;
 use App\Http\Requests\Deliveries\StoreDeliveryLocationsRequest;
+use App\Http\Requests\Deliveries\StoreDeliveryPaymentRequest;
 use App\Http\Requests\Deliveries\StoreDeliveryStopRequest;
+use App\Http\Resources\CustomersAndAccounts\CustomerMovementResource;
+use App\Http\Resources\CustomersAndAccounts\DeliveryClientResource;
 use App\Http\Resources\Deliveries\DeliveryResource;
 use App\Http\Resources\Deliveries\DeliveryStopResource;
+use App\Models\CustomersAndAccounts\Customer;
 use App\Models\Deliveries\Delivery;
 use App\Models\FarmStructure\ProductionUnit;
+use App\Queries\CustomersAndAccounts\ListCustomersQuery;
 use App\Queries\Deliveries\ListDeliveriesQuery;
 use App\Queries\Deliveries\ShowDeliveryQuery;
 use App\Services\Deliveries\DeliveryLoadUnits;
-use App\Services\Deliveries\LocalDeliveryClientCatalog;
+use App\Services\IdentityAndAccess\OperationPinVerifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Symfony\Component\HttpFoundation\Response;
 
 final readonly class DeliveryController
 {
-    public function clients(ListDeliveryClientsRequest $request, LocalDeliveryClientCatalog $catalog): JsonResponse
+    public function clients(ListDeliveryClientsRequest $request, ListCustomersQuery $query): AnonymousResourceCollection
     {
-        return response()->json(['data' => $catalog->search(
-            trim((string) $request->validated('search', '')),
-            (int) $request->validated('limit', 50),
-        )]);
+        return DeliveryClientResource::collection($query->operational($request->validated()));
+    }
+
+    public function payment(StoreDeliveryPaymentRequest $request, Delivery $reparto, RecordCustomerPaymentAction $action): AnonymousResourceCollection
+    {
+        $data = $request->attributesForAction();
+        $customer = Customer::query()->where('public_id', $data['client_reference'])->firstOrFail();
+        unset($data['client_reference'], $data['idempotency_key']);
+        $operation = $action->execute($customer, $request->actor(), $data, $request->idempotencyKey(), $reparto);
+
+        return CustomerMovementResource::collection($operation->movements()->with(['account.customer', 'operation', 'delivery', 'original', 'reversal'])->get());
     }
 
     public function units(ListDeliveryClientsRequest $request, DeliveryLoadUnits $units): JsonResponse
@@ -57,7 +70,7 @@ final readonly class DeliveryController
         return response()->json(['data' => $units]);
     }
 
-    public function store(StartDeliveryRequest $request, StartDeliveryAction $action, AuthenticateSharedPinAction $pinAuth, DeliveryLoadUnits $units): JsonResponse
+    public function store(StartDeliveryRequest $request, StartDeliveryAction $action, OperationPinVerifier $pinAuth, DeliveryLoadUnits $units): JsonResponse
     {
         $this->confirmDriverPin($request, $pinAuth);
         $delivery = $action->execute(
@@ -106,6 +119,13 @@ final readonly class DeliveryController
         ));
     }
 
+    public function correctStop(CorrectDeliveryStopRequest $request, Delivery $reparto, string $entrega, CorrectDeliveryStopAction $action): JsonResponse
+    {
+        $operation = $action->execute($reparto, (int) $entrega, $request->actor(), $request->attributesForAction(), $request->idempotencyKey());
+
+        return response()->json(['data' => $operation->result]);
+    }
+
     public function locations(StoreDeliveryLocationsRequest $request, Delivery $reparto, PublishDeliveryLocationsAction $action): JsonResponse
     {
         return response()->json([
@@ -113,7 +133,7 @@ final readonly class DeliveryController
         ]);
     }
 
-    public function close(CloseDeliveryRequest $request, Delivery $reparto, CloseDeliveryAction $action, AuthenticateSharedPinAction $pinAuth): DeliveryResource
+    public function close(CloseDeliveryRequest $request, Delivery $reparto, CloseDeliveryAction $action, OperationPinVerifier $pinAuth): DeliveryResource
     {
         $this->confirmDriverPin($request, $pinAuth);
 
@@ -125,13 +145,9 @@ final readonly class DeliveryController
         ));
     }
 
-    private function confirmDriverPin(StartDeliveryRequest|CloseDeliveryRequest $request, AuthenticateSharedPinAction $pinAuth): void
+    private function confirmDriverPin(StartDeliveryRequest|CloseDeliveryRequest $request, OperationPinVerifier $pinAuth): void
     {
         $actor = $request->actor();
-        if (! $actor->pin_enabled) {
-            throw new IdentityException(422, 'PIN_NOT_CONFIGURED', 'Pedí a administración que configure tu PIN de repartidor.');
-        }
-
-        $pinAuth->verifyPin($actor, (string) $request->validated('pin'));
+        $pinAuth->verify($actor, (string) $request->validated('pin'));
     }
 }

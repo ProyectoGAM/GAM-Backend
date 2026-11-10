@@ -11,6 +11,7 @@ use App\Exceptions\Inventory\InventoryConflict;
 use App\Exceptions\SuppliersAndCatalogs\SuppliersAndCatalogsConflict;
 use App\Exceptions\SuppliersAndCatalogs\VaccineConflict;
 use App\Models\FarmStructure\ProductionUnit;
+use App\Models\IdentityAndAccess\Role;
 use App\Models\Inventory\StockLocation;
 use App\Models\SuppliersAndCatalogs\Product;
 use App\Models\SuppliersAndCatalogs\Supplier;
@@ -27,7 +28,6 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Laravel\SerializableClosure\SerializableClosure;
 use PHPUnit\Framework\Attributes\Group;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 #[Group('vaccine-concurrency')]
@@ -297,7 +297,7 @@ final class VaccineConcurrencyTest extends TestCase
     private function admin(): User
     {
         $user = User::factory()->create();
-        $user->assignRole(Role::findOrCreate('admin', 'web'));
+        $user->syncRoles([Role::findOrCreate('admin', 'web')]);
 
         return $user;
     }

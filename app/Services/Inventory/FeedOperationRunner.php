@@ -10,6 +10,7 @@ use App\Models\Inventory\FeedBalance;
 use App\Models\Inventory\FeedRecipe;
 use App\Models\Inventory\FeedStockOperation;
 use App\Models\User;
+use App\Services\Lots\LotsAuthorization;
 use App\ValueObjects\Inventory\FeedStockGrams;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -39,6 +40,13 @@ final readonly class FeedOperationRunner
             if (User::query()->whereKey($actor->getKey())->lockForUpdate()->first() === null) {
                 throw new AuthorizationException;
             }
+            $permission = match ($kind) {
+                'manufacture' => 'can_manufacture_feed',
+                'cancellation' => 'can_cancel_feed_manufacturing',
+                'ingredient_adjustment' => 'can_adjust_feed_ingredients',
+                'feed_adjustment' => 'can_adjust_feed_stock',
+            };
+            LotsAuthorization::ensure($actor->fresh(), $permission);
             $existing = FeedStockOperation::query()->where('created_by', $actor->getKey())->where('idempotency_key', $key)->first();
             if ($existing !== null) {
                 if ($existing->request_hash !== $hash) {

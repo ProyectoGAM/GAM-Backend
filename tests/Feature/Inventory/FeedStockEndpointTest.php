@@ -30,7 +30,7 @@ final class FeedStockEndpointTest extends TestCase
     // Flujo: crea una planta, registra una materia prima en kg y verifica la conversión e idempotencia.
     public function test_creates_feed_ingredient_in_grams_and_replays_equivalent_units(): void
     {
-        $actor = $this->signIn(['products.manage', 'inventory.move', 'inventory.view', 'inventory.manage']);
+        $actor = $this->signIn(['can_manage_products', 'can_move_inventory', 'can_view_inventory', 'can_manage_inventory']);
         $house = $this->feedHouse($actor);
         $key = (string) Str::uuid();
 
@@ -66,7 +66,7 @@ final class FeedStockEndpointTest extends TestCase
     public function test_stock_reads_expose_the_current_plant_name_after_renaming(): void
     {
         // Preparación: crea una planta, su ubicación técnica y un saldo de materia prima.
-        $actor = $this->signIn(['inventory.view', 'inventory.manage', 'poultry-houses.manage']);
+        $actor = $this->signIn(['can_view_inventory', 'can_manage_inventory', 'can_manage_poultry_houses']);
         $house = PoultryHouse::factory()->feed()->create(['name' => 'Planta original']);
         $location = app(CreateFeedStockLocationAction::class)->execute($house, $actor);
         $product = Product::factory()->create(['kind' => 'raw_material', 'base_unit' => 'g']);
@@ -104,7 +104,7 @@ final class FeedStockEndpointTest extends TestCase
     // Flujo: rechaza reutilizar una clave de idempotencia con un payload diferente.
     public function test_rejects_same_idempotency_key_with_different_payload(): void
     {
-        $actor = $this->signIn(['products.manage', 'inventory.move', 'inventory.view', 'inventory.manage']);
+        $actor = $this->signIn(['can_manage_products', 'can_move_inventory', 'can_view_inventory', 'can_manage_inventory']);
         $house = $this->feedHouse($actor);
         $key = (string) Str::uuid();
 
@@ -132,7 +132,7 @@ final class FeedStockEndpointTest extends TestCase
     // Flujo: conserva el replay de un movimiento histórico cuyo hash no tenía escala decimal.
     public function test_replays_legacy_movement_hash_without_unit_or_scale(): void
     {
-        $actor = $this->signIn(['products.manage', 'inventory.move', 'inventory.view', 'inventory.manage']);
+        $actor = $this->signIn(['can_manage_products', 'can_move_inventory', 'can_view_inventory', 'can_manage_inventory']);
         $house = $this->feedHouse($actor);
 
         // Preparación: crea la materia prima y recupera su ubicación técnica.
@@ -185,7 +185,7 @@ final class FeedStockEndpointTest extends TestCase
     // Flujo: conserva los totales históricos y bloquea movimientos en plantas no operativas.
     public function test_non_operational_feed_plants_reject_movements_and_preserve_historical_totals(): void
     {
-        $actor = $this->signIn(['products.manage', 'inventory.move', 'inventory.view', 'inventory.manage', 'poultry-houses.manage']);
+        $actor = $this->signIn(['can_manage_products', 'can_move_inventory', 'can_view_inventory', 'can_manage_inventory', 'can_manage_poultry_houses']);
         $house = $this->feedHouse($actor);
 
         // Preparación: registra el ingrediente con saldo inicial.
@@ -229,9 +229,9 @@ final class FeedStockEndpointTest extends TestCase
         $this->getJson('/api/v1/stock-alimentacion')->assertForbidden();
 
         // Acción 2: intenta registrar un ingrediente en un galpón avícola con los permisos de escritura.
-        $actor->givePermissionTo([
-            Permission::findOrCreate('products.manage', 'web'),
-            Permission::findOrCreate('inventory.move', 'web'),
+        $actor->roles()->firstOrFail()->givePermissionTo([
+            Permission::findOrCreate('can_manage_products', 'web'),
+            Permission::findOrCreate('can_move_inventory', 'web'),
         ]);
         Sanctum::actingAs($actor, ['*']);
         $this->postJson('/api/v1/plantas-racion/'.$poultryHouse->getKey().'/ingredientes', [
@@ -249,7 +249,7 @@ final class FeedStockEndpointTest extends TestCase
     // Flujo: crea un ingrediente con proveedor y conserva el tipo de recepción.
     public function test_feed_ingredient_with_supplier_creates_receipt(): void
     {
-        $actor = $this->signIn(['products.manage', 'inventory.move', 'inventory.view']);
+        $actor = $this->signIn(['can_manage_products', 'can_move_inventory', 'can_view_inventory']);
         $house = $this->feedHouse($actor);
         $supplier = Supplier::factory()->create();
 
@@ -270,7 +270,7 @@ final class FeedStockEndpointTest extends TestCase
     // Flujo: convierte líneas mixtas antes de fusionarlas en una transferencia.
     public function test_transfer_merges_mixed_kg_and_gram_lines_exactly(): void
     {
-        $actor = $this->signIn(['products.manage', 'inventory.move', 'inventory.view', 'inventory.manage']);
+        $actor = $this->signIn(['can_manage_products', 'can_move_inventory', 'can_view_inventory', 'can_manage_inventory']);
         $sourceHouse = $this->feedHouse($actor);
         $targetHouse = $this->feedHouse($actor);
 
@@ -315,7 +315,7 @@ final class FeedStockEndpointTest extends TestCase
     // Flujo: permite una salida que cruza cero, audita el negativo y excluye sólo la planta inactiva de los totales.
     public function test_negative_feed_stock_is_audited_and_excluded_when_the_plant_is_inactive(): void
     {
-        $actor = $this->signIn(['products.manage', 'inventory.move', 'inventory.view', 'inventory.manage', 'poultry-houses.manage']);
+        $actor = $this->signIn(['can_manage_products', 'can_move_inventory', 'can_view_inventory', 'can_manage_inventory', 'can_manage_poultry_houses']);
         $house = $this->feedHouse($actor);
 
         // Acción 1: carga el ingrediente que será retirado.
@@ -367,7 +367,7 @@ final class FeedStockEndpointTest extends TestCase
     // Flujo: bloquea el movimiento de materias primas fuera de plantas de ración.
     public function test_raw_material_movement_outside_feed_location_returns_conflict(): void
     {
-        $this->signIn(['products.manage', 'inventory.move', 'inventory.view']);
+        $this->signIn(['can_manage_products', 'can_move_inventory', 'can_view_inventory']);
         $product = Product::factory()->create([
             'kind' => 'raw_material',
             'base_unit' => 'g',
@@ -393,7 +393,7 @@ final class FeedStockEndpointTest extends TestCase
     /** Flujo: expone si una ubicación manual o técnica está administrada por el sistema. */
     public function test_stock_location_reads_expose_system_managed_for_manual_and_feed_locations(): void
     {
-        $actor = $this->signIn(['inventory.manage', 'inventory.view']);
+        $actor = $this->signIn(['can_manage_inventory', 'can_view_inventory']);
 
         // Preparación: crea una ubicación manual mediante el endpoint público.
         $manual = $this->postJson('/api/v1/stock-locations', ['name' => 'Ubicacion manual de prueba'])
@@ -428,7 +428,7 @@ final class FeedStockEndpointTest extends TestCase
     // Flujo: protege la ubicación técnica de edición y cambios de estado independientes.
     public function test_feed_location_cannot_be_updated_or_deactivated_independently(): void
     {
-        $actor = $this->signIn(['inventory.view', 'inventory.manage']);
+        $actor = $this->signIn(['can_view_inventory', 'can_manage_inventory']);
         $house = $this->feedHouse($actor);
         $location = StockLocation::query()->where('poultry_house_id', $house->getKey())->firstOrFail();
 
@@ -454,7 +454,7 @@ final class FeedStockEndpointTest extends TestCase
     {
         $user = User::factory()->create();
         foreach ($permissions as $permission) {
-            $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+            $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
         Sanctum::actingAs($user, ['*']);
 

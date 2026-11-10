@@ -21,7 +21,7 @@ use Illuminate\Support\Str;
 final readonly class AssignFlockPlanAction
 {
     private const ACTIVITY_FIELDS = [
-        'sort_order', 'type', 'title', 'timing_kind', 'start_day', 'end_day',
+        'sort_order', 'type', 'title', 'practice_type', 'timing_kind', 'start_day', 'end_day',
         'start_week', 'end_week', 'interval_days', 'conditional', 'condition',
         'notes', 'catalog_type', 'catalog_id', 'catalog_snapshot', 'feed_recipe_id', 'grams_per_bird',
     ];
@@ -175,9 +175,15 @@ final readonly class AssignFlockPlanAction
 
         $publicToInternal = array_combine($publicIds, $ids);
         foreach (['vaccination_applications', 'medicine_applications', 'ration_changes', 'manual_practices'] as $table) {
-            foreach (DB::table($table)->whereIn('plan_activity_id', $publicIds)
-                ->where('occurred_at', '<=', $occurredAt->toIso8601String())
-                ->pluck('plan_activity_id') as $publicId) {
+            $records = DB::table($table)->whereIn('plan_activity_id', $publicIds)
+                ->where('occurred_at', '<=', $occurredAt->toIso8601String());
+            if ($table === 'manual_practices') {
+                $records->whereNotExists(fn ($corrections) => $corrections->selectRaw('1')->from('management_execution_corrections as correction')
+                    ->where('correction.original_type', 'manual_practice')
+                    ->whereColumn('correction.original_public_id', 'manual_practices.public_id')
+                    ->where('correction.occurred_at', '<=', $occurredAt->toIso8601String()));
+            }
+            foreach ($records->pluck('plan_activity_id') as $publicId) {
                 $executed[$publicToInternal[(string) $publicId]] = true;
             }
         }

@@ -3,8 +3,10 @@
 namespace App\Actions\IdentityAndAccess;
 
 use App\DTO\AuditAndTraceability\AuditEntryData;
+use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Exceptions\IdentityAndAccess\IdentityException;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
+use App\Models\FarmStructure\ProductionUnit;
 use App\Models\SharedDevice;
 use App\Models\SharedDevicePairingCode;
 use App\Models\User;
@@ -28,15 +30,22 @@ final class RedeemPairingCodeAction
                 ->first();
 
             if (! $pairing instanceof SharedDevicePairingCode
+                || $pairing->production_unit_id === null
                 || $pairing->consumed_at !== null
                 || $pairing->expires_at?->isPast()
                 || ! $pairing->creator()->whereNull('deleted_at')->whereHas('roles', fn ($query) => $query->where('name', 'admin'))->exists()) {
                 throw new IdentityException(422, 'INVALID_PAIRING_CODE', 'El código de vinculación no es válido.');
             }
 
+            $unit = ProductionUnit::query()->whereKey($pairing->production_unit_id)->lockForUpdate()->first();
+            if ($unit?->status !== ProductionUnitStatus::Active) {
+                throw new IdentityException(422, 'INVALID_PAIRING_CODE', 'El código de vinculación no es válido.');
+            }
+
             $issued = $this->credentials->issue();
             $device = SharedDevice::query()->create([
                 'name' => $name !== '' ? $name : $pairing->name,
+                'production_unit_id' => $pairing->production_unit_id,
                 'credential_hash' => $issued['hash'],
                 'credential_expires_at' => now()->addDays((int) config('identity.shared_device_days', 365)),
                 'enrolled_by' => $pairing->created_by,
@@ -55,6 +64,7 @@ final class RedeemPairingCodeAction
                 event: 'shared_device_paired',
                 description: 'Dispositivo compartido vinculado',
                 properties: ['device_name' => $device->name],
+                upId: (int) $pairing->production_unit_id,
                 source: 'api',
             ));
 

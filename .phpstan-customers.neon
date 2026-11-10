@@ -1,0 +1,24 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 5
+    paths:
+        - app/Actions/CustomersAndAccounts
+        - app/Services/CustomersAndAccounts
+        - app/Models/CustomersAndAccounts
+        - app/Enums/CustomersAndAccounts
+        - app/Queries/CustomersAndAccounts
+        - app/Policies/CustomersAndAccounts
+        - app/Http/Controllers/CustomersAndAccounts
+        - app/Http/Requests/CustomersAndAccounts
+        - app/Http/Resources/CustomersAndAccounts
+        - app/Providers/CustomersAndAccountsServiceProvider.php
+        - app/Exceptions/CustomersAndAccounts
+        - app/Actions/Deliveries/RecordDeliveryStopAction.php
+        - app/Actions/Deliveries/CloseDeliveryAction.php
+        - app/Services/Deliveries/DeliveryFinancialSummary.php
+        - app/Http/Controllers/Deliveries/DeliveryController.php
+        - database/factories/CustomersAndAccounts
+        - database/seeders/CustomersAndAccounts
+    tmpDir: storage/framework/cache/phpstan-customers

@@ -27,7 +27,7 @@ final class ProductionUnitEndpointTest extends TestCase
     {
         // Preparación: crea la localidad y autentica al actor autorizado.
         $localidad = Locality::factory()->create();
-        $actor = $this->userWithPermissions(['production-units.manage']);
+        $actor = $this->userWithPermissions(['can_manage_production_units']);
         Sanctum::actingAs($actor, ['*']);
 
         // Acción: registra la unidad productiva mediante la API.
@@ -69,7 +69,7 @@ final class ProductionUnitEndpointTest extends TestCase
     public function test_rural_production_unit_can_be_created_without_a_catalog_locality(): void
     {
         // Preparación: autentica al gestor y define una ubicación válida dentro de Uruguay.
-        Sanctum::actingAs($this->userWithPermissions(['production-units.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_production_units']), ['*']);
         $payload = [
             'locality_id' => null,
             'name' => 'Rural Farm Without Locality',
@@ -110,7 +110,7 @@ final class ProductionUnitEndpointTest extends TestCase
     public function test_production_unit_name_remains_unique_within_a_known_locality(): void
     {
         // Preparación: autentica al gestor y asigna una localidad del catálogo.
-        Sanctum::actingAs($this->userWithPermissions(['production-units.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_production_units']), ['*']);
         $localidad = Locality::factory()->create();
         $payload = [
             'locality_id' => $localidad->getKey(),
@@ -141,7 +141,7 @@ final class ProductionUnitEndpointTest extends TestCase
     public function test_location_prevalidation_returns_no_content_inside_uruguay_and_rejects_outside_points(): void
     {
         // Preparación: autentica al gestor que puede crear y editar unidades productivas.
-        Sanctum::actingAs($this->userWithPermissions(['production-units.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_production_units']), ['*']);
 
         // Acción: valida un punto de Durazno y rechaza otro fuera de Uruguay.
         $this->postJson('/api/v1/production-units/validate-location', [
@@ -170,7 +170,7 @@ final class ProductionUnitEndpointTest extends TestCase
         // Preparación: crea dos unidades y autentica al lector autorizado.
         $firstProductionUnit = ProductionUnit::factory()->create(['name' => 'North Farm']);
         $secondProductionUnit = ProductionUnit::factory()->create(['name' => 'South Farm']);
-        $actor = $this->userWithPermissions(['production-units.view']);
+        $actor = $this->userWithPermissions(['can_view_production_units']);
         Sanctum::actingAs($actor, ['*']);
 
         // Acción 1: lista todas las unidades productivas accesibles.
@@ -195,7 +195,7 @@ final class ProductionUnitEndpointTest extends TestCase
     public function test_user_without_view_permission_cannot_access_unidades_productivas(): void
     {
         // Preparación: registra el permiso y autentica un usuario sin asignarlo.
-        Permission::findOrCreate('production-units.view', 'web');
+        Permission::findOrCreate('can_view_production_units', 'web');
         Sanctum::actingAs(User::factory()->create(), ['*']);
 
         // Acción: intenta listar las unidades productivas.
@@ -206,7 +206,7 @@ final class ProductionUnitEndpointTest extends TestCase
     public function test_returns_404_with_a_spanish_message_for_a_missing_production_unit(): void
     {
         // Preparación: autentica al usuario con permiso de lectura.
-        Sanctum::actingAs($this->userWithPermissions(['production-units.view']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_view_production_units']), ['*']);
 
         // Acción: consulta un identificador inexistente.
         $this->getJson('/api/v1/production-units/999999')
@@ -218,7 +218,7 @@ final class ProductionUnitEndpointTest extends TestCase
     public function test_returns_422_when_coordinates_are_outside_supported_ranges(): void
     {
         // Preparación: autentica al usuario con permiso de gestión.
-        Sanctum::actingAs($this->userWithPermissions(['production-units.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_production_units']), ['*']);
 
         // Acción: intenta crear una unidad con coordenadas fuera de rango.
         $this->postJson('/api/v1/production-units', [
@@ -237,7 +237,7 @@ final class ProductionUnitEndpointTest extends TestCase
     public function test_create_requires_a_non_empty_bounded_address(): void
     {
         // Preparación: autentica al usuario autorizado y prepara los datos geográficos.
-        Sanctum::actingAs($this->userWithPermissions(['production-units.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_production_units']), ['*']);
         $payload = [
             'locality_id' => Locality::factory()->create()->getKey(),
             'name' => 'Address Required Farm',
@@ -263,7 +263,7 @@ final class ProductionUnitEndpointTest extends TestCase
     public function test_create_rejects_non_finite_coordinates(): void
     {
         // Preparación: autentica al gestor y crea la localidad de la solicitud.
-        Sanctum::actingAs($this->userWithPermissions(['production-units.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_production_units']), ['*']);
 
         // Acción: envía una cadena numérica que se convierte en infinito.
         $this->postJson('/api/v1/production-units', [
@@ -285,7 +285,7 @@ final class ProductionUnitEndpointTest extends TestCase
             'latitude' => '0.000000',
             'longitude' => '0.000000',
         ]);
-        Sanctum::actingAs($this->userWithPermissions(['production-units.manage', 'production-units.view']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_production_units', 'can_view_production_units']), ['*']);
 
         // Acción 1: consulta la unidad histórica y confirma que la dirección es nula.
         $this->getJson("/api/v1/production-units/{$productionUnit->getKey()}")
@@ -319,7 +319,7 @@ final class ProductionUnitEndpointTest extends TestCase
             'latitude' => '-34.901100',
             'longitude' => '-56.164500',
         ]);
-        Sanctum::actingAs($this->userWithPermissions(['production-units.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_production_units']), ['*']);
 
         // Acción 1: intenta cambiar el punto sin enviar una dirección.
         $this->patchJson("/api/v1/production-units/{$productionUnit->getKey()}", [
@@ -374,7 +374,7 @@ final class ProductionUnitEndpointTest extends TestCase
             'longitude' => '-56.164500',
         ]);
         PoultryHouse::factory()->for($productionUnit)->create();
-        Sanctum::actingAs($this->userWithPermissions(['production-units.manage']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_production_units']), ['*']);
 
         // Acción: modifica datos y ubicación junto con una transición inválida.
         $this->patchJson("/api/v1/production-units/{$productionUnit->getKey()}", [
@@ -426,7 +426,7 @@ final class ProductionUnitEndpointTest extends TestCase
         // Preparación: crea la unidad, un galpón activo y el actor autorizado.
         $unidadProductiva = ProductionUnit::factory()->create();
         PoultryHouse::factory()->for($unidadProductiva)->create();
-        $actor = $this->userWithPermissions(['production-units.manage']);
+        $actor = $this->userWithPermissions(['can_manage_production_units']);
         Sanctum::actingAs($actor, ['*']);
 
         // Acción: solicita la desactivación de la unidad productiva.
@@ -450,7 +450,7 @@ final class ProductionUnitEndpointTest extends TestCase
         PoultryHouse::factory()->for($unidadProductiva)->create([
             'status' => PoultryHouseStatus::Inactive,
         ]);
-        $actor = $this->userWithPermissions(['production-units.manage']);
+        $actor = $this->userWithPermissions(['can_manage_production_units']);
         Sanctum::actingAs($actor, ['*']);
 
         // Acción: cambia la unidad productiva a estado inactivo.
@@ -508,7 +508,7 @@ final class ProductionUnitEndpointTest extends TestCase
         $user = User::factory()->create();
 
         foreach ($permissions as $permission) {
-            $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+            $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
 
         return $user;

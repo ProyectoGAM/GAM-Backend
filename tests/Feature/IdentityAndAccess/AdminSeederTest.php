@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\IdentityAndAccess;
 
+use App\Models\IdentityAndAccess\Role;
 use App\Models\User;
 use Database\Seeders\AdminUserSeeder;
 use Database\Seeders\DatabaseSeeder;
@@ -10,7 +11,6 @@ use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 final class AdminSeederTest extends TestCase
@@ -24,11 +24,11 @@ final class AdminSeederTest extends TestCase
         // Preparación: crea el rol, otro administrador y un permiso agregado después de la carga inicial.
         $this->seed([IdentityPermissionSeeder::class, AdminUserSeeder::class]);
         $otherAdmin = User::factory()->create();
-        $otherAdmin->assignRole('admin');
+        $otherAdmin->syncRoles(['admin']);
         Permission::findOrCreate('future-module.manage', 'web');
         $role = Role::findByName('admin', 'web');
-        $role->syncPermissions(['identity.web.login']);
-        $this->assertFalse($otherAdmin->can('management-plans.manage'));
+        $role->syncPermissions(['can_login_web']);
+        $this->assertFalse($otherAdmin->can('can_manage_management_plans'));
 
         // Mutación: repite cada entrada que antes recortaba los permisos del rol.
         $this->seed($seeder);
@@ -39,13 +39,13 @@ final class AdminSeederTest extends TestCase
         foreach ($expected as $permission) {
             $this->assertTrue($admin->can($permission), $permission);
         }
-        $this->assertTrue($admin->can('management-plans.manage'));
-        $this->assertTrue($admin->can('feed-recipes.manage'));
-        $this->assertTrue($admin->can('delivery.start'));
+        $this->assertTrue($admin->can('can_manage_management_plans'));
+        $this->assertTrue($admin->can('can_manage_feed_recipes'));
+        $this->assertTrue($admin->can('can_start_deliveries'));
 
         // Consulta: los roles operativos conservan su alcance acotado.
-        $this->assertSame(['identity.shared.login'], Role::findByName('employee', 'web')->permissions->pluck('name')->all());
-        $this->assertFalse(Role::findByName('delivery', 'web')->hasPermissionTo('management-plans.manage'));
+        $this->assertSame(['can_login_shared'], Role::findByName('employee', 'web')->permissions->pluck('name')->all());
+        $this->assertFalse(Role::findByName('delivery', 'web')->hasPermissionTo('can_manage_management_plans'));
     }
 
     /** @return array<string, array{class-string}> */
@@ -115,17 +115,17 @@ final class AdminSeederTest extends TestCase
         $this->assertNull($admin->deleted_at);
         $this->assertTrue(Hash::check(config('auth.admin.password'), $admin->password));
         $this->assertTrue($admin->hasRole('admin'));
-        $this->assertTrue($admin->can('admin.dashboard.view'));
-        $this->assertTrue($admin->can('audit.view'));
-        $this->assertTrue($admin->can('geography.manage'));
-        $this->assertTrue($admin->can('production-units.manage'));
-        $this->assertTrue($admin->can('poultry-houses.manage'));
+        $this->assertTrue($admin->can('can_view_admin_dashboard'));
+        $this->assertTrue($admin->can('can_view_audit'));
+        $this->assertTrue($admin->can('can_manage_geography'));
+        $this->assertTrue($admin->can('can_manage_production_units'));
+        $this->assertTrue($admin->can('can_manage_poultry_houses'));
         $this->assertDatabaseHas('permissions', [
-            'name' => 'admin.dashboard.view',
+            'name' => 'can_view_admin_dashboard',
             'guard_name' => 'web',
         ]);
         $this->assertDatabaseHas('permissions', [
-            'name' => 'audit.view',
+            'name' => 'can_view_audit',
             'guard_name' => 'web',
         ]);
         $this->assertDatabaseCount('departments', 19);
@@ -202,7 +202,7 @@ final class AdminSeederTest extends TestCase
         $admin = User::query()->where('email', config('auth.admin.email'))->firstOrFail();
         $this->assertFalse($admin->trashed());
         $this->assertTrue($admin->hasRole('admin'));
-        $this->assertTrue($admin->can('admin.dashboard.view'));
+        $this->assertTrue($admin->can('can_view_admin_dashboard'));
         $this->assertDatabaseHas('production_units', ['name' => 'Granja El Ombú']);
         $this->assertDatabaseHas('flocks', ['code' => 'DEMO-LOT-A']);
         $this->assertDatabaseHas('flocks', ['code' => 'LOT-EGG-TEST', 'current_quantity' => 229]);

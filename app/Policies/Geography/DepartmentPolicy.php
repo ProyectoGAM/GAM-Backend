@@ -9,7 +9,7 @@ final readonly class DepartmentPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $this->hasPermission($user, 'geography.view');
+        return $this->hasPermission($user, 'can_view_geography');
     }
 
     public function view(User $user, Department $department): bool
@@ -19,7 +19,7 @@ final readonly class DepartmentPolicy
 
     public function create(User $user): bool
     {
-        return $this->hasPermission($user, 'geography.manage');
+        return $this->hasPermission($user, 'can_manage_geography');
     }
 
     public function update(User $user, Department $department): bool

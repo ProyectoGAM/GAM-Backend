@@ -55,15 +55,15 @@ final class ManagementPlanDemoSeeder extends Seeder
             'interval_days' => 15, 'notes' => 'Inicio del intervalo elegido para estos datos demo; editable en plantilla y lote.',
         ];
         $activities[] = [
-            'type' => 'manual_practice', 'title' => 'Despique en planta de incubación',
+            'type' => 'manual_practice', 'practice_type' => 'beak_trimming', 'title' => 'Despique en planta de incubación',
             'timing_kind' => 'unscheduled', 'notes' => 'Hacer en planta de incubación.',
         ];
         $activities[] = [
-            'type' => 'manual_practice', 'title' => 'Despique semana 12',
+            'type' => 'manual_practice', 'practice_type' => 'beak_trimming', 'title' => 'Despique semana 12',
             'timing_kind' => 'week', 'start_week' => 12,
             'conditional' => true, 'condition' => 'Si amerita.',
         ];
-        $activities[] = ['type' => 'manual_practice', 'title' => 'Colocación de nidos', 'timing_kind' => 'week', 'start_week' => 17];
+        $activities[] = ['type' => 'manual_practice', 'practice_type' => 'nest_placement', 'title' => 'Colocación de nidos', 'timing_kind' => 'week', 'start_week' => 17];
         foreach ([
             [1, 5, 'BB'], [6, 9, 'Recría'], [9, 18, 'Desarrollo'],
             [19, 21, 'Pre postura'], [22, 40, 'Fase 1'], [41, null, 'Fase 2'],

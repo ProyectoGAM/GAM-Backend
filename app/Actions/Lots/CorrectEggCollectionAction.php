@@ -33,7 +33,7 @@ final readonly class CorrectEggCollectionAction
     /** @param array<string, mixed> $data */
     public function execute(EggCollection $record, array $data, User $actor, bool $cancel = false, string $source = 'api'): FlockOperation
     {
-        return $this->commands->execute($actor, 'egg-collections.manage', $cancel ? 'eggs.cancel' : 'eggs.correct', $data['idempotency_key'], ['record' => $record->public_id, ...$data], function (string $operationId) use ($record, $data, $actor, $cancel, $source): array {
+        return $this->commands->execute($actor, 'can_manage_egg_collections', $cancel ? 'eggs.cancel' : 'eggs.correct', $data['idempotency_key'], ['record' => $record->public_id, ...$data], function (string $operationId) use ($record, $data, $actor, $cancel, $source): array {
             $flockPublicId = Flock::query()->whereKey($record->flock_id)->value('public_id');
             $flock = $this->state->lock([$flockPublicId])->get($flockPublicId);
             $current = EggCollection::query()->whereKey($record->id)->lockForUpdate()->firstOrFail();

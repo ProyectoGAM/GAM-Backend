@@ -6,7 +6,6 @@ use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Enums\FarmStructure\PoultryHouseType;
 use App\Exceptions\FarmStructure\FarmStructureConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
-use App\Interfaces\FarmStructure\PoultryHouseOccupancyProvider;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\User;
 use App\ValueObjects\FarmStructure\BirdCapacity;
@@ -16,7 +15,6 @@ final readonly class UpdatePoultryHouseAction
 {
     public function __construct(
         private AuditRecorder $auditRecorder,
-        private PoultryHouseOccupancyProvider $occupancyProvider,
     ) {}
 
     /** @param array{name?: string, type?: string, bird_capacity?: int|null} $attributes */
@@ -41,12 +39,6 @@ final readonly class UpdatePoultryHouseAction
 
             if (array_key_exists('bird_capacity', $attributes)) {
                 $capacity = BirdCapacity::fromInt($attributes['bird_capacity']);
-                $occupancy = $this->occupancyProvider->occupancyFor((int) $lockedPoultryHouse->getKey());
-
-                if (! $capacity->supportsOccupancy($occupancy)) {
-                    throw new FarmStructureConflict('La capacidad de aves no puede ser menor que la ocupación actual.');
-                }
-
                 $attributes['bird_capacity'] = $capacity->value();
             }
 

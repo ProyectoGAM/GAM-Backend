@@ -57,6 +57,9 @@ final readonly class InitializeFlockFeedingAction
             'feed_recipe_id' => $manual ? ($inherited['recipe_id'] ?? $previous->feed_recipe_id) : $stage['recipe_id'],
             'grams_per_bird' => $stage['grams_per_bird'],
             'daily_quantity_grams' => $manual ? ($inherited['quantity_grams'] ?? $previous->daily_quantity_grams) : null,
+            'manual_review_since' => $manual ? ($previous?->manualReviewSince() ?? $date)->toDateString() : null,
+            'manual_confirmed_at' => $manual ? $previous?->manual_confirmed_at : null,
+            'manual_confirmed_by' => $manual ? $previous?->manual_confirmed_by : null,
             'anchor_day' => $day, 'stage_snapshot' => $stage, 'stages' => $stages, 'created_by' => $actor->id,
         ])->save();
         $this->history->record($change, $flock, $actor, $previous === null ? 'flock_feeding_initialized' : 'flock_feeding_plan_revised', $operationId,

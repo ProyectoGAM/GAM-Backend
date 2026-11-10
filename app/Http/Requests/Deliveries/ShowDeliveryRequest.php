@@ -15,9 +15,9 @@ final class ShowDeliveryRequest extends DeliveryRequest
             return false;
         }
 
-        return $actor->can('delivery.monitor')
-            || $actor->can('delivery.history')
-            || ($delivery->driver_id === $actor->getKey() && $actor->can('delivery.view-own'));
+        return $actor->can('can_monitor_deliveries')
+            || $actor->can('can_view_delivery_history')
+            || ($delivery->driver_id === $actor->getKey() && $actor->can('can_view_own_deliveries'));
     }
 
     /** @return array<string, list<string>> */

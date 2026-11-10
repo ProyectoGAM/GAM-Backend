@@ -31,7 +31,7 @@ final class FeedRecipeEndpointTest extends TestCase
     public function test_creates_global_recipes_without_creating_products_or_requiring_equal_yield(): void
     {
         // Preparación: crea el catálogo y autentica sólo con el permiso de recetas.
-        $actor = $this->signIn(['feed-recipes.manage', 'feed-recipes.view']);
+        $actor = $this->signIn(['can_manage_feed_recipes', 'can_view_feed_recipes']);
         $payload = $this->payload();
         $productCount = Product::query()->count();
 
@@ -60,7 +60,7 @@ final class FeedRecipeEndpointTest extends TestCase
     public function test_creation_replay_is_canonical_and_does_not_restore_old_quantities(): void
     {
         // Preparación: conserva la clave y el contenido originales.
-        $this->signIn(['feed-recipes.manage']);
+        $this->signIn(['can_manage_feed_recipes']);
         $payload = $this->payload();
         $headers = $this->headers();
         $first = $this->postJson('/api/v1/recetas', $payload, $headers)->assertCreated();
@@ -85,7 +85,7 @@ final class FeedRecipeEndpointTest extends TestCase
     public function test_large_integer_grams_are_preserved_as_strings(): void
     {
         // Preparación: define una combinación con números que requieren transporte exacto.
-        $this->signIn(['feed-recipes.manage', 'feed-recipes.view']);
+        $this->signIn(['can_manage_feed_recipes', 'can_view_feed_recipes']);
         $payload = $this->payload();
         $payload['rendimiento_g'] = '9007199254740993';
         $payload['ingredientes'][0]['cantidad_g'] = '9223372036854775807';
@@ -102,7 +102,7 @@ final class FeedRecipeEndpointTest extends TestCase
     public function test_invalid_grams_return_422_without_persistence(mixed $quantity): void
     {
         // Preparación: conserva una receta válida para probar edición y cálculo.
-        $this->signIn(['feed-recipes.manage', 'feed-recipes.view']);
+        $this->signIn(['can_manage_feed_recipes', 'can_view_feed_recipes']);
         $payload = $this->payload();
         $created = $this->postJson('/api/v1/recetas', $payload, $this->headers())->assertCreated();
         $id = $created->json('data.id');
@@ -140,7 +140,7 @@ final class FeedRecipeEndpointTest extends TestCase
     public function test_invalid_or_duplicate_ingredients_return_422(): void
     {
         // Preparación: crea materias primas y un producto que no es ingrediente.
-        $this->signIn(['feed-recipes.manage']);
+        $this->signIn(['can_manage_feed_recipes']);
         $payload = $this->payload();
         $supply = Product::factory()->create();
 
@@ -161,7 +161,7 @@ final class FeedRecipeEndpointTest extends TestCase
     public function test_quantity_updates_preserve_composition_and_append_history(): void
     {
         // Preparación: registra y calcula la receta original.
-        $this->signIn(['feed-recipes.manage', 'feed-recipes.view']);
+        $this->signIn(['can_manage_feed_recipes', 'can_view_feed_recipes']);
         $payload = $this->payload();
         $created = $this->postJson('/api/v1/recetas', $payload, $this->headers())->assertCreated();
         $id = $created->json('data.id');
@@ -191,7 +191,7 @@ final class FeedRecipeEndpointTest extends TestCase
     public function test_composition_changes_and_extra_fields_are_rejected(): void
     {
         // Preparación: crea una receta y otra materia prima que no pertenece a ella.
-        $this->signIn(['feed-recipes.manage', 'feed-recipes.view']);
+        $this->signIn(['can_manage_feed_recipes', 'can_view_feed_recipes']);
         $payload = $this->payload();
         $id = $this->postJson('/api/v1/recetas', $payload, $this->headers())->assertCreated()->json('data.id');
         $extraProduct = Product::factory()->rawMaterial()->create();
@@ -227,7 +227,7 @@ final class FeedRecipeEndpointTest extends TestCase
     public function test_deactivation_and_reactivation_preserve_recipe_and_history(): void
     {
         // Preparación: crea una receta que permanecerá consultable.
-        $this->signIn(['feed-recipes.manage', 'feed-recipes.view']);
+        $this->signIn(['can_manage_feed_recipes', 'can_view_feed_recipes']);
         $created = $this->postJson('/api/v1/recetas', $this->payload(), $this->headers())->assertCreated();
         $id = $created->json('data.id');
         $ingredients = $created->json('data.ingredientes');
@@ -252,7 +252,7 @@ final class FeedRecipeEndpointTest extends TestCase
     public function test_calculates_integer_multiples_without_stock_mutations(int $requested, string $factor, array $expected): void
     {
         // Preparación: crea una receta y stock fraccionario previo independiente de sus cantidades.
-        $this->signIn(['feed-recipes.manage', 'feed-recipes.view']);
+        $this->signIn(['can_manage_feed_recipes', 'can_view_feed_recipes']);
         $payload = $this->payload();
         $id = $this->postJson('/api/v1/recetas', $payload, $this->headers())->assertCreated()->json('data.id');
         $balance = StockBalance::factory()->create(['product_id' => $payload['ingredientes'][0]['producto_id'], 'on_hand_quantity' => '0.123456']);
@@ -286,7 +286,7 @@ final class FeedRecipeEndpointTest extends TestCase
     public function test_fractional_factors_and_ingredient_overflow_return_422(): void
     {
         // Preparación: registra una receta normal y otra válida cuyo doble desborda.
-        $this->signIn(['feed-recipes.manage', 'feed-recipes.view']);
+        $this->signIn(['can_manage_feed_recipes', 'can_view_feed_recipes']);
         $payload = $this->payload();
         $id = $this->postJson('/api/v1/recetas', $payload, $this->headers())->assertCreated()->json('data.id');
         $payload['rendimiento_g'] = 1;
@@ -326,7 +326,7 @@ final class FeedRecipeEndpointTest extends TestCase
         }
 
         // Acción: concede lectura a otro usuario y comprueba que no permite mutaciones.
-        $this->signIn(['feed-recipes.view']);
+        $this->signIn(['can_view_feed_recipes']);
         $this->getJson("/api/v1/recetas/$id")->assertOk();
         $this->postJson("/api/v1/recetas/$id/calculo", ['cantidad_g' => 13000])->assertOk();
         $this->patchJson("/api/v1/recetas/$id/estado", ['estado' => 'inactive'])->assertForbidden();
@@ -338,7 +338,7 @@ final class FeedRecipeEndpointTest extends TestCase
     public function test_headers_filters_status_and_unknown_fields_are_validated(): void
     {
         // Preparación: autentica y conserva una receta válida.
-        $this->signIn(['feed-recipes.manage', 'feed-recipes.view']);
+        $this->signIn(['can_manage_feed_recipes', 'can_view_feed_recipes']);
         $payload = $this->payload();
         $id = $this->postJson('/api/v1/recetas', $payload, $this->headers())->assertCreated()->json('data.id');
 
@@ -360,7 +360,7 @@ final class FeedRecipeEndpointTest extends TestCase
     public function test_audit_failure_rolls_back_every_mutation(): void
     {
         // Preparación: registra una receta y sustituye la auditoría por un fallo controlado.
-        $this->signIn(['feed-recipes.manage']);
+        $this->signIn(['can_manage_feed_recipes']);
         $payload = $this->payload();
         $id = $this->postJson('/api/v1/recetas', $payload, $this->headers())->assertCreated()->json('data.id');
         $this->app->instance(AuditRecorder::class, new class implements AuditRecorder
@@ -400,7 +400,7 @@ final class FeedRecipeEndpointTest extends TestCase
     public function test_direct_actions_reject_unknown_fields_and_non_positive_quantities(): void
     {
         // Preparación: crea una receta mediante el caso de uso público.
-        $actor = $this->signIn(['feed-recipes.manage']);
+        $actor = $this->signIn(['can_manage_feed_recipes']);
         $payload = $this->payload();
         $id = $this->postJson('/api/v1/recetas', $payload, $this->headers())->assertCreated()->json('data.id');
         $recipe = FeedRecipe::query()->findOrFail($id);
@@ -428,7 +428,7 @@ final class FeedRecipeEndpointTest extends TestCase
     public function test_linked_raw_material_identity_remains_protected_without_stock_history(): void
     {
         // Preparación: vincula un producto nuevo a una receta.
-        $this->signIn(['feed-recipes.manage', 'products.manage', 'products.view']);
+        $this->signIn(['can_manage_feed_recipes', 'can_manage_products', 'can_view_products']);
         $payload = $this->payload();
         $this->postJson('/api/v1/recetas', $payload, $this->headers())->assertCreated();
         $productId = $payload['ingredientes'][0]['producto_id'];
@@ -444,7 +444,7 @@ final class FeedRecipeEndpointTest extends TestCase
     {
         $actor = User::factory()->create();
         foreach ($permissions as $permission) {
-            $actor->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+            $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
         Sanctum::actingAs($actor, ['*']);
 

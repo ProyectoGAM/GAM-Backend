@@ -31,7 +31,7 @@ final readonly class ReviseFlockPlanAction
     /** @param array<string, mixed> $data */
     public function assignLegacy(Flock $flock, array $data, User $actor, string $source = 'api'): FlockOperation
     {
-        return $this->commands->execute($actor, 'management-plans.manage', 'management_plan.flock.assign', $data['idempotency_key'], ['flock' => $flock->public_id, ...$data], function (string $operationId) use ($flock, $data, $actor, $source): array {
+        return $this->commands->execute($actor, 'can_manage_management_plans', 'management_plan.flock.assign', $data['idempotency_key'], ['flock' => $flock->public_id, ...$data], function (string $operationId) use ($flock, $data, $actor, $source): array {
             $locked = Flock::query()->whereKey($flock->id)->lockForUpdate()->firstOrFail();
             $this->assignment->assignPublished($locked, $data['plan_template_id'], (int) $data['plan_template_version'], $actor, $operationId, $source);
             $plan = FlockPlan::query()->where('flock_id', $locked->id)->firstOrFail();
@@ -44,7 +44,7 @@ final readonly class ReviseFlockPlanAction
     /** @param array<string, mixed> $data */
     public function revise(Flock $flock, array $data, User $actor, string $source = 'api'): FlockOperation
     {
-        return $this->commands->execute($actor, 'management-plans.manage', 'management_plan.flock.revise', $data['idempotency_key'], ['flock' => $flock->public_id, ...$data], function (string $operationId) use ($flock, $data, $actor, $source): array {
+        return $this->commands->execute($actor, 'can_manage_management_plans', 'management_plan.flock.revise', $data['idempotency_key'], ['flock' => $flock->public_id, ...$data], function (string $operationId) use ($flock, $data, $actor, $source): array {
             $locked = Flock::query()->whereKey($flock->id)->lockForUpdate()->firstOrFail();
             $plan = FlockPlan::query()->where('flock_id', $locked->id)->lockForUpdate()->first();
             if ($plan === null || $plan->current_revision !== (int) $data['expected_revision']) {
@@ -101,6 +101,7 @@ final readonly class ReviseFlockPlanAction
                 'created_at' => $revision->created_at->toIso8601String(),
                 'activities' => $revision->activities->map(fn (FlockPlanActivity $activity): array => [
                     'id' => $activity->public_id, 'type' => $activity->type,
+                    'practice_type' => $activity->practice_type,
                     'title' => $activity->title, 'timing_kind' => $activity->timing_kind,
                     'start_day' => $activity->start_day, 'end_day' => $activity->end_day,
                     'start_week' => $activity->start_week, 'end_week' => $activity->end_week,

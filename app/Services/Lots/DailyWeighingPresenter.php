@@ -51,6 +51,8 @@ class DailyWeighingPresenter
             'total_weight_g' => $this->math->format((string) $entry->total_weight_g, 1),
             'average_weight_g' => $this->math->format((string) $entry->average_weight_g),
             'outside_expected_range' => $entry->outside_expected_range,
+            'anomaly_reviewed_at' => $entry->anomaly_reviewed_at?->toIso8601String(),
+            'anomaly_reviewed_by' => $entry->anomaly_reviewed_by,
         ];
     }
 }

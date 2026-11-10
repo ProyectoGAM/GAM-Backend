@@ -8,6 +8,10 @@ info:
     abarcan Reparto, Manejo, Lotes, Vacunación, Pesadas, Alimentación y Postura.
     Alimentación distingue cantidad registrada de pauta diaria estimada. No se fabrican cobros,
     deudas, tamaños ni datos históricos ausentes. Los permisos de la fuente se revalidan.
+    Las sesiones PIN sólo consultan su UP: opciones y agregados se filtran antes de calcularse.
+    Las fuentes sin alcance UP demostrable se deniegan. Configuraciones y exportaciones conservan
+    su UP; el worker y la descarga privada revalidan el contexto. No se comparten exportaciones
+    restringidas mediante enlaces públicos.
   license:
     name: Proprietary
     identifier: Proprietary
@@ -30,6 +34,38 @@ tags:
   - name: Exportaciones
     description: Solicitud, seguimiento y descarga de archivos.
 paths:
+  /gastos/resumen:
+    get:
+      tags: [Reportes]
+      operationId: summarizeRecordedExpenses
+      summary: Suma gastos registrados por moneda, período y unidad productiva
+      description: >-
+        Requiere permiso de lectura de al menos un módulo de gastos. Agrega mantenimiento de galpones,
+        combustible y mantenimiento vehicular completado según los permisos de origen. En una UP sólo
+        incluye gastos atribuibles a esa unidad. Los importes se devuelven como decimales en texto y
+        cada moneda se suma por separado. Una sesión PIN queda limitada a su UP.
+      parameters:
+        - {name: up_id, in: query, schema: {type: integer, minimum: 1}}
+        - {name: desde, in: query, required: true, schema: {type: string, format: date}}
+        - name: hasta
+          in: query
+          required: true
+          description: Día inclusivo. Se admiten hasta 366 días.
+          schema: {type: string, format: date}
+      responses:
+        '200':
+          description: Totales por moneda y fuente autorizada
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: {$ref: '#/components/schemas/ExpenseSummary'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/InvalidQuery'}
   /reportes/fuentes:
     get:
       tags: [Reportes]
@@ -447,9 +483,46 @@ components:
               field: { type: string }
               direction: { type: string, enum: [asc, desc] }
         groupings: { type: array, items: { type: string }, maxItems: 10 }
-        metrics: { type: array, items: { type: string }, maxItems: 10 }
+        metrics:
+          type: array
+          items: {type: string}
+          maxItems: 10
+          description: La fuente global deliveries.deliveries expone merchandise_total, delivery_count y unpriced_delivery_count para distinguir importes parciales o desconocidos.
         page: { type: integer, minimum: 1, default: 1 }
         per_page: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    ExpenseSummary:
+      type: object
+      required: [up_id, desde, hasta, zona_horaria, fuentes_incluidas, fuentes_sin_permiso, totales]
+      properties:
+        up_id: {type: [integer, 'null'], minimum: 1}
+        desde: {type: string, format: date}
+        hasta: {type: string, format: date}
+        zona_horaria: {type: string, example: America/Montevideo}
+        fuentes_incluidas:
+          type: array
+          items: {$ref: '#/components/schemas/ExpenseSource'}
+        fuentes_sin_permiso:
+          type: array
+          items: {$ref: '#/components/schemas/ExpenseSource'}
+        totales:
+          type: array
+          items:
+            type: object
+            required: [moneda, importe, por_fuente]
+            properties:
+              moneda: {type: string, example: UYU}
+              importe: {type: string, example: '51.0000'}
+              por_fuente:
+                type: array
+                items:
+                  type: object
+                  required: [fuente, importe]
+                  properties:
+                    fuente: {$ref: '#/components/schemas/ExpenseSource'}
+                    importe: {type: string, example: '30.0000'}
+    ExpenseSource:
+      type: string
+      enum: [mantenimiento_galpones, combustible, mantenimiento_vehiculos]
     ReportResult:
       type: object
       required: [source_key, definition_version, columns, rows, aggregates, units, pagination, generated_at]

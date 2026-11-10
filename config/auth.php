@@ -26,6 +26,12 @@ return [
         'password' => env('ADMIN_PASSWORD'),
     ],
 
+    'demo_delivery' => [
+        'email' => env('DEMO_DELIVERY_EMAIL', 'repartidor.demo@gam.test'),
+        'password' => env('DEMO_DELIVERY_PASSWORD', 'ChangeMe123!'),
+        'pin' => env('DEMO_DELIVERY_PIN', '2468'),
+    ],
+
     'api_token_abilities' => [
         'api:access',
     ],

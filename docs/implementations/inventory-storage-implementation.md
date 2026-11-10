@@ -2,6 +2,8 @@
 
 Entrega del 28/10/2026. Completa las restricciones que el formulario de ajustes y pérdidas sólo podía aplicar en el cliente. El servidor comparte `StockProductCompatibility` entre productos permitidos y los comandos de stock, dentro de la transacción de cada movimiento.
 
+El saldo por ubicación y su mínimo alimentan la [alerta de stock mínimo de Inventarios](alerts-and-notifications-implementation-plan.md#6-stock-mínimo-de-inventarios).
+
 ## Alcance vigente del catálogo
 
 El alta genérica (`POST /api/v1/products`) y `GET /api/v1/reference/options` ofrecen únicamente **Insumo** (`supply`), **Materia prima** (`raw_material`) y **Otros** (`other`). Insumo y Otros pertenecen al depósito de insumos; las materias primas conservan las plantas de ración y gramos. Crear o convertir un producto a `egg`, `medicine`, `vaccine` o `finished_feed` devuelve 422 en `kind`; las Actions también impiden el bypass interno. La edición de metadata histórica puede conservar su tipo actual, respetando las protecciones de cada dominio.
@@ -32,11 +34,11 @@ Los medicamentos se registran globalmente en `POST /api/v1/medicines`, sin crear
 
 No se crean saldos físicos ni ubicaciones para estos catálogos. Los comandos genéricos y sus selectores los rechazan incluso si un producto o ubicación históricos conservan sus flags anteriores. Se conservan los permisos, auditoría síncrona e idempotencia de los catálogos globales: las vacunas requieren admin y los medicamentos mantienen sus controles actuales.
 
-El contador global de medicamentos de Planes de manejo se conserva como registro clínico independiente y se identifica con `balance_scope: clinical_global` en su consulta. No equivale a existencia física por UP y sus ajustes no ingresan stock físico. No se trasladan sus cantidades antiguas a una UP: carecen de procedencia suficiente para decidir esa asignación. El inventario físico se consulta por `product_id` y ubicación en Inventario.
+El contador global anterior de medicamentos de Planes de manejo queda sólo como historia y se identifica con `balance_scope: clinical_global` en su consulta. Sus ajustes están retirados y las aplicaciones nuevas no lo modifican. Sólo una corrección de una aplicación histórica con movimiento vinculado puede compensarlo. No se trasladan sus cantidades antiguas a una UP: carecen de procedencia suficiente para decidir esa asignación. El inventario físico histórico se consulta por `product_id` y ubicación en Inventario.
 
-Aplicaciones de medicamentos y vacunas conservan el registro clínico sin descuento físico. Enviar `stock_consumption` devuelve 422 con mensaje en español; las Actions bloquean también llamadas internas. Se conserva la implementación futura y su cobertura mediante habilitación explícita sólo dentro de esas pruebas. Las correcciones de aplicaciones históricas conservan sus compensaciones y no borran movimientos ni auditoría.
+Aplicaciones de medicamentos y vacunas conservan únicamente el registro, sin cantidad ni descuento físico o clínico. El motivo es obligatorio fuera del plan y opcional con una actividad válida del plan vigente. Enviar `quantity` o `stock_consumption` con contenido devuelve 422; las Actions bloquean también llamadas internas, incluso con la bandera futura habilitada. Las correcciones de aplicaciones históricas conservan sus compensaciones y no borran movimientos ni auditoría. La migración y las pruebas actuales se detallan en [aplicaciones sanitarias](medication-implementation-plan.md#aplicaciones-sanitarias-sin-cantidad-ni-stock).
 
-La compensación histórica exige `management-plans.execute`, una aplicación real vinculada al movimiento y la inversa completa de sus líneas, con idénticos productos y ubicaciones. Rechaza cantidades superiores o parciales y reversiones repetidas. Puede restaurar el consumo original aunque el producto ya no controle stock, sin reactivarlo ni habilitar nuevos movimientos sanitarios; la corrección y su auditoría siguen siendo transaccionales e idempotentes.
+La compensación histórica exige `can_execute_management_plans`, una aplicación real vinculada al movimiento y la inversa completa de sus líneas, con idénticos productos y ubicaciones. Rechaza cantidades superiores o parciales y reversiones repetidas. Puede restaurar el consumo original aunque el producto ya no controle stock, sin reactivarlo ni habilitar nuevos movimientos sanitarios; la corrección y su auditoría siguen siendo transaccionales e idempotentes.
 
 ## Proveedor interno
 
@@ -58,11 +60,11 @@ docker compose -f compose.dev.yaml exec -T api php artisan inventario:preparar-a
 docker compose -f compose.dev.yaml exec -T api php artisan inventario:preparar-almacenamiento --revisar --no-interaction
 ```
 
-Sustituir Compose por el del ambiente correspondiente. El actor debe tener `inventory.manage` o ser admin. El modo `--revisar` es de sólo lectura. La preparación es reiniciable, con transacciones por registro; un error posterior no deshace registros preparados previamente y un reintento no los duplica. Clasifica plantas por relación real, huevos por `egg_stock_accounts` y cámaras manuales sin galpón; una ubicación gestionada huérfana permanece `unknown` y bloqueada. Revisar el informe de incompatibilidades antes de reabrir las escrituras.
+Sustituir Compose por el del ambiente correspondiente. El actor debe tener `can_manage_inventory` o ser admin. El modo `--revisar` es de sólo lectura. La preparación es reiniciable, con transacciones por registro; un error posterior no deshace registros preparados previamente y un reintento no los duplica. Clasifica plantas por relación real, huevos por `egg_stock_accounts` y cámaras manuales sin galpón; una ubicación gestionada huérfana permanece `unknown` y bloqueada. Revisar el informe de incompatibilidades antes de reabrir las escrituras.
 
 `GET /api/v1/inventory/balances?incompatible_only=1` ofrece esa revisión paginada y combinable con filtros por producto y ubicación. No confunde inactividad con incompatibilidad estructural. No borra ni oculta saldos históricos de las consultas generales.
 
-`POST /api/v1/inventario/saldos/{stockBalance}/regularizaciones`, con `Idempotency-Key` UUID y permiso `inventory.adjust`, tiene dos modos:
+`POST /api/v1/inventario/saldos/{stockBalance}/regularizaciones`, con `Idempotency-Key` UUID y permiso `can_adjust_inventory`, tiene dos modos:
 
 ```json
 {"mode":"trasladar","to_stock_location_id":23,"quantity":"8","reason":"Traslado revisado de materia prima desde el depósito histórico a una planta"}

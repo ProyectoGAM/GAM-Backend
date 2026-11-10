@@ -27,6 +27,9 @@ final readonly class GetFlockFeedingQuery
                 'gramos_por_ave' => (string) $resolved['stage']['grams_per_bird'],
                 'poblacion' => $resolved['census']['population'], 'edad_dias' => $resolved['age'],
                 'fecha_vigencia' => $resolved['configuration']->effective_date->toDateString(),
+                'revision_manual_desde' => $resolved['configuration']->mode === 'manual' ? $resolved['configuration']->manualReviewSince()->toDateString() : null,
+                'confirmada_en' => $resolved['configuration']->manual_confirmed_at?->toIso8601String(),
+                'confirmada_por' => $resolved['configuration']->manual_confirmed_by,
                 'etapa' => $resolved['stage'], 'finalizado' => $locked->status->value === 'finished',
             ];
         });

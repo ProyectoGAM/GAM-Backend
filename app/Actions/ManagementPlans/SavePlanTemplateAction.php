@@ -20,7 +20,7 @@ final readonly class SavePlanTemplateAction
     /** @param array<string, mixed> $data */
     public function create(array $data, User $actor, string $source = 'api'): FlockOperation
     {
-        return $this->commands->execute($actor, 'management-plans.manage', 'management_plan.template.create', $data['idempotency_key'], $data, function (string $operationId) use ($data, $actor, $source): array {
+        return $this->commands->execute($actor, 'can_manage_management_plans', 'management_plan.template.create', $data['idempotency_key'], $data, function (string $operationId) use ($data, $actor, $source): array {
             $template = new PlanTemplate;
             $template->forceFill([
                 'public_id' => (string) Str::ulid(), 'name' => trim($data['name']),
@@ -38,7 +38,7 @@ final readonly class SavePlanTemplateAction
     /** @param array<string, mixed> $data */
     public function revise(PlanTemplate $template, array $data, User $actor, string $source = 'api'): FlockOperation
     {
-        return $this->commands->execute($actor, 'management-plans.manage', 'management_plan.template.revise', $data['idempotency_key'], ['template' => $template->public_id, ...$data], function (string $operationId) use ($template, $data, $actor, $source): array {
+        return $this->commands->execute($actor, 'can_manage_management_plans', 'management_plan.template.revise', $data['idempotency_key'], ['template' => $template->public_id, ...$data], function (string $operationId) use ($template, $data, $actor, $source): array {
             $current = PlanTemplate::query()->whereKey($template->id)->lockForUpdate()->firstOrFail();
             if ($current->status !== 'active' || $current->current_version !== (int) $data['expected_version']) {
                 throw new LotsConflict('La plantilla cambió o fue retirada.');
@@ -65,7 +65,7 @@ final readonly class SavePlanTemplateAction
     /** @param array<string, mixed> $data */
     public function publish(PlanTemplate $template, array $data, User $actor, string $source = 'api'): FlockOperation
     {
-        return $this->commands->execute($actor, 'management-plans.manage', 'management_plan.template.publish', $data['idempotency_key'], ['template' => $template->public_id, ...$data], function (string $operationId) use ($template, $data, $actor, $source): array {
+        return $this->commands->execute($actor, 'can_manage_management_plans', 'management_plan.template.publish', $data['idempotency_key'], ['template' => $template->public_id, ...$data], function (string $operationId) use ($template, $data, $actor, $source): array {
             $current = PlanTemplate::query()->whereKey($template->id)->lockForUpdate()->firstOrFail();
             if ($current->status !== 'active' || $current->current_version !== (int) $data['expected_version']) {
                 throw new LotsConflict('La plantilla cambió o fue retirada.');
@@ -93,7 +93,7 @@ final readonly class SavePlanTemplateAction
     /** @param array<string, mixed> $data */
     public function retire(PlanTemplate $template, array $data, User $actor, string $source = 'api'): FlockOperation
     {
-        return $this->commands->execute($actor, 'management-plans.manage', 'management_plan.template.retire', $data['idempotency_key'], ['template' => $template->public_id, ...$data], function (string $operationId) use ($template, $data, $actor, $source): array {
+        return $this->commands->execute($actor, 'can_manage_management_plans', 'management_plan.template.retire', $data['idempotency_key'], ['template' => $template->public_id, ...$data], function (string $operationId) use ($template, $data, $actor, $source): array {
             $current = PlanTemplate::query()->whereKey($template->id)->lockForUpdate()->firstOrFail();
             if ($current->status !== 'active' || $current->current_version !== (int) $data['expected_version']) {
                 throw new LotsConflict('La plantilla cambió o fue retirada.');
@@ -111,7 +111,7 @@ final readonly class SavePlanTemplateAction
     /** @param array<string, mixed> $data */
     public function activate(PlanTemplate $template, array $data, User $actor, string $source = 'api'): FlockOperation
     {
-        return $this->commands->execute($actor, 'management-plans.manage', 'management_plan.template.activate', $data['idempotency_key'], ['template' => $template->public_id, ...$data], function (string $operationId) use ($template, $data, $actor, $source): array {
+        return $this->commands->execute($actor, 'can_manage_management_plans', 'management_plan.template.activate', $data['idempotency_key'], ['template' => $template->public_id, ...$data], function (string $operationId) use ($template, $data, $actor, $source): array {
             $current = PlanTemplate::query()->whereKey($template->id)->lockForUpdate()->firstOrFail();
             if ($current->status !== 'retired' || $current->current_version !== (int) $data['expected_version']) {
                 throw new LotsConflict('La plantilla cambió o ya está activa.');
@@ -161,6 +161,7 @@ final readonly class SavePlanTemplateAction
             'version_status' => $version->status,
             'activities' => $version->activities->map(fn (PlanTemplateActivity $activity): array => [
                 'id' => $activity->public_id, 'type' => $activity->type, 'title' => $activity->title,
+                'practice_type' => $activity->practice_type,
                 'timing_kind' => $activity->timing_kind, 'start_day' => $activity->start_day,
                 'end_day' => $activity->end_day, 'start_week' => $activity->start_week,
                 'end_week' => $activity->end_week, 'interval_days' => $activity->interval_days,

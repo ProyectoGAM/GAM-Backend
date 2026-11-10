@@ -9,7 +9,7 @@ final readonly class SupplierPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $this->allowed($user, 'suppliers.view');
+        return $this->allowed($user, 'can_view_suppliers');
     }
 
     public function view(User $user, Supplier $supplier): bool
@@ -19,7 +19,7 @@ final readonly class SupplierPolicy
 
     public function create(User $user): bool
     {
-        return $this->allowed($user, 'suppliers.manage');
+        return $this->allowed($user, 'can_manage_suppliers');
     }
 
     public function update(User $user, Supplier $supplier): bool

@@ -17,13 +17,13 @@ Todas las rutas son relativas a `/api/v1` y usan la autenticación personal o co
 
 | Método y ruta | Permiso | Resultado |
 | --- | --- | --- |
-| `GET /pesajes-diarios?flock_id={ULID}` | `weighings.view` | Historial por fecha descendente, con `date_from`, `date_to`, `per_page` y `cursor`. Una lista vacía indica que no hay jornadas. |
-| `GET /lotes/{lote}/pesajes-diarios/{fecha}` | `weighings.view` | Jornada de una fecha local; `404` si no existe. |
-| `GET /pesajes-diarios/{jornada}` | `weighings.view` | Jornada e ingresos ordenados por hora e ID, paginados con `per_page` y `cursor`. |
-| `POST /lotes/{lote}/pesajes-diarios/ingresos` | `weighings.manage` | Agrega un ingreso a la fecha local actual; devuelve la jornada y el ingreso. |
-| `DELETE /pesajes-diarios/{jornada}/ingresos/{ingreso}` | `weighings.manage` | Elimina una medición concreta y devuelve la jornada recalculada. |
-| `GET /pesajes-diarios/{jornada}/distribucion` | `weighings.view` | Histograma y curva de los pesos individuales activos. |
-| `GET/PUT /configuracion-pesajes` | `weighing-settings.manage` | Consulta o cambia los rangos globales. |
+| `GET /pesajes-diarios?flock_id={ULID}` | `can_view_weighings` | Historial por fecha descendente, con `date_from`, `date_to`, `per_page` y `cursor`. Una lista vacía indica que no hay jornadas. |
+| `GET /lotes/{lote}/pesajes-diarios/{fecha}` | `can_view_weighings` | Jornada de una fecha local; `404` si no existe. |
+| `GET /pesajes-diarios/{jornada}` | `can_view_weighings` | Jornada e ingresos ordenados por hora e ID, paginados con `per_page` y `cursor`. |
+| `POST /lotes/{lote}/pesajes-diarios/ingresos` | `can_manage_weighings` | Agrega un ingreso a la fecha local actual; devuelve la jornada y el ingreso. |
+| `DELETE /pesajes-diarios/{jornada}/ingresos/{ingreso}` | `can_manage_weighings` | Elimina una medición concreta y devuelve la jornada recalculada. |
+| `GET /pesajes-diarios/{jornada}/distribucion` | `can_view_weighings` | Histograma y curva de los pesos individuales activos. |
+| `GET/PUT /configuracion-pesajes` | `can_manage_weighing_settings` | Consulta o cambia los rangos globales. |
 
 Las páginas devuelven `next_cursor`; `null` indica que no hay más resultados. El listado de jornadas se ordena por fecha e ID descendentes, y los ingresos por hora e ID ascendentes. `per_page` admite de 1 a 100; el detalle usa 50 y el historial 20 por defecto. Así, los ingresos nuevos no desplazan elementos entre páginas.
 
@@ -53,6 +53,14 @@ No se permite que la muestra acumulada supere la población viva proyectada del 
 
 Un ingreso fuera de rango sin `confirm_out_of_range=true` devuelve `409` con código `DAILY_WEIGHING_OUT_OF_RANGE_CONFIRMATION_REQUIRED`, promedio y límites. La transacción se revierte: no crea jornada, ingreso, operación ni auditoría. Si el usuario confirma, reintenta con el mismo `Idempotency-Key` y el campo de confirmación. Cancelar la confirmación no requiere ninguna llamada adicional ni cambia datos.
 
+## Revisión de anomalías
+
+Guardar un ingreso fuera de rango con `confirm_out_of_range=true` publica una alerta `weighing_anomaly` de urgencia `alto`. Cada ingreso anómalo tiene su propio aviso. La bandeja identifica el ingreso como `daily_weighing_entry` y enlaza a la jornada en `entidad.ruta`. Los destinatarios necesitan `can_view_weighings` y `can_view_notifications` dentro del alcance de la UP.
+
+`POST /api/v1/pesajes-diarios/{jornada}/ingresos/{ingreso}/confirmacion-anomalia` registra la revisión posterior. Requiere `can_manage_weighings`, `Idempotency-Key` y el `version` vigente de la jornada en el cuerpo. Devuelve la jornada y el ingreso con `anomaly_reviewed_at` y `anomaly_reviewed_by`. El dato conserva su peso, su marca fuera de rango y su contribución a los agregados. La primera revisión incrementa la versión, audita `weighing_anomaly_confirmed` y resuelve los avisos de ese ingreso para todos sus destinatarios en una transacción. Reintentar la misma clave recupera el resultado original.
+
+Eliminar el ingreso o reclasificarlo dentro del rango resuelve sus avisos vigentes. Una jornada abierta que vuelve a marcar un ingreso como anómalo tras un cambio de referencia genera una nueva alerta. La migración agrega las columnas anulables de revisión. Los ingresos anteriores pueden revisarse si siguen fuera de rango. El despliegue no publica avisos retroactivos.
+
 ## Eliminación, versión y auditoría
 
 `POST` y `DELETE` requieren `Idempotency-Key` UUID. La misma clave y el mismo comando de un actor devuelven el resultado guardado; reutilizarla con datos distintos produce conflicto. La inserción bloquea la configuración y el lote, y la unicidad de `(flock_id, local_date)` impide jornadas duplicadas. Dos actores pueden registrar ingresos en la misma jornada sin sobrescribirlos.
@@ -74,6 +82,8 @@ La distribución diaria usa sólo `weight_g` de ingresos individuales activos. N
 La cobertura está en [DailyWeighingEndpointTest](../../tests/Feature/Lots/DailyWeighingEndpointTest.php), [WeighingConcurrencyTest](../../tests/Feature/Lots/WeighingConcurrencyTest.php) y [WeighingContractTest](../../tests/Feature/Lots/WeighingContractTest.php). Incluye mezcla de modalidades, promedio ponderado, confirmación sin efectos, reintentos, medianoche local, borrado de jornadas cerradas, versión obsoleta, cursores, permisos, actualización de rangos, distribución y dos actores simultáneos.
 
 La ejecución focalizada del 2026-10-07 aprobó 38 pruebas y 551 aserciones en PostgreSQL aislado. Tras ajustar las rutas públicas a `/lotes`, las pruebas afectadas y la prueba multiproceso volvieron a pasar. Pint y `git diff --check` finalizaron sin errores. Larastan no señaló problemas en este cambio; conserva dos avisos previos en `RecordInventoryMovementAction`.
+
+La revisión de anomalías se verificó en PostgreSQL aislado junto con Pesajes, concurrencia y Notificaciones. Pasaron 55 pruebas y 796 aserciones, además de Pint y el análisis de tipos de las clases modificadas. [Pruebas de revisión de anomalías](../../tests/Feature/Lots/WeighingAnomalyAlertTest.php)
 
 ## Fixture demo para diseño del frontend
 

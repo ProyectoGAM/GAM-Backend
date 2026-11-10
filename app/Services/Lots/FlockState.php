@@ -22,8 +22,30 @@ final readonly class FlockState
      */
     public function lock(array $ids): Collection
     {
+        return $this->load($ids, true);
+    }
+
+    /**
+     * @param  list<string>  $ids
+     * @return Collection<string, Flock>
+     */
+    public function read(array $ids): Collection
+    {
+        return $this->load($ids, false);
+    }
+
+    /**
+     * @param  list<string>  $ids
+     * @return Collection<string, Flock>
+     */
+    private function load(array $ids, bool $lock): Collection
+    {
         $ids = array_values(array_unique($ids));
-        $flocks = Flock::query()->whereIn('public_id', $ids)->orderBy('id')->lockForUpdate()->get()->keyBy('public_id');
+        $query = Flock::query()->whereIn('public_id', $ids)->orderBy('id');
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+        $flocks = $query->get()->keyBy('public_id');
         if ($flocks->count() !== count($ids)) {
             throw (new ModelNotFoundException)->setModel(Flock::class, $ids);
         }
@@ -52,7 +74,7 @@ final readonly class FlockState
         }
     }
 
-    public function receive(LockedPoultryHouseData $house, int $netIncrease, bool $requiresEmpty = false, ?Flock $existingReceiver = null): void
+    public function receive(LockedPoultryHouseData $house, bool $requiresEmpty = false, ?Flock $existingReceiver = null): void
     {
         if (! $house->canReceive) {
             throw new LotsConflict('El galpón destino y su unidad productiva deben estar operativos.');
@@ -64,9 +86,6 @@ final readonly class FlockState
             }
         } elseif ($house->openFlocksCount > 0) {
             throw new LotsConflict('El galpón destino ya está ocupado por un lote abierto.');
-        }
-        if (! $house->supports($netIncrease)) {
-            throw new LotsConflict('La redistribución supera la capacidad disponible del galpón.');
         }
     }
 

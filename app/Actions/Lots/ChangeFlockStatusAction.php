@@ -5,26 +5,41 @@ namespace App\Actions\Lots;
 use App\Enums\Lots\FlockStatus;
 use App\Events\Lots\FlockStatusChanged;
 use App\Exceptions\Lots\LotsConflict;
+use App\Models\AuditAndTraceability\AuditEntry;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockOperation;
 use App\Models\User;
 use App\Services\Lots\FlockActivityJournal;
 use App\Services\Lots\FlockState;
+use App\Services\Lots\FlockStatusReversal;
 use App\Services\Lots\LotsHistory;
 use App\Services\Lots\LotsSnapshots;
 use App\Services\Lots\RunLotsCommand;
+use Illuminate\Support\Facades\Gate;
 
 final readonly class ChangeFlockStatusAction
 {
-    public function __construct(private RunLotsCommand $commands, private FlockState $state, private LotsSnapshots $snapshots, private LotsHistory $history, private FlockActivityJournal $activities) {}
+    public function __construct(
+        private RunLotsCommand $commands,
+        private FlockState $state,
+        private LotsSnapshots $snapshots,
+        private LotsHistory $history,
+        private FlockActivityJournal $activities,
+        private FlockStatusReversal $reversal,
+    ) {}
 
     /** @param array<string, mixed> $data */
     public function execute(Flock $flock, array $data, User $actor, string $source = 'api'): FlockOperation
     {
-        return $this->commands->execute($actor, 'flocks.manage', 'flock.status', $data['idempotency_key'], ['flock' => $flock->public_id, ...$data], function (string $operationId) use ($flock, $data, $actor, $source): array {
+        $auditEntryId = $data['audit_entry_id'] ?? null;
+
+        return $this->commands->execute($actor, 'can_manage_flocks', 'flock.status', $data['idempotency_key'], ['flock' => $flock->public_id, ...$data], function (string $operationId) use ($flock, $data, $actor, $source, $auditEntryId): array {
             $locked = $this->state->lock([$flock->public_id])->get($flock->public_id);
             $this->state->version($locked, (int) $data['version']);
             $status = FlockStatus::from($data['status']);
+            if ($auditEntryId !== null && $this->reversal->previousStatus(AuditEntry::query()->find($auditEntryId), $locked) !== $status) {
+                throw new LotsConflict('El estado solicitado no coincide con el estado anterior de la entrada.');
+            }
             if ($status === FlockStatus::Finished || ! $locked->status->canTransitionTo($status)) {
                 throw new LotsConflict('La transición de estado del lote no está permitida.');
             }
@@ -33,11 +48,14 @@ final readonly class ChangeFlockStatusAction
             $locked->version++;
             $locked->save();
             $after = $this->snapshots->flock($locked);
-            $this->history->audit($locked, $actor, 'flock_status_changed', 'Estado del lote cambiado', $operationId, $before, $after, $locked->production_unit_id, $source, $data['reason']);
+            $description = $auditEntryId === null ? 'Estado del lote cambiado' : 'Cambio de estado del lote revertido';
+            $this->history->audit($locked, $actor, 'flock_status_changed', $description, $operationId, $before, $after, $locked->production_unit_id, $source, $data['reason'], reversesAuditEntryId: $auditEntryId);
             $this->activities->record($locked, $operationId, 'status_change', 'flock.status');
             event(new FlockStatusChanged($operationId, [$locked->public_id], $actor->id));
 
             return ['flock' => $after];
+        }, authorize: $auditEntryId === null ? null : static function (User $currentActor): void {
+            Gate::forUser($currentActor)->authorize('can_view_audit');
         });
     }
 }

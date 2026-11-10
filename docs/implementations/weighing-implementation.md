@@ -30,6 +30,14 @@ Cada recurso independiente de `/pesajes` fotografía la configuración aplicada:
 
 La migración [add_breed_weighing_ranges_and_reference_origin](../../database/migrations/2026_10_09_064128_add_breed_weighing_ranges_and_reference_origin.php) agrega rangos opcionales en `breeds` y la procedencia de la referencia en `weighings` y `daily_weighings`. Las razas preexistentes tienen los cuatro límites en `null` y siguen heredando los valores globales. Los pesajes anteriores conservan su snapshot; cuando su procedencia no estaba almacenada, la API la presenta como `global`.
 
+## Revisión posterior de un pesaje anómalo
+
+Guardar un pesaje independiente con filas fuera de rango emite un aviso `weighing_anomaly` de urgencia `alto` por destinatario para el pesaje completo. `entidad.id` contiene el identificador de `/api/v1/pesajes/{pesaje}` y `entidad.ruta` abre la sección Pesajes del lote.
+
+`POST /api/v1/pesajes/{pesaje}/confirmacion-anomalia` requiere `can_manage_weighings`, `Idempotency-Key` y el `version` vigente. Devuelve el pesaje con `anomaly_reviewed_at` y `anomaly_reviewed_by`. La confirmación deja constancia de quién revisó los valores fuera de rango, audita el cambio y resuelve el aviso para todos sus destinatarios. Una rectificación con nuevos valores anómalos o con otro lote, fecha o modalidad requiere una nueva revisión. Si una rectificación elimina todas las anomalías, resuelve el aviso anterior. Las observaciones pueden corregirse conservando la revisión.
+
+Las columnas nuevas son anulables y la migración conserva los pesajes anteriores. [Flujo de revisión de ingresos diarios](daily-weighing-implementation.md#revisión-de-anomalías)
+
 ## Unidades, precisión y fórmulas
 
 Los cálculos exactos usan `Brick\Math\BigDecimal`; no se usa `float` para conversión, sumas, promedios, rangos, varianza ni bins. La evaluación de `exp()` de la densidad normal es la única parte necesariamente flotante.
@@ -92,14 +100,14 @@ La fuente ejecutable es [weighings.yaml](../../contracts/openapi/weighings.yaml)
 
 | Método y ruta | Permiso | Comportamiento |
 | --- | --- | --- |
-| `GET /pesajes` | `weighings.view` | Lista paginada por lote, modo y fechas; orden descendente estable. |
-| `POST /pesajes` | `weighings.manage` | Registra un pesaje individual o grupal. |
-| `GET /pesajes/evolucion` | `weighings.view` | Devuelve un punto por pesaje para un lote. |
-| `GET /pesajes/{pesaje}` | `weighings.view` | Consulta el detalle y sus mediciones. |
-| `PATCH /pesajes/{pesaje}` | `weighings.manage` | Corrige el estado vigente y conserva el anterior en auditoría. |
-| `GET /pesajes/{pesaje}/distribucion` | `weighings.view` | Devuelve histograma y campana sólo para modo individual. |
-| `GET /configuracion-pesajes` | `weighing-settings.manage` | Consulta el singleton o `null`. |
-| `PUT /configuracion-pesajes` | `weighing-settings.manage` | Crea o actualiza rangos globales. |
+| `GET /pesajes` | `can_view_weighings` | Lista paginada por lote, modo y fechas; orden descendente estable. |
+| `POST /pesajes` | `can_manage_weighings` | Registra un pesaje individual o grupal. |
+| `GET /pesajes/evolucion` | `can_view_weighings` | Devuelve un punto por pesaje para un lote. |
+| `GET /pesajes/{pesaje}` | `can_view_weighings` | Consulta el detalle y sus mediciones. |
+| `PATCH /pesajes/{pesaje}` | `can_manage_weighings` | Corrige el estado vigente y conserva el anterior en auditoría. |
+| `GET /pesajes/{pesaje}/distribucion` | `can_view_weighings` | Devuelve histograma y campana sólo para modo individual. |
+| `GET /configuracion-pesajes` | `can_manage_weighing_settings` | Consulta el singleton o `null`. |
+| `PUT /configuracion-pesajes` | `can_manage_weighing_settings` | Crea o actualiza rangos globales. |
 
 `POST`, `PATCH` y `PUT` requieren `Idempotency-Key` con UUID. El contrato documenta las alternativas personales Bearer/cookie y las sesiones compartidas nativa/web. Las mutaciones con cookie incluyen `X-XSRF-TOKEN`; las sesiones compartidas incluyen `X-GAM-Session` y la credencial de dispositivo correspondiente al transporte.
 
@@ -210,9 +218,9 @@ No agrega por día, no suaviza, no interpola ni muestra una curva teórica. Las 
 
 Los permisos son company-wide y no crean asignaciones por unidad productiva:
 
-- `weighings.view` para listado, detalle, distribución y evolución;
-- `weighings.manage` para alta y corrección;
-- `weighing-settings.manage` para lectura y escritura de configuración.
+- `can_view_weighings` para listado, detalle, distribución y evolución;
+- `can_manage_weighings` para alta y corrección;
+- `can_manage_weighing_settings` para lectura y escritura de configuración.
 
 El administrador inicial recibe los tres permisos. Las Policies se vuelven a comprobar dentro de las Actions críticas. En sesiones compartidas, web acepta únicamente `gam_shared_device` y nativo únicamente `X-Shared-Device-Token`; ambos exigen la sesión de empleado vigente, `X-GAM-Session`, generación del dispositivo y permiso funcional. No se usa el rol ni el modo local del frontend como evidencia de autorización.
 

@@ -17,7 +17,7 @@ final readonly class RecordManualEggStockAction
     /** @param array<string, mixed> $data @return array<string, mixed> */
     public function execute(ProductionUnit $unit, array $data, User $actor, int $sign = 1, string $type = 'manual_receipt', string $source = 'api'): array
     {
-        $command = $this->commands->execute($actor, 'egg-stock.move', 'egg-stock.record', $data['idempotency_key'], ['unit' => $unit->id, ...$data, 'type' => $type], function (string $operationId) use ($unit, $data, $actor, $sign, $type, $source): array {
+        $command = $this->commands->execute($actor, 'can_move_egg_stock', 'egg-stock.record', $data['idempotency_key'], ['unit' => $unit->id, ...$data, 'type' => $type], function (string $operationId) use ($unit, $data, $actor, $sign, $type, $source): array {
             $lockedUnit = ProductionUnit::query()->whereKey($unit->getKey())->lockForUpdate()->firstOrFail();
             if ($lockedUnit->status !== ProductionUnitStatus::Active) {
                 throw new LotsConflict('La unidad productiva debe estar operativa para registrar nuevos movimientos.');

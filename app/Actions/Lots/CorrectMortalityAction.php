@@ -34,7 +34,7 @@ final readonly class CorrectMortalityAction
     /** @param array<string, mixed> $data */
     public function execute(MortalityRecord $record, array $data, User $actor, bool $cancel = false, string $source = 'api'): FlockOperation
     {
-        return $this->commands->execute($actor, 'mortality.manage', $cancel ? 'mortality.cancel' : 'mortality.correct', $data['idempotency_key'], ['record' => $record->public_id, ...$data], function (string $operationId) use ($record, $data, $actor, $cancel, $source): array {
+        return $this->commands->execute($actor, 'can_manage_mortality', $cancel ? 'mortality.cancel' : 'mortality.correct', $data['idempotency_key'], ['record' => $record->public_id, ...$data], function (string $operationId) use ($record, $data, $actor, $cancel, $source): array {
             $flockId = Flock::query()->whereKey($record->flock_id)->value('public_id');
             $flock = $this->state->lock([$flockId])->get($flockId);
             $current = MortalityRecord::query()->whereKey($record->id)->lockForUpdate()->firstOrFail();
@@ -68,11 +68,11 @@ final readonly class CorrectMortalityAction
                         throw new LotsConflict('Debes confirmar la reactivación del lote finalizado antes de devolverle aves.');
                     }
                     $reactivationSnapshot = $terminalSnapshot;
-                    $this->state->receive($houses[$flock->poultry_house_id], $resultingQuantity, requiresEmpty: true);
+                    $this->state->receive($houses[$flock->poultry_house_id], requiresEmpty: true);
                 }
             } elseif (max(0, $resultingQuantity) > max(0, $flock->current_quantity)) {
                 $this->state->open($flock);
-                $this->state->receive($houses[$flock->poultry_house_id], max(0, $resultingQuantity) - max(0, $flock->current_quantity), existingReceiver: $flock);
+                $this->state->receive($houses[$flock->poultry_house_id], existingReceiver: $flock);
             } elseif ($flock->status !== FlockStatus::Finished) {
                 $this->state->open($flock);
             }

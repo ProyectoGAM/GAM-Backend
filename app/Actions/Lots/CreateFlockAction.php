@@ -31,7 +31,7 @@ final readonly class CreateFlockAction
     {
         $data['code'] = Str::upper(trim($data['code']));
 
-        return $this->commands->execute($actor, 'flocks.manage', 'flock.create', $data['idempotency_key'], $data, function (string $operationId) use ($data, $actor, $source): array {
+        return $this->commands->execute($actor, 'can_manage_flocks', 'flock.create', $data['idempotency_key'], $data, function (string $operationId) use ($data, $actor, $source): array {
             $quantity = (int) $data['initial_quantity'];
             $this->state->positive($quantity);
             $entry = CarbonImmutable::createFromFormat('!Y-m-d', $data['entry_date'], FlockFeedingResolver::TIMEZONE);
@@ -47,7 +47,7 @@ final readonly class CreateFlockAction
                 throw new LotsConflict('Indica un proveedor activo o describe el origen del lote.');
             }
             $house = $this->houses->execute([(int) $data['poultry_house_id']])[(int) $data['poultry_house_id']];
-            $this->state->receive($house, $quantity, requiresEmpty: true);
+            $this->state->receive($house, requiresEmpty: true);
             $flock = new Flock;
             $flock->forceFill([
                 'public_id' => $data['public_id'] ?? (string) Str::ulid(), 'code' => $data['code'],

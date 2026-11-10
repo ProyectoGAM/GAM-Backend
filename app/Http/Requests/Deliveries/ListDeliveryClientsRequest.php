@@ -6,7 +6,7 @@ final class ListDeliveryClientsRequest extends DeliveryRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('delivery.view-own') ?? false;
+        return $this->user()?->can('can_view_own_deliveries') ?? false;
     }
 
     /** @return array<string, list<string>> */
@@ -14,7 +14,10 @@ final class ListDeliveryClientsRequest extends DeliveryRequest
     {
         return [
             'search' => ['sometimes', 'nullable', 'string', 'max:100'],
-            'limit' => ['sometimes', 'integer', 'min:1', 'max:50'],
+            'page' => ['sometimes', 'integer', 'min:1', 'max:100000'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'status' => ['sometimes', 'in:active,inactive'],
+            'limit' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }
 }

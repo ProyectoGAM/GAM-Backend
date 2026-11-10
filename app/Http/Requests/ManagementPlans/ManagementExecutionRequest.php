@@ -16,7 +16,7 @@ abstract class ManagementExecutionRequest extends LotsRequest
 
         return $flock instanceof Flock
             && ($this->user() instanceof User)
-            && LotsAuthorization::allows($this->user(), 'management-plans.execute');
+            && LotsAuthorization::allows($this->user(), 'can_execute_management_plans');
     }
 
     protected function authorizeMedicineStockManagement(): bool
@@ -25,7 +25,7 @@ abstract class ManagementExecutionRequest extends LotsRequest
 
         return $medicine instanceof Medicine
             && ($this->user() instanceof User)
-            && LotsAuthorization::allows($this->user(), 'management-plans.stock.manage');
+            && LotsAuthorization::allows($this->user(), 'can_manage_medicine_stock');
     }
 
     protected function authorizeMedicineStockRead(): bool
@@ -35,8 +35,8 @@ abstract class ManagementExecutionRequest extends LotsRequest
 
         return $medicine instanceof Medicine
             && $user instanceof User
-            && (LotsAuthorization::allows($user, 'management-plans.view')
-                || LotsAuthorization::allows($user, 'management-plans.stock.manage'));
+            && (LotsAuthorization::allows($user, 'can_view_management_plans')
+                || LotsAuthorization::allows($user, 'can_manage_medicine_stock'));
     }
 
     /** @return array<string, mixed> */
@@ -46,6 +46,27 @@ abstract class ManagementExecutionRequest extends LotsRequest
             'plan_activity_id' => ['sometimes', 'ulid'],
             'responsible_user_id' => ['sometimes', 'integer', 'min:1', 'max:9223372036854775807'],
             'occurred_at' => ['required', 'date', 'regex:/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$/'],
+        ];
+    }
+
+    /** @return array<string, array<int, mixed>> */
+    protected function healthApplicationRules(): array
+    {
+        return [
+            'reason' => ['required_without:plan_activity_id', 'nullable', 'string', 'min:1', 'max:500'],
+            'quantity' => ['prohibited'],
+            'stock_consumption' => ['prohibited'],
+        ];
+    }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return [
+            ...parent::messages(),
+            'reason.required_without' => 'Debes indicar un motivo cuando la aplicación no está prevista en el plan de manejo.',
+            'quantity.prohibited' => 'La aplicación se registra sin cantidad aplicada.',
+            'stock_consumption.prohibited' => 'El stock físico de sanidad está deshabilitado. Registra la aplicación sin consumo de inventario.',
         ];
     }
 }

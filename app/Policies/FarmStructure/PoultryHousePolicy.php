@@ -10,7 +10,7 @@ final readonly class PoultryHousePolicy
 {
     public function viewAny(User $user): bool
     {
-        return $this->hasPermission($user, 'poultry-houses.view');
+        return $this->hasPermission($user, 'can_view_poultry_houses');
     }
 
     public function view(User $user, PoultryHouse $poultryHouse): bool
@@ -20,12 +20,12 @@ final readonly class PoultryHousePolicy
 
     public function create(User $user, ProductionUnit $productionUnit): bool
     {
-        return $this->hasPermission($user, 'poultry-houses.manage');
+        return $this->hasPermission($user, 'can_manage_poultry_houses');
     }
 
     public function update(User $user, PoultryHouse $poultryHouse): bool
     {
-        return $this->hasPermission($user, 'poultry-houses.manage');
+        return $this->hasPermission($user, 'can_manage_poultry_houses');
     }
 
     public function changeStatus(User $user, PoultryHouse $poultryHouse): bool

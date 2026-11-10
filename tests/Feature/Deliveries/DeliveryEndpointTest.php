@@ -2,13 +2,18 @@
 
 namespace Tests\Feature\Deliveries;
 
+use App\Actions\Inventory\RecordEggStockTransactionAction;
+use App\Models\CustomersAndAccounts\Customer;
 use App\Models\Deliveries\Delivery;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\EggPresentation;
+use App\Models\Notifications\AppNotification;
 use App\Models\User;
+use App\Models\Vehicles\Vehicle;
 use App\Queries\Inventory\GetEggStockBalanceQuery;
 use App\Services\IdentityAndAccess\PinHasher;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
@@ -19,20 +24,30 @@ final class DeliveryEndpointTest extends TestCase
 {
     use LazilyRefreshDatabase;
 
+    /** @var array<string, string> */
+    private array $vehiclesByCommand = [];
+
     /** @param list<string> $permissions */
     private function signIn(array $permissions): User
     {
+        // Preparación: el reparto usa fichas persistentes; estos seis clientes son sólo fixtures de prueba.
+        if (! Customer::query()->exists()) {
+            $names = ['Almacén El Puente', 'Comercio La Plaza', 'Despensa Santa Rita', 'Mercado del Barrio', 'Autoservicio Norte', 'Kiosco La Estación'];
+            foreach ($names as $index => $name) {
+                Customer::factory()->withAccount()->create(['public_id' => '01K0000000000000000000000'.($index + 1), 'name' => $name]);
+            }
+        }
         // Preparación: configura precios de prueba, sin modificar datos de desarrollo.
         EggPresentation::query()->update(['default_unit_price' => 100]);
         config(['identity.pin.pepper' => 'test-only-temporary-value']);
         $user = User::factory()->create([
-            'pin_hash' => app(PinHasher::class)->hash('0007'),
-            'pin_enabled' => true,
+            'operation_pin_hash' => app(PinHasher::class)->hash('0007'),
+
             'pin_pepper_version' => config('identity.pin.pepper_version'),
             'pin_daily_window_started_at' => now(),
         ]);
         foreach ($permissions as $permission) {
-            $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+            $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
         Sanctum::actingAs($user, ['api:access']);
 
@@ -42,6 +57,11 @@ final class DeliveryEndpointTest extends TestCase
     /** @param array<string, mixed> $payload */
     private function command(string $method, string $path, array $payload, ?string $key = null): TestResponse
     {
+        $key ??= (string) Str::uuid();
+        if ($method === 'POST' && $path === '/repartos' && ! isset($payload['vehicle_id'])) {
+            $this->vehiclesByCommand[$key] ??= Vehicle::factory()->create()->public_id;
+            $payload['vehicle_id'] = $this->vehiclesByCommand[$key];
+        }
         if ($method === 'POST' && ! isset($payload['production_unit_id'])) {
             if ($path === '/repartos') {
                 $payload['production_unit_id'] = ProductionUnit::query()->value('id') ?? ProductionUnit::factory()->create()->id;
@@ -54,51 +74,227 @@ final class DeliveryEndpointTest extends TestCase
             $payload = ['pin' => '0007', ...$payload];
         }
 
+        if ($method === 'POST' && str_ends_with($path, '/entregas') && ($payload['status'] ?? '') === 'delivered') {
+            $payload = ['accounting_version' => 2, 'client_event_id' => $key, 'payment' => ['amount' => '0.000'], ...$payload];
+        }
+
         return $this->json($method, '/api/v1'.$path, $payload, [
-            'Idempotency-Key' => $key ?? (string) Str::uuid(),
+            'Idempotency-Key' => $key,
         ]);
     }
 
+    // Flujo: las cargas que dejan saldo negativo y la devolución al cierre generan avisos distintos.
+    public function test_egg_alerts_follow_the_confirmed_loads_and_surplus(): void
+    {
+        // Preparación: distingue el acceso al stock local del acceso a un reparto con varias UP.
+        $driver = $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
+        $unit = ProductionUnit::factory()->create();
+        $otherUnit = ProductionUnit::factory()->create();
+        $supervisor = User::factory()->create();
+        $localViewer = User::factory()->devicePin($otherUnit)->create();
+        $history = Permission::findOrCreate('can_view_delivery_history', 'web');
+        $inbox = Permission::findOrCreate('can_view_notifications', 'web');
+        $eggStock = Permission::findOrCreate('can_view_egg_stock', 'web');
+        $monitor = Permission::findOrCreate('can_monitor_deliveries', 'web');
+        $supervisor->roles()->firstOrFail()->givePermissionTo($history, $monitor, $inbox, $eggStock);
+        $localViewer->roles()->firstOrFail()->givePermissionTo($history, $inbox, $eggStock);
+
+        // Request: el alta y su reintento dejan el saldo en -10 y un único aviso alto.
+        $startKey = (string) Str::uuid();
+        $start = ['production_unit_id' => $unit->id, 'quantity' => 10];
+        $deliveryId = $this->command('POST', '/repartos', $start, $startKey)->assertCreated()->json('data.id');
+        $this->command('POST', '/repartos', $start, $startKey)->assertCreated();
+        $negative = AppNotification::query()->sole();
+        $this->assertSame($supervisor->id, $negative->recipient_id);
+        $this->assertSame($unit->id, $negative->production_unit_id);
+        $this->assertStringContainsString('-10', $negative->message);
+
+        // Request: una recarga en otra UP genera su propio aviso alto y conserva el alcance.
+        $loadKey = (string) Str::uuid();
+        $load = ['production_unit_id' => $otherUnit->id, 'quantity' => 5];
+        $this->command('POST', "/repartos/{$deliveryId}/cargas", $load, $loadKey)->assertOk();
+        $this->command('POST', "/repartos/{$deliveryId}/cargas", $load, $loadKey)->assertOk();
+        $this->assertDatabaseHas('app_notifications', [
+            'recipient_id' => $supervisor->id, 'production_unit_id' => $otherUnit->id,
+            'type' => 'egg_stock_negative', 'urgency' => 'alto', 'entity_id' => (string) $otherUnit->id,
+        ]);
+        $this->assertDatabaseHas('app_notifications', [
+            'recipient_id' => $localViewer->id, 'production_unit_id' => $otherUnit->id, 'type' => 'egg_stock_negative',
+        ]);
+        $this->assertDatabaseCount('app_notifications', 3);
+
+        // Request: un cierre rechazado deja la bandeja intacta; el cierre válido avisa una sola vez.
+        $closeKey = (string) Str::uuid();
+        $close = ['returned_quantity' => 15, 'return_production_unit_id' => $otherUnit->id];
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", [...$close, 'returned_quantity' => 14])->assertConflict();
+        $this->assertDatabaseCount('app_notifications', 3);
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", $close, $closeKey)->assertOk();
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", $close, $closeKey)->assertOk();
+        $surplus = AppNotification::query()->where('type', 'delivery_egg_surplus')->sole();
+        $this->assertStringContainsString('15 huevos', $surplus->message);
+        $this->assertStringContainsString($otherUnit->name, $surplus->message);
+        $this->assertFalse($surplus->is_alert);
+        $this->assertSame($supervisor->id, $surplus->recipient_id);
+        $this->assertDatabaseCount('app_notifications', 4);
+        $remainingNegative = AppNotification::query()->where('type', 'egg_stock_negative')->whereNull('resolved_at')->sole();
+        $this->assertSame($negative->id, $remainingNegative->id);
+
+        // Consulta: el supervisor ve ambas urgencias y el vínculo al módulo en su bandeja.
+        Sanctum::actingAs($supervisor, ['api:access']);
+        $this->getJson('/api/v1/notificaciones/'.$negative->public_id)->assertOk()
+            ->assertJsonPath('data.urgencia', 'alto')
+            ->assertJsonPath('data.entidad.id', (string) $unit->id)
+            ->assertJsonPath('data.modulo', 'inventory');
+        $this->getJson('/api/v1/notificaciones/'.$surplus->public_id)->assertOk()
+            ->assertJsonPath('data.urgencia', 'bajo')
+            ->assertJsonPath('data.modulo', 'deliveries')
+            ->assertJsonPath('data.entidad.ruta', '/administracion/repartos/repartos');
+    }
+
+    // Flujo: el saldo cero y el cierre sin devolución no generan alertas.
+    public function test_no_egg_alert_is_issued_for_exact_stock_and_no_surplus(): void
+    {
+        // Preparación: da al repartidor permisos de supervisión y carga una cuenta con diez huevos.
+        $actor = $this->signIn([
+            'can_start_deliveries', 'can_update_own_deliveries', 'can_monitor_deliveries', 'can_view_notifications',
+        ]);
+        $unit = ProductionUnit::factory()->create();
+        app(RecordEggStockTransactionAction::class)->execute($unit, 'manual_receipt', 10, (string) Str::uuid(), $actor);
+
+        // Requests: carga y entrega todos los huevos antes de cerrar sin devolución.
+        $deliveryId = $this->command('POST', '/repartos', ['production_unit_id' => $unit->id, 'quantity' => 10])
+            ->assertCreated()->json('data.id');
+        $this->command('POST', "/repartos/{$deliveryId}/entregas", [
+            'client_reference' => '01K00000000000000000000001', 'status' => 'delivered',
+            'items' => [['unit' => 'huevo', 'amount' => '10', 'eggs_per_unit' => 1]],
+        ])->assertOk();
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", ['returned_quantity' => 0])->assertOk();
+        $this->assertDatabaseCount('app_notifications', 0);
+    }
+
+    // Flujo: una entrega puede registrar la diferencia real, que exige ajustar el reparto antes del cierre.
+    public function test_delivery_shortfall_stays_open_until_a_missing_load_is_recorded(): void
+    {
+        // Preparación: registra un maple sin dejar negativo el stock de la UP.
+        $actor = $this->signIn([
+            'can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries',
+            'can_monitor_deliveries', 'can_view_notifications',
+        ]);
+        $unit = ProductionUnit::factory()->create();
+        app(RecordEggStockTransactionAction::class)->execute($unit, 'manual_receipt', 45, (string) Str::uuid(), $actor);
+        $deliveryId = $this->command('POST', '/repartos', [
+            'production_unit_id' => $unit->id,
+            'items' => [['unit' => 'maple', 'amount' => '1', 'eggs_per_unit' => 30]],
+        ])->assertCreated()->json('data.id');
+
+        // Request: acepta y contabiliza la entrega de un maple y medio y conserva el saldo con signo.
+        $stopKey = (string) Str::uuid();
+        $stop = [
+            'client_reference' => '01K00000000000000000000001', 'status' => 'delivered',
+            'items' => [['unit' => 'maple', 'amount' => '1.5', 'eggs_per_unit' => 30]],
+        ];
+        $this->command('POST', "/repartos/{$deliveryId}/entregas", $stop, $stopKey)->assertOk()
+            ->assertJsonPath('data.delivered_quantity', 45)
+            ->assertJsonPath('data.total_amount', '150.000');
+        $this->command('POST', "/repartos/{$deliveryId}/entregas", $stop, $stopKey)->assertOk();
+        $this->getJson("/api/v1/repartos/{$deliveryId}")->assertOk()
+            ->assertJsonPath('data.remaining_quantity', -15)
+            ->assertJsonPath('data.unit_balances.rows.0.remaining_amount', '-0.5');
+
+        // Request: el cierre negativo se rechaza y la alerta sigue disponible para supervisión.
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", ['returned_quantity' => 0])->assertConflict();
+        $notice = AppNotification::query()->sole();
+        $this->assertSame('delivery_egg_balance_negative', $notice->type);
+        $this->assertSame('alto', $notice->urgency->value);
+        $this->assertSame($deliveryId, $notice->entity_id);
+        $this->getJson('/api/v1/alertas-operativas?up_id='.$unit->id)->assertOk()->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.entidad.id', $deliveryId);
+
+        // Request: registrar la carga física que faltaba salda la diferencia y habilita el cierre.
+        $this->command('POST', "/repartos/{$deliveryId}/cargas", [
+            'production_unit_id' => $unit->id, 'items' => [['unit' => 'maple', 'amount' => '0.5', 'eggs_per_unit' => 30]],
+        ])->assertOk()->assertJsonPath('data.remaining_quantity', 0);
+        $this->getJson('/api/v1/alertas-operativas/resumen?up_id='.$unit->id)->assertOk()->assertJsonPath('data.total', 0);
+        $this->assertNotNull($notice->fresh()->resolved_at);
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", ['returned_quantity' => 0])->assertOk()->assertJsonPath('data.remaining_quantity', 0);
+        $this->assertSame(0, app(GetEggStockBalanceQuery::class)->execute($unit)['balance']);
+    }
+
+    // Flujo: el sobrante exige destino explícito y se registra sólo cuando coincide con el saldo del reparto.
+    public function test_close_requires_a_return_unit_and_rejects_more_eggs_than_remaining(): void
+    {
+        // Preparación: registra una carga inicial que deja el stock de la UP en cero.
+        $actor = $this->signIn([
+            'can_start_deliveries', 'can_update_own_deliveries', 'can_monitor_deliveries', 'can_view_notifications',
+        ]);
+        $unit = ProductionUnit::factory()->create();
+        app(RecordEggStockTransactionAction::class)->execute($unit, 'manual_receipt', 10, (string) Str::uuid(), $actor);
+        $deliveryId = $this->command('POST', '/repartos', ['production_unit_id' => $unit->id, 'quantity' => 10])
+            ->assertCreated()->json('data.id');
+
+        // Request: rechaza una devolución sin destino o por encima de la carga registrada.
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", ['returned_quantity' => 10])->assertUnprocessable()
+            ->assertJsonValidationErrors('return_production_unit_id');
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", [
+            'returned_items' => [['unit' => 'huevo', 'amount' => '12', 'eggs_per_unit' => 1]],
+            'return_production_unit_id' => $unit->id,
+        ])->assertConflict();
+        $this->assertSame(0, app(GetEggStockBalanceQuery::class)->execute($unit)['balance']);
+
+        // Request: el destino elegido recibe la cantidad exacta y el aviso queda como informativo.
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", ['returned_quantity' => 10, 'return_production_unit_id' => $unit->id])
+            ->assertOk()->assertJsonPath('data.return_production_unit.id', $unit->id)->assertJsonPath('data.remaining_quantity', 0);
+        $this->assertSame(10, app(GetEggStockBalanceQuery::class)->execute($unit)['balance']);
+        $this->assertDatabaseCount('app_notifications', 1);
+        $this->assertDatabaseHas('app_notifications', ['type' => 'delivery_egg_surplus', 'urgency' => 'bajo', 'is_alert' => false]);
+    }
+
+    // Verifica el PIN de inicio y cierre sin persistirlo en el comando del reparto.
     public function test_start_and_close_require_the_drivers_valid_pin_without_persisting_it(): void
     {
-        $actor = $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        // Preparación: declara la unidad y el vehículo que forman parte del comando.
+        $actor = $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
-        $start = ['production_unit_id' => $unit->id, 'quantity' => 10];
+        $start = ['production_unit_id' => $unit->id, 'quantity' => 10, 'vehicle_id' => Vehicle::factory()->create()->public_id];
         $headers = ['Idempotency-Key' => (string) Str::uuid()];
 
+        // Request: rechaza el PIN ausente o inválido sin iniciar un reparto.
         $this->postJson('/api/v1/repartos', $start, $headers)->assertUnprocessable();
         $this->command('POST', '/repartos', [...$start, 'pin' => '9999'])->assertUnauthorized()
             ->assertJsonPath('code', 'INVALID_PIN');
         $this->assertDatabaseCount('deliveries', 0);
-        $this->assertDatabaseHas('users', ['id' => $actor->id, 'pin_failed_attempts' => 1]);
+        $this->assertSame(1, RateLimiter::attempts('operation-pin|'.$actor->id));
 
+        // Request: inicia con PIN válido y verifica que el hash no lo incluya.
         $key = (string) Str::uuid();
         $deliveryId = $this->command('POST', '/repartos', $start, $key)->assertCreated()->json('data.id');
-        $this->assertDatabaseHas('users', ['id' => $actor->id, 'pin_failed_attempts' => 0]);
+        $this->assertSame(0, RateLimiter::attempts('operation-pin|'.$actor->id));
         $this->assertDatabaseHas('deliveries', [
             'public_id' => $deliveryId,
             'start_request_hash' => hash('sha256', json_encode(['idempotency_key' => $key, ...$start])),
         ]);
 
-        $close = ['returned_quantity' => 10];
+        // Request: el cierre también exige PIN sin alterar el reparto ante un rechazo.
+        $close = ['returned_quantity' => 10, 'return_production_unit_id' => $unit->id];
         $this->postJson("/api/v1/repartos/{$deliveryId}/cierre", $close, $headers)->assertUnprocessable();
         $this->command('POST', "/repartos/{$deliveryId}/cierre", [...$close, 'pin' => '9999'])
             ->assertUnauthorized()->assertJsonPath('code', 'INVALID_PIN');
         $this->assertDatabaseHas('deliveries', ['public_id' => $deliveryId, 'status' => 'active']);
+        // Request: cierra con PIN válido y conserva el estado final esperado.
         $this->command('POST', "/repartos/{$deliveryId}/cierre", $close)->assertOk();
         $this->assertDatabaseHas('deliveries', ['public_id' => $deliveryId, 'status' => 'completed']);
     }
 
     public function test_delivery_pin_must_be_configured_and_is_locked_after_repeated_failures(): void
     {
-        $actor = $this->signIn(['delivery.start']);
-        $actor->forceFill(['pin_enabled' => false, 'pin_hash' => null])->save();
+        $actor = $this->signIn(['can_start_deliveries']);
+        $actor->forceFill(['operation_pin_hash' => null])->save();
         $this->command('POST', '/repartos', ['quantity' => 10])->assertStatus(422)
             ->assertJsonPath('code', 'PIN_NOT_CONFIGURED');
 
         $actor->forceFill([
-            'pin_enabled' => true,
-            'pin_hash' => app(PinHasher::class)->hash('0007'),
+
+            'operation_pin_hash' => app(PinHasher::class)->hash('0007'),
         ])->save();
         for ($attempt = 0; $attempt < 4; $attempt++) {
             $this->command('POST', '/repartos', ['quantity' => 10, 'pin' => '9999'])
@@ -114,7 +310,7 @@ final class DeliveryEndpointTest extends TestCase
     public function test_delivery_role_can_start_without_preassigned_clients_and_replay_without_duplicate_load(): void
     {
         // Preparación: autentica un repartidor y crea una unidad productiva operativa.
-        $actor = $this->signIn(['delivery.start', 'delivery.view-own']);
+        $actor = $this->signIn(['can_start_deliveries', 'can_view_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $key = (string) Str::uuid();
         $payload = ['production_unit_id' => $unit->id, 'quantity' => 120];
@@ -152,9 +348,44 @@ final class DeliveryEndpointTest extends TestCase
         $this->assertDatabaseCount('egg_stock_transactions', 1);
     }
 
+    // Verifica que el reparto exponga únicamente las cargas asociadas al uso de su vehículo.
+    public function test_delivery_responses_include_fuel_entries_from_the_current_vehicle_usage(): void
+    {
+        // Preparación: autentica un repartidor con permiso para registrar combustible.
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries', 'can_record_delivery_fuel']);
+        // Request: inicia un reparto y obtiene sus referencias de vehículo y uso.
+        $created = $this->command('POST', '/repartos', ['quantity' => 60])->assertCreated();
+        $deliveryId = $created->json('data.id');
+        $vehicleId = $created->json('data.vehicle.id');
+        $usageId = $created->json('data.vehicle_usage.id');
+        $key = (string) Str::uuid();
+
+        // Mutación: registra una carga de combustible vinculada al uso activo.
+        $this->json('POST', "/api/v1/vehiculos/{$vehicleId}/combustible", [
+            'usage_id' => $usageId,
+            'liters' => '32.5',
+            'fuel_type' => 'Nafta',
+            'amount' => '1789.500',
+            'occurred_at' => now()->toIso8601String(),
+            'supplier' => 'Estación de prueba',
+        ], ['Idempotency-Key' => $key])->assertCreated();
+
+        // Consulta: comprueba que el detalle devuelve los datos monetarios y de litros.
+        $this->getJson("/api/v1/repartos/{$deliveryId}")
+            ->assertOk()
+            ->assertJsonPath('data.vehicle_usage.fuel_entries.0.liters', '32.500')
+            ->assertJsonPath('data.vehicle_usage.fuel_entries.0.amount', '1789.500')
+            ->assertJsonPath('data.vehicle_usage.fuel_entries.0.supplier', 'Estación de prueba');
+
+        // Consulta: comprueba que el listado usado por la app también incluye la carga.
+        $this->getJson('/api/v1/repartos/actuales')
+            ->assertOk()
+            ->assertJsonPath('data.0.vehicle_usage.fuel_entries.0.fuel_type', 'Nafta');
+    }
+
     public function test_driver_chooses_clients_in_any_order_and_can_add_an_idempotent_mid_route_load(): void
     {
-        $actor = $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $actor = $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $deliveryId = $this->command('POST', '/repartos', [
             'production_unit_id' => $unit->id, 'quantity' => 60,
@@ -162,17 +393,17 @@ final class DeliveryEndpointTest extends TestCase
 
         $this->getJson('/api/v1/repartos/clientes?limit=2')->assertOk()
             ->assertJsonCount(2, 'data')
-            ->assertJsonPath('data.0.id', 'demo-001');
+            ->assertJsonPath('data.0.id', '01K00000000000000000000001');
         $this->getJson('/api/v1/repartos/clientes?search=&limit=50')->assertOk()
             ->assertJsonCount(6, 'data');
         $this->getJson('/api/v1/repartos/clientes?search=Estación')->assertOk()
             ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.id', 'demo-006');
+            ->assertJsonPath('data.0.id', '01K00000000000000000000006');
 
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-006', 'status' => 'delivered',
+            'client_reference' => '01K00000000000000000000006', 'status' => 'delivered',
             'items' => [['unit' => 'huevo', 'amount' => '40', 'eggs_per_unit' => 1]],
-        ])->assertOk()->assertJsonPath('data.client_reference', 'demo-006');
+        ])->assertOk()->assertJsonPath('data.client_reference', '01K00000000000000000000006');
 
         $key = (string) Str::uuid();
         $this->command('POST', "/repartos/{$deliveryId}/cargas", ['quantity' => 30], $key)
@@ -184,14 +415,14 @@ final class DeliveryEndpointTest extends TestCase
         $this->command('POST', "/repartos/{$deliveryId}/cargas", ['quantity' => 31], $key)->assertStatus(409);
 
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-001', 'status' => 'delivered',
+            'client_reference' => '01K00000000000000000000001', 'status' => 'delivered',
             'items' => [['unit' => 'huevo', 'amount' => '20', 'eggs_per_unit' => 1]],
         ])->assertOk();
         $this->assertDatabaseHas('delivery_stops', [
-            'client_reference' => 'demo-006', 'sequence' => 1, 'delivery_id' => Delivery::query()->where('public_id', $deliveryId)->firstOrFail()->id,
+            'client_reference' => '01K00000000000000000000006', 'sequence' => 1, 'delivery_id' => Delivery::query()->where('public_id', $deliveryId)->firstOrFail()->id,
         ]);
         $this->assertDatabaseHas('delivery_stops', [
-            'client_reference' => 'demo-001', 'sequence' => 2,
+            'client_reference' => '01K00000000000000000000001', 'sequence' => 2,
         ]);
         $this->assertDatabaseHas('delivery_loads', [
             'delivery_id' => Delivery::query()->where('public_id', $deliveryId)->firstOrFail()->id,
@@ -205,7 +436,7 @@ final class DeliveryEndpointTest extends TestCase
         $this->assertDatabaseCount('egg_stock_transactions', 2);
         $this->assertDatabaseCount('delivery_stops', 2);
 
-        $this->command('POST', "/repartos/{$deliveryId}/cierre", ['returned_quantity' => 30])
+        $this->command('POST', "/repartos/{$deliveryId}/cierre", ['returned_quantity' => 30, 'return_production_unit_id' => $unit->id])
             ->assertOk()
             ->assertJsonPath('data.loaded_quantity', 90)
             ->assertJsonPath('data.delivered_quantity', 60)
@@ -220,7 +451,7 @@ final class DeliveryEndpointTest extends TestCase
 
     public function test_unknown_client_and_foreign_driver_cannot_modify_a_delivery(): void
     {
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $deliveryId = $this->command('POST', '/repartos', [
             'production_unit_id' => $unit->id, 'quantity' => 10,
@@ -231,11 +462,11 @@ final class DeliveryEndpointTest extends TestCase
             'items' => [['unit' => 'huevo', 'amount' => '1', 'eggs_per_unit' => 1]],
         ])->assertStatus(409);
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-001', 'status' => 'pending',
+            'client_reference' => '01K00000000000000000000001', 'status' => 'pending',
         ])->assertUnprocessable();
 
         $other = User::factory()->create();
-        $other->givePermissionTo(Permission::findOrCreate('delivery.update-own', 'web'));
+        $other->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_update_own_deliveries', 'web'));
         Sanctum::actingAs($other, ['api:access']);
         $this->command('POST', "/repartos/{$deliveryId}/cargas", ['quantity' => 10])->assertForbidden();
         $this->assertDatabaseCount('delivery_stops', 0);
@@ -244,14 +475,14 @@ final class DeliveryEndpointTest extends TestCase
 
     public function test_visit_without_delivery_records_zero_eggs_without_items(): void
     {
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $deliveryId = $this->command('POST', '/repartos', [
             'production_unit_id' => $unit->id, 'quantity' => 10,
         ])->assertCreated()->json('data.id');
 
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-001', 'status' => 'not_delivered',
+            'client_reference' => '01K00000000000000000000001', 'status' => 'not_delivered',
             'visit_reason' => 'Negocio cerrado',
         ])->assertOk()
             ->assertJsonPath('data.delivered_quantity', 0)
@@ -263,7 +494,7 @@ final class DeliveryEndpointTest extends TestCase
 
     public function test_mixed_and_fractional_loads_keep_their_conversion_snapshot(): void
     {
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $this->getJson('/api/v1/repartos/unidades')->assertOk()
             ->assertJsonPath('data.1.id', 'maple')
@@ -323,7 +554,7 @@ final class DeliveryEndpointTest extends TestCase
 
     public function test_loads_created_before_the_items_migration_still_read_as_eggs(): void
     {
-        $this->signIn(['delivery.start', 'delivery.view-own']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $deliveryId = $this->command('POST', '/repartos', [
             'production_unit_id' => $unit->id, 'quantity' => 12,
@@ -337,60 +568,74 @@ final class DeliveryEndpointTest extends TestCase
             ->assertJsonPath('data.loads.0.items.0.eggs', 12);
     }
 
+    // Flujo: verifica el saldo de cada presentación después de las entregas, la recarga y el reintento.
     public function test_delivery_items_decrement_only_their_real_loaded_presentation_and_replay_safely(): void
     {
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        // Preparación: inicia un reparto con huevos sueltos y maples.
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
-        $deliveryId = $this->command('POST', '/repartos', [
+        $started = $this->command('POST', '/repartos', [
             'production_unit_id' => $unit->id,
             'items' => [
                 ['unit' => 'huevo', 'amount' => '5', 'eggs_per_unit' => 1],
                 ['unit' => 'maple', 'amount' => '2', 'eggs_per_unit' => 30],
             ],
-        ])->assertCreated()
-            ->assertJsonPath('data.unit_balances.rows.0.loaded_amount', '5')
-            ->assertJsonPath('data.unit_balances.rows.1.loaded_amount', '2')
-            ->json('data.id');
+        ])->assertCreated();
+        $deliveryId = $started->json('data.id');
+        $rows = array_column($started->json('data.unit_balances.rows'), null, 'unit');
+        $this->assertSame('5', $rows['huevo']['loaded_amount']);
+        $this->assertSame('2', $rows['maple']['loaded_amount']);
 
         $key = (string) Str::uuid();
-        $first = ['client_reference' => 'demo-001', 'status' => 'delivered', 'items' => [
+        $first = ['client_reference' => '01K00000000000000000000001', 'status' => 'delivered', 'items' => [
             ['unit' => 'maple', 'amount' => '1', 'eggs_per_unit' => 30],
             ['unit' => 'huevo', 'amount' => '3', 'eggs_per_unit' => 1],
         ]];
+        // Request: registra ambas presentaciones y comprueba la equivalencia del maple.
         $this->command('POST', "/repartos/{$deliveryId}/entregas", $first, $key)->assertOk()
             ->assertJsonPath('data.delivered_quantity', 33)
             ->assertJsonPath('data.items.0.eggs', 30);
+        // Request: exige el desglose por presentación y comprueba que el reintento no duplica la entrega.
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-002', 'status' => 'delivered', 'delivered_quantity' => 1,
+            'client_reference' => '01K00000000000000000000002', 'status' => 'delivered', 'delivered_quantity' => 1,
         ])->assertUnprocessable();
         $this->command('POST', "/repartos/{$deliveryId}/entregas", $first, $key)->assertOk();
         $this->assertDatabaseCount('delivery_stops', 1);
-        $this->getJson("/api/v1/repartos/{$deliveryId}")->assertOk()
+        // Consulta: verifica los saldos por presentación sin depender de la posición de sus filas.
+        $detail = $this->getJson("/api/v1/repartos/{$deliveryId}")->assertOk()
             ->assertJsonPath('data.delivered_quantity', 33)
-            ->assertJsonPath('data.remaining_quantity', 32)
-            ->assertJsonPath('data.unit_balances.rows.0.delivered_amount', '3')
-            ->assertJsonPath('data.unit_balances.rows.0.remaining_amount', '2')
-            ->assertJsonPath('data.unit_balances.rows.1.delivered_amount', '1')
-            ->assertJsonPath('data.unit_balances.rows.1.remaining_amount', '1');
+            ->assertJsonPath('data.remaining_quantity', 32);
+        $rows = array_column($detail->json('data.unit_balances.rows'), null, 'unit');
+        $this->assertSame('3', $rows['huevo']['delivered_amount']);
+        $this->assertSame('2', $rows['huevo']['remaining_amount']);
+        $this->assertSame('1', $rows['maple']['delivered_amount']);
+        $this->assertSame('1', $rows['maple']['remaining_amount']);
 
+        // Request: rechaza la equivalencia incorrecta y registra la recarga de maples.
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-002', 'status' => 'delivered',
-            'items' => [['unit' => 'maple', 'amount' => '2', 'eggs_per_unit' => 30]],
-        ])->assertUnprocessable();
-        $this->command('POST', "/repartos/{$deliveryId}/cargas", [
+            'client_reference' => '01K00000000000000000000002', 'status' => 'delivered',
+            'items' => [['unit' => 'maple', 'amount' => '2', 'eggs_per_unit' => 29]],
+        ])->assertUnprocessable()->assertJsonValidationErrors('items.0.unit');
+        $reloaded = $this->command('POST', "/repartos/{$deliveryId}/cargas", [
             'items' => [['unit' => 'maple', 'amount' => '1', 'eggs_per_unit' => 30]],
-        ])->assertOk()->assertJsonPath('data.unit_balances.rows.1.remaining_amount', '2');
+        ])->assertOk();
+        $rows = array_column($reloaded->json('data.unit_balances.rows'), null, 'unit');
+        $this->assertSame('2', $rows['maple']['remaining_amount']);
+
+        // Request y consulta: entrega los maples restantes y comprueba que los huevos sueltos quedan en el reparto.
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-002', 'status' => 'delivered',
+            'client_reference' => '01K00000000000000000000002', 'status' => 'delivered',
             'items' => [['unit' => 'maple', 'amount' => '2', 'eggs_per_unit' => 30]],
         ])->assertOk()->assertJsonPath('data.delivered_quantity', 60);
-        $this->getJson("/api/v1/repartos/{$deliveryId}")->assertOk()
-            ->assertJsonPath('data.unit_balances.rows.1.remaining_amount', '0');
+        $detail = $this->getJson("/api/v1/repartos/{$deliveryId}")->assertOk();
+        $rows = array_column($detail->json('data.unit_balances.rows'), null, 'unit');
+        $this->assertSame('0', $rows['maple']['remaining_amount']);
+        $this->assertSame('2', $rows['huevo']['remaining_amount']);
     }
 
     public function test_fractional_delivery_uses_the_load_conversion_snapshot(): void
     {
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $deliveryId = $this->command('POST', '/repartos', [
             'production_unit_id' => $unit->id,
@@ -400,7 +645,7 @@ final class DeliveryEndpointTest extends TestCase
         // Simula una definición histórica importada distinta para comprobar la copia de la carga.
         EggPresentation::query()->where('code', 'maple')->update(['eggs_per_unit' => 24]);
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-001', 'status' => 'delivered',
+            'client_reference' => '01K00000000000000000000001', 'status' => 'delivered',
             'items' => [['unit' => 'maple', 'amount' => '0.5', 'eggs_per_unit' => 30, 'unit_price' => 100]],
         ])->assertOk()->assertJsonPath('data.delivered_quantity', 15);
         $this->getJson("/api/v1/repartos/{$deliveryId}")->assertOk()
@@ -411,7 +656,7 @@ final class DeliveryEndpointTest extends TestCase
     public function test_driver_can_record_location_and_delivery_then_close_and_return_stock(): void
     {
         // Preparación: inicia un reparto activo con permisos operativos.
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own', 'delivery.location.publish']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries', 'can_publish_delivery_location']);
         $unit = ProductionUnit::factory()->create();
         $start = $this->command('POST', '/repartos', ['production_unit_id' => $unit->id, 'quantity' => 120]);
         $start->assertCreated();
@@ -435,12 +680,13 @@ final class DeliveryEndpointTest extends TestCase
 
         // Request: registra la entrega de un cliente y cierra con huevos devueltos.
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-001',
+            'client_reference' => '01K00000000000000000000001',
             'status' => 'delivered',
             'items' => [['unit' => 'huevo', 'amount' => '40', 'eggs_per_unit' => 1]],
         ])->assertOk();
         $closed = $this->command('POST', "/repartos/{$deliveryId}/cierre", [
             'returned_quantity' => 80,
+            'return_production_unit_id' => $unit->id,
             'notes' => 'Cierre de prueba',
         ])->assertOk();
 
@@ -461,7 +707,7 @@ final class DeliveryEndpointTest extends TestCase
     public function test_driver_can_query_only_their_active_delivery(): void
     {
         // Preparación: registra repartos activos de dos usuarios en unidades diferentes.
-        $firstDriver = $this->signIn(['delivery.start', 'delivery.view-own']);
+        $firstDriver = $this->signIn(['can_start_deliveries', 'can_view_own_deliveries']);
         $firstUnit = ProductionUnit::factory()->create([
             'latitude' => '-34.901100',
             'longitude' => '-56.164500',
@@ -476,14 +722,14 @@ final class DeliveryEndpointTest extends TestCase
         ])->assertCreated();
 
         $secondDriver = User::factory()->create([
-            'pin_hash' => app(PinHasher::class)->hash('0007'),
-            'pin_enabled' => true,
+            'operation_pin_hash' => app(PinHasher::class)->hash('0007'),
+
             'pin_pepper_version' => config('identity.pin.pepper_version'),
             'pin_daily_window_started_at' => now(),
         ]);
-        $secondDriver->givePermissionTo([
-            Permission::findOrCreate('delivery.start', 'web'),
-            Permission::findOrCreate('delivery.view-own', 'web'),
+        $secondDriver->roles()->firstOrFail()->givePermissionTo([
+            Permission::findOrCreate('can_start_deliveries', 'web'),
+            Permission::findOrCreate('can_view_own_deliveries', 'web'),
         ]);
         Sanctum::actingAs($secondDriver, ['api:access']);
         $secondDelivery = $this->command('POST', '/repartos', [
@@ -524,7 +770,7 @@ final class DeliveryEndpointTest extends TestCase
         ]);
         $firstDelivery = Delivery::factory()->create(['production_unit_id' => $firstUnit->id]);
         Delivery::factory()->create(['production_unit_id' => $secondUnit->id]);
-        $this->signIn(['delivery.monitor', 'delivery.history']);
+        $this->signIn(['can_monitor_deliveries', 'can_view_delivery_history']);
 
         // Acción: obtiene repartos históricos filtrados y comprueba la ubicación de su unidad.
         $this->getJson("/api/v1/repartos?production_unit_id={$firstUnit->id}")
@@ -553,7 +799,7 @@ final class DeliveryEndpointTest extends TestCase
     public function test_user_without_delivery_permission_is_forbidden_from_starting_a_delivery(): void
     {
         // Preparación: autentica un usuario que sólo posee un permiso de lectura no relacionado.
-        $this->signIn(['identity.personal.login']);
+        $this->signIn(['can_login_native']);
 
         // Request: intenta iniciar un reparto sin permiso de operación.
         $response = $this->command('POST', '/repartos', ['quantity' => 10]);
@@ -567,14 +813,14 @@ final class DeliveryEndpointTest extends TestCase
     public function test_driver_cannot_read_another_drivers_delivery_without_monitor_permission(): void
     {
         // Preparación: crea un reparto con un primer repartidor.
-        $firstDriver = $this->signIn(['delivery.start', 'delivery.view-own']);
+        $firstDriver = $this->signIn(['can_start_deliveries', 'can_view_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $created = $this->command('POST', '/repartos', ['production_unit_id' => $unit->id, 'quantity' => 10])->assertCreated();
         $deliveryId = $created->json('data.id');
 
         // Preparación: cambia la sesión a otro repartidor sin permiso de monitoreo.
         $secondDriver = User::factory()->create();
-        $secondDriver->givePermissionTo(Permission::findOrCreate('delivery.view-own', 'web'));
+        $secondDriver->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_view_own_deliveries', 'web'));
         Sanctum::actingAs($secondDriver, ['api:access']);
 
         // Request: intenta consultar el reparto ajeno.
@@ -589,7 +835,7 @@ final class DeliveryEndpointTest extends TestCase
     // Flujo: cada carga descuenta su UP; la descarga final concentra sobrantes en el destino elegido.
     public function test_multiple_load_origins_and_itemized_return_move_stock_once(): void
     {
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $firstUnit = ProductionUnit::factory()->create();
         $secondUnit = ProductionUnit::factory()->create();
         $query = app(GetEggStockBalanceQuery::class);
@@ -602,14 +848,14 @@ final class DeliveryEndpointTest extends TestCase
         ])->assertCreated()->assertJsonPath('data.loads.0.production_unit.id', $firstUnit->id)->json('data.id');
         $loadKey = (string) Str::uuid();
         $load = ['production_unit_id' => $secondUnit->id, 'items' => [['unit' => 'maple', 'amount' => '1', 'eggs_per_unit' => 30]]];
-        $this->command('POST', "/repartos/{$deliveryId}/cargas", $load, $loadKey)->assertOk()
-            ->assertJsonPath('data.loads.1.production_unit.id', $secondUnit->id);
+        $loaded = $this->command('POST', "/repartos/{$deliveryId}/cargas", $load, $loadKey)->assertOk();
+        $this->assertEqualsCanonicalizing([$firstUnit->id, $secondUnit->id], array_column(array_column($loaded->json('data.loads'), 'production_unit'), 'id'));
         $this->command('POST', "/repartos/{$deliveryId}/cargas", $load, $loadKey)->assertOk();
         $this->assertSame($firstBalance - 30, $query->execute($firstUnit)['balance']);
         $this->assertSame($secondBalance - 30, $query->execute($secondUnit)['balance']);
         // Request: entrega medio maple con precio particular; no vuelve a descontar stock central.
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-001', 'status' => 'delivered',
+            'client_reference' => '01K00000000000000000000001', 'status' => 'delivered',
             'items' => [['unit' => 'maple', 'amount' => '0.5', 'eggs_per_unit' => 30, 'unit_price' => 80]],
         ])->assertOk()->assertJsonPath('data.total_amount', '40.000');
         $this->assertSame($secondBalance - 30, $query->execute($secondUnit)['balance']);
@@ -640,7 +886,7 @@ final class DeliveryEndpointTest extends TestCase
     // Flujo: conserva milésimos exactos, admite precio personalizado entero y protege el historial.
     public function test_integer_unit_price_and_fractional_quantity_preserve_exact_total(): void
     {
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $unit = ProductionUnit::factory()->create();
         $presentation = EggPresentation::factory()->create(['eggs_per_unit' => 360, 'default_unit_price' => 200]);
         // Request: registra la carga con una presentación creada por administración.
@@ -651,7 +897,7 @@ final class DeliveryEndpointTest extends TestCase
         $item = ['unit' => $presentation->code, 'amount' => '0.125', 'eggs_per_unit' => 360, 'unit_price' => 101];
         // Request: conserva exactamente $12,625, sin modificar el precio predeterminado.
         $event = (string) Str::uuid();
-        $stop = ['client_reference' => 'demo-001', 'status' => 'delivered', 'items' => [$item]];
+        $stop = ['client_reference' => '01K00000000000000000000001', 'status' => 'delivered', 'items' => [$item]];
         $this->command('POST', "/repartos/{$deliveryId}/entregas", $stop, $event)->assertOk()
             ->assertJsonPath('data.delivered_quantity', 45)->assertJsonPath('data.total_amount', '12.625')
             ->assertJsonPath('data.items.0.unit_price', 101)->assertJsonPath('data.items.0.line_amount', '12.625');
@@ -660,11 +906,12 @@ final class DeliveryEndpointTest extends TestCase
         // Request: rechaza un precio fraccionario aun con una cantidad válida.
         $item['unit_price'] = 100.01;
         $this->command('POST', "/repartos/{$deliveryId}/entregas", [
-            'client_reference' => 'demo-002', 'status' => 'delivered', 'items' => [$item],
+            'client_reference' => '01K00000000000000000000002', 'status' => 'delivered', 'items' => [$item],
         ])->assertUnprocessable()->assertJsonValidationErrors('items.0.unit_price');
         // Request: devuelve la fracción restante y conserva su presentación.
         $this->command('POST', "/repartos/{$deliveryId}/cierre", [
             'returned_items' => [['unit' => $presentation->code, 'amount' => '0.875', 'eggs_per_unit' => 360]],
+            'return_production_unit_id' => $unit->id,
         ])->assertOk()->assertJsonPath('data.returned_quantity', 315);
         // Mutación de fixture: posteriores definiciones no reescriben el detalle guardado.
         $presentation->update(['name' => 'Nombre posterior', 'eggs_per_unit' => 24, 'default_unit_price' => 300]);
@@ -678,11 +925,11 @@ final class DeliveryEndpointTest extends TestCase
     // Flujo: el contrato exige origen explícito y permite consultar todas las UP operativas.
     public function test_new_load_commands_require_an_explicit_operating_unit(): void
     {
-        $this->signIn(['delivery.start', 'delivery.view-own', 'delivery.update-own']);
+        $this->signIn(['can_start_deliveries', 'can_view_own_deliveries', 'can_update_own_deliveries']);
         $first = ProductionUnit::factory()->create();
         $second = ProductionUnit::factory()->create();
         // Request: no selecciona automáticamente la primera UP ni siquiera en desarrollo.
-        $this->postJson('/api/v1/repartos', ['pin' => '0007', 'quantity' => 1], ['Idempotency-Key' => (string) Str::uuid()])
+        $this->postJson('/api/v1/repartos', ['pin' => '0007', 'quantity' => 1, 'vehicle_id' => Vehicle::factory()->create()->public_id], ['Idempotency-Key' => (string) Str::uuid()])
             ->assertUnprocessable()->assertJsonValidationErrors('production_unit_id');
         $this->getJson('/api/v1/repartos/unidades-productivas')->assertOk()->assertJsonCount(2, 'data');
         $deliveryId = $this->command('POST', '/repartos', ['production_unit_id' => $first->id, 'quantity' => 1])

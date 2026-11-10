@@ -10,6 +10,30 @@ Dependencias: M03 Instalaciones, M04 Proveedores y productos, Identidad y acceso
 
 [Contrato OpenAPI](../../contracts/openapi/lots.yaml) · [Procedimiento de Do Test](#do-test--validación-manual)
 
+## Capacidad como umbral de alerta — 29 de octubre de 2026
+
+`bird_capacity` sigue siendo un entero positivo configurado por galpón avícola. Es el umbral de referencia para aves adultas; se permite alojar más pollitos sin bloquear altas, redistribuciones, restituciones de mortalidad ni reversiones. No se calcula un límite adicional por edad. Los movimientos conservan el límite configurado. También se permite editarlo por debajo de la ocupación, con auditoría síncrona de la modificación.
+
+El listado `GET /api/v1/production-units/{productionUnit}/poultry-houses`, el detalle `GET /api/v1/poultry-houses/{poultryHouse}` y las respuestas de alta, edición y estado del galpón exponen:
+
+```json
+{
+  "bird_capacity": 100,
+  "current_occupancy": 120,
+  "capacity_exceeded": true,
+  "excess_quantity": 20,
+  "capacity_alert": "La ocupación del galpón supera su capacidad máxima. Aves excedentes: 20."
+}
+```
+
+La alerta requiere `current_occupancy > bird_capacity`; al igualar o bajar del límite devuelve `false`, `0` y `null`. Se recalcula al consultar con el proveedor público de Lotes, incluyendo cuarentena y sin consultas individuales por cada galpón del listado. Las plantas de ración devuelven `capacity_exceeded=false`, con ocupación, exceso y mensaje en `null`. La disponibilidad informativa es `max(0, capacidad - ocupación)`.
+
+El mensaje `capacity_alert` describe el exceso al consultar el galpón. La [alerta operativa de Galpones](alerts-and-notifications-implementation-plan.md#5-capacidad-de-galpones) se publica en la bandeja cuando se acerca la adultez o ya se alcanzó.
+
+Se conservan los permisos funcionales, un único lote abierto por galpón, estados operativos, controles de cantidad, versiones, idempotencia, bloqueos y auditoría de las operaciones existentes. No se agregan endpoints, permisos, migraciones, cambios de datos ni dependencias. Las rutas de galpones conservan sus nombres públicos actuales por compatibilidad.
+
+Verificación: 90 pruebas y 628 aserciones aprobadas en `BirdCapacityTest`, `PoultryHouseEndpointTest`, `FlockEndpointTest`, `RedistributionEndpointTest` y `MortalityEndpointTest`, sobre PostgreSQL aislado de testing. Cubren igualdad y exceso, proveedor real con cuarentena, respuesta agrupada, edición del límite, plantas de ración, altas, incorporación a un lote existente, corrección/cancelación de mortalidad y reversión hacia un galpón sobreocupado. Además pasaron las tres pruebas de `LotsConcurrencyTest` (24 aserciones): total 93 pruebas y 652 aserciones. PHPStan de los archivos afectados pasó sin errores y los dos contratos OpenAPI modificados tienen YAML válido. Pint pasó con las rutas PHP modificadas explícitas: `--dirty` no funciona porque Git no está disponible dentro del contenedor. No se ejecutó la suite completa ni aceptación visual del frontend.
+
 ## Implementación realizada
 
 La entrega de [alimentación de lotes](flock-feeding-implementation.md) exige ingreso del día de registro en America/Montevideo y un plan publicado con una única alimentación inicial, receta y gramos positivos. Inicializa automático; fraccionar conserva edad y todas las etapas de alimentación o copia exactamente el manual. Agrupar conserva el plan y modo del receptor. Se bloquean todos los movimientos entre UP. La finalización conserva el censo anterior al cero administrativo para alimentar toda la última jornada y permitir su recuperación posterior. El journal incluye los cambios y consumos de alimento al evaluar reversiones.
@@ -20,7 +44,7 @@ La entrega de [alimentación de lotes](flock-feeding-implementation.md) exige in
 - ULID público para lotes, movimientos, mortalidades y recolecciones; IDs numéricos internos para relaciones. Razas y referencias de otros módulos conservan IDs numéricos.
 - Cantidades enteras, bloqueo transaccional de lotes y galpones, control de versión, idempotencia por actor y auditoría síncrona.
 - Cada galpón puede tener como máximo un lote `active` o `quarantined`; los lotes `finished` no ocupan. La exclusividad se comprueba después de bloquear el galpón y también la impone PostgreSQL.
-- `PoultryHouseOccupancyProvider` obtiene la ocupación real desde Lotes. Las Actions existentes de Instalaciones impiden reducir la capacidad por debajo de la ocupación o desactivar un galpón ocupado.
+- `PoultryHouseOccupancyProvider` obtiene la ocupación real desde Lotes. La capacidad es un umbral de alerta: se puede superar y reducir por debajo de la ocupación. Se mantiene la prohibición de desactivar un galpón ocupado.
 - `RecordEggStockTransactionAction` es la frontera pública de Inventario. La producción no escribe directamente en sus modelos ni en sus saldos.
 - `Clock`, `SystemClock` y `FlockAge` centralizan los cálculos temporales. `config/lots.php` define `LOTS_TIMEZONE`, por defecto `America/Montevideo`.
 - `LotsDemoSeeder` se integra a `LocalDemoDataSeeder`, sólo en ambiente local. Sus operaciones se ejecutan por las mismas Actions y su auditoría indica `source=seeder`.
@@ -29,7 +53,7 @@ La entrega de [alimentación de lotes](flock-feeding-implementation.md) exige in
 
 `POST /breeds` y `PATCH /breeds/{breed}` permiten definir por separado mínimos y máximos esperados de pollitos y adultas en gramos. Al omitir una pareja, la raza hereda el rango global de esa etapa. En un PATCH, enviar ambos límites como `null` restablece la herencia. Las razas existentes siguen heredando sin migración de datos; la nueva migración agrega columnas anulables y restricciones para exigir parejas completas y `0 < mínimo < máximo`. La semana de paso a adultas permanece en `/configuracion-pesajes`.
 
-La lista y las respuestas de alta/edición exponen `range_overrides` y `expected_ranges` para distinguir lo guardado de lo efectivo. `breeds.view` permite consultar; `breeds.manage` permite crear y modificar con versión e idempotencia. `SaveBreedAction` audita el cambio y reclasifica dentro de la misma transacción las jornadas abiertas de lotes de esa raza; las cerradas conservan el rango capturado. El contrato se encuentra en [lots.yaml](../../contracts/openapi/lots.yaml), y las pruebas en [BreedWeighingRangeEndpointTest](../../tests/Feature/Lots/BreedWeighingRangeEndpointTest.php).
+La lista y las respuestas de alta/edición exponen `range_overrides` y `expected_ranges` para distinguir lo guardado de lo efectivo. `can_view_breeds` permite consultar; `can_manage_breeds` permite crear y modificar con versión e idempotencia. `SaveBreedAction` audita el cambio y reclasifica dentro de la misma transacción las jornadas abiertas de lotes de esa raza; las cerradas conservan el rango capturado. El contrato se encuentra en [lots.yaml](../../contracts/openapi/lots.yaml), y las pruebas en [BreedWeighingRangeEndpointTest](../../tests/Feature/Lots/BreedWeighingRangeEndpointTest.php).
 
 La implementación quedó verificada con seis pruebas nuevas (77 aserciones) de herencia, personalización por etapa, confirmación de anomalías, reclasificación, restauración de herencia, snapshot histórico y validación; también pasaron las pruebas de catálogos, contratos, concurrencia y seeders afectadas. El 2026-10-09 se aplicó sólo la nueva migración a la base local `gam`; las dos razas demo conservaron sus límites propios en `null` y el lote `LOT-PESAJE-TEST` continuó disponible. Pint y `git diff --check` no señalaron problemas. Larastan mantuvo únicamente dos avisos previos de `RecordInventoryMovementAction`.
 
@@ -44,7 +68,7 @@ La implementación quedó verificada con seis pruebas nuevas (77 aserciones) de 
 | Unión total hacia un lote existente | Suma todas las aves al receptor compatible, conserva sus metadatos, lleva el origen a cero y lo finaliza; movimiento `total_existing`. No registra un egreso ficticio. |
 | Finalización | Registra el egreso de las aves remanentes positivas, deja saldo cero y estado `finished`; movimiento `departure`. Si el saldo era cero o negativo, registra egreso cero y conserva el saldo previo en auditoría. No crea mortalidad. |
 
-La redistribución conserva el total de aves de los lotes involucrados. La cantidad física máxima de un galpón nunca se incrementa ni decrementa: `disponible = capacidad física - suma de aves vivas`, incluyendo cuarentena.
+La redistribución conserva el total de aves de los lotes involucrados. La capacidad configurada de un galpón nunca se incrementa ni decrementa por movimientos: `disponible = max(0, capacidad - suma de aves vivas)`, incluyendo cuarentena. Esa disponibilidad es informativa y no limita ingresos.
 
 El destinatario existente conserva su proveedor/origen, fecha de ingreso, edad administrativa y cantidad inicial. Puede recibir aves de otro proveedor si la raza coincide; la procedencia de las aves incorporadas queda identificada por el lote origen y las fotografías del movimiento. No se calcula una edad ponderada.
 
@@ -70,7 +94,9 @@ No hay DELETE, `SoftDeletes` ni `isDeleted` para Lotes, mortalidad, recolección
 
 ### Correcciones y compensaciones
 
-- Una redistribución puede revertirse únicamente si ninguno de los lotes involucrados tiene actividad posterior de negocio. El journal ordenado incluye pesajes, recolecciones, mortalidad, distribuciones, correcciones y cambios del lote; las versiones son una protección adicional. Se verifican estado, operación histórica verificable y la capacidad necesaria del galpón de retorno. El movimiento original queda intacto y se agrega `redistribution_reversal`, que expone `reversed_movement_id`.
+- Una redistribución puede revertirse únicamente si ninguno de los lotes involucrados tiene actividad posterior de negocio. El journal ordenado incluye pesajes, recolecciones, mortalidad, distribuciones, correcciones y cambios del lote; las versiones son una protección adicional. Se verifican estado, operación histórica verificable y disponibilidad del galpón de retorno para ese lote; superar el umbral de capacidad no impide revertir. El movimiento original queda intacto y se agrega `redistribution_reversal`, que expone `reversed_movement_id`.
+- El detalle de Auditoría ofrece la misma reversión de redistribución desde las entradas del origen y el destino. El comando vuelve a comprobar la elegibilidad bajo bloqueo y evalúa la alerta de capacidad con la ocupación resultante.
+- El PATCH de estado acepta `audit_entry_id` para compensar desde Historial. Con `can_manage_flocks` y `can_view_audit`, exige el lote y la versión vigentes y la última transición verificable entre activo y cuarentena. Si otro cambio de estado desplazó la entrada o el estado solicitado difiere del anterior, devuelve `409` con `detail`. La nueva entrada conserva la referencia al original en `reverses_audit_entry_id`. Esta modalidad usa el historial existente y no requiere migración.
 - Al revertir una redistribución a un lote nuevo, éste permanece consultable, vacío y finalizado. La reversión a uno existente restaura ambas cantidades sin cambiar sus metadatos. La reversión total restituye el galpón original.
 - El alta de mortalidad exige `occurred_at`, `quantity` y `notes`: fecha ISO 8601 con segundos y zona horaria, cantidad entera de 1 a 2147483647 y motivo textual no vacío de hasta 5000 caracteres. Categorías ya no forman parte del contrato. Se conserva `version` y el encabezado `Idempotency-Key`.
 - Mortalidad admite corregir cantidad, fecha y motivo. Las bajas pueden superar las aves del lote: 2000 aves y 2001 bajas dejan saldo -1 sin finalizar. Cancelar no borra el registro; pasa a `cancelled` y restituye las bajas vigentes. El saldo se ajusta por la diferencia y la restitución valida el aumento real de ocupación física, sin contar el déficit como aves restituidas.
@@ -82,25 +108,25 @@ No hay DELETE, `SoftDeletes` ni `isDeleted` para Lotes, mortalidad, recolección
 
 ### Transacciones, acceso y reintentos offline
 
-Cada comando bloquea al actor para serializar sus claves de idempotencia, luego los lotes y galpones involucrados en orden estable. Inventario aplica sus propios bloqueos dentro de la misma transacción. Una falla de capacidad, stock o auditoría revierte la operación completa. Las transacciones reintentan deadlocks hasta tres veces.
+Cada comando bloquea al actor para serializar sus claves de idempotencia, luego los lotes y galpones involucrados en orden estable. Inventario aplica sus propios bloqueos dentro de la misma transacción. Una falla de ocupación por otro lote, stock o auditoría revierte la operación completa. Las transacciones reintentan deadlocks hasta tres veces.
 
 Las escrituras exigen `Idempotency-Key` con UUID. Una clave queda asociada al actor y al contenido normalizado del comando. Repetir exactamente la solicitud devuelve la misma operación y sus fotografías originales, incluso si los recursos ya cambiaron. Reutilizar la clave con otro contenido devuelve `409`. Para una intención nueva se genera una clave nueva. No hay expiración automática del registro idempotente.
 
-`version` representa el lote en cambios de estado, finalización, redistribución y mortalidad. Las correcciones de mortalidad requieren `version` del registro y `flock_version`; las correcciones de recolección requieren la versión de la recolección y no alteran la versión del lote. La redistribución hacia un lote existente y las reversiones parciales requieren además `destination_version`.
+`version` representa el lote en cambios de estado, finalización, redistribución y mortalidad. Las correcciones de mortalidad requieren `version` del registro y `flock_version`; las correcciones de recolección requieren la versión de la recolección y no alteran la versión del lote. La redistribución hacia un lote existente y las reversiones entre dos lotes distintos requieren además `destination_version`.
 
 Un cliente offline debe guardar ULID, payload, clave y versiones; enviar sus operaciones en orden; ante una pérdida de respuesta reintentar el mismo comando; y ante `409` consultar los recursos/histórico y pedir resolución al usuario. No debe modificar automáticamente la versión y reenviar una operación de cantidad. Esta entrega no implementa almacenamiento local mobile, colas del dispositivo, descarga incremental ni resolución visual de conflictos.
 
 | Permiso | Alcance |
 |---|---|
-| `flocks.view` | Listados, detalle, semana actual e histórico de movimientos. |
-| `flocks.manage` | Alta, código/observaciones, activación y cuarentena. |
-| `flocks.redistribute` | Redistribuciones y sus reversiones. |
-| `flocks.finalize` | Finalización con egreso. |
-| `breeds.view` / `breeds.manage` | Lectura / administración de razas. |
-| `mortality.view` / `mortality.manage` | Consultas / registro, corrección y cancelación de mortalidad. |
-| `egg-collections.view` / `egg-collections.manage` | Consultas y métricas / comandos de recolección. |
-| `egg-stock.view` / `egg-stock.move` / `egg-stock.adjust` | Saldos, movimientos, ingresos, salidas y correcciones de la cuenta de huevos por UP. |
-| `audit.view` | Lectura del endpoint transversal de auditoría. |
+| `can_view_flocks` | Listados, detalle, semana actual e histórico de movimientos. |
+| `can_manage_flocks` | Alta, código/observaciones, activación y cuarentena. |
+| `can_redistribute_flocks` | Redistribuciones y sus reversiones. |
+| `can_finalize_flocks` | Finalización con egreso. |
+| `can_view_breeds` / `can_manage_breeds` | Lectura / administración de razas. |
+| `can_view_mortality` / `can_manage_mortality` | Consultas / registro, corrección y cancelación de mortalidad. |
+| `can_view_egg_collections` / `can_manage_egg_collections` | Consultas y métricas / comandos de recolección. |
+| `can_view_egg_stock` / `can_move_egg_stock` / `can_adjust_egg_stock` | Saldos, movimientos, ingresos, salidas y correcciones de la cuenta de huevos por UP. |
+| `can_view_audit` | Lectura del endpoint transversal de auditoría. |
 
 `AdminUserSeeder` agrega los permisos funcionales de Lotes y stock de huevos al administrador. Son globales para toda la empresa; no hay asignaciones usuario–UP ni restricciones por propietario. Un operador de producción no necesita permisos de movimiento manual de inventario para que su recolección legítima genere stock.
 
@@ -135,7 +161,7 @@ Todas las rutas siguientes son relativas a `/api/v1`. Las altas, redistribucione
 | POST | `/collections/{collection}/cancellation` | Cancelación con compensación de stock. |
 | GET | `/flocks/{flock}/metrics` | Totales, promedio, agrupaciones diarias y semanales. |
 
-Listados: `page` de 1 a 100000 y `per_page` de 1 a 100, por defecto 50. El listado de lotes admite búsqueda por código, estado, raza, proveedor, galpón, UP y fechas de ingreso. El histórico admite `type` y fechas. Mortalidad admite lote, galpón histórico, estado y fechas; recolección admite lote, galpón, UP, estado y fechas. La cuenta corriente de huevos admite tipo, estado y fechas. Las consultas incluyen finalizados/cancelados por defecto salvo filtro explícito.
+Listados: `page` de 1 a 100000 y `per_page` de 1 a 100, por defecto 50. El listado de lotes admite búsqueda por código, estado, raza, proveedor, galpón, UP y fechas de ingreso. El histórico admite `type` y fechas. Mortalidad admite lote, galpón histórico, UP (`production_unit_id`), estado y fechas. Recolección admite lote, galpón, UP, estado y fechas. La cuenta corriente de huevos admite tipo, estado y fechas. Las consultas incluyen finalizados o cancelados por defecto salvo filtro explícito. El total de aves vivas, las bajas con su tasa y la comparación opcional de recolección están en la [guía del resumen operativo](operational-summary-implementation.md).
 
 Métricas: por defecto últimos 30 días calendario, con máximo 366 días por consulta. `date_from`/`date_to` son inclusivas. Sólo cuentan recolecciones vigentes con su cantidad corregida; las entradas manuales, salidas y pérdidas de stock no se suman a producción. El promedio incluye días sin producción; las series omiten días/semanas sin registros. `by_week` agrupa por semana calendario iniciada en lunes, no por semana de edad del lote. No se publica porcentaje de postura o mortalidad con denominadores históricos inventados.
 
@@ -219,7 +245,7 @@ Si la imagen no contiene Git, Pint debe recibir la lista exacta de archivos PHP 
 ### Resultados de esta entrega
 
 - Regresión completa sobre PostgreSQL en `<DB_DATABASE>_testing`: **151 pruebas aprobadas, 981 aserciones**, en 181,71 segundos. Incluye 65 casos del módulo y 86 casos existentes.
-- Tres pruebas de concurrencia con procesos independientes aprobadas: competencia por capacidad, conflicto de versión y reintentos simultáneos idempotentes.
+- Tres pruebas de concurrencia con procesos independientes aprobadas: competencia por un único lote abierto por galpón, conflicto de versión y reintentos simultáneos idempotentes.
 - Contrato OpenAPI verificado mediante pruebas: YAML válido, referencias internas resueltas, correspondencia de las 28 rutas con Laravel y campos de los Resources públicos.
 - PHPStan/Larastan con `.phpstan-lots.neon`, nivel 5: sin errores en el módulo y las integraciones incluidas.
 - Pint aplicado a los 122 archivos PHP del cambio. La imagen no contiene Git, por lo que `--dirty` no pudo resolver el conjunto; se utilizó la lista exacta obtenida con Git desde el host.
@@ -325,7 +351,7 @@ Esperado: `200`, R vuelve a 30, S permanece consultable con 0 y `finished`. El m
 
 Repetir el caso de reversión con traslado total: R vuelve a su galpón original manteniendo el ULID. Repetir con destinatario existente: se restauran ambas cantidades y metadatos. En una tercera redistribución, editar observaciones de uno de los lotes antes de revertir: ahora debe responder `409` por operaciones posteriores.
 
-Crear un galpón QA de capacidad 5, admitir 5 y comprobar: alta adicional de 1 o traslado entrante de 1 → `409`; PATCH de capacidad a 4 → `409`; cambio de galpón a `inactive` → `409`. Una redistribución parcial entre dos lotes dentro del mismo galpón lleno no aumenta ocupación y debe funcionar. Un origen en `maintenance` puede evacuarse hacia un destino operativo; un destino en mantenimiento no recibe aves.
+Crear un galpón QA de capacidad 5 y admitir 6 aves: `201`; consultar el galpón debe devolver `capacity_exceeded=true`, `excess_quantity=1` y un mensaje en `capacity_alert`. PATCH de capacidad a 4 → `200` y exceso 2. Un segundo lote abierto sigue dando `409`; una incorporación al lote existente puede superar el umbral. Cambio del galpón ocupado a `inactive` → `409`. Un origen en `maintenance` puede evacuarse hacia un destino operativo; un destino en mantenimiento no recibe aves.
 
 ### 7. Mortalidad, corrección, cancelación e historial
 
@@ -376,10 +402,10 @@ Las entradas manuales, salidas para reparto y pérdidas se validan en el recorri
 | Cuarentena | PATCH `/flocks/{B}/status` con versión actual, `status:quarantined` y motivo. | `200`; conserva aves y ocupación. Redistribuir B devuelve `409`; mortalidad/recolección válida sigue permitida. |
 | Reactivación | PATCH de B a `active` con nueva clave/versión y motivo. | `200`, nueva versión. |
 | Finalización | POST `/flocks/{C}/finalization` con versión 1 y motivo, si C no fue modificado. | `200`, C=0/`finished`, egreso 20, no mortalidad extra, consulta e histórico disponibles. |
-| Reapertura | Intentar cambiar C finalizado a `active`; luego corregir una mortalidad terminal con y sin confirmación. | El cambio ordinario responde `409`; la corrección sin `confirm_reactivation` responde `409` sin mutación y con confirmación sólo reactiva en galpón libre y con capacidad. |
+| Reapertura | Intentar cambiar C finalizado a `active`; luego corregir una mortalidad terminal con y sin confirmación. | El cambio ordinario responde `409`; la corrección sin `confirm_reactivation` responde `409` sin mutación y con confirmación sólo reactiva en galpón libre y operativo, aunque supere el umbral. |
 | Sin autenticación | GET `/flocks` sin token. | `401`. |
-| Sin permiso | Usuario activo sin `flocks.view` consulta lotes; sin permiso de escritura intenta un comando. | `403`; no hay escrituras. Repetir para mortalidad, recolección y catálogos. |
-| Auditoría restringida | Usuario sin `audit.view` consulta `/audit/entries`. | `403`, aunque tenga permisos de producción. |
+| Sin permiso | Usuario activo sin `can_view_flocks` consulta lotes; sin permiso de escritura intenta un comando. | `403`; no hay escrituras. Repetir para mortalidad, recolección y catálogos. |
+| Auditoría restringida | Usuario sin `can_view_audit` consulta `/audit/entries`. | `403`, aunque tenga permisos de producción. |
 | Referencia inexistente | GET de un ULID de lote inexistente. | `404`. |
 | Campos protegidos | PATCH de lote con `current_quantity`, `initial_quantity`, `status` o identificadores internos. | `422`; las cantidades sólo cambian por Actions específicas. |
 | Enteros positivos | En altas/registros enviar 0, negativos, fracciones o más de 2147483647. | `422` y ningún cambio. |
@@ -394,7 +420,7 @@ Las entradas manuales, salidas para reparto y pérdidas se validan en el recorri
 
 ### 10. Concurrencia, auditoría y aceptación
 
-Ejecutar `LotsConcurrencyTest` con el comando aislado documentado, o coordinar dos usuarios con claves diferentes y la misma versión del lote. Sólo una operación de cantidad debe confirmarse; la otra debe recibir conflicto. Para dos altas en el mismo galpón cuya suma supera capacidad, sólo una debe entrar. Para dos envíos simultáneos idénticos con el mismo actor/clave, ambos reciben la misma operación y existe un único efecto.
+Ejecutar `LotsConcurrencyTest` con el comando aislado documentado, o coordinar dos usuarios con claves diferentes y la misma versión del lote. Sólo una operación de cantidad debe confirmarse; la otra debe recibir conflicto. Para dos altas en el mismo galpón, sólo una debe entrar por la regla de un único lote abierto, independientemente de su capacidad. Para dos envíos simultáneos idénticos con el mismo actor/clave, ambos reciben la misma operación y existe un único efecto.
 
 Para cada operación significativa consultar:
 

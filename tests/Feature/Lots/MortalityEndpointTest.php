@@ -8,6 +8,7 @@ use App\Interfaces\FarmStructure\PoultryHouseOccupancyProvider;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\Lots\Flock;
 use App\Models\Lots\FlockMovement;
+use App\Models\Lots\MortalityRecord;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -16,12 +17,74 @@ use RuntimeException;
 
 final class MortalityEndpointTest extends LotsTestCase
 {
+    // Flujo: el total de bajas coincide con los registros vigentes del detalle por UP.
+    public function test_summary_and_detail_share_historical_unit_and_date_filters(): void
+    {
+        // Preparación: registra bajas vigentes, una anulada y una de otra UP.
+        config(['lots.timezone' => 'America/Montevideo']);
+        $this->signIn(['can_view_mortality']);
+        $flock = $this->flock();
+        $other = $this->flock();
+        foreach ([[$flock, '2026-11-01T03:00:00Z', 6, 'recorded'], [$flock, '2026-11-02T02:59:59Z', 2, 'recorded'],
+            [$flock, '2026-11-02T03:00:00Z', 3, 'recorded'], [$flock, '2026-11-01T04:00:00Z', 90, 'cancelled'],
+            [$other, '2026-11-01T04:00:00Z', 5, 'recorded']] as [$lot, $date, $quantity, $status]) {
+            MortalityRecord::factory()->for($lot)->create(['occurred_at' => CarbonImmutable::parse($date), 'quantity' => $quantity, 'status' => $status]);
+        }
+
+        // Consulta: compara el total de cantidades con la cantidad de registros de la UP.
+        $path = '/api/v1/mortalidades/resumen?desde=2026-11-01&hasta=2026-11-01';
+        $this->getJson($path)->assertOk()->assertJsonPath('data.bajas_registradas', 13);
+        $this->getJson($path.'&up_id='.$flock->production_unit_id)->assertOk()
+            ->assertJsonPath('data.bajas_registradas', 8)->assertJsonPath('data.estado_tasa', 'historial_indeterminado')
+            ->assertJsonPath('data.tasa_porcentual', null);
+        $this->getJson('/api/v1/mortalities?status=recorded&date_from=2026-11-01&date_to=2026-11-01&per_page=1&production_unit_id='.$flock->production_unit_id)
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('meta.total', 2);
+
+        // Consulta: el período está acotado y una búsqueda sin hechos devuelve cero.
+        $this->getJson('/api/v1/mortalidades/resumen?desde=2025-01-01&hasta=2026-11-01')->assertUnprocessable();
+        $this->getJson('/api/v1/mortalidades/resumen?desde=2026-11-03&hasta=2026-11-03')->assertOk()->assertJsonPath('data.bajas_registradas', 0);
+    }
+
+    // Flujo: calcula la tasa con la apertura y los ingresos, excluye fraccionamientos y reconcilia una baja anterior rectificada.
+    public function test_rate_uses_opening_population_and_external_admissions(): void
+    {
+        // Preparación: crea una población histórica de 110 aves y descuenta 10 bajas antes de la apertura.
+        config(['lots.timezone' => 'America/Montevideo']);
+        $this->travelTo(CarbonImmutable::parse('2026-11-07T15:00:00-03:00'));
+        $actor = $this->signIn();
+        $flock = $this->flockWithHistory(110);
+        $record = $this->command('POST', "/flocks/{$flock->public_id}/mortalities", [
+            'quantity' => 10, 'version' => 1, 'notes' => 'Bajas antes del período', 'occurred_at' => '2026-10-31T23:00:00-03:00',
+        ])->assertCreated()->json('data.mortality.id');
+
+        // Preparación: incorpora 20 aves externas y representa un fraccionamiento interno de 30 aves.
+        foreach ([['admission', 20, '2026-11-02T00:00:00-03:00'], ['partial_new', 30, '2026-11-03T10:00:00-03:00']] as [$type, $quantity, $date]) {
+            $established = CarbonImmutable::parse($date);
+            $house = PoultryHouse::factory()->create(['production_unit_id' => $flock->production_unit_id]);
+            $newFlock = Flock::factory()->create(['poultry_house_id' => $house->id, 'established_at' => $established]);
+            FlockMovement::factory()->create(['type' => $type, 'quantity' => $quantity, 'occurred_at' => $established,
+                'destination_flock_id' => $newFlock->id, 'destination_poultry_house_id' => $house->id, 'created_by' => $actor->id,
+                'source_flock_id' => $type === 'partial_new' ? $flock->id : null,
+                'source_poultry_house_id' => $type === 'partial_new' ? $flock->poultry_house_id : null]);
+        }
+        MortalityRecord::factory()->for($flock)->create(['quantity' => 6, 'occurred_at' => CarbonImmutable::parse('2026-11-06T12:00:00-03:00')]);
+
+        // Consulta: sumar el fraccionamiento como ingreso daría una tasa incorrecta.
+        $path = '/api/v1/mortalidades/resumen?desde=2026-11-01&hasta=2026-11-07&up_id='.$flock->production_unit_id;
+        $this->getJson($path)->assertOk()->assertJsonPath('data.poblacion_referencia', 120)
+            ->assertJsonPath('data.bajas_registradas', 6)->assertJsonPath('data.tasa_porcentual', 5)->assertJsonPath('data.estado_tasa', 'calculada');
+
+        // Mutación y consulta: la rectificación posterior restituye cinco aves al censo de apertura.
+        $this->command('PATCH', '/mortalities/'.$record, ['version' => 1, 'flock_version' => 2, 'quantity' => 5, 'reason' => 'Recuento corregido'])->assertOk();
+        $this->getJson($path)->assertOk()->assertJsonPath('data.poblacion_referencia', 125)->assertJsonPath('data.tasa_porcentual', 4.8);
+    }
+
     // Flujo: registra, corrige y cancela mortalidad sin reescribir el historial.
     public function test_corrections_restore_live_quantity_and_append_audit_history(): void
     {
         // Preparación: configura un lote vigente.
         $this->signIn();
-        $flock = $this->flock(100);
+        $flock = $this->flock(100, house: PoultryHouse::factory()->create(['bird_capacity' => 96]));
 
         // Request: registra cinco bajas y conserva la cantidad inicial.
         $created = $this->command('POST', "/flocks/{$flock->public_id}/mortalities", [
@@ -31,7 +94,7 @@ final class MortalityEndpointTest extends LotsTestCase
         $originalMovementId = $created->json('data.movement.id');
         $original = FlockMovement::query()->where('public_id', $originalMovementId)->firstOrFail()->getAttributes();
 
-        // Request: corrige a tres bajas mediante un movimiento compensatorio de dos aves.
+        // Request: restituye dos aves aunque la ocupación resultante supere el umbral de 96.
         $this->command('PATCH', "/mortalities/{$id}", [
             'version' => 1, 'flock_version' => 2, 'quantity' => 3, 'reason' => 'Recuento verificado',
         ])->assertOk()->assertJsonPath('data.flock.current_quantity', 97)->assertJsonPath('data.mortality.quantity', 3)
@@ -325,7 +388,7 @@ final class MortalityEndpointTest extends LotsTestCase
         $this->command('POST', "/flocks/{$flock->public_id}/mortalities", $payload)->assertUnauthorized();
         $this->signIn();
         $created = $this->command('POST', "/flocks/{$flock->public_id}/mortalities", $payload)->assertCreated();
-        $this->signIn(['mortality.view']);
+        $this->signIn(['can_view_mortality']);
 
         // Requests: el permiso de lectura no habilita altas, correcciones ni cancelaciones.
         $this->command('POST', "/flocks/{$flock->public_id}/mortalities", [...$payload, 'version' => 2])->assertForbidden();

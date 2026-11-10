@@ -24,7 +24,7 @@ final readonly class RegularizeStockBalanceAction
     {
         return DB::transaction(function () use ($balance, $attributes, $actor): InventoryMovement {
             $actor = User::query()->whereKey($actor->getKey())->lockForUpdate()->firstOrFail();
-            LotsAuthorization::ensure($actor, 'inventory.adjust');
+            LotsAuthorization::ensure($actor, 'can_adjust_inventory');
             if (! Str::isUuid($attributes['idempotency_key']) || trim($attributes['reason']) === '' || ! in_array($attributes['mode'], ['trasladar', 'recontar'], true)) {
                 throw new InventoryConflict('La regularización requiere modo, motivo y clave de idempotencia válidos.');
             }
@@ -35,7 +35,7 @@ final readonly class RegularizeStockBalanceAction
                 return $this->movements->execute(new InventoryMovementCommand(
                     type: $attributes['mode'] === 'trasladar' ? InventoryMovementType::Transfer : InventoryMovementType::Adjustment,
                     lines: [], operationId: $attributes['idempotency_key'], idempotencyPayload: $payload,
-                ), $actor, requiredPermission: 'inventory.adjust');
+                ), $actor, requiredPermission: 'can_adjust_inventory');
             }
             Product::query()->whereKey($balance->product_id)->sharedLock()->firstOrFail();
             $locationIds = [(int) $balance->stock_location_id, (int) ($attributes['to_stock_location_id'] ?? $balance->stock_location_id)];
@@ -57,7 +57,7 @@ final readonly class RegularizeStockBalanceAction
                 type: $attributes['mode'] === 'trasladar' ? InventoryMovementType::Transfer : InventoryMovementType::Adjustment,
                 lines: $lines, operationId: $attributes['idempotency_key'], reason: trim($attributes['reason']),
                 referenceType: 'stock_regularization', referenceId: (string) $locked->getKey(), idempotencyPayload: $payload,
-            ), $actor, regularization: $locked, requiredPermission: 'inventory.adjust');
+            ), $actor, regularization: $locked, requiredPermission: 'can_adjust_inventory');
         }, 3);
     }
 }

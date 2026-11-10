@@ -15,7 +15,7 @@ final class BreedWeighingRangeEndpointTest extends LotsTestCase
     {
         // Preparación: fija la fecha, autentica y establece la referencia general.
         $this->travelTo(CarbonImmutable::parse('2026-10-09 12:00:00', 'America/Montevideo'));
-        $this->signIn(['breeds.view', 'breeds.manage', 'weighing-settings.manage']);
+        $this->signIn(['can_view_breeds', 'can_manage_breeds', 'can_manage_weighing_settings']);
         $this->settings();
 
         // Requests: crea una raza heredada y otra con ambos rangos personalizados.
@@ -46,7 +46,7 @@ final class BreedWeighingRangeEndpointTest extends LotsTestCase
     {
         // Preparación: crea dos razas adultas con máximo global 3000 y máximo particular 2000.
         $this->travelTo(CarbonImmutable::parse('2026-10-09 12:00:00', 'America/Montevideo'));
-        $this->signIn(['breeds.manage', 'weighing-settings.manage', 'weighings.manage', 'weighings.view']);
+        $this->signIn(['can_manage_breeds', 'can_manage_weighing_settings', 'can_manage_weighings', 'can_view_weighings']);
         $this->settings();
         $default = Breed::query()->findOrFail($this->command('POST', '/breeds', ['name' => 'Raza 1'])->assertCreated()->json('data.catalog.id'));
         $custom = Breed::query()->findOrFail($this->command('POST', '/breeds', [
@@ -80,7 +80,7 @@ final class BreedWeighingRangeEndpointTest extends LotsTestCase
     {
         // Preparación: registra un peso de 150 gramos dentro del rango heredado de pollitos.
         $this->travelTo(CarbonImmutable::parse('2026-10-08 12:00:00', 'America/Montevideo'));
-        $this->signIn(['breeds.manage', 'weighing-settings.manage', 'weighings.manage', 'weighings.view']);
+        $this->signIn(['can_manage_breeds', 'can_manage_weighing_settings', 'can_manage_weighings', 'can_view_weighings']);
         $this->command('PUT', '/configuracion-pesajes', [
             'adult_from_week' => 18, 'unit' => 'g',
             'chick_min_weight' => '10.0', 'chick_max_weight' => '200.0',
@@ -116,7 +116,7 @@ final class BreedWeighingRangeEndpointTest extends LotsTestCase
     public function test_breed_range_requires_a_valid_pair(): void
     {
         // Preparación: autentica a una persona con permiso de administración de razas.
-        $this->signIn(['breeds.manage']);
+        $this->signIn(['can_manage_breeds']);
 
         // Requests: un límite aislado y un mínimo mayor que el máximo son inválidos.
         $this->command('POST', '/breeds', ['name' => 'Incompleta', 'chick_min_weight_g' => '50.0'])
@@ -132,7 +132,7 @@ final class BreedWeighingRangeEndpointTest extends LotsTestCase
     {
         // Preparación: registra el mismo peso para una raza heredada y otra con rango propio.
         $this->travelTo(CarbonImmutable::parse('2026-10-09 12:00:00', 'America/Montevideo'));
-        $this->signIn(['breeds.manage', 'weighing-settings.manage', 'weighings.manage', 'weighings.view']);
+        $this->signIn(['can_manage_breeds', 'can_manage_weighing_settings', 'can_manage_weighings', 'can_view_weighings']);
         $this->settings();
         $inherited = Breed::query()->findOrFail($this->command('POST', '/breeds', ['name' => 'Heredada'])->assertCreated()->json('data.catalog.id'));
         $custom = Breed::query()->findOrFail($this->command('POST', '/breeds', [
@@ -170,7 +170,7 @@ final class BreedWeighingRangeEndpointTest extends LotsTestCase
     {
         // Preparación: crea un pesaje adulto con máximo propio de 2000 gramos.
         $this->travelTo(CarbonImmutable::parse('2026-10-09 12:00:00', 'America/Montevideo'));
-        $this->signIn(['breeds.manage', 'weighing-settings.manage', 'weighings.manage', 'weighings.view']);
+        $this->signIn(['can_manage_breeds', 'can_manage_weighing_settings', 'can_manage_weighings', 'can_view_weighings']);
         $this->settings();
         $breed = Breed::query()->findOrFail($this->command('POST', '/breeds', [
             'name' => 'Histórica', 'adult_min_weight_g' => '100.0', 'adult_max_weight_g' => '2000.0',

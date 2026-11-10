@@ -8,7 +8,7 @@ final class ListEggDonationUnitsRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return ($this->user()?->can('egg-stock.view') ?? false) || ($this->user()?->can('egg-stock.move') ?? false);
+        return ($this->user()?->can('can_view_egg_stock') ?? false) || ($this->user()?->can('can_move_egg_stock') ?? false);
     }
 
     public function rules(): array

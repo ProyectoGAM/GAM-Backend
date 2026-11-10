@@ -3,7 +3,7 @@
 # La versión del cliente de PostgreSQL debe coincidir con la usada en Compose.
 ARG POSTGRES_CLIENT_VERSION=18
 
-FROM php:8.5-fpm AS php-base
+FROM php:8.5.12-fpm-trixie AS php-base
 
 ARG POSTGRES_CLIENT_VERSION
 

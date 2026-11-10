@@ -4,6 +4,7 @@ namespace Tests\Feature\SuppliersAndCatalogs;
 
 use App\Enums\SuppliersAndCatalogs\ProductKind;
 use App\Enums\SuppliersAndCatalogs\ProductStatus;
+use App\Models\IdentityAndAccess\Role;
 use App\Models\Inventory\InventoryMovementLine;
 use App\Models\Inventory\StockBalance;
 use App\Models\SuppliersAndCatalogs\Product;
@@ -13,7 +14,6 @@ use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 final class ProductResourceCapabilitiesTest extends TestCase
@@ -35,7 +35,7 @@ final class ProductResourceCapabilitiesTest extends TestCase
             ->assertJsonPath('data.capabilities.deactivate', true)
             ->assertJsonMissingPath('data.system_key');
 
-        $manager = $this->userWithPermissions(['products.manage', 'products.view']);
+        $manager = $this->userWithPermissions(['can_manage_products', 'can_view_products']);
         Sanctum::actingAs($manager, ['*']);
         Product::factory()->create(['status' => ProductStatus::Inactive]);
 
@@ -49,7 +49,7 @@ final class ProductResourceCapabilitiesTest extends TestCase
     public function test_read_only_user_receives_no_mutation_capabilities(): void
     {
         $product = Product::factory()->create();
-        Sanctum::actingAs($this->userWithPermissions(['products.view']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_view_products']), ['*']);
 
         $this->getJson('/api/v1/products/'.$product->getKey())
             ->assertOk()
@@ -93,7 +93,7 @@ final class ProductResourceCapabilitiesTest extends TestCase
 
     public function test_history_restricts_only_the_fields_known_to_be_immutable(): void
     {
-        Sanctum::actingAs($this->userWithPermissions(['products.manage', 'products.view']), ['*']);
+        Sanctum::actingAs($this->userWithPermissions(['can_manage_products', 'can_view_products']), ['*']);
 
         $rawMaterialWithoutHistory = Product::factory()->rawMaterial()->create();
         $this->getJson('/api/v1/products/'.$rawMaterialWithoutHistory->getKey())
@@ -145,7 +145,7 @@ final class ProductResourceCapabilitiesTest extends TestCase
     private function admin(): User
     {
         $user = User::factory()->create();
-        $user->assignRole(Role::findOrCreate('admin', 'web'));
+        $user->syncRoles([Role::findOrCreate('admin', 'web')]);
 
         return $user;
     }
@@ -155,7 +155,7 @@ final class ProductResourceCapabilitiesTest extends TestCase
     {
         $user = User::factory()->create();
         foreach ($permissions as $permission) {
-            $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+            $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
 
         return $user;

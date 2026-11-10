@@ -5,7 +5,9 @@ namespace App\Actions\IdentityAndAccess;
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Exceptions\IdentityAndAccess\IdentityException;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
+use App\Models\FarmStructure\ProductionUnit;
 use App\Models\IdentityAndAccess\AuthSession;
+use App\Models\IdentityAndAccess\Role;
 use App\Models\SharedDevice;
 use App\Models\User;
 use App\Services\IdentityAndAccess\AuthSessionService;
@@ -25,95 +27,56 @@ final class AuthenticateSharedPinAction
     /** @return array{token: NewAccessToken, session: AuthSession} */
     public function execute(SharedDevice $device, int $userId, string $pin): array
     {
-        $user = User::query()->find($userId);
+        return $this->authenticate($device, $userId, $pin, false);
+    }
 
-        if (! $user instanceof User || ! $user->pin_enabled || $user->hasRole('admin')) {
+    public function executeWeb(SharedDevice $device, int $userId, string $pin): AuthSession
+    {
+        return $this->authenticate($device, $userId, $pin, true)['session'];
+    }
+
+    /** @return array{token: ?NewAccessToken, session: AuthSession} */
+    private function authenticate(SharedDevice $device, int $userId, string $pin, bool $web): array
+    {
+        $user = User::query()->find($userId);
+        if (! $user instanceof User || ! $this->eligible($user, $device)) {
             throw $this->invalidPin();
         }
-
-        if (! $user->can('identity.shared.login')) {
-            throw new IdentityException(403, 'SHARED_LOGIN_FORBIDDEN', 'El usuario no tiene habilitado el acceso compartido.');
-        }
-
         $this->verifyPin($user, $pin);
+        $verifiedHash = $user->pin_hash;
 
-        return DB::transaction(function () use ($device, $user): array {
+        return DB::transaction(function () use ($device, $user, $verifiedHash, $web): array {
+            Role::query()->where('name', 'admin')->lockForUpdate()->first();
+            ProductionUnit::query()->whereKey($device->production_unit_id)->lockForUpdate()->firstOrFail();
             $lockedDevice = SharedDevice::query()->whereKey($device->getKey())->lockForUpdate()->firstOrFail();
+            $lockedUser = User::query()->whereKey($user->getKey())->lockForUpdate()->firstOrFail();
+            if (! $this->eligible($lockedUser, $lockedDevice) || ! hash_equals((string) $verifiedHash, (string) $lockedUser->pin_hash)) {
+                throw $this->invalidPin();
+            }
             $lockedDevice->increment('session_generation');
             $lockedDevice->refresh();
-
-            AuthSession::query()
-                ->where('shared_device_id', $lockedDevice->getKey())
-                ->where('kind', 'shared_user')
-                ->whereNull('revoked_at')
-                ->update(['revoked_at' => now(), 'revoked_reason' => 'replaced']);
-
-            $token = $this->issueToken->executeShared($user, 'shared-'.$lockedDevice->getKey());
-            $session = $this->sessions->createShared($user, $lockedDevice, $token);
-
-            User::query()->whereKey($user->getKey())->update([
-                'pin_failed_attempts' => 0,
-                'pin_failed_window_started_at' => null,
-            ]);
-
+            foreach ($lockedDevice->sessions()->whereNull('revoked_at')->get() as $previous) {
+                $previous->forceFill(['revoked_at' => now(), 'revoked_reason' => 'replaced'])->save();
+            }
+            $token = $web ? null : $this->issueToken->executeShared($lockedUser, 'shared-'.$lockedDevice->getKey());
+            $session = $web ? $this->sessions->createSharedWeb($lockedUser, $lockedDevice)
+                : $this->sessions->createShared($lockedUser, $lockedDevice, $token);
             $this->auditRecorder->record(AuditEntryData::forSubject(
-                subject: $user,
-                actor: $user,
-                logName: 'identity',
-                event: 'shared_pin_login',
+                subject: $lockedUser, actor: $lockedUser, logName: 'identity', event: 'shared_pin_login',
                 description: 'Empleado inició sesión en dispositivo compartido',
                 properties: ['shared_device_id' => $lockedDevice->getKey(), 'auth_session_id' => $session->getKey()],
-                source: 'api',
+                upId: (int) $lockedDevice->production_unit_id, source: $web ? 'web' : 'api',
             ));
 
             return ['token' => $token, 'session' => $session];
         });
     }
 
-    public function executeWeb(SharedDevice $device, int $userId, string $pin): AuthSession
+    private function eligible(User $user, SharedDevice $device): bool
     {
-        $user = User::query()->find($userId);
-
-        if (! $user instanceof User || ! $user->pin_enabled || $user->hasRole('admin')) {
-            throw $this->invalidPin();
-        }
-
-        if (! $user->can('identity.shared.login')) {
-            throw new IdentityException(403, 'SHARED_LOGIN_FORBIDDEN', 'El usuario no tiene habilitado el acceso compartido.');
-        }
-
-        $this->verifyPin($user, $pin);
-
-        return DB::transaction(function () use ($device, $user): AuthSession {
-            $lockedDevice = SharedDevice::query()->whereKey($device->getKey())->lockForUpdate()->firstOrFail();
-            $lockedDevice->increment('session_generation');
-            $lockedDevice->refresh();
-
-            AuthSession::query()
-                ->where('shared_device_id', $lockedDevice->getKey())
-                ->where('kind', 'shared_user')
-                ->whereNull('revoked_at')
-                ->update(['revoked_at' => now(), 'revoked_reason' => 'replaced']);
-
-            $session = $this->sessions->createSharedWeb($user, $lockedDevice);
-
-            User::query()->whereKey($user->getKey())->update([
-                'pin_failed_attempts' => 0,
-                'pin_failed_window_started_at' => null,
-            ]);
-
-            $this->auditRecorder->record(AuditEntryData::forSubject(
-                subject: $user,
-                actor: $user,
-                logName: 'identity',
-                event: 'shared_pin_login',
-                description: 'Empleado inició sesión en dispositivo compartido',
-                properties: ['shared_device_id' => $lockedDevice->getKey(), 'auth_session_id' => $session->getKey()],
-                source: 'web',
-            ));
-
-            return $session;
-        });
+        return $user->usesDevicePin() && $user->pin_enabled && $user->hasAccessRole()
+            && ! $user->hasRole('admin') && $user->can('can_login_shared')
+            && $user->production_unit_id === $device->production_unit_id && $device->isUsable();
     }
 
     public function verifyPin(User $user, string $pin): void
@@ -188,7 +151,7 @@ final class AuthenticateSharedPinAction
             $windowStarted = $windowExpired ? $now : $locked->pin_failed_window_started_at;
             $dailyStarted = $dailyExpired ? $now : $locked->pin_daily_window_started_at;
             $blockedUntil = $failed >= (int) config('identity.pin.max_attempts', 5)
-                ? $windowStarted?->copy()->addMinutes((int) config('identity.pin.window_minutes', 15))
+                ? $windowStarted->copy()->addMinutes((int) config('identity.pin.window_minutes', 15))
                 : null;
 
             $locked->forceFill([

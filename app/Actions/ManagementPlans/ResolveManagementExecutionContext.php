@@ -19,13 +19,40 @@ final readonly class ResolveManagementExecutionContext
         $this->flockState->open($lockedFlock);
         $occurredAt = $this->flockState->time($lockedFlock, $attributes['occurred_at']);
         $responsibleId = (int) ($attributes['responsible_user_id'] ?? $actor->getKey());
-        $responsible = User::query()->whereKey($responsibleId)->sharedLock()->first();
+        $responsible = User::query()->whereKey($responsibleId)
+            ->when(($attributes['practice_type'] ?? null) === 'beak_trimming' && $actor->usesDevicePin(),
+                fn ($users) => $users->where('production_unit_id', $lockedFlock->production_unit_id))
+            ->sharedLock()->first();
         if ($responsible === null) {
             throw new LotsConflict('La persona responsable debe ser un usuario activo.');
         }
 
         $activityPublicId = $attributes['plan_activity_id'] ?? null;
         $activity = $this->activityLinker->resolve($lockedFlock, $activityPublicId, $activityType);
+
+        if ($activityType === 'manual_practice' && $activity?->practice_type !== null
+            && $activity->practice_type !== ($attributes['practice_type'] ?? null)) {
+            throw new LotsConflict('La práctica registrada no coincide con la actividad prevista en el plan de manejo.');
+        }
+        if (in_array($activityType, ['medication', 'vaccination'], true)) {
+            if (isset($attributes['quantity']) || isset($attributes['stock_consumption'])) {
+                throw new LotsConflict('Las aplicaciones sanitarias se registran sin cantidad aplicada ni consumo de stock.');
+            }
+            $reason = trim($attributes['reason'] ?? '');
+            if ($activity === null && $reason === '') {
+                throw new LotsConflict('Debes indicar un motivo cuando la aplicación no está prevista en el plan de manejo.');
+            }
+            if (mb_strlen($reason) > 500) {
+                throw new LotsConflict('El motivo no puede superar los 500 caracteres.');
+            }
+            if ($activity?->catalog_id !== null) {
+                $catalogType = $activityType === 'medication' ? 'medicine' : 'vaccine';
+                if ($activity->catalog_type !== $catalogType
+                    || ($activity->catalog_snapshot['id'] ?? null) !== ($attributes[$catalogType.'_id'] ?? null)) {
+                    throw new LotsConflict('El medicamento o la vacuna no coincide con la actividad prevista en el plan de manejo.');
+                }
+            }
+        }
 
         return new ManagementExecutionContext(
             flock: $lockedFlock,

@@ -7,9 +7,11 @@ info:
     y elaboración inmediata con descuento distribuido de ingredientes, saldo de alimento
     por receta y UP, cancelación compensatoria, ajustes independientes y mínimos configurables.
     Los endpoints del catálogo y cálculo conservan sus permisos originales.
-    Las nuevas operaciones requieren autenticación y sesión válida, sin permiso
-    específico provisional, salvo la configuración de mínimos que requiere inventory.manage
-    o rol admin. El consumo de lotes tiene su contrato propio en flock-feeding.yaml.
+    Las cuentas PIN sólo consultan y modifican saldos y operaciones de su UP. El catálogo
+    global admite lecturas y cálculo autorizado; sus mutaciones requieren sesión personal.
+    Las operaciones requieren sesión válida y permisos específicos: can_view_feed_stock,
+    can_manufacture_feed, can_cancel_feed_manufacturing, can_adjust_feed_stock,
+    can_adjust_feed_ingredients y can_manage_feed_minimums según la operación. El consumo de lotes tiene su contrato propio en flock-feeding.yaml.
     Los nombres pueden repetirse. El rendimiento es independiente de la suma
     de ingredientes. Los saldos usan gramos enteros con signo; los mínimos son
     enteros no negativos o null cuando no están configurados.
@@ -22,12 +24,40 @@ tags:
   - name: Recetas
     description: Catálogo global sin asignaciones por unidad productiva.
 paths:
+  /unidades-productivas/{productionUnit}/alertas-cobertura-racion:
+    parameters:
+      - {$ref: '#/components/parameters/ProductionUnitId'}
+    get:
+      operationId: getFeedCoverageAlertThresholds
+      summary: Consulta los umbrales de alerta de cobertura por unidad productiva
+      description: Requiere can_view_feed_stock o can_manage_alert_thresholds. Las cuentas de dispositivo consultan su propia unidad.
+      responses:
+        '200': {$ref: '#/components/responses/FeedCoverageThresholds'}
+        '401': {description: Sesión inválida}
+        '403': {description: Falta el permiso de stock de alimento}
+        '404': {description: Unidad productiva no disponible}
+    put:
+      operationId: updateFeedCoverageAlertThresholds
+      summary: Guarda los umbrales de alerta de cobertura
+      description: Requiere can_manage_alert_thresholds o can_manage_feed_minimums. La evaluación programada aplica los cambios en su próxima ejecución.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/FeedCoverageThresholdsInput'}
+            example: {dias_aviso: 7, dias_urgencia: 2}
+      responses:
+        '200': {$ref: '#/components/responses/FeedCoverageThresholds'}
+        '401': {description: Sesión inválida}
+        '403': {description: Falta el permiso para configurar umbrales}
+        '404': {description: Unidad productiva no disponible}
+        '422': {description: Umbrales inválidos}
   /recetas:
     get:
       tags: [Recetas]
       operationId: listFeedRecipes
       summary: Lista recetas globales con paginación
-      description: Requiere feed-recipes.view. Incluye activas e inactivas por defecto; ordena por ID descendente.
+      description: Requiere can_view_feed_recipes. Incluye activas e inactivas por defecto; ordena por ID descendente.
       parameters:
         - name: buscar
           in: query
@@ -67,7 +97,7 @@ paths:
       operationId: createFeedRecipe
       summary: Crea una receta con materias primas existentes
       description: >-
-        Requiere feed-recipes.manage. Idempotencia por actor y encabezado UUID.
+        Requiere can_manage_feed_recipes. Idempotencia por actor y encabezado UUID.
         La misma clave y contenido normalizado devuelve la receta existente en
         su estado actual, sin reescribir cantidades posteriores; otros datos
         con la misma clave devuelven 409. El orden de ingredientes no cambia
@@ -101,7 +131,7 @@ paths:
       tags: [Recetas]
       operationId: getFeedRecipe
       summary: Consulta una receta y su composición actual
-      description: Requiere feed-recipes.view. Permite consultar recetas inactivas.
+      description: Requiere can_view_feed_recipes. Permite consultar recetas inactivas.
       responses:
         '200': {$ref: '#/components/responses/RecipeResponse'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -116,7 +146,7 @@ paths:
       operationId: updateFeedRecipeQuantities
       summary: Actualiza únicamente las cantidades de ingredientes existentes
       description: >-
-        Requiere feed-recipes.manage. Debe enviar la lista completa con los mismos
+        Requiere can_manage_feed_recipes. Debe enviar la lista completa con los mismos
         producto_id sin agregar, quitar, duplicar ni sustituir ingredientes.
         No admite nombre, nota, rendimiento, estado ni otros campos.
         Permite editar recetas activas e inactivas. Las ediciones se serializan
@@ -147,7 +177,7 @@ paths:
       operationId: changeFeedRecipeStatus
       summary: Desactiva o reactiva una receta conservando su historial
       description: >-
-        Requiere feed-recipes.manage. Serializa con el mismo lock de edición.
+        Requiere can_manage_feed_recipes. Serializa con el mismo lock de edición.
         Repetir el estado actual no genera otra auditoría. No exige Idempotency-Key.
         No modifica la composición ni detiene consumos futuros de lotes.
       requestBody:
@@ -174,7 +204,7 @@ paths:
       operationId: calculateFeedRecipe
       summary: Calcula cantidades para un múltiplo entero de la combinación base
       description: >-
-        Requiere feed-recipes.view. Sólo admite cantidad_g, sin ajustes manuales.
+        Requiere can_view_feed_recipes. Sólo admite cantidad_g, sin ajustes manuales.
         La receta debe estar activa. Si Q no es múltiplo exacto de R devuelve 422.
         Si un ingrediente multiplicado supera 9223372036854775807 g devuelve 422.
         Usa la composición actual bajo un lock compartido. No consulta disponibilidad
@@ -432,7 +462,7 @@ paths:
       operationId: setFeedBalanceMinimum
       summary: Configura o quita el mínimo de alimento por receta y UP
       description: >-
-        Requiere autenticación, sesión válida e inventory.manage o rol admin.
+        Requiere autenticación, sesión válida y can_manage_feed_minimums o rol admin.
         Funciona con recetas activas o inactivas y sin movimientos anteriores.
         Materializa una cuenta en cero si todavía no existe, sin acreditar ni
         descontar alimento. minimo_g admite gramos enteros entre 0 y 999999999999;
@@ -610,6 +640,13 @@ components:
       description: UUID por actor para alta y nuevas operaciones; no se admite en el cuerpo.
       schema: {type: string, format: uuid}
   schemas:
+    FeedCoverageThresholdsInput:
+      type: object
+      required: [dias_aviso, dias_urgencia]
+      properties:
+        dias_aviso: {type: integer, minimum: 1, maximum: 365, default: 7, description: Genera el aviso medio cuando la cobertura es menor a este valor}
+        dias_urgencia: {type: integer, minimum: 0, maximum: 364, default: 2, description: Genera el aviso alto cuando la cobertura es menor o igual a este valor. Debe ser menor que dias_aviso.}
+        dias_aviso_bajo: {type: [integer, 'null'], minimum: 2, maximum: 365, description: Genera el nivel bajo cuando la cobertura es menor a este valor y no alcanza el nivel medio. Debe ser mayor que dias_aviso. Nulo lo deshabilita y omitirlo conserva el valor actual.}
     StockSignedGrams:
       description: "Gramos enteros exactos dentro del rango del inventario decimal(18,6); no floats, fracciones ni notación científica. Máximo absoluto 999999999999."
       oneOf: [{"type":"integer","format":"int64","minimum":-999999999999,"maximum":999999999999},{"type":"string","pattern":"^-?[0-9]+$"}]
@@ -902,6 +939,21 @@ components:
             type: array
             items: {type: string}
   responses:
+    FeedCoverageThresholds:
+      description: Configuración efectiva de cobertura
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data:
+                allOf:
+                  - {$ref: '#/components/schemas/FeedCoverageThresholdsInput'}
+                  - type: object
+                    required: [unidad_productiva_id, dias_aviso_bajo]
+                    properties:
+                      unidad_productiva_id: {type: integer}
     FeedOperationResponse:
       description: "Operación histórica con instantánea, saldos y referencias."
       content:

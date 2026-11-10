@@ -42,6 +42,8 @@ use Illuminate\Support\Str;
  * @property string $total_weight_g
  * @property string $average_weight_g
  * @property bool $outside_expected_range
+ * @property CarbonImmutable|null $anomaly_reviewed_at
+ * @property int|null $anomaly_reviewed_by
  * @property int $version
  * @property int $created_by
  * @property-read Flock $flock
@@ -78,6 +80,8 @@ class Weighing extends Model
             'reference_breed_version' => 'integer',
             'represented_bird_count' => 'integer',
             'outside_expected_range' => 'boolean',
+            'anomaly_reviewed_at' => 'immutable_datetime',
+            'anomaly_reviewed_by' => 'integer',
             'version' => 'integer',
             'created_by' => 'integer',
         ];

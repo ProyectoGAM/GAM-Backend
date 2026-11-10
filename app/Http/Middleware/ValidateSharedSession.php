@@ -18,8 +18,9 @@ final class ValidateSharedSession
     {
         $device = $request->attributes->get('shared_device');
         $session = $this->sessions->current($request);
+        $user = $request->user();
 
-        if (! $device instanceof SharedDevice || ! $session instanceof AuthSession) {
+        if (! $device instanceof SharedDevice || ! $session instanceof AuthSession || $user === null) {
             throw $this->expired();
         }
 
@@ -27,6 +28,14 @@ final class ValidateSharedSession
         $lastActivity = $session->last_user_activity_at;
 
         if ($session->kind !== 'shared_user'
+            || $session->production_unit_id === null
+            || $session->production_unit_id !== $device->production_unit_id
+            || $user->production_unit_id !== $device->production_unit_id
+            || ! $user->usesDevicePin()
+            || ! $user->pin_enabled
+            || ! $user->hasAccessRole()
+            || ! $user->can('can_login_shared')
+            || ! $device->isUsable()
             || $session->shared_device_id !== $device->getKey()
             || $session->device_generation !== $device->session_generation
             || ! is_string($expectedId)

@@ -120,8 +120,8 @@ final class SharedDeviceAuthenticationTest extends TestCase
     {
         $this->seed(IdentityPermissionSeeder::class);
 
-        $employee = User::factory()->create();
-        $employee->assignRole('employee');
+        $employee = User::factory()->devicePin()->create();
+        $employee->syncRoles(['employee']);
         $employee->forceFill([
             'pin_hash' => app(PinHasher::class)->hash('0007'),
             'pin_enabled' => true,
@@ -130,10 +130,10 @@ final class SharedDeviceAuthenticationTest extends TestCase
         ])->save();
 
         $admin = User::factory()->create();
-        $admin->assignRole('admin');
+        $admin->syncRoles(['admin']);
         $secret = Str::random(64);
         $device = SharedDevice::query()->create([
-            'name' => 'Test tablet',
+            'name' => 'Test tablet', 'production_unit_id' => $employee->production_unit_id,
             'credential_hash' => hash('sha256', $secret),
             'credential_expires_at' => now()->addYear(),
             'enrolled_by' => $admin->getKey(),

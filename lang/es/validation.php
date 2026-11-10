@@ -6,6 +6,7 @@ return [
     'between' => [
         'numeric' => 'El campo :attribute debe estar entre :min y :max.',
     ],
+    'boolean' => 'El campo :attribute debe ser verdadero o falso.',
     'confirmed' => 'La confirmación de :attribute no coincide.',
     'date_format' => 'El campo :attribute no coincide con el formato :format.',
     'email' => 'El campo :attribute debe ser una dirección de correo válida.',
@@ -21,6 +22,7 @@ return [
         'string' => 'El campo :attribute debe tener al menos :min caracteres.',
     ],
     'numeric' => 'El campo :attribute debe ser un número.',
+    'prohibited' => 'El campo :attribute no está permitido.',
     'required' => 'El campo :attribute es obligatorio.',
     'string' => 'El campo :attribute debe ser una cadena de texto.',
     'unique' => 'El valor de :attribute ya está en uso.',

@@ -4,6 +4,8 @@ namespace App\Http\Requests\Inventory;
 
 final class CorrectFeedConsumptionRequest extends FeedOperationRequest
 {
+    protected string $permissionAbility = 'correctConsumption';
+
     /** @return array<string, list<mixed>> */
     public function rules(): array
     {

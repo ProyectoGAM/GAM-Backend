@@ -4,9 +4,17 @@ Cada guía describe el alcance entregado, las decisiones de negocio, el contrato
 
 ## Guías
 
+- [Actualización de seguridad de PHP en Docker](php-runtime-security-update.md)
 - [Identidad y acceso](identity-access-implementation.md)
+- [Modalidades de acceso, credenciales y dispositivos por UP](access-methods-and-production-unit-implementation.md)
+- [Acceso, registro y dispositivos por UP — plan de implementación](access-methods-and-production-unit-implementation-plan.md)
+- [Roles y permisos — plan de implementación](roles-and-permissions-implementation-plan.md)
+- [Roles y permisos configurables — API e integración](roles-and-permissions-implementation.md)
+- [Auditoría: resumen y detalle bajo demanda](audit-presentation-implementation.md)
+- [Informe de integración de auditoría para frontend](audit-frontend-integration.md)
 - [Lotes y cría](lots-implementation.md)
 - [Producción y stock de huevos](egg-production-implementation.md)
+- [Catálogo de presentaciones de huevos](egg-presentations-implementation.md)
 - [Pesajes individuales y grupales](weighing-implementation.md)
 - [Pesajes diarios por lote](daily-weighing-implementation.md)
 - [Mantenimientos de galpones](maintenance-implementation.md)
@@ -17,6 +25,12 @@ Cada guía describe el alcance entregado, las decisiones de negocio, el contrato
 - [Retirada operativa de productos finished_feed](finished-feed-retirement.md)
 - [Recetas, elaboración inmediata, ajustes y stock de alimento](feed-recipes-implementation.md)
 - [Alimentación de lotes, consumo diario y rectificaciones](flock-feeding-implementation.md)
+- [Clientes y cuenta corriente — implementación de las cards 13 y 15](customers-and-accounts-implementation.md)
+- [Clientes y cuenta corriente — plan y decisiones de alcance](customers-and-accounts-implementation-plan.md)
+- [Notificaciones en la app y futuras alertas por módulo — plan de implementación](alerts-and-notifications-implementation-plan.md)
+- [Notificaciones en la app — API y tiempo real](notifications-implementation.md)
+- [Resumen operativo — plan de backend y guía de consumo de la API](operational-summary-implementation-plan.md)
+- [Resumen operativo — API entregada e integración](operational-summary-implementation.md)
 
 ## Qué registrar en cada cambio
 

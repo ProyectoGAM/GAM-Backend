@@ -5,6 +5,7 @@ namespace App\Actions\Deliveries;
 use App\Actions\Inventory\RecordEggStockTransactionAction;
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Enums\Deliveries\DeliveryStatus;
+use App\Enums\Deliveries\DeliveryStopStatus;
 use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Exceptions\Deliveries\DeliveryConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
@@ -12,7 +13,9 @@ use App\Models\Deliveries\Delivery;
 use App\Models\Deliveries\DeliveryLoad;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\User;
+use App\Services\Deliveries\DeliveryEggAlerts;
 use App\Services\Deliveries\DeliveryLoadUnits;
+use App\Services\IdentityAndAccess\AccessControl;
 use Illuminate\Support\Facades\DB;
 
 final readonly class AddDeliveryLoadAction
@@ -21,6 +24,7 @@ final readonly class AddDeliveryLoadAction
         private RecordEggStockTransactionAction $stock,
         private AuditRecorder $audit,
         private DeliveryLoadUnits $units,
+        private DeliveryEggAlerts $eggAlerts,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -29,6 +33,8 @@ final readonly class AddDeliveryLoadAction
         $requestHash = hash('sha256', json_encode($data, JSON_THROW_ON_ERROR));
 
         return DB::transaction(function () use ($delivery, $actor, $data, $idempotencyKey, $requestHash): Delivery {
+            $actor = User::query()->whereKey($actor->id)->lockForUpdate()->firstOrFail();
+            app(AccessControl::class)->assertCurrentSession($actor);
             $locked = Delivery::query()->whereKey($delivery->getKey())->lockForUpdate()->firstOrFail();
             if ($locked->driver_id !== $actor->getKey()) {
                 throw new DeliveryConflict('No puedes cargar huevos en otro reparto.');
@@ -84,6 +90,7 @@ final readonly class AddDeliveryLoadAction
                 'items' => $load['items'],
                 'request_hash' => $requestHash,
                 'type' => 'additional',
+                'occurred_at' => $data['occurred_at'] ?? now(),
                 'created_by' => $actor->getKey(),
             ]);
             $locked->forceFill(['loaded_quantity' => $locked->loaded_quantity + $quantity])->save();
@@ -100,12 +107,16 @@ final readonly class AddDeliveryLoadAction
                 upId: $unit->getKey(),
             ));
 
+            $delivered = $locked->stops()->where('status', DeliveryStopStatus::Delivered)->sum('delivered_quantity');
+            $this->eggAlerts->negativeDeliveryBalance($locked, $locked->loaded_quantity - (int) $delivered);
+
             return $this->load($locked);
         }, 3);
     }
 
     private function load(Delivery $delivery): Delivery
     {
-        return $delivery->load(['driver:id,name', 'productionUnit:id,name,latitude,longitude', 'loads.productionUnit:id,name', 'returnProductionUnit:id,name', 'stops', 'latestLocation']);
+        return $delivery->load(['driver:id,name', 'productionUnit:id,name,latitude,longitude', 'loads.productionUnit:id,name,latitude,longitude', 'returnProductionUnit:id,name,latitude,longitude', 'stops',
+            'accountMovements.account.customer', 'accountMovements.operation', 'accountMovements.delivery', 'accountMovements.reversal', 'accountMovements.original', 'latestLocation']);
     }
 }

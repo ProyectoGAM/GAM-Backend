@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * @property int $id
+ * @property int|null $production_unit_id
  * @property string $operation_id
  * @property string $request_hash
  * @property array<string, mixed> $result

@@ -3,6 +3,7 @@
 namespace App\Http\Resources\AuditAndTraceability;
 
 use App\Models\AuditAndTraceability\AuditEntry;
+use App\Services\AuditAndTraceability\AuditEventCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -19,13 +20,11 @@ final class AuditEntryResource extends JsonResource
 
         return [
             'id' => $entry->getKey(),
-            'log_name' => $entry->log_name,
+            'log_name' => AuditEventCatalog::moduleName($entry->log_name, $entry->event),
             'event' => $entry->event,
             'description' => $entry->description,
-            'actor' => [
-                'type' => $entry->causer_type,
-                'id' => $entry->causer_id,
-            ],
+            'actor' => $entry->getRelation('auditActorPresentation'),
+            'presentation' => $entry->getRelation('auditPresentation'),
             'subject' => [
                 'type' => $entry->subject_type,
                 'id' => $entry->subject_id,

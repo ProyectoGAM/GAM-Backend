@@ -31,7 +31,7 @@ final readonly class SaveBreedAction
             $data['name'] = trim($data['name']);
         }
 
-        return $this->commands->execute($actor, 'breeds.manage', 'breed.save', $data['idempotency_key'], ['id' => $record?->id, ...$data], function (string $operationId) use ($record, $data, $actor, $source): array {
+        return $this->commands->execute($actor, 'can_manage_breeds', 'breed.save', $data['idempotency_key'], ['id' => $record?->id, ...$data], function (string $operationId) use ($record, $data, $actor, $source): array {
             if (DB::connection()->getDriverName() === 'pgsql') {
                 DB::statement("SELECT pg_advisory_xact_lock(hashtext('weighing_reference_settings'))");
             }

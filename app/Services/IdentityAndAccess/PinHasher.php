@@ -4,12 +4,17 @@ namespace App\Services\IdentityAndAccess;
 
 use Illuminate\Contracts\Hashing\Hasher;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 final class PinHasher
 {
     public function hash(string $pin): string
     {
+        if (! preg_match('/\A[0-9]{4}\z/D', $pin)) {
+            throw ValidationException::withMessages(['pin' => 'El PIN debe contener exactamente cuatro dígitos.']);
+        }
+
         return $this->driver()->make($this->peppered($pin));
     }
 

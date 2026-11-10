@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $id
  * @property string $public_id
  * @property string $type
+ * @property string|null $practice_type
  * @property string $title
  * @property string $timing_kind
  * @property int|null $start_day

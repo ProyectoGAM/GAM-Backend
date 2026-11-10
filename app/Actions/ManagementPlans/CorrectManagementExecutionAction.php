@@ -19,6 +19,7 @@ use App\Models\ManagementPlans\VaccinationApplication;
 use App\Models\User;
 use App\Services\Lots\FlockActivityJournal;
 use App\Services\Lots\FlockState;
+use App\Services\Lots\LotsAuthorization;
 use App\Services\Lots\RunLotsCommand;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
@@ -40,7 +41,7 @@ final readonly class CorrectManagementExecutionAction
 
         return $this->commands->execute(
             $actor,
-            'management-plans.execute',
+            'can_execute_management_plans',
             'management-plans.execution.correct',
             $attributes['idempotency_key'],
             [
@@ -115,6 +116,15 @@ final readonly class CorrectManagementExecutionAction
 
                 return ['management_execution_correction' => $snapshot, 'warnings' => []];
             },
+            authorize: $executionType === 'manual_practice'
+                ? function (User $currentActor) use ($flock, $executionPublicId): void {
+                    $practice = ManualPractice::query()->where('flock_id', $flock->id)
+                        ->where('public_id', $executionPublicId)->firstOrFail();
+                    if ($practice->practice_type === 'beak_trimming') {
+                        LotsAuthorization::ensure($currentActor, 'can_reverse_beak_trimming');
+                    }
+                }
+            : null,
         );
     }
 
@@ -134,7 +144,7 @@ final readonly class CorrectManagementExecutionAction
     private function snapshot(string $executionType, Model $execution): array
     {
         $keys = match ($executionType) {
-            'vaccination' => ['public_id', 'operation_id', 'flock_id', 'plan_activity_id', 'plan_activity_title_snapshot', 'vaccine_snapshot', 'product_snapshot', 'occurred_at', 'responsible_name_snapshot', 'notes', 'inventory_quantity', 'stock_location_name_snapshot', 'inventory_movement_id'],
+            'vaccination' => ['public_id', 'operation_id', 'flock_id', 'plan_activity_id', 'plan_activity_title_snapshot', 'vaccine_snapshot', 'product_snapshot', 'occurred_at', 'responsible_name_snapshot', 'reason', 'notes', 'inventory_quantity', 'stock_location_name_snapshot', 'inventory_movement_id'],
             'medication' => ['public_id', 'operation_id', 'flock_id', 'plan_activity_id', 'plan_activity_title_snapshot', 'medicine_public_id_snapshot', 'medicine_name_snapshot', 'medicine_description_snapshot', 'supplier_name_snapshot', 'occurred_at', 'responsible_name_snapshot', 'quantity', 'reason', 'notes', 'stock_movement_id', 'inventory_movement_id'],
             'ration_change' => ['public_id', 'operation_id', 'flock_id', 'plan_activity_id', 'plan_activity_title_snapshot', 'ration_description', 'finished_feed_product_snapshot', 'feed_recipe_snapshot', 'daily_quantity_grams', 'occurred_at', 'responsible_name_snapshot', 'notes'],
             'manual_practice' => ['public_id', 'operation_id', 'flock_id', 'plan_activity_id', 'plan_activity_title_snapshot', 'practice_type', 'practice_title_snapshot', 'occurred_at', 'responsible_name_snapshot', 'notes'],
@@ -163,7 +173,7 @@ final readonly class CorrectManagementExecutionAction
         $reversal = $this->reverseInventoryMovement->execute($movement, [
             'operation_id' => $operationId,
             'reason' => 'Corrección de aplicación sanitaria '.$execution->getAttribute('public_id').': '.trim($reason),
-        ], $actor, $source, 'management-plans.execute');
+        ], $actor, $source, 'can_execute_management_plans');
 
         return [
             'kind' => 'inventory_reversal',
@@ -172,10 +182,13 @@ final readonly class CorrectManagementExecutionAction
         ];
     }
 
-    /** @return array<string, mixed> */
-    private function restoreMedicineStock(Model $execution, string $operationId, string $idempotencyKey, string $reason, User $actor, string $source): array
+    /** @return array<string, mixed>|null */
+    private function restoreMedicineStock(Model $execution, string $operationId, string $idempotencyKey, string $reason, User $actor, string $source): ?array
     {
         $inventoryCompensation = $this->reverseVaccinationInventory($execution, $operationId, $reason, $actor, $source);
+        if ($execution->getAttribute('stock_movement_id') === null) {
+            return $inventoryCompensation;
+        }
         $medicineId = (int) $execution->getAttribute('medicine_id');
         $quantity = (int) $execution->getAttribute('quantity');
         $balance = MedicineStockBalance::query()->where('medicine_id', $medicineId)->lockForUpdate()->firstOrFail();

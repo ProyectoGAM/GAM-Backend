@@ -5,6 +5,7 @@ namespace App\Services\Lots;
 use App\Exceptions\Lots\LotsConflict;
 use App\Models\Lots\FlockOperation;
 use App\Models\User;
+use App\Services\IdentityAndAccess\ProductionUnitAccess;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
@@ -18,15 +19,16 @@ final readonly class RunLotsCommand
      *
      * @param  array<string, mixed>  $payload
      * @param  Closure(string): array<string, mixed>  $operation
+     * @param  (Closure(User): void)|null  $authorize
      */
-    public function execute(User $actor, ?string $permission, string $command, string $key, array $payload, Closure $operation): FlockOperation
+    public function execute(User $actor, ?string $permission, string $command, string $key, array $payload, Closure $operation, ?Closure $authorize = null): FlockOperation
     {
         if (! Str::isUuid($key)) {
             throw new LotsConflict('La clave de idempotencia debe ser un UUID válido.');
         }
         $hash = hash('sha256', json_encode([$command, $this->canonical($payload)], JSON_THROW_ON_ERROR));
         try {
-            return DB::transaction(function () use ($actor, $permission, $command, $key, $hash, $operation): FlockOperation {
+            return DB::transaction(function () use ($actor, $permission, $command, $key, $hash, $operation, $authorize): FlockOperation {
                 $currentActor = User::query()->whereKey($actor->id)->lockForUpdate()->first();
                 if ($currentActor === null) {
                     throw new AuthorizationException;
@@ -34,8 +36,16 @@ final readonly class RunLotsCommand
                 if ($permission !== null) {
                     LotsAuthorization::ensure($currentActor, $permission);
                 }
+                $unitAccess = app(ProductionUnitAccess::class);
+                $unitId = $currentActor->usesDevicePin() ? $currentActor->production_unit_id : null;
+                if ($authorize !== null) {
+                    $unitAccess->within($unitId, fn () => $authorize($currentActor));
+                }
                 $existing = FlockOperation::query()->where('created_by', $actor->id)->where('idempotency_key', $key)->first();
                 if ($existing !== null) {
+                    if ($currentActor->usesDevicePin() && (int) $existing->production_unit_id !== $currentActor->production_unit_id) {
+                        throw new AuthorizationException;
+                    }
                     if ($existing->request_hash !== $hash) {
                         throw new LotsConflict('La clave de idempotencia ya fue utilizada con otros datos.');
                     }
@@ -43,10 +53,11 @@ final readonly class RunLotsCommand
                     return $existing;
                 }
                 $operationId = (string) Str::uuid();
-                $result = $operation($operationId);
+                $result = $unitAccess->within($unitId, fn (): array => $operation($operationId));
                 $record = new FlockOperation;
                 $record->forceFill([
                     'operation_id' => $operationId,
+                    'production_unit_id' => $currentActor->usesDevicePin() ? $currentActor->production_unit_id : null,
                     'created_by' => $actor->id,
                     'idempotency_key' => $key,
                     'command' => $command,

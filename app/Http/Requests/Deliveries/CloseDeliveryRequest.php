@@ -6,7 +6,7 @@ final class CloseDeliveryRequest extends DeliveryRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('delivery.update-own')
+        return $this->user()?->can('can_update_own_deliveries')
             && $this->delivery()->driver_id === $this->user()?->getKey();
     }
 
@@ -24,6 +24,7 @@ final class CloseDeliveryRequest extends DeliveryRequest
             'returned_items.*.eggs_per_unit' => ['required', 'integer', 'min:1', 'max:2147483647'],
             'return_production_unit_id' => ['sometimes', 'nullable', 'integer', 'exists:production_units,id'],
             'notes' => ['sometimes', 'nullable', 'string', 'max:5000'],
+            'odometer_km' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:999999999'],
         ];
     }
 

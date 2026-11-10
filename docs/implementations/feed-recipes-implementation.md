@@ -16,7 +16,7 @@ El catálogo mantiene su rango de 1 a 9223372036854775807 gramos y respuestas co
 
 El cálculo lee la receta activa y su composición bajo lock compartido. Exige `Q % R === 0`, obtiene el factor con `intdiv(Q, R)` y comprueba cada multiplicación antes de ejecutarla. No reserva existencias, no congela la composición, no elabora y no modifica saldos o auditoría. Las ediciones y cambios de estado toman el lock exclusivo de la misma receta.
 
-Los permisos del catálogo siguen siendo `feed-recipes.view` para listar, consultar y calcular, y `feed-recipes.manage` para crear, editar cantidades y cambiar estado. Alta idempotente por actor y encabezado UUID. El reintento conserva el estado actual y no restaura cantidades antiguas. Edición y estado no requieren clave; repetir valores actuales no genera nueva auditoría.
+Los permisos del catálogo siguen siendo `can_view_feed_recipes` para listar, consultar y calcular, y `can_manage_feed_recipes` para crear, editar cantidades y cambiar estado. Alta idempotente por actor y encabezado UUID. El reintento conserva el estado actual y no restaura cantidades antiguas. Edición y estado no requieren clave; repetir valores actuales no genera nueva auditoría.
 
 ## Elaboración inmediata
 
@@ -105,7 +105,7 @@ Contrato: [OpenAPI de recetas y alimento](../../contracts/openapi/feed-recipes.y
 | POST | `/elaboraciones/{operation}/cancelacion` | Devuelve el detalle de la elaboración cancelada |
 | GET | `/saldos-alimento` | Cuentas materializadas paginadas |
 | GET | `/unidades-productivas/{productionUnit}/recetas/{recipe}/saldo` | Cuenta puntual o cero |
-| PATCH | `/unidades-productivas/{productionUnit}/recetas/{recipe}/minimo` | Configura o quita el mínimo; `inventory.manage` o rol admin |
+| PATCH | `/unidades-productivas/{productionUnit}/recetas/{recipe}/minimo` | Configura o quita el mínimo; `can_manage_feed_minimums` o rol admin |
 | POST | `/unidades-productivas/{productionUnit}/recetas/{recipe}/ajustes` | Ajuste de alimento por UP |
 | POST | `/plantas-racion/{poultryHouse}/ingredientes/{product}/ajustes` | Ajuste de ingrediente |
 | GET | `/ajustes-alimentacion` | Historia paginada con motivo y saldos |
@@ -132,7 +132,7 @@ Errores: 401 sin sesión/contexto válido, 404 entidad inexistente o detalle que
 
 ## Autorización, idempotencia, auditoría y bloqueos
 
-Por decisión expresa del usuario, **los endpoints de elaboración, ajustes y consulta de saldos permiten cualquier usuario autenticado con sesión válida** hasta definir el permiso funcional específico. Configurar mínimos requiere `inventory.manage` o rol admin. El catálogo conserva sus permisos. El permiso de mínimos se aplica a todas las UP; no hay asignaciones por usuario o por registro.
+La configuración de roles sustituye la autorización provisional: consultar saldos y operaciones exige `can_view_feed_stock`; elaborar exige `can_manufacture_feed`; anular exige `can_cancel_feed_manufacturing`; ajustar alimento exige `can_adjust_feed_stock` y ajustar ingredientes exige `can_adjust_feed_ingredients`. Configurar mínimos exige `can_manage_feed_minimums`. Admin conserva acceso. El catálogo de recetas mantiene sus permisos propios y todos los permisos son globales para las UP de la empresa.
 
 Las rutas nuevas reutilizan `auth:sanctum`, `shared.device:any` y `shared.session.conditional`. El acceso compartido nativo exige Bearer, `X-Shared-Device-Token`, `X-GAM-Session` y generación vigente. Web conserva sesión stateful, CSRF, cookie HttpOnly `gam_shared_device` y contexto de sesión compartida. Los secretos nunca se copian al historial o auditoría.
 
@@ -140,7 +140,7 @@ La fila del actor serializa reintentos antes de buscar la clave. Unicidad por ac
 
 El orden técnico de adquisición es receta compartida, productos compartidos por ID, plantas compartidas por ID, ubicaciones exclusivas por ID y saldos por ubicación/producto. La prioridad de consumo se calcula después. Las cancelaciones bloquean primero la operación/movimiento original; mantienen el mismo orden técnico para ingredientes. La cuenta receta/UP se materializa con unicidad y se bloquea antes de leer y actualizar. Las transacciones pueden reintentarse ante deadlock hasta tres veces sin conservar efectos de intentos fallidos.
 
-Los Actions propietarios escriben auditoría con `AuditRecorder` y `AuditEntryData` dentro de la misma transacción. Eventos: `feed_manufacture_recorded`, `feed_cancellation_recorded`, `feed_ingredient_adjustment_recorded` y `feed_feed_adjustment_recorded`, además del movimiento de Inventario. Conservan operación, traza, actor, sujeto, UP, origen, resultado, instantánea permitida y cambios explícitos de saldo y distribución. La auditoría es append-only. Consultarla desde la API transversal sigue requiriendo `audit.view`; las consultas de operaciones de alimento no exponen entradas crudas de auditoría.
+Los Actions propietarios escriben auditoría con `AuditRecorder` y `AuditEntryData` dentro de la misma transacción. Eventos: `feed_manufacture_recorded`, `feed_cancellation_recorded`, `feed_ingredient_adjustment_recorded` y `feed_feed_adjustment_recorded`, además del movimiento de Inventario. Conservan operación, traza, actor, sujeto, UP, origen, resultado, instantánea permitida y cambios explícitos de saldo y distribución. La auditoría es append-only. Consultarla desde la API transversal sigue requiriendo `can_view_audit`; las consultas de operaciones de alimento no exponen entradas crudas de auditoría.
 
 ## Mínimos de alimento por receta y UP
 
@@ -175,7 +175,7 @@ En el ejemplo de San José, iniciador con `saldo_g=800000` y `minimo_g=300000` e
 
 La señal contiene una instantánea inmutable con ID de cuenta, receta, UP, cantidad, mínimo nullable, estado, motivo técnico y UUID de la operación. Los motivos son `manufacture`, `feed_adjustment`, `cancellation`, `consumption`, `consumption_correction` y `minimum_changed`. Incluye estados suficientes y sin configurar para que Alertas pueda resolver una condición anterior. Los reintentos idempotentes de operaciones de stock no generan otra evaluación. Las rectificaciones que cambian receta evalúan ambas cuentas afectadas; un delta cero no modifica stock ni necesita señal nueva.
 
-No se incorporan notificaciones, listeners ni historial de alertas en esta entrega. El futuro módulo de Alertas gestionará apertura, resolución, deduplicación y entrega; podrá contrastar el saldo vigente al procesar señales concurrentes. El evento en memoria no sustituye un mecanismo persistente de entrega o recuperación que ese módulo pueda necesitar.
+El evento queda disponible para avisos por mínimo en gramos. Los avisos de cobertura en días se evalúan por separado a partir del saldo vigente y la demanda de los lotes. [Cobertura de ración](flock-feeding-implementation.md#avisos-por-cobertura-de-ración)
 
 ### Migración de mínimos
 
@@ -237,7 +237,7 @@ La verificación focalizada posterior pasó con **36 pruebas y 849 aserciones**,
 
 ## Decisiones pendientes
 
-Desempate y valores de ajustes quedaron confirmados. El permiso funcional específico permanece pendiente; se implementa la política provisional autenticada expresamente acordada.
+Desempate y valores de ajustes quedaron confirmados. Los permisos funcionales específicos se incorporan en la entrega de roles y permisos; se retira la política provisional de sólo autenticación.
 
 El consumo futuro de lotes debe continuar con recetas desactivadas o saldo cero/negativo hasta cambiar alimentación o desactivar el lote. Es contexto para una entrega posterior; no se implementa ahora.
 

@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Actions\Lots\EvaluatePoultryHouseCapacityAlertsAction;
+use App\Events\Lots\FlockRedistributed;
 use App\Interfaces\Clock;
 use App\Interfaces\FarmStructure\PoultryHouseOccupancyProvider;
 use App\Models\Lots\Breed;
@@ -18,6 +20,7 @@ use App\Policies\Lots\WeighingPolicy;
 use App\Policies\Lots\WeighingReferenceSettingsPolicy;
 use App\Services\Lots\LotsPoultryHouseOccupancyProvider;
 use App\Services\SystemClock;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
@@ -37,5 +40,14 @@ final class LotsServiceProvider extends ServiceProvider
         Gate::policy(EggCollection::class, EggCollectionPolicy::class);
         Gate::policy(Weighing::class, WeighingPolicy::class);
         Gate::policy(WeighingReferenceSettings::class, WeighingReferenceSettingsPolicy::class);
+
+        Event::listen(FlockRedistributed::class, function (FlockRedistributed $event): void {
+            rescue(function () use ($event): void {
+                $unitId = Flock::query()->whereIn('public_id', $event->flockIds)->value('production_unit_id');
+                if ($unitId !== null) {
+                    $this->app->make(EvaluatePoultryHouseCapacityAlertsAction::class)->execute((int) $unitId);
+                }
+            });
+        });
     }
 }

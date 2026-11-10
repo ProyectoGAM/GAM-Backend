@@ -1,0 +1,350 @@
+openapi: 3.1.0
+info:
+  title: API de presentación de auditoría
+  version: 1.0.0
+  description: |
+    Opción 2: listado compatible con resumen y detalle bajo demanda.
+    Todas las lecturas requieren can_view_audit. La presentación usa texto plano
+    y datos históricos permitidos; las acciones se evalúan al consultar.
+    No se modifican entradas anteriores ni se conceden permisos de negocio.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+  - cookieAuth: []
+tags:
+  - name: Auditoría
+    description: Historial de operaciones y presentación para operadores.
+paths:
+  /audit/entries:
+    get:
+      tags: [Auditoría]
+      operationId: listarEntradasDeAuditoria
+      summary: Lista el historial paginado con resumen
+      description: |
+        Conserva el contrato técnico existente y agrega actor ampliado y presentation.
+        No incluye facts, changes, actions ni reversibility dentro del resumen.
+        Orden descendente por created_at y luego id. Los filtros y totales se
+        calculan en servidor. No filtrar u ocultar registros localmente.
+        log_name representa el módulo funcional: las plantillas y la asignación,
+        herencia y revisión de planes de manejo se presentan como management_plans,
+        también cuando se almacenaron originalmente en lots. Lotes las excluye y
+        Manejo y sanidad las incluye antes de paginar. La historia almacenada no cambia.
+      parameters:
+        - { name: log_name, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: event, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: operation_id, in: query, schema: { type: string, format: uuid } }
+        - { name: trace_id, in: query, schema: { type: string, format: uuid } }
+        - { name: source, in: query, schema: { type: string, maxLength: 50 } }
+        - { name: actor_type, in: query, schema: { type: string, maxLength: 255 } }
+        - { name: actor_id, in: query, schema: { type: integer } }
+        - { name: actor_kind, in: query, schema: { type: string, enum: [person, system, unavailable] } }
+        - { name: subject_type, in: query, schema: { type: string, maxLength: 255 } }
+        - { name: subject_id, in: query, schema: { type: integer } }
+        - { name: up_id, in: query, schema: { type: integer } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, description: Debe ser igual o posterior a from., schema: { type: string, format: date } }
+        - { name: per_page, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { $ref: '#/components/parameters/Page' }
+      responses:
+        '200':
+          description: Página de entradas; los campos técnicos se conservan por compatibilidad.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/Pagination' }
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ListEntry' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /auditoria/entradas/{auditEntry}:
+    get:
+      tags: [Auditoría]
+      operationId: consultarDetalleDeAuditoria
+      summary: Consulta hechos históricos, cambios y acciones actuales
+      description: |
+        Se solicita al abrir el detalle. No devuelve properties, attribute_changes,
+        trace_id ni operation_id. Las acciones son orientación para la interfaz:
+        el comando de negocio vuelve a autorizar y validar estado e idempotencia.
+        Un estado unknown indica que esta presentación no integra la corrección
+        del módulo; no demuestra irreversibilidad.
+        Las reversiones de lotes requieren el permiso del comando correspondiente.
+        Si están disponibles, el destino incluye las versiones para confirmar.
+        Para revertir un cambio de estado se envía data.id como audit_entry_id.
+      parameters:
+        - name: auditEntry
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Detalle legible de una entrada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/DetailEntry' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: La entrada no existe.
+  /auditoria/responsables:
+    get:
+      tags: [Auditoría]
+      operationId: buscarResponsablesDeAuditoria
+      summary: Busca responsables históricos con datos mínimos
+      description: |
+        Incluye sólo actores con actividad, también deshabilitados o eliminados,
+        y distingue sistema de responsable no disponible. Deduplica por tipo e
+        identificador, separando sistema de desconocido cuando no hay ID.
+        Ordena por la fecha y el ID de la entrada representativa más reciente.
+        No requiere can_manage_users ni devuelve correos, roles o permisos.
+        Para filtrar personas usar actor_kind=person, actor_type y actor_id;
+        para sistema o desconocido usar actor_kind. No enviar IDs nulos.
+      parameters:
+        - { name: buscar, in: query, description: Busca literalmente en el nombre histórico más reciente o vigente; también admite Sistema., schema: { type: string, minLength: 1, maxLength: 100 } }
+        - { name: por_pagina, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { $ref: '#/components/parameters/Page' }
+      responses:
+        '200':
+          description: Opciones mínimas paginadas de responsables.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/Pagination' }
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          allOf:
+                            - { $ref: '#/components/schemas/ActorOption' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/Invalid' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: Sanctum }
+    cookieAuth: { type: apiKey, in: cookie, name: gam_session }
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 1000000, default: 1 }
+  responses:
+    Unauthenticated: { description: Debes iniciar sesión. }
+    Forbidden: { description: No tienes el permiso can_view_audit. }
+    Invalid: { description: Los filtros no cumplen los límites permitidos; devuelve message y errors en español. }
+  schemas:
+    Identifier:
+      oneOf:
+        - { type: integer }
+        - { type: string }
+        - { type: 'null' }
+    Actor:
+      type: object
+      required: [type, id, kind, name, current_name, exists, status, can_manage]
+      properties:
+        type: { type: [string, 'null'], description: Tipo técnico conservado para filtrar el historial. }
+        id: { $ref: '#/components/schemas/Identifier' }
+        kind: { type: string, enum: [person, system, unavailable] }
+        name: { type: [string, 'null'], description: Nombre histórico; Sistema para procesos identificados. Null si no se conservó. }
+        current_name: { type: [string, 'null'], description: 'Nombre actual, separado del histórico.' }
+        exists: { type: boolean, description: 'La fila de usuario existe, incluso si está deshabilitada lógicamente.' }
+        status: { type: string, enum: [active, disabled, system, unavailable] }
+        can_manage: { type: boolean, description: La cuenta existe y quien consulta tiene can_manage_users; no concede autorización. }
+    ActorOption:
+      type: object
+      required: [value, label, type, kind, status, can_manage, exists, name, current_name]
+      properties:
+        value: { $ref: '#/components/schemas/Identifier' }
+        label: { type: string, description: 'Nombre histórico, nombre actual explícito o Responsable no disponible.' }
+        type: { type: [string, 'null'] }
+        kind: { type: string, enum: [person, system, unavailable] }
+        status: { type: string, enum: [active, disabled, system, unavailable] }
+        can_manage: { type: boolean }
+        exists: { type: boolean }
+        name: { type: [string, 'null'] }
+        current_name: { type: [string, 'null'] }
+    Subject:
+      type: object
+      description: |
+        Referencia semántica para mostrar contexto y construir navegación conocida
+        por el cliente. Los eventos weighing_recorded y weighing_corrected usan
+        el flock_id público de su instantánea; daily_weighing_entry_added y
+        daily_weighing_entry_deleted usan daily_weighing.flock_id.
+        Para esos pesajes, resource=flock e id es el ULID público del lote del
+        evento, también en entradas históricas. label puede ser null: mostrar
+        Ver lote y no exigir un nombre para habilitar el enlace.
+        Mortalidad registrada, rectificada y cancelada usa el flock_id público de
+        su instantánea; flock_mortality_applied/corrected usa public_id del lote.
+        undo_mortality apunta a la confirmación existente de Mortandad con el
+        ULID público del registro. Consultar el detalle no ejecuta la cancelación.
+        Una referencia interna o inválida no produce un destino. La referencia
+        histórica no otorga acceso ni garantiza existencia actual; el endpoint
+        del lote conserva su autorización y sus respuestas 403/404.
+      required: [label, resource, id]
+      example:
+        label: null
+        resource: flock
+        id: 01K8Y2N7AA2XQY0YQEBMWVFJ9F
+      properties:
+        label: { type: [string, 'null'], description: Etiqueta histórica cuando se conserva; null no impide enlazar un lote con ID público válido. }
+        resource: { type: [string, 'null'], description: Recurso semántico reconocido; null si no hay destino seguro. }
+        id: { $ref: '#/components/schemas/Identifier' }
+    Summary:
+      type: object
+      description: |
+        En pesajes, title distingue modalidad individual/grupal y registro,
+        rectificación o eliminación. summary presenta aves, peso total y promedio
+        en gramos normalizados, y la evaluación histórica del rango. Los pesos
+        usan punto de miles y coma decimal sin redondeo adicional. En ingresos
+        diarios también explica cómo cambió la cantidad de aves de la muestra.
+      required: [title, summary, subject, production_unit]
+      properties:
+        title: { type: string }
+        summary: { type: string }
+        subject: { $ref: '#/components/schemas/Subject' }
+        production_unit:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [id, name]
+              properties:
+                id: { type: integer }
+                name: { type: string }
+    Presentation:
+      description: |
+        Los pesajes convencionales presentan modalidad, cantidad de aves, peso
+        total, promedio por ave, rango esperado, evaluación y mediciones.
+        En pesajes diarios, facts distingue el ingreso de los totales de la jornada;
+        changes compara cantidades, peso total y promedio de la muestra diaria.
+        Un promedio nulo al quedar cero aves se presenta como Sin aves en la muestra.
+        Si falta rango, la respuesta explica Sin rango esperado disponible y no
+        afirma que la medición esté dentro. Los metadatos técnicos conocidos se
+        omiten sin convertirlos en un aviso genérico de cambios no presentables.
+      allOf:
+        - { $ref: '#/components/schemas/Summary' }
+        - type: object
+          required: [facts, changes, changes_state, history, actions, reversibility]
+          properties:
+            facts:
+              type: array
+              items:
+                type: object
+                required: [label, value]
+                properties:
+                  label: { type: string }
+                  value: { type: string }
+            changes:
+              type: array
+              items:
+                type: object
+                required: [label, before, after]
+                properties:
+                  label: { type: string }
+                  before: { type: [string, 'null'], description: Null significa valor no conservado o no presentable; no significa Sin registrar. }
+                  after: { type: [string, 'null'] }
+            changes_state: { type: string, enum: [presented, partial, unavailable, not_recorded] }
+            history:
+              type: object
+              required: [state, missing]
+              properties:
+                state: { type: string, enum: [complete, partial], description: Cobertura de los datos históricos usados por esta presentación. }
+                missing: { type: array, items: { type: string } }
+            reversibility:
+              type: object
+              required: [state, reason]
+              properties:
+                state: { type: string, enum: [available, irreversible, unavailable, unknown] }
+                reason: { type: string }
+            actions:
+              type: array
+              items:
+                type: object
+                required: [kind, label, available, reason, target]
+                properties:
+                  kind: { type: string, enum: [reverse_inventory_movement, correct_feed_consumption, undo_mortality, reverse_flock_status, reverse_flock_redistribution] }
+                  label: { type: string }
+                  available: { type: boolean }
+                  reason: { type: [string, 'null'] }
+                  target:
+                    type: object
+                    description: |
+                      Para reverse_flock_status el recurso es flock. Si está disponible, incluye status y version.
+                      Para reverse_flock_redistribution el recurso es flock_redistribution. Si está disponible,
+                      incluye version y también destination_version cuando intervienen dos lotes distintos.
+                      Una reversión bloqueada con referencia verificable entrega únicamente resource e id.
+                    required: [resource, id]
+                    properties:
+                      resource: { type: string, enum: [inventory_movement, feed_consumption, mortality_record, flock, flock_redistribution] }
+                      id: { oneOf: [{ type: integer }, { type: string }], description: "ID numérico para inventario y consumos. ULID público para mortalidad, lote y redistribución." }
+                      flock_id: { type: string, description: Identificador público del lote; presente para consumos y mortalidad. }
+                      production_unit_id: { type: integer }
+                      status: { type: string, enum: [active, quarantined], description: Estado anterior que se restituye al revertir un cambio de estado. }
+                      version: { type: integer, minimum: 1, description: Versión vigente del lote o del origen original de la redistribución. }
+                      destination_version: { type: integer, minimum: 1, description: Versión vigente del destinatario original cuando es otro lote. }
+    ListEntry:
+      type: object
+      required: [id, log_name, event, description, actor, subject, operation_id, trace_id, source, up_id, properties, attribute_changes, created_at, presentation]
+      properties:
+        id: { type: integer }
+        log_name: { type: [string, 'null'] }
+        event: { type: [string, 'null'] }
+        description: { type: string }
+        actor: { $ref: '#/components/schemas/Actor' }
+        presentation: { $ref: '#/components/schemas/Summary' }
+        subject:
+          type: object
+          required: [type, id]
+          properties:
+            type: { type: [string, 'null'] }
+            id: { $ref: '#/components/schemas/Identifier' }
+        operation_id: { type: [string, 'null'], format: uuid }
+        trace_id: { type: [string, 'null'], format: uuid }
+        source: { type: string }
+        up_id: { type: [integer, 'null'] }
+        properties:
+          description: Contrato técnico anterior; no renderizar en el detalle.
+          oneOf:
+            - { type: object, additionalProperties: true }
+            - { type: array, maxItems: 0 }
+        attribute_changes:
+          description: Contrato técnico anterior; no interpretar claves arbitrarias.
+          oneOf:
+            - { type: object, additionalProperties: true }
+            - { type: array, maxItems: 0 }
+        created_at: { type: [string, 'null'], format: date-time }
+    DetailEntry:
+      type: object
+      required: [id, event, created_at, actor, presentation]
+      additionalProperties: false
+      properties:
+        id: { type: integer }
+        event: { type: [string, 'null'] }
+        created_at: { type: [string, 'null'], format: date-time }
+        actor: { $ref: '#/components/schemas/Actor' }
+        presentation: { $ref: '#/components/schemas/Presentation' }
+    Pagination:
+      type: object
+      required: [data, links, meta]
+      properties:
+        links:
+          type: object
+          additionalProperties: true
+        meta:
+          type: object
+          required: [current_page, last_page, per_page, total]
+          properties:
+            current_page: { type: integer }
+            last_page: { type: integer }
+            per_page: { type: integer }
+            total: { type: integer }

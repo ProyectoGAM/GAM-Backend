@@ -30,7 +30,7 @@ final readonly class SaveWeighingReferenceSettingsAction
     {
         return $this->commands->execute(
             $actor,
-            'weighing-settings.manage',
+            'can_manage_weighing_settings',
             'weighing-settings.save',
             $data['idempotency_key'],
             $data,

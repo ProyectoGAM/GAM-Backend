@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Deliveries;
 
+use App\Http\Resources\CustomersAndAccounts\CustomerMovementResource;
 use App\ValueObjects\Money;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -13,6 +14,7 @@ final class DeliveryStopResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'version' => $this->version,
             'client_reference' => $this->client_reference,
             'client_name' => $this->client_name,
             'address' => $this->address,
@@ -24,9 +26,13 @@ final class DeliveryStopResource extends JsonResource
             'items' => $this->items,
             'total_amount' => $this->total_amount,
             'currency' => Money::CURRENCY,
+            'accounting_status' => $this->accounting_status,
+            'delivery_id' => $this->whenLoaded('delivery', fn () => $this->delivery->public_id),
+            'account_movements' => CustomerMovementResource::collection($this->whenLoaded('accountMovements')),
             'visit_reason' => $this->visit_reason,
             'notes' => $this->notes,
             'visited_at' => $this->visited_at,
+            'created_at' => $this->created_at,
         ];
     }
 }

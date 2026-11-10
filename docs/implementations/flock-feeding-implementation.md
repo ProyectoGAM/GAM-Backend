@@ -1,12 +1,34 @@
 # Alimentación de lotes, consumos diarios y rectificaciones
 
+La entrega de roles y permisos exige sesión válida y permisos del rol: consulta con `can_view_flock_feeding`, configuración manual/automática con `can_manage_flock_feeding` y rectificación con `can_correct_feed_consumption`. Las operaciones automáticas del scheduler conservan su contexto de sistema.
+
 ## Alcance y decisiones
 
 El tercer bloque consume exclusivamente alimento elaborado desde `FeedBalance`, por receta y UP del lote. No descuenta ingredientes, modifica elaboraciones ni aplica sus restricciones de cancelación. Permite saldos cero o negativos sin elaboración previa, con aritmética exacta y límites comprobados.
 
-Incluye etapas de alimentación del plan, inicialización automática al admitir aves, configuración manual fija, regreso explícito a automático, integración con mortalidad y redistribuciones, recuperación de días pendientes, consultas y rectificaciones con compensación. No incorpora frontend, comidas individuales, pausa, alertas, notificaciones ni eliminación/cancelación de consumos.
+Incluye etapas de alimentación del plan, inicialización automática al admitir aves, configuración manual fija, regreso explícito a automático, integración con mortalidad y redistribuciones, recuperación de días pendientes, consultas y rectificaciones con compensación. Los avisos de cobertura se integran con la bandeja de notificaciones.
+
+## Avisos por cobertura de ración
+
+Cada cinco minutos, `alimentacion:evaluar-cobertura` agrupa la demanda vigente por receta y unidad productiva. En automático usa los gramos por ave de la etapa vigente y la población actual. En manual usa el total diario configurado. Incluye lotes activos y en cuarentena con pauta vigente. Una cuenta sin saldo o con saldo negativo equivale a cero días. La cobertura es una estimación a partir de la pauta del día.
+
+Con los valores iniciales, el aviso es `medio` con menos de 7 días de cobertura y `alto` con 2 días o menos. Compara el saldo con la demanda multiplicada por cada umbral antes de redondear. El aviso se resuelve cuando la cobertura deja de activar cualquier nivel o deja de haber demanda. Un faltante posterior abre un nuevo episodio. Una subida de nivel vuelve a marcar el mismo aviso como no leído.
+
+Los avisos aparecen con `modulo: management_plans`, `tipo: feed_coverage` y una referencia a la receta. Los reciben quienes tienen `can_view_feed_stock` y `can_view_notifications` dentro del alcance de la UP. La evaluación serializa por UP y confirma cada unidad por separado. PostgreSQL permite un solo aviso abierto por destinatario, receta y UP.
+
+El frontend puede consultar y guardar los umbrales de cada UP con `GET` y `PUT /api/v1/unidades-productivas/{productionUnit}/alertas-cobertura-racion`. El cuerpo del `PUT` incluye `dias_aviso` de 1 a 365 y `dias_urgencia` entre 0 y un día menos que el umbral medio. `dias_aviso_bajo` es opcional, debe superar el umbral medio y activa el nivel bajo cuando la cobertura cae por debajo de ese valor. Enviar `null` lo deshabilita. Omitirlo conserva su valor. `can_manage_alert_thresholds` permite consultar y editar. Los permisos existentes `can_view_feed_stock` y `can_manage_feed_minimums` también permiten consultar y editar, respectivamente. La escritura registra auditoría en la misma transacción. [Contrato de configuración](../../contracts/openapi/feed-recipes.yaml) · [Bandeja de avisos](notifications-implementation.md)
 
 Se confirmó con el usuario que el total manual debe ser positivo; una rectificación puede establecer cero. También se confirmó que revisar el plan del lote aplica sus nuevas etapas desde el día de la revisión, preservando días anteriores y cualquier configuración manual vigente. Las transiciones automáticas evalúan la disponibilidad al inicio del día: si la receta estaba activa a medianoche, la etapa queda vigente aunque se desactive durante esa jornada.
+
+## Revisión de ración manual
+
+`alimentacion:evaluar-revision-manual` revisa cada cinco minutos la pauta vigente de lotes abiertos de UP activas. En modo manual, si pasan 21 días locales desde el último cambio efectivo o confirmación, se emite `medio`. Desde el día 29 se emite `alto` en el mismo aviso y vuelve a aparecer como no leído. Una receta o cantidad nueva inicia otro plazo. Guardar la misma pauta o revisar el plan conservando la pauta manual mantiene el plazo. Un lote nuevo que hereda una pauta manual comienza su propio plazo.
+
+`POST /api/v1/lotes/{flock}/alimentacion/manual/confirmacion` recibe `configuracion_id` e `Idempotency-Key`. Requiere `can_manage_flock_feeding`. Si la configuración revisada ya cambió o el lote dejó de estar en modo manual, se devuelve `409`. La confirmación registra fecha, usuario, receta y cantidad en auditoría, resuelve el aviso y reinicia el plazo. La cantidad vigente se mantiene. Reintentar la misma operación conserva la confirmación original. La consulta de alimentación devuelve `revision_manual_desde`, `confirmada_en` y `confirmada_por`.
+
+Los umbrales se editan por UP con `can_manage_alert_thresholds` en `/api/v1/unidades-productivas/{productionUnit}/umbrales-alertas/manual_feeding_review_due`. Enviar `bajo: null` y dos enteros positivos, `medio < alto`. La bandeja entrega `modulo: management_plans`, `tipo: manual_feeding_review_due` y una ruta directa a Alimentación para usuarios con permisos de consulta. La migración reconstruye el inicio del último período de pauta manual para el historial existente. [Contrato de alimentación](../../contracts/openapi/flock-feeding.yaml) · [Contrato de umbrales](../../contracts/openapi/notifications.yaml)
+
+La regresión del backend pasó 52 pruebas y 609 aserciones en PostgreSQL aislado. Incluyó los límites de 21 y 29 días, la confirmación idempotente, el rechazo de una configuración obsoleta, la edición de umbrales y las rutas de la bandeja. Pint, PHPStan, el análisis YAML y `schedule:list` pasaron.
 
 ## Planes y calendario
 
@@ -65,7 +87,7 @@ Una restricción única `(flock_id, consumption_date)` y un lock del lote serial
 | GET | `/lotes/{flock}/consumos-alimento/{consumption}` | Original, último efectivo, censo, etapa, rectificaciones y movimientos. |
 | POST | `/lotes/{flock}/consumos-alimento/{consumption}/rectificaciones` | Compensación con motivo. |
 
-Los nuevos endpoints requieren la sesión autenticada existente y los middleware de dispositivo/sesión compartidos. En nativo compartido se exigen `X-Shared-Device-Token`, `X-GAM-Session`, sesión actual y generación vigente; en web, la credencial HttpOnly y CSRF existentes. No agregan permisos funcionales. Una consulta de estos historiales de negocio no expone la API genérica de auditoría, que conserva `audit.view`.
+Los nuevos endpoints requieren la sesión autenticada existente y los middleware de dispositivo/sesión compartidos. En nativo compartido se exigen `X-Shared-Device-Token`, `X-GAM-Session`, sesión actual y generación vigente; en web, la credencial HttpOnly y CSRF existentes. No agregan permisos funcionales. Una consulta de estos historiales de negocio no expone la API genérica de auditoría, que conserva `can_view_audit`.
 
 Las mutaciones requieren UUID en `Idempotency-Key`, devuelven 201 y la misma respuesta al repetir clave/contenido. La clave no se admite en el cuerpo. Otro contenido con esa clave devuelve 409. Un consumo ajeno al lote devuelve 404.
 
@@ -83,7 +105,7 @@ Entrada de rectificación:
 
 El regreso a automático admite un cuerpo vacío. Cantidades recibidas admiten entero JSON o cadena entera; se rechazan punto flotante, fracciones, notación científica y redondeos. Las cantidades de respuestas se entregan como cadenas para preservar precisión. Los listados admiten `desde`, `hasta`, `por_pagina` (1–100) y `page` acotada; ordenan fecha e ID descendente. `acumulado_g` suma cantidades efectivas de todo el filtro antes de paginar y usa suma decimal exacta de PostgreSQL.
 
-El endpoint existente `POST /flocks/{flock}/cambios-racion` conserva `management-plans.execute` y su registro de manejo, pero ahora cambia la configuración manual del día mediante la misma Action. Sustituye `finished_feed_product_id` por `feed_recipe_id` y `daily_quantity_grams` (uno o ambos obligatorios), con `occurred_at` del día de registro. No registra comidas ni descuenta stock inmediatamente. Los antiguos registros con snapshots de productos siguen consultables; corregir su metadata no revierte la alimentación vigente.
+El endpoint existente `POST /flocks/{flock}/cambios-racion` conserva `can_execute_management_plans` y su registro de manejo, pero ahora cambia la configuración manual del día mediante la misma Action. Sustituye `finished_feed_product_id` por `feed_recipe_id` y `daily_quantity_grams` (uno o ambos obligatorios), con `occurred_at` del día de registro. No registra comidas ni descuenta stock inmediatamente. Los antiguos registros con snapshots de productos siguen consultables; corregir su metadata no revierte la alimentación vigente.
 
 ## Persistencia, auditoría y límites
 

@@ -17,6 +17,7 @@ use App\Services\Lots\DailyWeighingTotals;
 use App\Services\Lots\FlockState;
 use App\Services\Lots\LotsHistory;
 use App\Services\Lots\RunLotsCommand;
+use App\Services\Lots\WeighingAnomalyAlerts;
 use App\Services\Lots\WeighingFlockProjection;
 use App\Services\Lots\WeighingMath;
 use App\ValueObjects\Lots\FlockAge;
@@ -35,6 +36,7 @@ final readonly class AddDailyWeighingEntryAction
         private DailyWeighingTotals $totals,
         private DailyWeighingPresenter $presenter,
         private LotsHistory $history,
+        private WeighingAnomalyAlerts $anomalyAlerts,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -42,7 +44,7 @@ final readonly class AddDailyWeighingEntryAction
     {
         return $this->commands->execute(
             $actor,
-            'weighings.manage',
+            'can_manage_weighings',
             'daily-weighing.entry.add',
             $data['idempotency_key'],
             ['flock' => $flock->public_id, ...$data],
@@ -113,6 +115,9 @@ final readonly class AddDailyWeighingEntryAction
                 $this->totals->recalculate($daily);
                 $after = $this->presenter->daily($daily->fresh());
                 $this->history->audit($daily, $actor, 'daily_weighing_entry_added', 'Ingreso de pesaje diario registrado', $operationId, $before, ['daily_weighing' => $after, 'entry' => $this->presenter->entry($entry)], $projection['production_unit_id'], $source);
+                if ($outside) {
+                    $this->anomalyAlerts->publish($entry->setRelation('dailyWeighing', $daily->setRelation('flock', $locked)), $operationId);
+                }
 
                 return ['daily_weighing' => $after, 'entry' => $this->presenter->entry($entry)];
             },

@@ -13,12 +13,12 @@ final readonly class ReportExportPolicy
 
     public function viewAny(User $user): bool
     {
-        return $this->allowed($user, 'reports.view');
+        return $this->allowed($user, 'can_view_reports');
     }
 
     public function view(User $user, ReportExport $export): bool
     {
-        return $this->owns($user, $export) && $this->allowed($user, 'reports.view');
+        return $this->owns($user, $export) && $this->allowed($user, 'can_view_reports');
     }
 
     public function download(User $user, ReportExport $export): bool
@@ -28,7 +28,7 @@ final readonly class ReportExportPolicy
 
     public function share(User $user, ReportExport $export): bool
     {
-        return $this->owns($user, $export) && $this->allowed($user, 'reports.share') && $this->canReadSource($user, $export);
+        return $this->owns($user, $export) && $this->allowed($user, 'can_share_reports') && $this->canReadSource($user, $export);
     }
 
     private function canReadSource(User $user, ReportExport $export): bool

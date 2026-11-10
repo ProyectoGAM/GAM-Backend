@@ -3,7 +3,9 @@
 namespace App\Queries\ManagementPlans;
 
 use App\Models\Lots\Flock;
+use App\Models\Lots\FlockMovement;
 use App\Models\ManagementPlans\FlockPlan;
+use App\Services\IdentityAndAccess\ProductionUnitAccess;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Query\Builder;
@@ -78,6 +80,10 @@ final readonly class ListFlockManagementHistoryQuery
             ->selectRaw('records.created_by as responsible_user_id')
             ->selectRaw('responsible_user.name as responsible_name')
             ->selectRaw("jsonb_build_object('quantity', records.quantity, 'source_flock_id', source_flock.public_id, 'destination_flock_id', destination_flock.public_id, 'source_poultry_house_id', records.source_poultry_house_id, 'destination_poultry_house_id', records.destination_poultry_house_id, 'reason', records.reason, 'reverses_movement_id', reversed.public_id, 'before', records.before, 'after', records.after) as module_data");
+
+        if (app(ProductionUnitAccess::class)->unitId() !== null) {
+            $query->whereIn('records.id', FlockMovement::query()->select('id'));
+        }
 
         return $this->applyScopes($query, $scopes, movement: true)
             ->where('records.type', '<>', 'mortality')
@@ -168,7 +174,7 @@ final readonly class ListFlockManagementHistoryQuery
             ->selectRaw('records.plan_activity_title_snapshot as plan_activity_title')
             ->selectRaw('records.responsible_user_id as responsible_user_id')
             ->selectRaw('records.responsible_name_snapshot as responsible_name')
-            ->selectRaw("jsonb_build_object('vaccine', records.vaccine_snapshot, 'product', records.product_snapshot, 'notes', records.notes, 'inventory_quantity', records.inventory_quantity, 'stock_location_name', records.stock_location_name_snapshot) as module_data");
+            ->selectRaw("jsonb_build_object('vaccine', records.vaccine_snapshot, 'product', records.product_snapshot, 'reason', records.reason, 'notes', records.notes, 'inventory_quantity', records.inventory_quantity, 'stock_location_name', records.stock_location_name_snapshot) as module_data");
 
         return $this->applyScopes($query, $scopes)
             ->selectRaw($this->scopeCaseSql($scopes, false, 'provenance'), $this->scopeCaseBindings($scopes, false, includeProvenance: true))

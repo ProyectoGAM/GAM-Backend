@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Inventory;
 
+use App\Actions\Inventory\DeleteEggPresentationAction;
 use App\Actions\Inventory\SaveEggPresentationAction;
+use App\Http\Requests\Inventory\DeleteEggPresentationRequest;
 use App\Http\Requests\Inventory\ListEggPresentationsRequest;
 use App\Http\Requests\Inventory\StoreEggPresentationRequest;
 use App\Http\Requests\Inventory\UpdateEggPresentationRequest;
@@ -11,6 +13,7 @@ use App\Models\Inventory\EggPresentation;
 use App\Services\Inventory\EggPresentationCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
 
 final readonly class EggPresentationController
 {
@@ -28,5 +31,12 @@ final readonly class EggPresentationController
     public function update(UpdateEggPresentationRequest $request, EggPresentation $presentation, SaveEggPresentationAction $action): EggPresentationResource
     {
         return new EggPresentationResource($action->execute($presentation, $request->validated(), $request->user()));
+    }
+
+    public function destroy(DeleteEggPresentationRequest $request, EggPresentation $presentation, DeleteEggPresentationAction $action): Response
+    {
+        $action->execute($presentation, $request->user());
+
+        return response()->noContent();
     }
 }

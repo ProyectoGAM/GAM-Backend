@@ -6,7 +6,9 @@ use App\Actions\IdentityAndAccess\RegisterUserAction;
 use App\DTO\AuditAndTraceability\AuditEntryData;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\AuditAndTraceability\AuditEntry;
+use App\Models\IdentityAndAccess\Role;
 use App\Models\User;
+use Database\Seeders\IdentityPermissionSeeder;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -23,14 +25,15 @@ final class AuditEntryTest extends TestCase
     {
         // Acción 1: crea un administrador de prueba y registra el usuario mediante la API administrativa.
         $admin = User::factory()->create();
-        $admin->givePermissionTo(Permission::findOrCreate('identity.users.manage', 'web'));
+        $this->seed(IdentityPermissionSeeder::class);
+        $admin->syncRoles([Role::findByName('admin', 'web')]);
         Sanctum::actingAs($admin, ['api:access']);
         $response = $this->postJson('/api/v1/users', [
             'name' => 'Audited User',
             'email' => 'audited.user@example.test',
             'password' => 'correct-password',
             'password_confirmation' => 'correct-password',
-            'role' => 'employee',
+            'rol_id' => Role::findByName('employee', 'web')->id,
         ]);
 
         // Verificación: confirma respuesta, usuario creado y entrada de auditoría.
@@ -52,6 +55,7 @@ final class AuditEntryTest extends TestCase
         $this->assertSame([
             'name' => 'Audited User',
             'email' => 'audited.user@example.test',
+            'role' => 'employee',
         ], $entry->properties->get('subject_snapshot'));
         $this->assertArrayNotHasKey('password', $entry->properties->toArray());
     }
@@ -84,8 +88,8 @@ final class AuditEntryTest extends TestCase
     {
         // Preparación: crea el usuario autorizado, el sujeto y una entrada de auditoría.
         $user = User::factory()->create();
-        $permission = Permission::findOrCreate('audit.view', 'web');
-        $user->givePermissionTo($permission);
+        $permission = Permission::findOrCreate('can_view_audit', 'web');
+        $user->roles()->firstOrFail()->givePermissionTo($permission);
         $subject = User::factory()->create();
 
         AuditEntry::query()->create([
@@ -125,7 +129,10 @@ final class AuditEntryTest extends TestCase
     // Flujo: fuerza un fallo de auditoría; verifica que la operación de negocio se revierte.
     public function test_failed_audit_rolls_back_the_business_operation(): void
     {
-        // Preparación: sustituye el grabador por uno que falla.
+        // Preparación: autoriza el alta y sustituye el grabador por uno que falla.
+        $this->seed(IdentityPermissionSeeder::class);
+        $admin = User::factory()->create();
+        $admin->syncRoles(['admin']);
         $this->app->instance(AuditRecorder::class, new class implements AuditRecorder
         {
             public function record(AuditEntryData $entry): void
@@ -140,7 +147,8 @@ final class AuditEntryTest extends TestCase
                 'name' => 'Rolled Back User',
                 'email' => 'rolled.back@example.test',
                 'password' => 'correct-password',
-            ]);
+                'rol_id' => Role::findByName('employee', 'web')->id,
+            ], $admin);
 
             $this->fail('The registration should fail when audit storage fails.');
         } catch (RuntimeException $exception) {
@@ -149,5 +157,63 @@ final class AuditEntryTest extends TestCase
 
         // Verificación: confirma que el usuario no se persistió.
         $this->assertDatabaseMissing('users', ['email' => 'rolled.back@example.test']);
+    }
+
+    // Flujo: clasifica planes antiguos sin alterar la historia y conserva filtros, totales y paginación.
+    public function test_management_plan_history_belongs_to_management_and_not_lots(): void
+    {
+        // Preparación: crea un lector y eventos de planes antiguos, actuales y de otros módulos.
+        $user = User::factory()->create();
+        $user->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_view_audit', 'web'));
+        $planEvents = ['plan_template_created', 'plan_template_revised', 'plan_template_published',
+            'plan_template_retired', 'plan_template_activated', 'flock_plan_assigned',
+            'flock_plan_inherited', 'flock_plan_revised'];
+        $records = [];
+        foreach ($planEvents as $event) {
+            $records[] = ['lots', $event];
+        }
+        $records = [...$records, ['management_plans', 'medicine_application_recorded'],
+            ['lots', 'flock_created'], ['lots', 'eggs_collected'], ['lots', null],
+            ['lots', 'future_plan_event'], ['inventory', 'flock_feeding_plan_revised']];
+        $entries = [];
+        foreach ($records as [$module, $event]) {
+            $entries[] = AuditEntry::query()->create([
+                'log_name' => $module, 'event' => $event, 'description' => 'Actividad de prueba',
+                'operation_id' => Str::uuid()->toString(), 'source' => 'test',
+                'causer_type' => User::class, 'causer_id' => $user->getKey(), 'properties' => [],
+            ]);
+        }
+        Sanctum::actingAs($user, ['*']);
+
+        // Consulta: Lotes conserva sus eventos, incluidos los desconocidos y los que no tienen código.
+        $lots = $this->getJson('/api/v1/audit/entries?log_name=lots&per_page=2')
+            ->assertOk()->assertJsonPath('meta.total', 4)->assertJsonPath('meta.last_page', 2)
+            ->assertJsonCount(2, 'data');
+        $this->assertSame(['lots'], array_values(array_unique(array_column($lots->json('data'), 'log_name'))));
+
+        // Consulta: Manejo incorpora los ocho eventos antiguos y conserva su paginación real.
+        $management = $this->getJson('/api/v1/audit/entries?log_name=management_plans&per_page=3&page=2')
+            ->assertOk()->assertJsonPath('meta.total', 9)->assertJsonPath('meta.current_page', 2)
+            ->assertJsonPath('meta.last_page', 3)->assertJsonCount(3, 'data');
+        $this->assertSame(['management_plans'], array_values(array_unique(array_column($management->json('data'), 'log_name'))));
+
+        // Consulta: otros filtros siguen acotando los eventos reclasificados y no incluyen alimentación.
+        $this->getJson('/api/v1/audit/entries?log_name=management_plans&event=flock_plan_assigned')
+            ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.event', 'flock_plan_assigned');
+        $this->getJson('/api/v1/audit/entries?log_name=lots&event=plan_template_published')
+            ->assertOk()->assertJsonPath('meta.total', 0);
+        $this->getJson('/api/v1/audit/entries?log_name=inventory')
+            ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.log_name', 'inventory');
+        $this->getJson('/api/v1/audit/entries?log_name=management_plans&source=other')
+            ->assertOk()->assertJsonPath('meta.total', 0);
+
+        // Consulta: Todo el sistema presenta el mismo módulo sin duplicar registros.
+        $all = $this->getJson('/api/v1/audit/entries?per_page=100')
+            ->assertOk()->assertJsonPath('meta.total', 14)->assertJsonCount(14, 'data');
+        $byId = array_column($all->json('data'), null, 'id');
+        foreach (array_slice($entries, 0, 8) as $entry) {
+            $this->assertSame('management_plans', $byId[$entry->getKey()]['log_name']);
+            $this->assertDatabaseHas('activity_log', ['id' => $entry->getKey(), 'log_name' => 'lots']);
+        }
     }
 }

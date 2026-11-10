@@ -8,7 +8,7 @@ final readonly class MedicinePolicy
 {
     public function viewAny(User $user): bool
     {
-        return ! $user->trashed() && ($user->hasRole('admin') || $user->can('management-plans.manage'));
+        return ! $user->trashed() && ($user->hasRole('admin') || $user->can('can_manage_management_plans'));
     }
 
     public function create(User $user): bool

@@ -8,7 +8,10 @@ use App\Enums\FarmStructure\ProductionUnitStatus;
 use App\Exceptions\FarmStructure\FarmStructureConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\FarmStructure\ProductionUnit;
+use App\Models\IdentityAndAccess\AuthSession;
+use App\Models\SharedDevicePairingCode;
 use App\Models\User;
+use App\Services\IdentityAndAccess\AuthSessionService;
 use Illuminate\Support\Facades\DB;
 
 final readonly class ChangeProductionUnitStatusAction
@@ -36,6 +39,12 @@ final readonly class ChangeProductionUnitStatusAction
 
             $previousStatus = $lockedProductionUnit->status;
             $lockedProductionUnit->update(['status' => $status]);
+            if ($status === ProductionUnitStatus::Inactive) {
+                foreach (AuthSession::query()->where('production_unit_id', $lockedProductionUnit->id)->whereNull('revoked_at')->get() as $session) {
+                    app(AuthSessionService::class)->revoke($session, 'production_unit_inactive');
+                }
+                SharedDevicePairingCode::query()->where('production_unit_id', $lockedProductionUnit->id)->whereNull('consumed_at')->update(['expires_at' => now()]);
+            }
 
             $this->auditRecorder->record(AuditEntryData::forSubject(
                 subject: $lockedProductionUnit,

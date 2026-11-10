@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Lots;
 
+use App\Models\Lots\EggCollection;
+use Carbon\CarbonImmutable;
 use PHPUnit\Framework\Attributes\TestWith;
 
 final class EggCollectionEndpointTest extends LotsTestCase
@@ -27,7 +29,7 @@ final class EggCollectionEndpointTest extends LotsTestCase
     public function test_collection_creates_history_and_stock_without_changing_flock(): void
     {
         // Preparación: autentica al usuario con permisos de producción y stock.
-        $this->signIn(['egg-collections.view', 'egg-collections.manage', 'egg-stock.view', 'egg-stock.move', 'egg-stock.adjust']);
+        $this->signIn(['can_view_egg_collections', 'can_manage_egg_collections', 'can_view_egg_stock', 'can_move_egg_stock', 'can_adjust_egg_stock']);
         $flock = $this->flock();
         $version = $flock->version;
 
@@ -45,7 +47,7 @@ final class EggCollectionEndpointTest extends LotsTestCase
     public function test_collection_correction_applies_only_the_difference(): void
     {
         // Preparación: registra la captura inicial y conserva su versión.
-        $this->signIn(['egg-collections.view', 'egg-collections.manage', 'egg-stock.view', 'egg-stock.move', 'egg-stock.adjust']);
+        $this->signIn(['can_view_egg_collections', 'can_manage_egg_collections', 'can_view_egg_stock', 'can_move_egg_stock', 'can_adjust_egg_stock']);
         $flock = $this->flock();
         $created = $this->command('POST', "/flocks/{$flock->public_id}/collections", ['quantity' => 4000])->assertCreated();
         $collectionId = $created->json('data.collection.id');
@@ -64,7 +66,7 @@ final class EggCollectionEndpointTest extends LotsTestCase
     public function test_collection_cancellation_keeps_history_and_can_make_balance_negative(): void
     {
         // Preparación: registra una recolección en un lote válido.
-        $this->signIn(['egg-collections.view', 'egg-collections.manage', 'egg-stock.view', 'egg-stock.move', 'egg-stock.adjust']);
+        $this->signIn(['can_view_egg_collections', 'can_manage_egg_collections', 'can_view_egg_stock', 'can_move_egg_stock', 'can_adjust_egg_stock']);
         $flock = $this->flock();
         $created = $this->command('POST', "/flocks/{$flock->public_id}/collections", ['quantity' => 12])->assertCreated();
         $collectionId = $created->json('data.collection.id');
@@ -83,11 +85,37 @@ final class EggCollectionEndpointTest extends LotsTestCase
     public function test_metrics_ignore_manual_stock_movements(): void
     {
         // Preparación: registra una única recolección.
-        $this->signIn(['egg-collections.view', 'egg-collections.manage']);
+        $this->signIn(['can_view_egg_collections', 'can_manage_egg_collections']);
         $flock = $this->flock();
         $this->command('POST', "/flocks/{$flock->public_id}/collections", ['quantity' => 9])->assertCreated();
 
         // Consulta: solicita métricas diarias, semanales y mensuales.
-        $this->getJson('/api/v1/collections/metrics')->assertOk()->assertJsonPath('data.collected_eggs', 9);
+        $this->getJson('/api/v1/collections/metrics')->assertOk()->assertJsonPath('data.collected_eggs', 9)
+            ->assertJsonMissingPath('data.comparacion');
+    }
+
+    // Flujo: compara períodos contiguos con la misma UP, sin incluir anulaciones ni extender las series.
+    public function test_metrics_compare_the_previous_calendar_period(): void
+    {
+        // Preparación: coloca registros a ambos lados de la medianoche y en una segunda UP.
+        config(['lots.timezone' => 'America/Montevideo']);
+        $this->signIn(['can_view_egg_collections']);
+        $flock = $this->flock();
+        $other = $this->flock();
+        foreach ([[$flock, '2026-11-01T02:59:59Z', 10, 'recorded'], [$flock, '2026-11-01T03:00:00Z', 15, 'recorded'],
+            [$flock, '2026-11-02T03:00:00Z', 99, 'recorded'], [$flock, '2026-11-01T04:00:00Z', 90, 'cancelled'],
+            [$other, '2026-11-01T02:59:59Z', 50, 'recorded']] as [$lot, $date, $quantity, $status]) {
+            EggCollection::factory()->for($lot)->create(['occurred_at' => CarbonImmutable::parse($date), 'quantity' => $quantity, 'status' => $status]);
+        }
+
+        // Consulta: el 1 de noviembre compara únicamente el 31 de octubre y devuelve la serie actual.
+        $path = '/api/v1/collections/metrics?comparar_anterior=1&production_unit_id='.$flock->production_unit_id;
+        $this->getJson($path.'&date_from=2026-11-01&date_to=2026-11-01')->assertOk()
+            ->assertJsonPath('data.total_eggs', 15)->assertJsonCount(1, 'data.by_day')
+            ->assertJsonPath('data.comparacion', ['desde' => '2026-10-31', 'hasta' => '2026-10-31', 'total_huevos' => 10, 'variacion_porcentual' => 50]);
+
+        // Consulta: un período anterior vacío conserva el total cero y devuelve variación nula.
+        $this->getJson($path.'&date_from=2026-10-31&date_to=2026-10-31')->assertOk()
+            ->assertJsonPath('data.comparacion.total_huevos', 0)->assertJsonPath('data.comparacion.variacion_porcentual', null);
     }
 }

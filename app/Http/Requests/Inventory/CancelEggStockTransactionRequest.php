@@ -6,7 +6,7 @@ final class CancelEggStockTransactionRequest extends EggStockRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('egg-stock.adjust') ?? false;
+        return $this->user()?->can('can_adjust_egg_stock') ?? false;
     }
 
     /** @return array<string, mixed> */

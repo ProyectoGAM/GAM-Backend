@@ -5,6 +5,7 @@ namespace App\Models\Lots;
 use App\Models\ManagementPlans\FlockPlanActivity;
 use Carbon\CarbonImmutable;
 use Database\Factories\Lots\MortalityRecordFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -44,6 +45,23 @@ class MortalityRecord extends Model
     public function getRouteKeyName(): string
     {
         return 'public_id';
+    }
+
+    /** @param Builder<self> $query @return Builder<self> */
+    public function scopeForReportingPeriod(Builder $query, ?string $from, ?string $to, ?int $unitId): Builder
+    {
+        $timezone = config('lots.timezone');
+        if ($from !== null) {
+            $query->where('occurred_at', '>=', CarbonImmutable::parse($from, $timezone)->startOfDay()->toIso8601String());
+        }
+        if ($to !== null) {
+            $query->where('occurred_at', '<', CarbonImmutable::parse($to, $timezone)->addDay()->startOfDay()->toIso8601String());
+        }
+        if ($unitId !== null) {
+            $query->where('production_unit_id', $unitId);
+        }
+
+        return $query;
     }
 
     /** @return array<string, string> */

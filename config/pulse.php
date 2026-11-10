@@ -189,6 +189,7 @@ return [
             ],
             'groups' => [
                 // '#^https://api\.github\.com/repos/.*$#' => 'api.github.com/repos/*',
+                '#^https://api\.mapbox\.com/search/geocode/v6/reverse(?:\?.*)?$#' => 'https://api.mapbox.com/search/geocode/v6/reverse',
                 // '#^https?://([^/]*).*$#' => '\1',
                 // '#/\d+#' => '/*',
             ],

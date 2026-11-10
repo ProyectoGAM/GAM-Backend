@@ -27,6 +27,7 @@ final readonly class CreateReportPresetAction
         try {
             return DB::transaction(fn (): ReportPreset => ReportPreset::query()->create([
                 'user_id' => $actor->getKey(),
+                'production_unit_id' => $actor->usesDevicePin() ? $actor->production_unit_id : null,
                 'name' => $attributes['name'],
                 'source_key' => $query->sourceKey,
                 'definition_version' => $query->definitionVersion,
