@@ -18,6 +18,9 @@ final readonly class ListLotsCatalogQuery
     public function execute(string $model, array $filters): LengthAwarePaginator
     {
         $query = $model::query();
+        if (isset($filters['id'])) {
+            $query->whereKey((int) $filters['id']);
+        }
         if (isset($filters['search'])) {
             $query->where('name', 'ilike', '%'.$filters['search'].'%');
         }

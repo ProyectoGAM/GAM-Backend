@@ -165,6 +165,8 @@ final readonly class ReportQueryNormalizer
         $valid = match ($definition['type']) {
             'integer' => is_int($value) || (is_string($value) && ctype_digit($value)),
             'boolean' => is_bool($value),
+            'date' => $value !== null && $this->normalizeDate($value, $key) !== null,
+            'number' => is_int($value) || (is_string($value) && preg_match('/^-?[0-9]{1,22}(?:\.[0-9]{1,6})?$/D', $value) === 1),
             'string', 'enum' => is_string($value) && $value !== '' && mb_strlen($value) <= 160,
             default => false,
         };

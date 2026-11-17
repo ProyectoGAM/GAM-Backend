@@ -1032,6 +1032,7 @@ components:
           enum:
             - cash
             - transfer
+            - check
             - other
         payment_reference:
           type:
@@ -1088,6 +1089,7 @@ components:
           enum:
             - cash
             - transfer
+            - check
             - other
             - null
         payment_reference:

@@ -8,6 +8,18 @@ al abrir una entrada y devuelve hechos, cambios legibles y acciones calculadas
 contra el estado actual. Contrato: [audit.yaml](../../contracts/openapi/audit.yaml).
 La integración del cliente está en [el informe para frontend](audit-frontend-integration.md).
 
+## Vehículos, Clientes y Razas
+
+El resumen y el detalle exponen `presentation.subject.section` para navegar al módulo y la sección con un identificador válido. La cuenta corriente puede incluir `record_id` con el ULID del movimiento. El presentador toma las referencias de las instantáneas existentes y comprueba permisos de lectura sin consultar recursos vigentes por cada fila. Las entradas anteriores se benefician cuando conservan el ID público apropiado o el ID de catálogo de Razas. Las sesiones PIN se ajustan a las restricciones de los módulos de destino.
+
+El detalle proyecta `cancel_vehicle_maintenance` para intervenciones planificadas o en curso, `correct_vehicle_reading` para lecturas vigentes del odómetro y `reverse_customer_movement` para pagos y ajustes elegibles de cuenta corriente. Verifica el permiso de cada comando, la existencia del registro y la vigencia de la acción. Si se puede consultar el registro pero la acción dejó de estar disponible, devuelve `available: false` y el motivo. Los cargos de venta y sus compensaciones se gestionan desde la entrega.
+
+Cada acción reutiliza el endpoint de su módulo, que vuelve a comprobar permisos y estado, y conserva la trazabilidad propia de la anulación, rectificación o compensación. Las rectificaciones de lecturas y las reversiones de cuenta usan el encabezado `Idempotency-Key`. Las anulaciones de intervenciones usan la versión del mantenimiento para detectar cambios entre consulta y confirmación.
+
+Los eventos `breed_created` y `breed_updated` aparecen en Manejos con un destino al catálogo. `GET /breeds?id={id}` permite abrir la ficha vigente por ID aunque su nombre haya cambiado. Las ediciones se realizan desde el catálogo. La clasificación se aplica al filtrar y presentar los eventos guardados bajo Lotes. La ampliación reutiliza los datos de auditoría existentes.
+
+La regresión en PostgreSQL de testing pasó con 131 pruebas y 1825 aserciones de auditoría, vehículos, clientes, razas y aislamiento por UP. La verificación final de la presentación, el filtro por ID y el contrato de Lotes pasó con 14 pruebas y 649 aserciones. Pint y PHPStan nivel 5 pasaron sobre los archivos del cambio. La navegación en pantalla corresponde a la integración del cliente.
+
 No se agregan dependencias ni migraciones. Se reutilizan los JSON de activity_log.
 No se ejecutaron migraciones ni seeders sobre datos de trabajo.
 

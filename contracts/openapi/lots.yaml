@@ -466,6 +466,10 @@ paths:
       description: "Permiso requerido: can_view_breeds. Cada raza incluye sus límites propios (null significa herencia) y los rangos efectivos calculados con la configuración global."
       x-permission: "can_view_breeds"
       parameters:
+        - name: id
+          in: query
+          description: Identificador exacto de la raza, incluido en el enlace del Historial.
+          schema: { type: integer, format: int64, minimum: 1 }
         -
           "$ref": "#/components/parameters/Page"
         -

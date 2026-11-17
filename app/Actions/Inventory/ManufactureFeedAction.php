@@ -8,11 +8,14 @@ use App\Exceptions\Inventory\FeedRecipeConflict;
 use App\Models\FarmStructure\PoultryHouse;
 use App\Models\Inventory\FeedStockOperation;
 use App\Models\User;
+use App\Services\IdentityAndAccess\ProductionUnitAccess;
 use App\Services\Inventory\FeedBalanceEvaluator;
 use App\Services\Inventory\FeedIngredientStocks;
+use App\Services\Inventory\FeedManufactureAlerts;
 use App\Services\Inventory\FeedOperationRunner;
 use App\Services\Inventory\FeedRecipeCalculator;
 use Brick\Math\BigDecimal;
+use Illuminate\Support\Facades\Crypt;
 use InvalidArgumentException;
 
 final readonly class ManufactureFeedAction
@@ -23,14 +26,22 @@ final readonly class ManufactureFeedAction
         private FeedRecipeCalculator $calculator,
         private RecordInventoryMovementAction $recordMovement,
         private FeedBalanceEvaluator $evaluator,
+        private ProductionUnitAccess $access,
+        private FeedManufactureAlerts $alerts,
     ) {}
 
-    public function execute(int $recipeId, int $houseId, mixed $quantity, string $key, User $actor, string $source = 'api'): FeedStockOperation
+    public function execute(int $recipeId, int $houseId, mixed $quantity, string $key, User $actor, string $source = 'api', ?string $shortageConfirmation = null): FeedStockOperation
     {
         $quantity = $this->operations->grams($quantity, true);
 
-        return $this->operations->run('manufacture', $key, [$recipeId, $houseId, (string) $quantity], $actor,
-            function (string $operationId) use ($recipeId, $houseId, $quantity, $key, $actor, $source): FeedStockOperation {
+        $payload = [$recipeId, $houseId, (string) $quantity];
+        $idempotencyPayload = $shortageConfirmation === null ? $payload : [...$payload, $shortageConfirmation];
+
+        $operation = $this->operations->run('manufacture', $key, $idempotencyPayload, $actor,
+            function (string $operationId) use ($recipeId, $houseId, $quantity, $key, $actor, $source, $shortageConfirmation, $payload): FeedStockOperation {
+                $house = PoultryHouse::query()->findOrFail($houseId);
+                $unitId = (int) $house->production_unit_id;
+                $this->access->assertUnit($unitId, $actor);
                 $recipe = $this->operations->recipe($recipeId)->load('ingredients');
                 try {
                     $calculation = $this->calculator->calculate($recipe->yield_grams, $quantity, $recipe->ingredients->pluck('quantity_grams', 'product_id')->all());
@@ -41,12 +52,23 @@ final readonly class ManufactureFeedAction
                     $this->operations->grams($required, true);
                 }
                 $products = $this->stocks->products(array_keys($calculation['quantities']));
-                $house = PoultryHouse::query()->findOrFail($houseId);
-                $unitId = (int) $house->production_unit_id;
                 $locations = $this->stocks->locations($unitId, [$houseId], true);
                 $house->refresh();
                 $balances = $this->stocks->balances(array_keys($calculation['quantities']), $locations);
-                $distribution = $this->stocks->distribute($calculation['quantities'], $houseId, $locations, $balances);
+                ['distribution' => $distribution, 'shortages' => $shortages] = $this->stocks->distribute($calculation['quantities'], $houseId, $locations, $balances);
+                $shortageSnapshot = [];
+                if ($shortages !== []) {
+                    foreach ($shortages as $productId => $missingGrams) {
+                        $shortageSnapshot[] = ['product_id' => $productId, 'name' => $products->get($productId)->name, 'quantity_grams' => $missingGrams];
+                    }
+
+                    $confirmation = hash_hmac('sha256', json_encode([
+                        'feed-manufacture-shortage', $actor->getKey(), strtolower($key), $unitId, $payload, $calculation, $distribution,
+                    ], JSON_THROW_ON_ERROR), Crypt::getKey());
+                    if (! hash_equals($confirmation, $shortageConfirmation ?? '')) {
+                        throw FeedRecipeConflict::stockConfirmationRequired($confirmation, $shortageSnapshot);
+                    }
+                }
                 $feedBalance = $this->operations->balance($recipeId, $unitId);
                 $before = $feedBalance->quantity_grams;
                 $after = $this->operations->grams($before + $quantity);
@@ -60,6 +82,7 @@ final readonly class ManufactureFeedAction
                         'required_quantity_grams' => (string) $calculation['quantities'][$ingredient->product_id],
                     ])->all(),
                     'distribution' => $distribution,
+                    'shortages' => $shortageSnapshot,
                 ];
                 $operation = $this->operations->operation('manufacture', $key, $actor, $operationId, [
                     'feed_recipe_id' => $recipeId, 'production_unit_id' => $unitId, 'poultry_house_id' => $houseId,
@@ -86,10 +109,16 @@ final readonly class ManufactureFeedAction
                 }, $distribution);
                 $operation->forceFill(['inventory_movement_id' => $movement->id, 'snapshot' => $snapshot])->save();
                 $feedBalance->forceFill(['quantity_grams' => $after])->save();
-                $this->operations->audit($operation, $actor, 'Alimento elaborado inmediatamente', $source);
+                $this->operations->audit($operation, $actor, $shortages === [] ? 'Alimento elaborado inmediatamente' : 'Alimento elaborado con faltantes confirmados', $source);
+                if ($shortages !== []) {
+                    $this->alerts->publish($operation);
+                }
                 $this->evaluator->evaluate($feedBalance, 'manufacture', $operationId);
 
                 return $operation;
             });
+        $this->access->assertUnit($operation->production_unit_id, $actor);
+
+        return $operation;
     }
 }

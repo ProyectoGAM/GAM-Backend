@@ -32,6 +32,7 @@ final readonly class ReportSourceDefinition
         public array $standardQueries = [],
         public bool $supportsDateRange = true,
         public array $additionalPermissions = [],
+        public bool $supportsPublicLinks = true,
     ) {}
 
     /**

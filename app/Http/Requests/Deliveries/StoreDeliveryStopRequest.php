@@ -29,7 +29,7 @@ final class StoreDeliveryStopRequest extends DeliveryRequest
             'occurred_at' => ['sometimes', 'date'],
             'payment' => ['sometimes', 'prohibited_if:status,not_delivered', 'array:amount,payment_method,payment_reference,reason'],
             'payment.amount' => ['required_with:payment', 'string'],
-            'payment.payment_method' => ['sometimes', 'in:cash,transfer,other'],
+            'payment.payment_method' => ['sometimes', 'in:cash,transfer,check,other'],
             'payment.payment_reference' => ['sometimes', 'nullable', 'string', 'max:240'],
             'payment.reason' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'client_reference' => ['required', 'string', 'max:80'],

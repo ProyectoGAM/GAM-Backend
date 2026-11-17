@@ -64,6 +64,13 @@ final class BusinessReportSourcesTest extends TestCase
             $this->postJson($path, ['from' => $from, 'to' => $to, 'metrics' => $metrics])->assertOk()
                 ->assertJsonPath('data.rows.0', ['merchandise_total' => $value, 'delivery_count' => $count, 'unpriced_delivery_count' => $missing]);
         }
+
+        // Consulta: el reporte completo conserva cobro, precio predeterminado y deuda desconocidos en registros legados.
+        Sanctum::actingAs($this->actor(['can_view_reports', 'can_view_delivery_history', 'can_view_customer_accounts']));
+        $this->postJson('/api/v1/reportes/deliveries.collections/previsualizaciones', ['from' => '2026-11-02', 'to' => '2026-11-02'])
+            ->assertOk()->assertJsonPath('data.rows.0.paid_at_delivery', null)
+            ->assertJsonPath('data.rows.0.default_merchandise_value', null)
+            ->assertJsonPath('data.rows.0.current_debt_status', 'Desconocido');
     }
 
     // Flujo: los gastos agregan sólo importes efectivos y separan moneda, UP y permisos de origen.
@@ -119,17 +126,17 @@ final class BusinessReportSourcesTest extends TestCase
         Sanctum::actingAs($actor);
         // Consulta: conserva las diez fuentes previas y rechaza las fuentes de vehículos sin permiso.
         $this->getJson('/api/v1/reportes/fuentes')->assertOk()->assertJsonCount(10, 'data');
-        foreach (['vehicles.usage', 'vehicles.fuel', 'vehicles.maintenance'] as $sourceKey) {
+        foreach (['vehicles.usage', 'vehicles.fuel', 'vehicles.maintenance', 'deliveries.collections'] as $sourceKey) {
             $this->postJson('/api/v1/reportes/'.$sourceKey.'/previsualizaciones')->assertForbidden();
         }
 
         // Preparación: concede los permisos funcionales de las tres fuentes nuevas.
-        foreach (['can_view_vehicles', 'can_view_vehicle_fuel', 'can_view_vehicle_maintenance'] as $permission) {
+        foreach (['can_view_vehicles', 'can_view_vehicle_fuel', 'can_view_vehicle_maintenance', 'can_view_customer_accounts'] as $permission) {
             $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
 
-        // Acción: consulta las trece fuentes autorizadas y ejecuta todas sus consultas estándar.
-        $this->getJson('/api/v1/reportes/fuentes')->assertOk()->assertJsonCount(13, 'data');
+        // Acción: consulta las catorce fuentes autorizadas y ejecuta sus consultas estándar.
+        $this->getJson('/api/v1/reportes/fuentes')->assertOk()->assertJsonCount(14, 'data');
         foreach (app(ReportSourceRegistry::class)->all() as $source) {
             $this->postJson('/api/v1/reportes/'.$source->definition()->key.'/previsualizaciones')->assertOk();
             foreach ($source->definition()->standardQueries as $standard) {

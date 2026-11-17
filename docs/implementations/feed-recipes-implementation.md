@@ -6,7 +6,7 @@ El [tercer bloque de alimentación de lotes](flock-feeding-implementation.md) ya
 
 El catálogo global conserva su contrato: ID estable, nombres repetidos, ingredientes existentes de Inventario, edición exclusiva de sus cantidades y estados activo/inactivo. Rendimiento e ingredientes usan gramos enteros positivos; el rendimiento es independiente de su suma. Sólo se elaboran múltiplos enteros positivos de la combinación base.
 
-El segundo bloque incorpora elaboración inmediata, distribución de ingredientes entre plantas de la misma UP, saldo acumulado de alimento por receta y UP, cancelación compensatoria, ajustes independientes y consultas paginadas. La alimentación heredada y el consumo de lotes se entregan ahora en su guía propia del tercer bloque. Se mantienen fuera de alcance transferencias entre UP, compras de alimento, vencimientos, partidas, alertas, notificaciones y frontend.
+El segundo bloque incorpora elaboración inmediata, distribución de ingredientes entre plantas de la misma UP, saldo acumulado de alimento por receta y UP, cancelación compensatoria, ajustes independientes y consultas paginadas. La alimentación heredada y el consumo de lotes se describen en la guía del tercer bloque.
 
 ## Catálogo y cálculo existentes
 
@@ -35,9 +35,17 @@ Dentro de una única transacción, `ManufactureFeedAction`:
 
 Para cada ingrediente se consume primero el saldo positivo de la planta seleccionada. El faltante usa otras plantas operativas de la misma UP, ordenadas por saldo de ese ingrediente de menor a mayor y, en empate, por ID de planta ascendente. La prioridad se resuelve por ingrediente: no hay una lista única de plantas para toda la receta.
 
-Mantenimiento, fuera de servicio e inactivo no son operativos. Saldos cero o negativos no aportan disponibilidad. Si cualquier ingrediente no alcanza, se devuelve 409 sin descuentos, crédito de alimento, operación ni auditoría parcial. Las elaboraciones no generan negativos de ingredientes, aunque el motor genérico conserva sus reglas previas para otros movimientos.
+Las plantas en mantenimiento, fuera de servicio o inactivas se excluyen del cálculo junto con las plantas de otras UP. Los saldos cero o negativos aportan cero gramos de disponibilidad.
 
 Ejemplo: se requieren 10000 g; A seleccionada tiene 2000, B 3000 y C 8000. Se descuentan 2000 de A, 3000 de B y 5000 de C.
+
+### Elaboración con faltantes
+
+1. Al confirmar la elaboración por primera vez, el frontend envía `POST /api/v1/elaboraciones` con receta, planta, cantidad y `Idempotency-Key`. Si hay faltantes, el backend devuelve 409 con `code: FEED_STOCK_CONFIRMATION_REQUIRED`, `faltantes` por ingrediente y `confirmacion_faltante`. Ese intento deja los saldos y el historial de operaciones intactos.
+2. El frontend muestra los gramos faltantes por ingrediente. Si el usuario confirma por segunda vez, reenvía el mismo cuerpo y encabezado, agregando `confirmacion_faltante` con el código recibido. El código se vincula al usuario, la UP, la clave, la receta, la cantidad y la distribución calculada con los saldos bloqueados. Si el faltante sigue presente y cambia la distribución, el backend devuelve otro 409 para confirmar el nuevo cálculo. Si el stock ya alcanza, registra una elaboración normal.
+3. Con el código válido, se consume el stock positivo elegible y se imputa el déficit restante a la planta seleccionada. El movimiento puede dejar sus materias primas en negativo. El backend acredita la ración completa y registra los faltantes confirmados en `data.faltantes`, en la instantánea de la operación y en la auditoría. Un reintento exitoso usa el mismo cuerpo, código y clave originales.
+
+La elaboración con faltantes genera `feed_manufacture_with_shortage` en la UP, con urgencia alta por defecto y referencia a la operación. La configuración de alertas de la UP permite desactivarla o fijar otra urgencia. La bandeja la entrega a destinatarios habilitados con permisos de consulta de notificaciones y stock de alimento. El alta de la alerta comparte la transacción del movimiento. Cancelar la elaboración compensa los débitos originales y resuelve el aviso. Se reutilizan las tablas de operaciones, movimientos, auditoría y alertas.
 
 ### Exactitud y límites
 
@@ -192,6 +200,10 @@ La migración `2026_10_13_075223_create_feed_stock_operations_tables.php` crea `
 Sólo se ejecuta en local o en la demo de producción explícitamente habilitada por la configuración existente. La implementación se verificó con PostgreSQL aislado de testing; no se aplicó esta segunda migración a la base local ni a producción.
 
 ## Verificación
+
+### Elaboración con faltantes — 16/11/2026
+
+Pasaron **82 pruebas y 1377 aserciones** sobre PostgreSQL de testing. La regresión incluyó elaboración y cancelación, confirmaciones inválidas o desactualizadas, concurrencia, idempotencia, consulta y resolución de alertas, contrato de recetas, aislamiento por UP y resumen de gastos. También pasaron Pint sobre los archivos modificados, PHPStan nivel 5 sobre las fuentes del cambio y la lectura de los dos contratos YAML. La prueba de la segunda confirmación en pantalla corresponde a la integración con el frontend.
 
 ### Mínimos y evaluación de saldos — 26/10/2026
 

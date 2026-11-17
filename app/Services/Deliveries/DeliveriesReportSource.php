@@ -8,21 +8,33 @@ use App\Services\ReportingAndAnalytics\SqlReportSource;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
-final class DeliveriesReportSource extends SqlReportSource
+class DeliveriesReportSource extends SqlReportSource
 {
     public function definition(): ReportSourceDefinition
     {
-        return $this->describe('deliveries.deliveries', 'Reparto', 'Una fila por entrega confirmada. Valor de mercadería y cantidades reales; los cobros y la deuda requieren su registro en el módulo financiero.', 'can_view_delivery_history', [
+        return $this->describe('deliveries.deliveries', 'Reparto', 'Una fila por entrega confirmada con cantidades y valor de mercadería.', 'can_view_delivery_history', $this->columns(), $this->metrics());
+    }
+
+    /** @return array<string, array{label:string,type:string,unit?:string}> */
+    protected function columns(): array
+    {
+        return [
             'date' => ['label' => 'Fecha', 'type' => 'datetime'], 'delivery_id' => ['label' => 'Reparto', 'type' => 'string'],
             'delivery' => ['label' => 'Reparto', 'type' => 'string'], 'client_id' => ['label' => 'Cliente', 'type' => 'string'], 'client' => ['label' => 'Cliente', 'type' => 'string'],
             'quantity' => ['label' => 'Huevos entregados', 'type' => 'quantity', 'unit' => 'huevos'],
             'presentations' => ['label' => 'Presentaciones y cantidades', 'type' => 'string'],
             'sizes' => ['label' => 'Tipos / tamaños registrados', 'type' => 'string'],
             'merchandise_value' => ['label' => 'Valor de mercadería', 'type' => 'money', 'unit' => 'UYU'], 'notes' => ['label' => 'Comentarios', 'type' => 'string'],
-        ], ['egg_count' => ['label' => 'Huevos entregados', 'type' => 'quantity', 'unit' => 'huevos'],
+        ];
+    }
+
+    /** @return array<string, array{label:string,type:string,unit?:string}> */
+    protected function metrics(): array
+    {
+        return ['egg_count' => ['label' => 'Huevos entregados', 'type' => 'quantity', 'unit' => 'huevos'],
             'merchandise_total' => ['label' => 'Valor de mercadería', 'type' => 'money', 'unit' => 'UYU'],
             'delivery_count' => ['label' => 'Entregas confirmadas', 'type' => 'quantity', 'unit' => 'entregas'],
-            'unpriced_delivery_count' => ['label' => 'Entregas sin importe', 'type' => 'quantity', 'unit' => 'entregas']]);
+            'unpriced_delivery_count' => ['label' => 'Entregas sin importe', 'type' => 'quantity', 'unit' => 'entregas']];
     }
 
     protected function dimensionKeys(): array

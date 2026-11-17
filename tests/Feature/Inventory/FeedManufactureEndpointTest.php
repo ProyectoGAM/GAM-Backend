@@ -11,6 +11,7 @@ use App\DTO\Inventory\InventoryMovementCommand;
 use App\Enums\FarmStructure\PoultryHouseStatus;
 use App\Enums\Inventory\FeedRecipeStatus;
 use App\Enums\Inventory\InventoryMovementType;
+use App\Enums\Notifications\OperationalAlertType;
 use App\Enums\SuppliersAndCatalogs\ProductStatus;
 use App\Exceptions\Inventory\InventoryConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
@@ -113,12 +114,93 @@ final class FeedManufactureEndpointTest extends TestCase
         }
 
         // Request: la cantidad del primer ingrediente alcanza, pero la operación completa falla.
-        $this->manufacture($data)->assertConflict();
+        $this->manufacture($data)->assertConflict()
+            ->assertJsonPath('code', 'FEED_STOCK_CONFIRMATION_REQUIRED')
+            ->assertJsonPath('faltantes.0.producto_id', $data['products'][1]->id)
+            ->assertJsonPath('faltantes.0.cantidad_faltante_g', '2000.000000');
         $this->assertDatabaseHas('stock_balances', ['id' => $data['balances'][0][0]->id, 'on_hand_quantity' => '2000.000000']);
         $this->assertDatabaseCount('feed_balances', 0);
         $this->assertDatabaseCount('feed_stock_operations', 0);
         $this->assertDatabaseCount('inventory_movements', 0);
         $this->assertDatabaseCount('activity_log', 0);
+        $this->assertDatabaseCount('operational_alerts', 0);
+    }
+
+    // Flujo: confirma el faltante, registra un aviso y revierte exactamente el débito al cancelar.
+    public function test_confirmed_shortage_debits_selected_plant_and_creates_one_alert(): void
+    {
+        // Preparación: el primer ingrediente tiene 7000 g disponibles y el segundo ya tiene saldo negativo en A.
+        $data = $this->fixture();
+        $data['balances'][2][0]->forceFill(['on_hand_quantity' => 2000])->save();
+        foreach ($data['balances'] as $index => $balances) {
+            $balances[1]->forceFill(['on_hand_quantity' => $index === 0 ? -100 : 0])->save();
+        }
+        $data['actor']->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('can_view_notifications', 'web'));
+        $headers = $this->headers();
+        $payload = ['receta_id' => $data['recipe']->id, 'planta_id' => $data['plants'][0]->id, 'cantidad_g' => 13000];
+
+        // Requests: pide confirmación y reenvía la misma clave y el código de la respuesta.
+        $warning = $this->postJson('/api/v1/elaboraciones', $payload, $headers)->assertConflict()
+            ->assertJsonPath('faltantes.0.cantidad_faltante_g', '3000.000000')
+            ->assertJsonPath('faltantes.1.cantidad_faltante_g', '2000.000000');
+        $payload['confirmacion_faltante'] = $warning->json('confirmacion_faltante');
+        $created = $this->postJson('/api/v1/elaboraciones', $payload, $headers)->assertCreated()
+            ->assertJsonPath('data.saldo_resultante_g', '13000')
+            ->assertJsonPath('data.faltantes', $warning->json('faltantes'))
+            ->assertJsonPath('data.distribucion.0.cantidad_g', '5000.000000')
+            ->assertJsonPath('data.distribucion.0.saldo_resultante_g', '-3000.000000');
+        $id = $created->json('data.id');
+        $this->postJson('/api/v1/elaboraciones', $payload, $headers)->assertCreated()->assertJsonPath('data.id', $id);
+
+        // Consulta: comprueba los saldos, la auditoría y la alerta única para la UP.
+        $this->assertDatabaseHas('stock_balances', ['id' => $data['balances'][0][0]->id, 'on_hand_quantity' => '-3000.000000']);
+        $this->assertDatabaseHas('stock_balances', ['id' => $data['balances'][0][1]->id, 'on_hand_quantity' => '-2100.000000']);
+        $this->assertDatabaseCount('feed_stock_operations', 1);
+        $this->assertDatabaseCount('inventory_movements', 1);
+        $this->assertDatabaseCount('operational_alerts', 1);
+        $alert = [
+            'type' => OperationalAlertType::FeedManufactureWithShortage->value,
+            'source_key' => $created->json('data.operacion_id'), 'entity_id' => (string) $id,
+            'production_unit_id' => $data['plants'][0]->production_unit_id, 'resolved_at' => null,
+        ];
+        $this->assertDatabaseHas('operational_alerts', $alert);
+        $this->assertDatabaseHas('app_notifications', [...$alert, 'recipient_id' => $data['actor']->id]);
+        $this->getJson('/api/v1/alertas-operativas')->assertOk()
+            ->assertJsonPath('data.0.tipo', $alert['type'])->assertJsonPath('data.0.entidad.id', (string) $id);
+        $this->getJson('/api/v1/notificaciones')->assertOk()->assertJsonPath('data.0.tipo', $alert['type']);
+        $audit = AuditEntry::query()->where('event', 'feed_manufacture_recorded')->sole();
+        $this->assertSame('3000.000000', $audit->properties['subject_snapshot']['snapshot']['shortages'][0]['quantity_grams']);
+
+        // Request: cancela la elaboración, restaura los saldos exactos y resuelve el aviso.
+        $this->postJson("/api/v1/elaboraciones/{$id}/cancelacion", ['motivo' => 'Corrección de prueba'], $this->headers())
+            ->assertOk()->assertJsonPath('data.estado', 'cancelada');
+        $this->assertDatabaseHas('stock_balances', ['id' => $data['balances'][0][0]->id, 'on_hand_quantity' => '2000.000000']);
+        $this->assertDatabaseHas('stock_balances', ['id' => $data['balances'][0][1]->id, 'on_hand_quantity' => '-100.000000']);
+        $this->assertDatabaseMissing('operational_alerts', $alert);
+        $this->assertDatabaseMissing('app_notifications', $alert);
+    }
+
+    // Flujo: una confirmación ajena a la clave o al faltante vigente no permite elaborar.
+    public function test_confirmation_must_match_the_key_and_current_shortage(): void
+    {
+        // Preparación: deja el primer ingrediente sin stock suficiente.
+        $data = $this->fixture();
+        $data['balances'][2][0]->forceFill(['on_hand_quantity' => 1000])->save();
+        $headers = $this->headers();
+        $payload = ['receta_id' => $data['recipe']->id, 'planta_id' => $data['plants'][0]->id, 'cantidad_g' => 13000];
+
+        // Requests: intenta usar el código con otra clave y vuelve a intentarlo tras cambiar el saldo.
+        $this->postJson('/api/v1/elaboraciones', [...$payload, 'confirmacion_faltante' => true], $headers)
+            ->assertUnprocessable()->assertJsonValidationErrors('confirmacion_faltante');
+        $warning = $this->postJson('/api/v1/elaboraciones', $payload, $headers)->assertConflict();
+        $payload['confirmacion_faltante'] = $warning->json('confirmacion_faltante');
+        $this->postJson('/api/v1/elaboraciones', $payload, $this->headers())->assertConflict();
+        $data['balances'][2][0]->forceFill(['on_hand_quantity' => 500])->save();
+        $updated = $this->postJson('/api/v1/elaboraciones', $payload, $headers)->assertConflict()
+            ->assertJsonPath('faltantes.0.cantidad_faltante_g', '4500.000000');
+        $this->assertNotSame($payload['confirmacion_faltante'], $updated->json('confirmacion_faltante'));
+        $this->assertDatabaseCount('inventory_movements', 0);
+        $this->assertDatabaseCount('operational_alerts', 0);
     }
 
     // Flujo: rechaza recetas o ingredientes inactivos y plantas no operativas.

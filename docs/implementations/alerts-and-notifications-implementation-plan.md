@@ -104,4 +104,6 @@ Ambas evaluaciones usan el calendario de Montevideo y se ejecutan cada cinco min
 
 `inventario:evaluar-stock-huevos` revisa las UP cada cinco minutos para cubrir saldos existentes y recuperar evaluaciones pendientes. También resuelve los avisos anteriores `delivery_egg_stock_negative` por carga y los conserva en el historial. Los avisos de saldo negativo del reparto y de sobrantes al cierre tienen sus propios disparadores.
 
+`feed_manufacture_with_shortage` se genera por elaboración de ración con faltantes confirmados. Se configura por UP, tiene urgencia alta por defecto y requiere `can_view_feed_stock` para consultar la alerta. La bandeja requiere además `can_view_notifications`. La alerta referencia la elaboración y se resuelve al cancelarla. El registro y sus reintentos se describen en la [guía de recetas](feed-recipes-implementation.md#elaboración-con-faltantes).
+
 Los destinatarios requieren `can_view_egg_stock` y `can_view_notifications`. Las cuentas PIN reciben sólo los avisos de su UP. El vínculo abre Stock de huevos y el aviso identifica la UP y su saldo. [Contrato de Stock de huevos](../../contracts/openapi/lots.yaml) · [Contrato de notificaciones](../../contracts/openapi/notifications.yaml)

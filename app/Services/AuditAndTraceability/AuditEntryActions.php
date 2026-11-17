@@ -5,6 +5,8 @@ namespace App\Services\AuditAndTraceability;
 use App\Enums\Lots\FlockStatus;
 use App\Exceptions\Lots\LotsConflict;
 use App\Models\AuditAndTraceability\AuditEntry;
+use App\Models\CustomersAndAccounts\Customer;
+use App\Models\CustomersAndAccounts\CustomerAccountMovement;
 use App\Models\Inventory\FeedConsumption;
 use App\Models\Inventory\FeedConsumptionCorrection;
 use App\Models\Inventory\FeedStockOperation;
@@ -13,6 +15,8 @@ use App\Models\Lots\Flock;
 use App\Models\Lots\FlockMovement;
 use App\Models\Lots\MortalityRecord;
 use App\Models\User;
+use App\Models\Vehicles\VehicleMaintenance;
+use App\Models\Vehicles\VehicleMeterReading;
 use App\Services\Inventory\InventoryReversalAvailability;
 use App\Services\Lots\FlockStatusReversal;
 use App\Services\Lots\RedistributionReversal;
@@ -24,11 +28,24 @@ final readonly class AuditEntryActions
         private InventoryReversalAvailability $inventory,
         private FlockStatusReversal $statusReversal,
         private RedistributionReversal $redistributionReversal,
+        private AuditSubjectNavigation $navigation,
     ) {}
 
     /** @return array<string, mixed> */
     public function forEntry(AuditEntry $entry, User $viewer): array
     {
+        if ($entry->log_name === 'vehicles') {
+            if (in_array($entry->event, ['vehicle_maintenance_created', 'vehicle_maintenance_start', 'vehicle_maintenance_complete', 'vehicle_maintenance_cancel'], true)) {
+                return $this->vehicleMaintenance($entry, $viewer);
+            }
+            if (in_array($entry->event, ['vehicle_meter_reading_recorded', 'vehicle_meter_reading_corrected', 'vehicle_meter_reset_recorded'], true)) {
+                return $this->vehicleReading($entry, $viewer);
+            }
+        }
+        if ($entry->log_name === 'customers_and_accounts' && str_starts_with((string) $entry->event, 'customer_account_')) {
+            return $this->customerMovement($entry, $viewer);
+        }
+
         if ($entry->event === 'inventory_movement_recorded' && $entry->subject_type === (new InventoryMovement)->getMorphClass()) {
             $movement = InventoryMovement::query()->find($entry->subject_id);
             if ($movement === null) {
@@ -116,7 +133,7 @@ final readonly class AuditEntryActions
             }
         }
 
-        return $this->lotAction('reverse_flock_status', 'Revertir cambio de estado', $target, $reason,
+        return $this->resourceAction('reverse_flock_status', 'Revertir cambio de estado', $target, $reason,
             'Puedes restituir el estado anterior del lote conservando el cambio original.');
     }
 
@@ -159,12 +176,86 @@ final readonly class AuditEntryActions
             }
         }
 
-        return $this->lotAction('reverse_flock_redistribution', 'Revertir redistribución', $target, $reason,
+        return $this->resourceAction('reverse_flock_redistribution', 'Revertir redistribución', $target, $reason,
             'Puedes compensar la redistribución conservando el movimiento original.');
     }
 
+    /** @return array<string, mixed> */
+    private function vehicleMaintenance(AuditEntry $entry, User $viewer): array
+    {
+        if (! $this->navigation->canViewVehicleSection($viewer, 'maintenance')) {
+            return $this->result('unavailable', 'No tienes acceso al mantenimiento de vehículos.');
+        }
+        $record = $entry->subject_type === (new VehicleMaintenance)->getMorphClass()
+            ? VehicleMaintenance::query()->with('vehicle')->find($entry->subject_id) : null;
+        if ($record?->vehicle === null) {
+            return $this->result('unavailable', 'La intervención o su vehículo ya no está disponible.');
+        }
+        $reason = match (true) {
+            ! $viewer->can('can_manage_vehicle_maintenance') => 'No tienes permiso para anular intervenciones.',
+            ! $record->canBeCancelled() => 'La intervención ya está completada o anulada.',
+            default => null,
+        };
+        $target = ['resource' => 'vehicle_maintenance', 'id' => $record->public_id, 'vehicle_id' => $record->vehicle->public_id];
+        if ($reason === null) {
+            $target['version'] = $record->version;
+        }
+
+        return $this->resourceAction('cancel_vehicle_maintenance', 'Anular intervención', $target, $reason,
+            'Puedes anular la intervención indicando el motivo.');
+    }
+
+    /** @return array<string, mixed> */
+    private function vehicleReading(AuditEntry $entry, User $viewer): array
+    {
+        $canCorrect = ! $viewer->usesDevicePin() && $viewer->can('can_manage_vehicle_readings');
+        if (! $canCorrect && ! $this->navigation->canViewVehicleSection($viewer, 'readings')) {
+            return $this->result('unavailable', 'No tienes acceso a las lecturas del vehículo.');
+        }
+        $reading = $entry->subject_type === (new VehicleMeterReading)->getMorphClass()
+            ? VehicleMeterReading::query()->with('vehicle')->find($entry->subject_id) : null;
+        if ($reading?->vehicle === null) {
+            return $this->result('unavailable', 'La lectura o su vehículo ya no está disponible.');
+        }
+        $reason = match (true) {
+            ! $canCorrect => 'No tienes permiso para rectificar lecturas.',
+            $reading->meter_type !== 'odometer' || ! VehicleMeterReading::query()->effective()->whereKey($reading->getKey())->exists() => 'La lectura ya fue rectificada o no corresponde al odómetro.',
+            default => null,
+        };
+
+        return $this->resourceAction('correct_vehicle_reading', 'Rectificar lectura',
+            ['resource' => 'vehicle_meter_reading', 'id' => $reading->public_id, 'vehicle_id' => $reading->vehicle->public_id],
+            $reason, 'Puedes registrar el valor corregido y el motivo.');
+    }
+
+    /** @return array<string, mixed> */
+    private function customerMovement(AuditEntry $entry, User $viewer): array
+    {
+        if ($viewer->usesDevicePin() || ! $viewer->can('account', Customer::class)) {
+            return $this->result('unavailable', 'No tienes acceso a la cuenta corriente del cliente.');
+        }
+        $movement = $entry->subject_type === (new CustomerAccountMovement)->getMorphClass()
+            ? CustomerAccountMovement::query()->with('account.customer')->find($entry->subject_id) : null;
+        $customer = $movement?->account?->customer;
+        if ($customer === null) {
+            return $this->result('unavailable', 'El movimiento o su cliente ya no está disponible.');
+        }
+        if (! $movement->canReverseIndependently()) {
+            return $this->result('irreversible', 'Este movimiento se gestiona desde su operación de origen.');
+        }
+        $reason = match (true) {
+            ! $viewer->can('reverse', Customer::class) => 'No tienes permiso para revertir movimientos de cuenta corriente.',
+            $movement->reversal()->exists() => 'El movimiento ya tiene una reversión.',
+            default => null,
+        };
+
+        return $this->resourceAction('reverse_customer_movement', 'Revertir movimiento de cuenta',
+            ['resource' => 'customer_account_movement', 'id' => $movement->public_id, 'customer_id' => $customer->public_id],
+            $reason, 'Puedes registrar un movimiento compensatorio indicando el motivo.');
+    }
+
     /** @param array<string, mixed> $target @return array<string, mixed> */
-    private function lotAction(string $kind, string $label, array $target, ?string $reason, string $availableReason): array
+    private function resourceAction(string $kind, string $label, array $target, ?string $reason, string $availableReason): array
     {
         return $this->result($reason === null ? 'available' : 'unavailable', $reason ?? $availableReason, [[
             'kind' => $kind, 'label' => $label, 'available' => $reason === null, 'reason' => $reason, 'target' => $target,

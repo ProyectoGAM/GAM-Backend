@@ -43,7 +43,7 @@ final readonly class ManageVehicleMaintenanceAction
             ]);
             foreach ($data['items'] ?? [] as $item) {
                 $plan = isset($item['plan_id']) ? VehicleMaintenancePlan::query()->where('vehicle_id', $vehicle->getKey())->where('public_id', $item['plan_id'])->firstOrFail() : null;
-                $maintenance->items()->create(['plan_id' => $plan?->getKey(), 'task' => $item['task'] ?? $plan?->task ?? $maintenance->description, 'completed' => false, 'notes' => $item['notes'] ?? null]);
+                $maintenance->items()->create(['plan_id' => $plan?->getKey(), 'task' => $item['task'] ?? $plan->task ?? $maintenance->description, 'completed' => false, 'notes' => $item['notes'] ?? null]);
             }
             $this->audit->record(AuditEntryData::forSubject($maintenance, $actor, 'vehicles', 'vehicle_maintenance_created', 'Intervención de mantenimiento planificada', ['vehicle_id' => $vehicle->public_id, 'type' => $maintenance->type, 'description' => $maintenance->description], source: 'api'));
 
@@ -100,7 +100,7 @@ final readonly class ManageVehicleMaintenanceAction
                     }
                 }
             } elseif ($transition === 'cancel') {
-                if (! in_array($record->status, ['planned', 'in_progress'], true)) {
+                if (! $record->canBeCancelled()) {
                     throw ValidationException::withMessages(['status' => 'Esta intervención ya está finalizada.']);
                 }
                 $record->status = 'cancelled';

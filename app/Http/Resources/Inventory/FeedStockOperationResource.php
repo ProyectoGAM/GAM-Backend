@@ -39,6 +39,9 @@ final class FeedStockOperationResource extends JsonResource
                 'producto_id' => $item['product_id'], 'nombre' => $item['name'], 'sku' => $item['sku'],
                 'cantidad_base_g' => $item['base_quantity_grams'], 'cantidad_requerida_g' => $item['required_quantity_grams'],
             ], $snapshot['ingredients'] ?? []),
+            'faltantes' => array_map(static fn (array $item): array => [
+                'producto_id' => $item['product_id'], 'nombre' => $item['name'], 'cantidad_faltante_g' => $item['quantity_grams'],
+            ], $snapshot['shortages'] ?? []),
             'distribucion' => array_map(fn (array $item): array => [
                 'producto_id' => $item['product_id'], 'planta_id' => $item['poultry_house_id'],
                 'nombre_planta' => $item['plant_name'], 'ubicacion_id' => $item['stock_location_id'],

@@ -90,6 +90,11 @@ paths:
       tags: [Reportes]
       summary: Previsualiza una consulta paginada
       operationId: previsualizarReporte
+      description: >-
+        deliveries.collections combina las entregas confirmadas, los totales del reparto y la cuenta corriente.
+        Requiere can_view_delivery_history y can_view_customer_accounts además del permiso de Reportes.
+        Admite filtros y agrupaciones publicados por la fuente. La deuda es el saldo vigente al consultar,
+        mientras que el cobro y el importe pendiente corresponden al momento de la entrega.
       parameters:
         - $ref: '#/components/parameters/Source'
       requestBody:
@@ -193,6 +198,7 @@ paths:
       tags: [Exportaciones]
       summary: Solicita una exportación asíncrona
       operationId: solicitarExportacionDeReporte
+      description: La exportación de deliveries.collections congela el saldo vigente y los demás datos al generarse. La descarga requiere sesión y permisos del reporte y de sus módulos de origen.
       parameters:
         - $ref: '#/components/parameters/Source'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -296,7 +302,9 @@ paths:
     post:
       tags: [Exportaciones]
       summary: Crea un enlace temporal firmado
-      description: 'La duración se expresa en minutos, hasta 30 días. Conserva el archivo y su instantánea al menos hasta el vencimiento del nuevo enlace. No recupera exportaciones ya expiradas ni acorta enlaces anteriores.'
+      description: >-
+        La duración se expresa en minutos, hasta 30 días. Conserva el archivo y su instantánea al menos hasta el vencimiento del nuevo enlace.
+        La fuente deliveries.collections usa descarga privada.
       operationId: crearEnlaceTemporalDeReporte
       parameters:
         - $ref: '#/components/parameters/ReportExport'
@@ -458,7 +466,7 @@ components:
             required: [field, operator, value]
             properties:
               field: { type: string }
-              operator: { type: string, enum: [eq, neq, in, not_in] }
+              operator: { type: string, enum: [eq, neq, in, not_in, gt, gte, lt, lte, contains] }
               value: {}
         from: { type: [string, 'null'], format: date }
         to: { type: [string, 'null'], format: date }
@@ -558,7 +566,7 @@ components:
             required: [field, operator, value]
             properties:
               field: { type: string }
-              operator: { type: string, enum: [eq, neq, in, not_in] }
+              operator: { type: string, enum: [eq, neq, in, not_in, gt, gte, lt, lte, contains] }
               value: {}
         from: { type: string, format: date }
         to: { type: string, format: date }

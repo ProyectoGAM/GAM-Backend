@@ -34,13 +34,18 @@ final readonly class AuditPresentation
         'stage_snapshot.start_day' => 'Día de inicio de la etapa', 'census_snapshot.population' => 'Censo de aves',
     ];
 
-    public function __construct(private AuditEventCatalog $events, private AuditEntryActions $actions, private WeighingAuditPresentation $weighings) {}
+    public function __construct(
+        private AuditEventCatalog $events,
+        private AuditEntryActions $actions,
+        private WeighingAuditPresentation $weighings,
+        private AuditSubjectNavigation $navigation,
+    ) {}
 
     /** @return array<string, mixed> */
-    public function summary(AuditEntry $entry): array
+    public function summary(AuditEntry $entry, User $viewer): array
     {
         $snapshot = $this->snapshot($entry);
-        $subject = $this->subject($entry, $snapshot);
+        $subject = $this->navigation->subject($entry, $snapshot, $viewer) ?? $this->subject($entry, $snapshot);
         $title = $this->events->label($entry->event, $entry->description);
         $quantity = $this->format('quantity_grams', $snapshot['quantity_grams'] ?? null);
         $population = $this->format('population', $snapshot['population'] ?? null);
@@ -65,11 +70,13 @@ final readonly class AuditPresentation
     public function detail(AuditEntry $entry, User $viewer): array
     {
         $snapshot = $this->snapshot($entry);
+        $summary = $this->summary($entry, $viewer);
+        $missing = $this->contextMissing($entry, $summary['subject']['label']);
         if ($this->weighings->supports($entry->event)) {
             $weighing = $this->weighings->detail($entry, $snapshot);
-            $missing = [...$this->contextMissing($entry), ...$weighing['missing']];
+            $missing = [...$missing, ...$weighing['missing']];
 
-            return [...$this->summary($entry), 'facts' => $weighing['facts'], 'changes' => $weighing['changes'],
+            return [...$summary, 'facts' => $weighing['facts'], 'changes' => $weighing['changes'],
                 'changes_state' => $weighing['changes_state'],
                 'history' => ['state' => $missing === [] ? 'complete' : 'partial', 'missing' => $missing],
                 ...$this->actions->forEntry($entry, $viewer)];
@@ -119,7 +126,6 @@ final readonly class AuditPresentation
             }
         }
         $unmappedChanges = array_diff(array_unique([...array_keys(Arr::dot($old)), ...array_keys(Arr::dot($new))]), array_keys(self::FIELDS)) !== [];
-        $missing = $this->contextMissing($entry);
         if (str_starts_with((string) $entry->event, 'feed_consumption_') && ! isset($context['recipe_name'])) {
             $missing[] = 'No se conserva el nombre histórico de la receta.';
         }
@@ -129,20 +135,20 @@ final readonly class AuditPresentation
             $missing[] = 'Se presentan los cambios reconocidos; otros datos del registro no se muestran.';
         }
 
-        return [...$this->summary($entry), 'facts' => $facts, 'changes' => $changes,
+        return [...$summary, 'facts' => $facts, 'changes' => $changes,
             'changes_state' => $changes !== [] ? ($unmappedChanges ? 'partial' : 'presented') : (($old !== [] || $new !== []) ? 'unavailable' : 'not_recorded'),
             'history' => ['state' => $missing === [] ? 'complete' : 'partial', 'missing' => $missing],
             ...$this->actions->forEntry($entry, $viewer)];
     }
 
     /** @return list<string> */
-    private function contextMissing(AuditEntry $entry): array
+    private function contextMissing(AuditEntry $entry, ?string $subjectLabel): array
     {
         $missing = [];
         if ($entry->causer_id !== null && ! is_string($entry->properties?->get('actor_snapshot')['name'] ?? null)) {
             $missing[] = 'No se conserva el nombre histórico del responsable.';
         }
-        if ($this->summary($entry)['subject']['label'] === null) {
+        if ($subjectLabel === null) {
             $missing[] = 'No se conserva el nombre histórico del recurso.';
         }
         if ($entry->up_id !== null && $entry->properties?->get('production_unit_snapshot') === null) {

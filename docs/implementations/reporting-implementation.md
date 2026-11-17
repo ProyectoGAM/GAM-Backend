@@ -17,6 +17,7 @@ La actualización de [acceso por UP](access-methods-and-production-unit-implemen
 | `management.executions` | Manejos realizados y programación de la revisión aplicable | `can_view_management_plans` |
 | `management.feed-supply` | Ración registrada y pauta estimada separadas | `can_view_management_plans` |
 | `deliveries.deliveries` | Una fila por entrega confirmada, cantidades, presentaciones, valor y notas | `can_view_delivery_history` |
+| `deliveries.collections` | Reparto completo, con cargas, sobrantes, precios, observaciones, cobros y cuenta corriente | `can_view_delivery_history` y `can_view_customer_accounts` |
 | `vehicles.usage` | Usos, responsables y kilometraje registrado | `can_view_vehicles` |
 | `vehicles.fuel` | Cargas de combustible, litros e importe en UYU | `can_view_vehicle_fuel` |
 | `vehicles.maintenance` | Intervenciones, estado y costos | `can_view_vehicle_maintenance` |
@@ -25,6 +26,24 @@ La actualización de [acceso por UP](access-methods-and-production-unit-implemen
 La [guía del resumen operativo](operational-summary-implementation.md#valor-entregado-y-gastos) documenta el valor global entregado con cobertura de importes y `GET /gastos/resumen`, con totales por moneda para la empresa o una UP.
 
 El servidor define filtros, columnas, ordenamientos, dimensiones, métricas, opciones, consultas estándar y capacidades. La UI ofrece las consultas estándar antes de las opciones avanzadas. Las nuevas fuentes admiten todo el historial registrado (`max_range_days=0`), con 100 filas por página y 50.000 por XLSX. PDF se limita a 2.000 filas. No se recortan archivos silenciosamente: superar el límite produce un fallo accionable.
+
+## Reparto completo
+
+Seleccionar **Reparto completo** en el catálogo de Reportes. La clave `deliveries.collections` se usa en las rutas de previsualización y exportación XLSX/PDF. La fuente abre la consulta estándar **Detalle de entregas** y exige permiso de Reportes, lectura del historial de Repartos y `can_view_customer_accounts`. Sus exportaciones se descargan de forma autenticada y privada.
+
+Cada fila representa una entrega confirmada. Incluye la fecha de la visita, fecha de inicio e identificador del reparto, cliente, huevos cargados, entregados y devueltos al cierre, valor de mercadería, precio predeterminado, precios ingresados y observaciones. La carga y la devolución son totales del reparto. Antes del cierre, la devolución es nula. El valor predeterminado se calcula con el precio de catálogo guardado por línea al confirmar la entrega y las cantidades vigentes. Un cambio de catálogo posterior no altera esos valores. Las entregas históricas con datos incompletos muestran nulo para el valor predeterminado desconocido.
+
+El cobro y el importe pendiente al entregar se obtienen de los movimientos originales vinculados a la visita. Los cobros posteriores, rectificaciones y reversiones afectan la cuenta vigente. El reporte conserva lo que ocurrió al entregar. Una entrega fiada confirmada tiene cobro cero y una entrega legada sin conciliar tiene cobro nulo. `current_debt`, `current_credit` y `current_debt_status` reflejan la cuenta al generar el reporte, incluso si se eligió un período anterior. Una cuenta sin vínculo verificable se muestra como desconocida.
+
+`from` y `to` filtran la fecha local de entrega e incluyen ambos extremos. Se puede filtrar además por cliente, reparto, fecha de inicio, cantidad, importes, observaciones, medios de pago y estados. Los operadores numéricos admiten enteros o decimales en texto. `contains` busca texto literal sin distinguir mayúsculas. Los medios y estados del reporte se filtran con las etiquetas publicadas por la fuente, como `Cheque`, `Fiado` y `Al día`.
+
+Las consultas estándar **Resumen por día** y **Resumen por cliente** incluyen la deuda actual. Al agrupar por día, semana, mes, reparto o cliente, `loaded_total` y `returned_total` cuentan cada reparto una vez dentro de cada grupo. `current_debt_total`, `current_credit_total` y los conteos de clientes usan una cuenta por cliente dentro de cada grupo. Un reparto o cliente puede aparecer en grupos distintos. Solicitar un total sin agrupación aplica la deduplicación a todo el resultado filtrado. Las observaciones y los precios unitarios se consultan en el detalle. `unknown_payment_count` identifica la cobertura del cobro histórico.
+
+La migración amplía el catálogo de medios de pago de PostgreSQL con `check`. Revertirla requiere que no existan movimientos con ese medio. Los cheques anteriores registrados como `other` conservan su clasificación y los precios históricos faltantes permanecen desconocidos. Registrar una entrega o un cobro sigue usando las operaciones auditadas e idempotentes del módulo de origen. El reporte sólo consulta esos datos y la exportación congela la vista que obtuvo al generarse.
+
+El frontend carga el catálogo y las consultas estándar desde la API. Los selectores de cobro del cliente actual todavía carecen de la opción `check` y las comparaciones numéricas nuevas muestran una etiqueta genérica.
+
+Pasaron 56 pruebas y 396 aserciones en PostgreSQL de testing. La suite verificó el cobro con cheque, la entrega fiada que se pagó después, el cierre con devolución, los valores predeterminados históricos, los filtros, la deduplicación por grupo, la descarga privada y el archivo XLSX. Pint y PHPStan pasaron para el núcleo del reporte. PHPStan señaló seis diagnósticos en líneas preexistentes al ampliar la revisión a solicitudes de Reparto y creación de enlaces temporales.
 
 ## Alimentación registrada y estimada
 
@@ -119,7 +138,7 @@ La suite completa de CI pasó localmente con **603 pruebas y 5576 aserciones**, 
 
 La ampliación de compartición del 13 de octubre de 2026 se verificó con 44 pruebas de ReportingAndAnalytics (216 aserciones), incluyendo los siete plazos, rechazo de duraciones fuera de rango, retención/limpieza, firmas con vencimientos independientes, bloqueo de exportaciones vencidas y descarga con modelo desactualizado. Frontend: 496 pruebas aprobadas, lint y build aprobados, auditoría de dependencias de producción sin vulnerabilidades y sincronización de Android/iOS con Clipboard. Chrome contra Docker Compose comprobó PDF y Excel con los siete plazos reales, copia desde el botón y el icono junto a la URL, compartición separada, apertura sin sesión y teléfono claro/oscuro. La llamada a compartir web se comprobó con una implementación controlada para evitar abrir la hoja del sistema operativo en Chrome sin interfaz; no se probó un dispositivo físico.
 
-Repartos aún no tiene cobros, forma de pago ni cuenta corriente autoritativa; esos campos financieros se integrarán desde su módulo cuando exista. No se infieren de `total_amount`. Tamaños no registrados permanecen desconocidos. Partidas de vacuna son opcionales para nuevos registros; los históricos carecen de dato. La pauta de alimentación es estimación, no medición de ingesta ni receta por ave. “Toda la vida” representa todo el historial registrado, sin reconstruir datos anteriores a la instalación.
+Partidas de vacuna son opcionales para nuevos registros; los históricos carecen de dato. La pauta de alimentación se estima con la configuración vigente de cada período y “Toda la vida” representa todo el historial registrado.
 
 Las pruebas nuevas cubren catálogo/rutas, cantidades históricas, pautas separadas y recortadas, idempotencia y auditoría, donaciones/stock, archivos y firmas, precisión/formularios, cancelación de consultas, polling y cambio de usuario. La verificación se registra al cerrar el cambio. No se considera probado el comportamiento físico de Android/iOS sólo por `cap sync`; se requiere recorrido en dispositivos y Xcode para compilar iOS.
 

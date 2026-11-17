@@ -33,3 +33,6 @@ Decisión posterior del 28/10/2026 sustituye la habilitación operativa de sanid
 
 ## Compensar consumos sanitarios históricos con sanidad deshabilitada
 La corrección de una aplicación previa conserva la reversión física aun con health_stock_enabled=false o producto sin stock_tracked. Exigir management-plans.execute y validar en RecordInventoryMovementAction que el movimiento pertenece a una aplicación sanitaria real, que no está revertido y que el comando invierte exactamente todas sus líneas originales con iguales producto y ubicación. No usar esa excepción para ingresos o consumos nuevos, reactivar productos ni borrar historia.
+
+## Elaboración con faltantes confirmados
+Esta regla sustituye la prohibición anterior de dejar saldos negativos al elaborar. Tras consumir los saldos positivos de las plantas operativas de la misma UP, se permite imputar el faltante a la planta seleccionada sólo con el código devuelto por un 409 para el mismo actor, pedido, clave de idempotencia y distribución vigente. Guarda el faltante en la instantánea auditada y genera la alerta operativa en la misma transacción según la configuración de la UP. La cancelación compensa las líneas y resuelve el aviso.

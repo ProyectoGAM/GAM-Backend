@@ -58,6 +58,13 @@ class CustomerAccountMovement extends Model
         return 'public_id';
     }
 
+    public function canReverseIndependently(): bool
+    {
+        return $this->type === CustomerMovementType::Payment
+            || (in_array($this->type, [CustomerMovementType::AdjustmentIncrease, CustomerMovementType::AdjustmentDecrease], true)
+                && $this->delivery_stop_id === null);
+    }
+
     /** @return BelongsTo<CustomerAccount, $this> */
     public function account(): BelongsTo
     {
