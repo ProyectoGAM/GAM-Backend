@@ -12,6 +12,7 @@ La actualización de [acceso por UP](access-methods-and-production-unit-implemen
 | `inventory.movements` | Movimientos físicos y sus unidades | `can_view_inventory` |
 | `lots.egg-production` | Postura válida y total vitalicio por galpón | `can_view_egg_collections` |
 | `lots.admissions` | Ingresos y alojamientos no revertidos; cantidad ingresada | `can_view_flocks` |
+| `lots.summary` | Una fila por lote, galpón actual, ingreso, raza, capacidad, mortandad y postura del período y estado actual | `can_view_flocks`, `can_view_mortality` y `can_view_egg_collections` |
 | `lots.weighing-measurements` | Muestras históricas y diarias; promedio ponderado por aves | `can_view_weighings` |
 | `management.vaccinations` | Aplicaciones válidas, vacuna y partida registrada | `can_view_management_plans` |
 | `management.executions` | Manejos realizados y programación de la revisión aplicable | `can_view_management_plans` |
@@ -26,6 +27,20 @@ La actualización de [acceso por UP](access-methods-and-production-unit-implemen
 La [guía del resumen operativo](operational-summary-implementation.md#valor-entregado-y-gastos) documenta el valor global entregado con cobertura de importes y `GET /gastos/resumen`, con totales por moneda para la empresa o una UP.
 
 El servidor define filtros, columnas, ordenamientos, dimensiones, métricas, opciones, consultas estándar y capacidades. La UI ofrece las consultas estándar antes de las opciones avanzadas. Las nuevas fuentes admiten todo el historial registrado (`max_range_days=0`), con 100 filas por página y 50.000 por XLSX. PDF se limita a 2.000 filas. No se recortan archivos silenciosamente: superar el límite produce un fallo accionable.
+
+## Lotes completos y tipos de manejo
+
+La fuente **Lotes completos** (`lots.summary`) publica una fila por lote. Su consulta estándar **Detalle por lote** incluye lote, galpón asignado actualmente, fecha de ingreso, raza, capacidad física del galpón, aves actuales del lote, mortandad y postura del período y estado actual. Un lote finalizado conserva su último galpón asignado. La capacidad representa el máximo físico y se mantiene separada de las aves actuales. Las correcciones y anulaciones se reflejan mediante los registros efectivos.
+
+`from` y `to` abarcan días completos de America/Montevideo. El rango se aplica a las bajas y recolecciones e incluye los lotes ingresados y constituidos como máximo al final del período y cuya finalización ocurrió como mínimo al comienzo, incluidos los que siguen abiertos. Un fraccionamiento constituido después del período queda fuera aunque haya heredado una fecha de ingreso anterior. Un lote sin actividad tiene cero en mortandad y postura. Omitir el rango suma todo el historial registrado. Las sumas de bajas y huevos se calculan por separado antes de unirlas a cada lote para evitar multiplicar los totales.
+
+El filtro `entry_date` permite elegir la fecha de ingreso independientemente del período de actividad. También se filtra por lote, galpón, UP, raza, estado actual, capacidad y cantidades. El resumen por galpón usa el alojamiento actual. Las agrupaciones por día, semana y mes se refieren al ingreso de los lotes de cada grupo. Las métricas publicadas cuentan lotes y suman aves actuales, bajas y huevos. La capacidad física se consulta en el detalle de cada lote.
+
+Leer la fuente requiere `can_view_reports`, `can_view_flocks`, `can_view_mortality` y `can_view_egg_collections`. Exportarla requiere `can_export_reports` y los permisos de sus módulos. Las sesiones PIN filtran tanto los lotes como los hechos de producción por su UP antes de devolver filas, opciones o agregados. Se reutilizan las rutas de Reportes, las configuraciones guardadas y las exportaciones XLSX/PDF.
+
+**Manejo general** (`management.executions`) agrega `management_type` como columna, filtro y agrupación. Publica Despique, Colocación de nidos, Práctica manual, Vacunación, Medicación, Cambio de ración y Suministro de alimento. Conserva lote, galpón histórico, fecha de ejecución y descripción del manejo realizado. Las ejecuciones corregidas y suministros anulados se excluyen. Esta ampliación reutiliza los datos existentes.
+
+La verificación del 17/11/2026 pasó con 65 pruebas y 404 aserciones de Reportes y aislamiento por UP. La comprobación final pasó con 4 pruebas y 31 aserciones, incluidos límites de día con zona horaria, lotes sin actividad, finalizados y constituidos fuera del período, hechos cancelados, sumas independientes, permisos, tipos de manejo, filtro y agrupación, y un archivo XLSX real. Pint, PHPStan nivel 5 y la lectura del contrato OpenAPI pasaron. La factory de correcciones se ajustó a `Str::ulid()` para poder crear registros de prueba con el generador instalado.
 
 ## Reparto completo
 

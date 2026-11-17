@@ -121,12 +121,7 @@ abstract class SqlReportSource implements ReportSource
                 default => $builder->where($filter['field'], '=', $filter['value']),
             };
         }
-        if ($query->from !== null) {
-            $builder->where('date', '>=', Carbon::parse($query->from, $timezone)->startOfDay()->toIso8601String());
-        }
-        if ($query->to !== null) {
-            $builder->where('date', '<', Carbon::parse($query->to, $timezone)->addDay()->startOfDay()->toIso8601String());
-        }
+        $this->filterPeriod($builder, $query);
         $builder = $this->prepareFilteredRows($builder, $query);
         $grouped = $query->groupings !== [] || $query->metrics !== [];
         if ($grouped) {
@@ -155,6 +150,17 @@ abstract class SqlReportSource implements ReportSource
         }
 
         return $builder;
+    }
+
+    protected function filterPeriod(Builder $builder, ReportQueryData $query): void
+    {
+        $timezone = config('lots.timezone', 'America/Montevideo');
+        if ($query->from !== null) {
+            $builder->where('date', '>=', Carbon::parse($query->from, $timezone)->startOfDay()->toIso8601String());
+        }
+        if ($query->to !== null) {
+            $builder->where('date', '<', Carbon::parse($query->to, $timezone)->addDay()->startOfDay()->toIso8601String());
+        }
     }
 
     private function resultColumns(ReportQueryData $query): array

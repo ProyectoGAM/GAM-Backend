@@ -13,6 +13,7 @@ use App\Services\Inventory\InventoryMovementsReportSource;
 use App\Services\Inventory\InventoryStockBalancesReportSource;
 use App\Services\Lots\EggProductionReportSource;
 use App\Services\Lots\FlockAdmissionsReportSource;
+use App\Services\Lots\FlockSummaryReportSource;
 use App\Services\Lots\WeighingMeasurementsReportSource;
 use App\Services\ManagementPlans\FeedSupplyReportSource;
 use App\Services\ManagementPlans\ManagementExecutionsReportSource;
@@ -34,6 +35,7 @@ final class ReportingAndAnalyticsServiceProvider extends ServiceProvider
                 new InventoryMovementsReportSource,
                 $this->app->make(EggProductionReportSource::class),
                 $this->app->make(FlockAdmissionsReportSource::class),
+                $this->app->make(FlockSummaryReportSource::class),
                 $this->app->make(WeighingMeasurementsReportSource::class),
                 $this->app->make(VaccinationReportSource::class),
                 $this->app->make(ManagementExecutionsReportSource::class),

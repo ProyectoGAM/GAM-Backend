@@ -126,17 +126,17 @@ final class BusinessReportSourcesTest extends TestCase
         Sanctum::actingAs($actor);
         // Consulta: conserva las diez fuentes previas y rechaza las fuentes de vehículos sin permiso.
         $this->getJson('/api/v1/reportes/fuentes')->assertOk()->assertJsonCount(10, 'data');
-        foreach (['vehicles.usage', 'vehicles.fuel', 'vehicles.maintenance', 'deliveries.collections'] as $sourceKey) {
+        foreach (['vehicles.usage', 'vehicles.fuel', 'vehicles.maintenance', 'deliveries.collections', 'lots.summary'] as $sourceKey) {
             $this->postJson('/api/v1/reportes/'.$sourceKey.'/previsualizaciones')->assertForbidden();
         }
 
         // Preparación: concede los permisos funcionales de las tres fuentes nuevas.
-        foreach (['can_view_vehicles', 'can_view_vehicle_fuel', 'can_view_vehicle_maintenance', 'can_view_customer_accounts'] as $permission) {
+        foreach (['can_view_vehicles', 'can_view_vehicle_fuel', 'can_view_vehicle_maintenance', 'can_view_customer_accounts', 'can_view_mortality'] as $permission) {
             $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
 
-        // Acción: consulta las catorce fuentes autorizadas y ejecuta sus consultas estándar.
-        $this->getJson('/api/v1/reportes/fuentes')->assertOk()->assertJsonCount(14, 'data');
+        // Acción: consulta las quince fuentes autorizadas y ejecuta sus consultas estándar.
+        $this->getJson('/api/v1/reportes/fuentes')->assertOk()->assertJsonCount(15, 'data');
         foreach (app(ReportSourceRegistry::class)->all() as $source) {
             $this->postJson('/api/v1/reportes/'.$source->definition()->key.'/previsualizaciones')->assertOk();
             foreach ($source->definition()->standardQueries as $standard) {

@@ -95,6 +95,12 @@ paths:
         Requiere can_view_delivery_history y can_view_customer_accounts además del permiso de Reportes.
         Admite filtros y agrupaciones publicados por la fuente. La deuda es el saldo vigente al consultar,
         mientras que el cobro y el importe pendiente corresponden al momento de la entrega.
+        lots.summary devuelve una fila por lote con galpón actual, fecha de ingreso, raza,
+        capacidad física, aves actuales, mortandad y postura del período y estado actual.
+        Requiere can_view_flocks, can_view_mortality y can_view_egg_collections.
+        Su rango from/to filtra los hechos e incluye lotes presentes durante el período.
+        entry_date permite filtrar el ingreso por separado. Sus agrupaciones temporales se refieren al ingreso.
+        management.executions incluye management_type como columna, filtro y agrupación.
       parameters:
         - $ref: '#/components/parameters/Source'
       requestBody:
