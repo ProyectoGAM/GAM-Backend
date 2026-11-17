@@ -9,6 +9,7 @@ use App\Policies\ReportingAndAnalytics\ReportPresetPolicy;
 use App\Services\Deliveries\DeliveriesReportSource;
 use App\Services\Deliveries\DeliveryCollectionsReportSource;
 use App\Services\Inventory\EggOutflowReportSource;
+use App\Services\Inventory\FeedConsumptionReportSource;
 use App\Services\Inventory\InventoryMovementsReportSource;
 use App\Services\Inventory\InventoryStockBalancesReportSource;
 use App\Services\Lots\EggProductionReportSource;
@@ -40,6 +41,7 @@ final class ReportingAndAnalyticsServiceProvider extends ServiceProvider
                 $this->app->make(VaccinationReportSource::class),
                 $this->app->make(ManagementExecutionsReportSource::class),
                 $this->app->make(FeedSupplyReportSource::class),
+                $this->app->make(FeedConsumptionReportSource::class),
                 $this->app->make(DeliveriesReportSource::class),
                 $this->app->make(DeliveryCollectionsReportSource::class),
                 $this->app->make(VehicleUsageReportSource::class),

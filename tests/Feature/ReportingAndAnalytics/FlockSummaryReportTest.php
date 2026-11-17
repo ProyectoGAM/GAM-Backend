@@ -154,4 +154,52 @@ final class FlockSummaryReportTest extends LotsTestCase
         $this->postJson($path, [...$period, 'groupings' => ['management_type'], 'metrics' => ['execution_count']])
             ->assertOk()->assertJsonCount(7, 'data.rows');
     }
+
+    // Flujo: el responsable se selecciona y exporta con el nombre registrado al realizar el manejo.
+    public function test_management_reports_offer_the_historical_responsible_as_a_selectable_column(): void
+    {
+        // Preparación: el mismo responsable realiza manejos antes de cambiar su nombre.
+        Storage::fake('local');
+        $actor = $this->signIn(['can_view_reports', 'can_export_reports', 'can_view_management_plans']);
+        $flock = Flock::factory()->create();
+        foreach ([ManualPractice::class, VaccinationApplication::class, MedicineApplication::class, RationChange::class] as $model) {
+            $model::factory()->for($flock)->create([
+                'poultry_house_id' => $flock->poultry_house_id, 'production_unit_id' => $flock->production_unit_id,
+                'responsible_user_id' => $actor->id, 'responsible_name_snapshot' => 'Responsable original',
+            ]);
+        }
+        FeedSupply::factory()->for($flock)->create();
+        $actor->forceFill(['name' => 'Nombre actualizado'])->save();
+
+        foreach (['management.executions' => 4, 'management.vaccinations' => 1] as $sourceKey => $count) {
+            // Consulta: filtros y opciones leen la instantánea histórica.
+            $base = '/api/v1/reportes/'.$sourceKey;
+            $filter = [['field' => 'responsible', 'operator' => 'eq', 'value' => 'Responsable original']];
+            $this->postJson($base.'/previsualizaciones', ['columns' => ['flock', 'responsible'], 'filters' => $filter])
+                ->assertOk()->assertJsonCount($count, 'data.rows')
+                ->assertJsonPath('data.rows.0.responsible', 'Responsable original');
+            $this->getJson($base.'/opciones?field=responsible')->assertOk()
+                ->assertJsonPath('data.0.value', 'Responsable original')->assertJsonCount(1, 'data');
+
+            // Consulta: la misma fuente permite omitir la columna o agrupar por responsable.
+            $this->postJson($base.'/previsualizaciones', ['columns' => ['flock']])->assertOk()
+                ->assertJsonMissingPath('data.rows.0.responsible');
+            $this->postJson($base.'/previsualizaciones', ['groupings' => ['responsible'], 'filters' => $filter])
+                ->assertOk()->assertJsonCount(1, 'data.rows')
+                ->assertJsonPath('data.rows.0.responsible', 'Responsable original');
+        }
+
+        // Consulta: el suministro legado conserva como desconocido al responsable sin instantánea.
+        $this->postJson('/api/v1/reportes/management.executions/previsualizaciones', [
+            'columns' => ['responsible'], 'filters' => [['field' => 'management_type', 'operator' => 'eq', 'value' => 'Suministro de alimento']],
+        ])->assertOk()->assertJsonPath('data.rows.0.responsible', null);
+
+        // Exportación: la planilla utiliza la selección y el nombre histórico.
+        $source = app(ReportSourceRegistry::class)->get('management.vaccinations');
+        $query = app(ReportQueryNormalizer::class)->normalize('management.vaccinations', ['columns' => ['responsible']]);
+        $export = ReportExport::factory()->for($actor)->create(['source_key' => 'management.vaccinations', 'query' => $query->toArray()]);
+        $file = app(ReportExportWriter::class)->write($export, $source, $query);
+        $rows = SimpleExcelReader::create(Storage::disk('local')->path($file['path']))->getRows()->all();
+        $this->assertSame([['Responsable' => 'Responsable original']], $rows);
+    }
 }

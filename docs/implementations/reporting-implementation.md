@@ -16,7 +16,8 @@ La actualización de [acceso por UP](access-methods-and-production-unit-implemen
 | `lots.weighing-measurements` | Muestras históricas y diarias; promedio ponderado por aves | `can_view_weighings` |
 | `management.vaccinations` | Aplicaciones válidas, vacuna y partida registrada | `can_view_management_plans` |
 | `management.executions` | Manejos realizados y programación de la revisión aplicable | `can_view_management_plans` |
-| `management.feed-supply` | Ración registrada y pauta estimada separadas | `can_view_management_plans` |
+| `management.feed-supply` | Alimentación histórica: suministros antiguos y pauta estimada separadas | `can_view_management_plans` |
+| `management.feeding` | Alimentación: consumos diarios por receta y última rectificación | `can_view_flock_feeding` |
 | `deliveries.deliveries` | Una fila por entrega confirmada, cantidades, presentaciones, valor y notas | `can_view_delivery_history` |
 | `deliveries.collections` | Reparto completo, con cargas, sobrantes, precios, observaciones, cobros y cuenta corriente | `can_view_delivery_history` y `can_view_customer_accounts` |
 | `vehicles.usage` | Usos, responsables y kilometraje registrado | `can_view_vehicles` |
@@ -40,6 +41,10 @@ Leer la fuente requiere `can_view_reports`, `can_view_flocks`, `can_view_mortali
 
 **Manejo general** (`management.executions`) agrega `management_type` como columna, filtro y agrupación. Publica Despique, Colocación de nidos, Práctica manual, Vacunación, Medicación, Cambio de ración y Suministro de alimento. Conserva lote, galpón histórico, fecha de ejecución y descripción del manejo realizado. Las ejecuciones corregidas y suministros anulados se excluyen. Esta ampliación reutiliza los datos existentes.
 
+`management.executions` y `management.vaccinations` publican `responsible` con la etiqueta **Responsable**. Se puede incluir u omitir con `columns`, filtrar por los nombres históricos publicados en `opciones?field=responsible` y agrupar u ordenar por ese campo. El nombre proviene de `responsible_name_snapshot` para prácticas, vacunaciones, medicaciones y cambios de ración. Si la cuenta cambia de nombre, el reporte conserva el de la aplicación. Los suministros legados sin instantánea del responsable devuelven nulo. Las configuraciones guardadas con una selección explícita conservan sus columnas y las exportaciones utilizan esa selección.
+
+La ampliación de Responsable se verificó el 17/11/2026 con 17 pruebas y 190 aserciones de reportes, incluida una exportación XLSX real. Se comprobaron selección y omisión de la columna, filtros, opciones históricas, agrupación y nombres preservados tras renombrar la cuenta. Pint y PHPStan pasaron.
+
 La verificación del 17/11/2026 pasó con 65 pruebas y 404 aserciones de Reportes y aislamiento por UP. La comprobación final pasó con 4 pruebas y 31 aserciones, incluidos límites de día con zona horaria, lotes sin actividad, finalizados y constituidos fuera del período, hechos cancelados, sumas independientes, permisos, tipos de manejo, filtro y agrupación, y un archivo XLSX real. Pint, PHPStan nivel 5 y la lectura del contrato OpenAPI pasaron. La factory de correcciones se ajustó a `Str::ulid()` para poder crear registros de prueba con el generador instalado.
 
 ## Reparto completo
@@ -60,9 +65,40 @@ El frontend carga el catálogo y las consultas estándar desde la API. Los selec
 
 Pasaron 56 pruebas y 396 aserciones en PostgreSQL de testing. La suite verificó el cobro con cheque, la entrega fiada que se pagó después, el cierre con devolución, los valores predeterminados históricos, los filtros, la deduplicación por grupo, la descarga privada y el archivo XLSX. Pint y PHPStan pasaron para el núcleo del reporte. PHPStan señaló seis diagnósticos en líneas preexistentes al ampliar la revisión a solicitudes de Reparto y creación de enlaces temporales.
 
-## Alimentación registrada y estimada
+## Postura y Alimentación como fuentes independientes
 
-`feed_supplies` conserva lote, galpón/UP del hecho, alimento y nombre histórico, cantidad decimal, unidad, fecha, operación y responsable. Las nuevas cantidades representan alimento administrado al lote; se aceptan kg y g. No se infiere consumo de alimento a partir de movimientos de materias primas. El registro de suministro no modifica automáticamente esos movimientos ni el inventario: elaboración y administración son hechos diferentes.
+**Postura** reutiliza `lots.egg-production`: fecha, lote, galpón de la recolección y cantidad de huevos. Sólo incluye recolecciones registradas, incluso de lotes finalizados; las anuladas quedan fuera. Agrega filtro numérico `quantity` y consultas estándar por día/lote/galpón y por mes/galpón, además del total vitalicio existente.
+
+**Alimentación** usa la nueva clave `management.feeding`. Cada fila representa un consumo diario ya registrado en `feed_consumptions`, con la receta y cantidad de su última rectificación por ID, o los valores originales si no hubo rectificaciones. Un cero rectificado es cero; las compensaciones de stock no son consumos adicionales. No se proyectan consumos futuros ni jornadas pendientes. Incluye fecha, lote, galpón, UP, alimento (`feed_recipe_id`/`feed_recipe`), cantidad en kg, unidad, modo Automático/Manual y observaciones de la última rectificación. La conversión desde gramos y las sumas se realizan en PostgreSQL con decimales exactos. El nombre del alimento se consulta en el catálogo actual de recetas; la identidad de la receta consumida o rectificada es histórica.
+
+El galpón de Alimentación se reconstruye desde el último movimiento del lote anterior al comienzo del día siguiente en America/Montevideo. Los traslados del día se atribuyen al alojamiento al cierre; una recuperación posterior no reasigna el consumo al galpón actual. Sin instantánea comprobable permanece nulo. La UP proviene del propio consumo y se valida que el galpón reconstruido pertenezca a esa UP. `feed_quantity` suma kg efectivos y `consumption_count` cuenta jornadas registradas de lotes, incluidas las de cantidad cero. Las consultas estándar ofrecen detalle, día/lote/galpón/alimento y mes/galpón/alimento.
+
+Ambas fuentes aceptan `from`/`to` inclusivos en la zona de la granja, con una misma fecha para un día específico. Comparten filtros por `production_unit_id`, `poultry_house_id` y `flock_id`, opciones históricas, y agrupaciones por `day`, `week`, `month`, `production_unit`, `poultry_house` y `flock`. La semana comienza el lunes. `quantity` permite comparar cantidades de cada registro antes de agrupar, en huevos para Postura y kg para Alimentación. Alimentación permite además filtrar por `feed_recipe_id` y `mode`, y agrupar por alimento o modo. Los IDs acompañan las dimensiones internamente para conservar entidades distintas aunque compartan nombre.
+
+Ejemplo de configuración de Alimentación para reutilizar el mismo lote, galpón y período de otra sección:
+
+```json
+{
+  "from": "2026-11-01",
+  "to": "2026-11-30",
+  "filters": [
+    {"field": "flock_id", "operator": "eq", "value": "ID_PUBLICO_DEL_LOTE"},
+    {"field": "poultry_house_id", "operator": "eq", "value": 12}
+  ],
+  "groupings": ["month", "flock", "poultry_house"],
+  "metrics": ["feed_quantity"]
+}
+```
+
+Se envía a `POST /api/v1/reportes/management.feeding/previsualizaciones`. Para Postura se utiliza `lots.egg-production` y la métrica `egg_count`. Cada fuente conserva sus propias configuraciones y usa el motor existente de exportaciones XLSX/PDF e instantáneas web. Los filtros compatibles facilitan una futura configuración con varias secciones; esta entrega no agrega todavía esa composición al motor, que sigue recibiendo una fuente por configuración/exportación.
+
+Se requiere `can_view_reports` y el permiso de origen: `can_view_egg_collections` o `can_view_flock_feeding`. Exportar y guardar configuraciones mantienen sus permisos existentes. Las sesiones PIN quedan limitadas a su UP en detalle, totales, opciones y exportaciones. Son consultas sobre hechos existentes: no agregan mutaciones de negocio, movimientos de stock ni nuevas auditorías de lectura. Guardar configuraciones y solicitar exportaciones conserva la auditoría del motor actual. No hay migraciones ni dependencias nuevas.
+
+Verificación del 17/11/2026: las cinco pruebas nuevas comprobaron límites de día, agrupaciones por día/semana/mes, filtros, alimentación manual/automática, rectificaciones sucesivas y cero, recuperación tras traslados, permisos y aislamiento HTTP con una sesión PIN real. Incluyen una configuración guardada, archivos XLSX/PDF reales y una instantánea que conserva el valor anterior tras rectificar. Se ejecutaron las 56 pruebas funcionales y unitarias de Reportes; el barrido de catálogo excedió su límite de frecuencia y se aisló ese middleware únicamente en la prueba. La repetición del archivo de catálogo pasó con 12 pruebas y 140 aserciones; las otras 44 pruebas de la corrida conjunta pasaron. Pint, PHPStan nivel 5 y la lectura de OpenAPI pasaron.
+
+## Alimentación histórica registrada y estimada
+
+`management.feed-supply` se presenta como **Alimentación histórica** y conserva las configuraciones guardadas y sus resultados. `feed_supplies` contiene lote, galpón/UP del hecho, alimento y nombre histórico, cantidad decimal, unidad, fecha, operación y responsable. El registro de suministros nuevos fue retirado; se conservan consulta, reintentos históricos y anulaciones. Esta fuente no incluye los consumos diarios por receta de `management.feeding` ni los infiere de movimientos de materias primas.
 
 La pauta suma todos los suministros reales de un mismo día por lote, galpón y alimento. En días posteriores sin carga repite esa cantidad diaria, hasta otra fecha con suministro real. Se detiene antes del día de cierre o traslado para no estimar un día completo de alojamiento parcial; también respeta la fecha actual y el rango consultado. Si una observación tiene varios alimentos se conserva la mezcla hasta la próxima observación. No se estiman días anteriores al primer dato. Las filas estimadas se expanden por día para que las agrupaciones semanales y mensuales sean correctas.
 

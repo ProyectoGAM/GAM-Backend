@@ -16,9 +16,12 @@ final class EggProductionReportSource extends SqlReportSource
             'production_unit' => ['label' => 'Unidad productiva', 'type' => 'string'], 'poultry_house_id' => ['label' => 'Galpón', 'type' => 'integer'],
             'poultry_house' => ['label' => 'Galpón', 'type' => 'string'], 'flock_id' => ['label' => 'Lote', 'type' => 'string'],
             'flock' => ['label' => 'Lote', 'type' => 'string'], 'quantity' => ['label' => 'Huevos', 'type' => 'quantity', 'unit' => 'huevos'],
-        ], ['egg_count' => ['label' => 'Huevos producidos', 'type' => 'quantity', 'unit' => 'huevos']], standardQueries: [
-            ['label' => 'Huevos de toda la vida del galpón', 'configuration' => ['groupings' => ['production_unit', 'poultry_house'], 'metrics' => ['egg_count']]],
-        ]);
+        ], ['egg_count' => ['label' => 'Huevos producidos', 'type' => 'quantity', 'unit' => 'huevos']],
+            extraFilters: ['quantity' => ['label' => 'Cantidad de huevos', 'type' => 'number', 'operators' => ['eq', 'neq', 'gt', 'gte', 'lt', 'lte']]], standardQueries: [
+                ['label' => 'Postura por día y lote', 'configuration' => ['groupings' => ['day', 'flock', 'poultry_house'], 'metrics' => ['egg_count']]],
+                ['label' => 'Postura por galpón y mes', 'configuration' => ['groupings' => ['month', 'poultry_house'], 'metrics' => ['egg_count']]],
+                ['label' => 'Huevos de toda la vida del galpón', 'configuration' => ['groupings' => ['production_unit', 'poultry_house'], 'metrics' => ['egg_count']]],
+            ]);
     }
 
     protected function baseQuery(): Builder

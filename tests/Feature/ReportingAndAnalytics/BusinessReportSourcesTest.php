@@ -29,6 +29,7 @@ use App\Services\Lots\RunLotsCommand;
 use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
@@ -121,6 +122,8 @@ final class BusinessReportSourcesTest extends TestCase
     // Flujo: todas las fuentes de negocio ejecutan detalle y consultas estándar con el contrato público.
     public function test_catalog_and_queries_are_executable(): void
     {
+        // Preparación: el barrido del catálogo no representa la frecuencia de consultas de una sesión real.
+        $this->withoutMiddleware(ThrottleRequests::class);
         // Preparación: habilita los módulos previos a la incorporación de vehículos.
         $actor = $this->actor(['can_view_reports', 'can_view_inventory', 'can_view_flocks', 'can_view_weighings', 'can_view_egg_collections', 'can_view_management_plans', 'can_view_delivery_history', 'can_view_egg_stock']);
         Sanctum::actingAs($actor);
@@ -130,13 +133,13 @@ final class BusinessReportSourcesTest extends TestCase
             $this->postJson('/api/v1/reportes/'.$sourceKey.'/previsualizaciones')->assertForbidden();
         }
 
-        // Preparación: concede los permisos funcionales de las tres fuentes nuevas.
-        foreach (['can_view_vehicles', 'can_view_vehicle_fuel', 'can_view_vehicle_maintenance', 'can_view_customer_accounts', 'can_view_mortality'] as $permission) {
+        // Preparación: concede los permisos funcionales del resto del catálogo.
+        foreach (['can_view_vehicles', 'can_view_vehicle_fuel', 'can_view_vehicle_maintenance', 'can_view_customer_accounts', 'can_view_mortality', 'can_view_flock_feeding'] as $permission) {
             $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
 
-        // Acción: consulta las quince fuentes autorizadas y ejecuta sus consultas estándar.
-        $this->getJson('/api/v1/reportes/fuentes')->assertOk()->assertJsonCount(15, 'data');
+        // Acción: consulta las dieciséis fuentes autorizadas y ejecuta sus consultas estándar.
+        $this->getJson('/api/v1/reportes/fuentes')->assertOk()->assertJsonCount(16, 'data');
         foreach (app(ReportSourceRegistry::class)->all() as $source) {
             $this->postJson('/api/v1/reportes/'.$source->definition()->key.'/previsualizaciones')->assertOk();
             foreach ($source->definition()->standardQueries as $standard) {
