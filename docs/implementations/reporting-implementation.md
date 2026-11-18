@@ -13,11 +13,18 @@ La actualización de [acceso por UP](access-methods-and-production-unit-implemen
 | `lots.egg-production` | Postura válida y total vitalicio por galpón | `can_view_egg_collections` |
 | `lots.admissions` | Ingresos y alojamientos no revertidos; cantidad ingresada | `can_view_flocks` |
 | `lots.summary` | Una fila por lote, galpón actual, ingreso, raza, capacidad, mortandad y postura del período y estado actual | `can_view_flocks`, `can_view_mortality` y `can_view_egg_collections` |
+| `lots.mortality` | Mortandad detallada por lote y galpón histórico, sin anulaciones | `can_view_mortality` |
+| `lots.medications` | Medicación detallada del lote con medicamento/responsable históricos, sin ejecuciones corregidas | `can_view_management_plans` |
 | `lots.weighing-measurements` | Muestras históricas y diarias; promedio ponderado por aves | `can_view_weighings` |
 | `management.vaccinations` | Aplicaciones válidas, vacuna y partida registrada | `can_view_management_plans` |
 | `management.executions` | Manejos realizados y programación de la revisión aplicable | `can_view_management_plans` |
+| `management.overview` | Manejos por secciones: lotes, plan vigente, actividades, pesadas y movimientos/fraccionamientos | `can_view_management_plans`, `can_view_flocks`, `can_view_mortality`, `can_view_egg_collections` y `can_view_weighings` |
 | `management.feed-supply` | Alimentación histórica: suministros antiguos y pauta estimada separadas | `can_view_management_plans` |
 | `management.feeding` | Alimentación: consumos diarios por receta y última rectificación | `can_view_flock_feeding` |
+| `inventory.feed-manufacturing` | Elaboraciones con ingredientes, distribución, faltantes y estado de cancelación | `can_view_feed_stock` |
+| `inventory.feed-balances` | Saldos actuales por receta/UP con mínimos, atención y negativos | `can_view_feed_stock` |
+| `accounts.movements` | Cuenta corriente completa, cargos, cobros, ajustes y reversiones | `can_view_customer_accounts` |
+| `expenses.poultry-house-maintenance` | Gastos de mantenimientos de galpones completados, por moneda | `can_view_poultry_houses` |
 | `deliveries.deliveries` | Una fila por entrega confirmada, cantidades, presentaciones, valor y notas | `can_view_delivery_history` |
 | `deliveries.collections` | Reparto completo, con cargas, sobrantes, precios, observaciones, cobros y cuenta corriente | `can_view_delivery_history` y `can_view_customer_accounts` |
 | `vehicles.usage` | Usos, responsables y kilometraje registrado | `can_view_vehicles` |
@@ -28,6 +35,68 @@ La actualización de [acceso por UP](access-methods-and-production-unit-implemen
 La [guía del resumen operativo](operational-summary-implementation.md#valor-entregado-y-gastos) documenta el valor global entregado con cobertura de importes y `GET /gastos/resumen`, con totales por moneda para la empresa o una UP.
 
 El servidor define filtros, columnas, ordenamientos, dimensiones, métricas, opciones, consultas estándar y capacidades. La UI ofrece las consultas estándar antes de las opciones avanzadas. Las nuevas fuentes admiten todo el historial registrado (`max_range_days=0`), con 100 filas por página y 50.000 por XLSX. PDF se limita a 2.000 filas. No se recortan archivos silenciosamente: superar el límite produce un fallo accionable.
+
+## Módulos de reportes dedicados
+
+El catálogo tiene 23 fuentes y publica `module: {key, label}` en cada definición. El front puede agruparlas sin deducir el área desde el nombre o la clave de la fuente. Mortandad y Medicación pertenecen a **Lotes**; la cuenta completa a **Cuenta corriente**; las elaboraciones a **Elaboración de ración**; sus saldos a **Stock de alimento**. Postura conserva su grupo propio. **Gastos** contiene `expenses.poultry-house-maintenance` y `vehicles.maintenance`: se conserva esta última clave para que sigan funcionando sus configuraciones previas. Se reutilizan los endpoints de Reportes, las configuraciones privadas, XLSX/PDF y las instantáneas web. Esta entrega agrega fuentes y metadatos de agrupación de API, sin modificar pantallas ni crear nuevos registros de negocio.
+
+### Lotes: Mortandad y Medicación
+
+`lots.mortality` muestra fecha, lote, galpón/UP del hecho, cantidad de bajas y observaciones. Excluye registros anulados y suma bajas por lote, galpón o período. `lots.medications` muestra fecha, lote, alojamiento histórico, identidad y nombre guardados del medicamento, cantidad registrada si consta, motivo, responsable histórico y observaciones. Excluye originales compensados por correcciones de tipo `medication`. No inventa cantidades ni unidades de dosis cuando el registro no las tiene: la métrica cuenta aplicaciones. Ambas permiten filtrar lote, galpón, UP y fechas; Medicación agrega medicamento y responsable. Los datos provienen de los registros existentes y se mantienen disponibles para lotes finalizados; no se los reasigna al galpón actual.
+
+### Cuenta corriente completa
+
+`accounts.movements` incluye cargos por ventas, cobros, ajustes a débito/crédito y reversiones, aunque no pertenezcan a un reparto. Mantiene los importes con signo y los saldos anterior/posterior de cada movimiento, secuencia, cliente y responsable guardados, medio y referencia de pago, motivo, reparto opcional e identificador del movimiento compensado. Las compensaciones no borran los originales: `net_amount` suma los importes firmados y `movement_count` cuenta asientos. El saldo actual de la cuenta se expone sólo en detalle, identificado por separado, y no se suma repetidamente entre movimientos. Se filtra por cliente, tipo, medio de pago y fecha; se agrupa por cliente, moneda o períodos.
+
+La cuenta completa requiere `can_view_customer_accounts`, además de permisos de Reportes. Es de alcance empresarial: no publica una UP artificial ni permite sesiones PIN, ya que una cuenta puede contener movimientos globales no atribuibles a una UP. Sus exportaciones se descargan de forma autenticada y no admiten enlaces públicos.
+
+### Elaboración y stock de alimento
+
+`inventory.feed-manufacturing` utiliza una fila por operación `manufacture`. Conserva fecha, receta y planta seleccionada de la instantánea histórica, multiplicador, kg elaborados, ingredientes y cantidades, distribución por planta y faltantes confirmados en kg. Los arrays se resumen mediante subconsultas escalares sin multiplicar la producción por cada ingrediente o planta. La cancelación se presenta como estado vigente, fecha y motivo en la misma fila. El historial incluye canceladas; `effective_quantity` suma sólo las que siguen elaboradas, y `manufacturing_count` cuenta originales. El estado es vigente al consultar, aunque la cancelación sea posterior al rango seleccionado; el rango recorta la fecha de elaboración. No se reinterpretan ajustes como fabricaciones.
+
+`inventory.feed-balances` muestra los saldos vigentes materializados de cada receta/UP, incluso negativos y recetas inactivas. Publica kg actuales, mínimo nullable, estado y atención: se requiere atención con mínimo configurado y saldo menor o igual. Un mínimo nulo no equivale a cero. Las cantidades se convierten desde gramos con decimal exacto en PostgreSQL. Esta fuente rechaza fechas y agrupaciones temporales porque no reconstruye existencias históricas; el catálogo indica `supports_date_range: false`. Ambas fuentes usan `can_view_feed_stock` y filtran la UP antes de agregar u ofrecer opciones.
+
+### Gastos de mantenimiento y monedas
+
+`expenses.poultry-house-maintenance` incluye sólo mantenimientos de galpones completados: fecha, galpón/UP, descripción, costo, moneda y responsable guardado. Las cancelaciones no se suman. `vehicles.maintenance` conserva el historial operativo y sus estados, agrega filtro por estado y consulta estándar de gastos completados. Su métrica `cost_total` suma únicamente los completados; los pendientes/cancelados pueden consultarse como historial, pero no inflan ese gasto. El primero necesita `can_view_poultry_houses`; el segundo mantiene `can_view_vehicle_maintenance`.
+
+El normalizador añade automáticamente la columna de moneda al seleccionar un importe con unidad variable, y la dimensión de moneda al agrupar su métrica. `cost_total` y `net_amount` nunca mezclan monedas por omisión del cliente. Se mantienen los permisos funcionales por fuente: una categoría común no amplía accesos. Las sesiones PIN sólo consultan mantenimientos de galpones de su UP; el mantenimiento vehicular global sigue denegado. El reporte de gastos de galpones no admite enlaces públicos. Todos son reportes de lectura: no modifican stock, cuentas, correcciones ni auditorías. Las operaciones del negocio siguen auditándose en sus Actions; solicitudes de exportación conservan la auditoría del motor. No hay migraciones ni dependencias nuevas.
+
+Verificación del 17/11/2026: pasaron 72 pruebas y 627 aserciones funcionales/unitarias de Reportes. Las siete pruebas nuevas cubren bajas anuladas y medicaciones corregidas, instantáneas clínicas y cantidades desconocidas, contabilidad firmada con cobros/reversiones/ajustes independientes, elaboraciones sin multiplicación por ingredientes/plantas, cancelaciones, negativos y mínimos de stock, separación de monedas y gastos pendientes/cancelados, metadatos de módulo y sesión PIN real con filas, opciones y agregados restringidos. Se generaron XLSX/PDF reales y la instantánea común de vista web. El catálogo ejecutó las 23 fuentes y sus consultas estándar; el contrato OpenAPI, Pint y PHPStan nivel 5 pasaron.
+
+## Configuraciones iniciales y mes calendario anterior
+
+`DefaultReportPresetsSeeder` crea tres configuraciones privadas para la cuenta indicada en `auth.admin.email`, incluso sin datos operativos:
+
+| Nombre | Fuente | Contenido inicial |
+| --- | --- | --- |
+| Manejos | `management.overview` | Datos del lote, plan vigente y su revisión, actividades programadas, manejos realizados y responsable, pesadas y movimientos/fraccionamientos |
+| Repartos | `deliveries.collections` | Todos los campos publicados: reparto y cliente, huevos cargados/entregados/devueltos, valores predeterminados e ingresados, cobro, pago pendiente, medio de pago, deuda/crédito actual y observaciones |
+| Postura | `lots.egg-production` | Fecha, UP, lote, galpón y huevos |
+
+El seeder se integra en `DatabaseSeeder` después del administrador y los permisos. También se puede ejecutar solo, sin cargar demos, crear usuarios ni modificar stock:
+
+```powershell
+docker compose -f compose.dev.yaml exec -T api php artisan db:seed --class='Database\Seeders\ReportingAndAnalytics\DefaultReportPresetsSeeder' --no-interaction
+```
+
+Bloquea la cuenta durante la transacción y busca por nombre normalizado y propietario antes de crear. Repetirlo conserva IDs, nombres coincidentes y personalizaciones existentes. No elimina otras configuraciones ni seedea datos del negocio. La visibilidad sigue siendo privada por usuario; no concede permisos ni crea configuraciones automáticamente para otras cuentas.
+
+Las tres guardan `date_preset: "last_month"`, con `from` y `to` nulos. Se resuelve en America/Montevideo al **mes calendario anterior completo**, desde el día 1 hasta el último día, ambos inclusivos; por ejemplo, el 17/11/2026 consulta 01/10/2026–31/10/2026. En marzo consulta todo febrero, incluido el 29 en años bisiestos; en enero consulta diciembre del año anterior. La API de configuraciones entrega la plantilla en `configuration` y fechas concretas actualizadas en `resolved_configuration`, para que el front inicialice su rango. Se puede enviar la plantilla directamente a previsualización/exportación. Las tres configuraciones ya seedeadas se ajustan automáticamente al resolver el mismo marcador; no requieren reescribir filas ni perder personalizaciones. Fuentes y configuraciones anteriores sin `date_preset` mantienen su comportamiento.
+
+En una consulta, fechas explícitas prevalecen sobre el rango relativo. Al guardar una configuración con `date_preset`, el servidor vuelve a dejar ambas fechas nulas; para guardar un rango fijo se omite el marcador o se envía nulo. La solicitud de exportación conserva fechas concretas desde el primer momento: que el worker se ejecute otro día no desplaza el período. La fuente de stock actual continúa rechazando rangos históricos.
+
+### Vista conjunta Manejos
+
+`management.overview` reutiliza el detalle filtrado de Lotes completos, Manejo general y Pesadas, y agrega programación vigente y movimientos no revertidos. Publica `section`: **Lotes**, **Plan de manejo**, **Manejos realizados**, **Pesadas**, **Movimientos y fraccionamientos**. Cada fila corresponde a un dato de una sección; las demás columnas son nulas cuando no aplican. No hace joins entre actividades, pesos y movimientos que multipliquen cantidades. Las fuentes individuales siguen disponibles.
+
+Los datos del lote incluyen fecha de ingreso, raza, capacidad, aves actuales, mortandad, postura y estado; el lote se incluye si estuvo presente durante el período, aunque haya ingresado antes. Sus bajas y postura se recortan al rango. Las ejecuciones y pesadas usan la fecha y galpón del hecho. Las actividades corresponden a la revisión vigente y a la programación que se solapa con el rango; las condicionales/sin fecha y las recurrencias vigentes se incluyen mientras el lote estuvo presente. No se expanden las recurrencias en ocurrencias inventadas. `plan_id`, `plan_revision` y `plan` identifican el plan vigente del lote y el nombre actual de su manual, incluso en filas de hechos anteriores; no representan una reconstrucción del manual pasado.
+
+Los movimientos conservan fecha, tipo, origen, destino, aves y motivo. Se muestran por cada lote afectado para que filtrar cualquiera de ellos no pierda el fraccionamiento. Se excluyen las compensaciones y sus originales revertidos. Por eso no hay una métrica que sume indiscriminadamente aves del movimiento: `record_count` cuenta filas y `flock_count` lotes distintos. El detalle permite consultar las cantidades de cada movimiento.
+
+Se admiten filtros por `section`, `flock_id`, `poultry_house_id`, `production_unit_id` y `plan_id`; selección de columnas y agrupaciones por sección, lote, galpón o períodos. En Lotes/Plan el alojamiento es actual; en hechos es histórico cuando consta. Se requieren todos los permisos listados en el catálogo. En sesiones PIN, los componentes se filtran por UP y un movimiento que involucra otra UP se excluye completo. Se reutilizan XLSX, PDF e instantánea web existentes, con una tabla que distingue secciones. No se agregan hojas separadas ni se cambia aún el motor a configuraciones arbitrarias de varias fuentes. No hay migraciones ni dependencias nuevas.
+
+Verificación inicial del 17/11/2026: pasaron 61 pruebas de Reportes con 488 aserciones en PostgreSQL de testing. Las cinco pruebas nuevas cubren carga repetible sin datos operativos, conservación de personalizaciones, columnas completas de Repartos, rango relativo y fin de mes en hora local, actualización de configuraciones, rango congelado antes del worker, las cinco secciones de Manejos sin multiplicación y XLSX real, permisos e aislamiento de filas/opciones/agregados con sesión PIN real. Se ejecutó el seeder en el entorno local y se comprobaron las tres filas con `last_month` y fechas nulas. El catálogo y OpenAPI se verificaron en la regresión; Pint y PHPStan nivel 5 pasaron. La corrección posterior cambia el rango predeterminado a mes calendario anterior completo según la elección del usuario: pasaron las 9 pruebas de configuraciones con 79 aserciones, incluyendo febrero bisiesto, cambio de año, zona local, fechas personalizadas y período congelado antes del worker. Pint y PHPStan pasaron para la corrección.
 
 ## Lotes completos y tipos de manejo
 

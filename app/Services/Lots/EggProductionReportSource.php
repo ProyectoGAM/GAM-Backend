@@ -21,7 +21,7 @@ final class EggProductionReportSource extends SqlReportSource
                 ['label' => 'Postura por día y lote', 'configuration' => ['groupings' => ['day', 'flock', 'poultry_house'], 'metrics' => ['egg_count']]],
                 ['label' => 'Postura por galpón y mes', 'configuration' => ['groupings' => ['month', 'poultry_house'], 'metrics' => ['egg_count']]],
                 ['label' => 'Huevos de toda la vida del galpón', 'configuration' => ['groupings' => ['production_unit', 'poultry_house'], 'metrics' => ['egg_count']]],
-            ]);
+            ], module: ['key' => 'egg_production', 'label' => 'Postura']);
     }
 
     protected function baseQuery(): Builder

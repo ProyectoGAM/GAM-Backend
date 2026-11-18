@@ -17,6 +17,18 @@ abstract class SqlReportSource implements ReportSource
 {
     abstract protected function baseQuery(): Builder;
 
+    /** Reutiliza el detalle filtrado de una fuente dentro de una vista conjunta, sin multiplicar hechos. */
+    public function detailQuery(?ReportQueryData $period = null): Builder
+    {
+        $definition = $this->definition();
+
+        return $this->query(new ReportQueryData(
+            sourceKey: $definition->key, definitionVersion: $definition->definitionVersion,
+            columns: [...array_keys($definition->columns), 'row_key'], filters: [], from: $period?->from, to: $period?->to,
+            sorts: [], groupings: [], metrics: [], page: 1, perPage: 50,
+        ));
+    }
+
     /** Permite recortar períodos calculados antes de aplicar filtros comunes. */
     protected function prepareRecords(ReportQueryData $query): Builder
     {
@@ -38,10 +50,10 @@ abstract class SqlReportSource implements ReportSource
     }
 
     /** @param array<string, array<string, mixed>> $columns @param array<string, array<string, mixed>> $metrics */
-    protected function describe(string $key, string $label, string $description, string $permission, array $columns, array $metrics, array $extraFilters = [], array $standardQueries = [], array $additionalPermissions = [], bool $supportsPublicLinks = true): ReportSourceDefinition
+    protected function describe(string $key, string $label, string $description, string $permission, array $columns, array $metrics, array $extraFilters = [], array $standardQueries = [], array $additionalPermissions = [], bool $supportsPublicLinks = true, bool $supportsDateRange = true, ?array $module = null): ReportSourceDefinition
     {
         $filters = $extraFilters;
-        $groupings = ['day' => ['label' => 'Día', 'type' => 'date'], 'week' => ['label' => 'Semana', 'type' => 'date'], 'month' => ['label' => 'Mes', 'type' => 'date']];
+        $groupings = $supportsDateRange ? ['day' => ['label' => 'Día', 'type' => 'date'], 'week' => ['label' => 'Semana', 'type' => 'date'], 'month' => ['label' => 'Mes', 'type' => 'date']] : [];
         $sorts = [];
         foreach ($columns as $field => $column) {
             $sorts[$field] = ['label' => $column['label'], 'direction' => 'both'];
@@ -60,7 +72,8 @@ abstract class SqlReportSource implements ReportSource
             permission: $permission, columns: $columns, filters: $filters, groupings: $groupings, metrics: $metrics, sorts: $sorts,
             formats: ['xlsx', 'pdf'], limits: ['max_page_size' => 100, 'max_range_days' => 0, 'max_export_rows' => 50000],
             defaultSort: 'date:desc', defaultColumns: array_values(array_filter(array_keys($columns), fn (string $field): bool => ! str_ends_with($field, '_id'))),
-            standardQueries: $standardQueries, additionalPermissions: $additionalPermissions, supportsPublicLinks: $supportsPublicLinks);
+            standardQueries: $standardQueries, additionalPermissions: $additionalPermissions, supportsPublicLinks: $supportsPublicLinks,
+            supportsDateRange: $supportsDateRange, module: $module);
     }
 
     public function preview(ReportQueryData $query): ReportResultData

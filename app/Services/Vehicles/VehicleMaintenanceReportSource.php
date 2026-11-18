@@ -11,14 +11,17 @@ final class VehicleMaintenanceReportSource extends SqlReportSource
 {
     public function definition(): ReportSourceDefinition
     {
-        return $this->describe('vehicles.maintenance', 'Mantenimiento de vehículos', 'Intervenciones preventivas y correctivas con su costo y estado.', 'can_view_vehicle_maintenance', [
+        return $this->describe('vehicles.maintenance', 'Mantenimiento de vehículos', 'Historial de intervenciones. El gasto total suma sólo las completadas y separa monedas.', 'can_view_vehicle_maintenance', [
             'date' => ['label' => 'Fecha de intervención', 'type' => 'datetime'], 'vehicle_id' => ['label' => 'Vehículo', 'type' => 'string'],
             'vehicle' => ['label' => 'Matrícula', 'type' => 'string'], 'type' => ['label' => 'Tipo', 'type' => 'string'],
             'status' => ['label' => 'Estado', 'type' => 'string'], 'description' => ['label' => 'Descripción', 'type' => 'string'],
             'workshop' => ['label' => 'Taller', 'type' => 'string'], 'completed_at' => ['label' => 'Completado', 'type' => 'datetime'],
-            'cost_amount' => ['label' => 'Costo', 'type' => 'money', 'unit' => 'UYU'], 'cost_currency' => ['label' => 'Moneda', 'type' => 'string'],
+            'cost_amount' => ['label' => 'Costo', 'type' => 'money', 'unit' => 'cost_currency'], 'cost_currency' => ['label' => 'Moneda', 'type' => 'string'],
             'immobilizes_vehicle' => ['label' => 'Inmoviliza', 'type' => 'string'],
-        ], ['maintenance_count' => ['label' => 'Intervenciones', 'type' => 'quantity', 'unit' => 'intervenciones'], 'cost_total' => ['label' => 'Costo total', 'type' => 'money', 'unit' => 'UYU']], additionalPermissions: ['can_view_vehicle_maintenance']);
+        ], ['maintenance_count' => ['label' => 'Intervenciones', 'type' => 'quantity', 'unit' => 'intervenciones'], 'cost_total' => ['label' => 'Gasto completado', 'type' => 'money', 'unit' => 'cost_currency']],
+            extraFilters: ['status' => ['label' => 'Estado', 'type' => 'enum', 'operators' => ['eq', 'in'], 'options' => ['planned', 'in_progress', 'completed', 'cancelled']]],
+            standardQueries: [['label' => 'Gastos completados por mes', 'configuration' => ['filters' => [['field' => 'status', 'operator' => 'eq', 'value' => 'completed']], 'groupings' => ['month', 'vehicle'], 'metrics' => ['cost_total']]]],
+            additionalPermissions: ['can_view_vehicle_maintenance'], module: ['key' => 'expenses', 'label' => 'Gastos']);
     }
 
     protected function dimensionKeys(): array
@@ -34,6 +37,6 @@ final class VehicleMaintenanceReportSource extends SqlReportSource
 
     protected function metricExpressions(): array
     {
-        return ['maintenance_count' => 'COUNT(*)', 'cost_total' => 'SUM(cost_amount)'];
+        return ['maintenance_count' => 'COUNT(*)', 'cost_total' => "SUM(CASE WHEN status = 'completed' THEN cost_amount ELSE 0 END)"];
     }
 }

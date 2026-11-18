@@ -114,6 +114,21 @@ paths:
         cuenta jornadas de lotes. Postura requiere can_view_egg_collections, publica quantity en huevos y egg_count.
         Ambas permiten filtrar quantity; Alimentación agrega feed_recipe_id y mode.
         management.feed-supply sigue disponible como Alimentación histórica con sus configuraciones existentes.
+        management.overview reúne Lotes, Plan de manejo vigente, Manejos realizados, Pesadas y Movimientos
+        y fraccionamientos como filas independientes identificadas por section. Permite filtrar por sección,
+        lote, galpón, UP y plan. Requiere todos los permisos de sus componentes. Los movimientos revertidos
+        se excluyen y un traslado aparece una vez por lote afectado, sin sumar sus aves entre secciones.
+        date_preset=last_month resuelve el mes calendario anterior completo en America/Montevideo cuando from/to
+        son nulos. Las fechas explícitas tienen prioridad en consultas y se congelan al solicitar una exportación.
+        El catálogo incorpora lots.mortality, lots.medications, accounts.movements,
+        inventory.feed-manufacturing, inventory.feed-balances y expenses.poultry-house-maintenance.
+        Mortandad y Medicación se agrupan en Lotes. Los mantenimientos de galpones y vehicles.maintenance
+        se agrupan en Gastos mediante module.key/module.label, conservando las claves anteriores.
+        Los importes con unidad dinámica incorporan su moneda en detalle y agregados para no mezclar monedas.
+        La cuenta completa incluye movimientos independientes y compensaciones; su saldo actual no se agrega.
+        No admite sesiones PIN ni enlaces públicos. Stock de alimento representa saldos actuales y rechaza fechas.
+        Elaboraciones conserva canceladas en el historial pero sólo suma producción no cancelada.
+        El gasto de vehículos suma sólo mantenimientos completados; los de galpón excluyen cancelaciones.
       parameters:
         - $ref: '#/components/parameters/Source'
       requestBody:
@@ -433,9 +448,15 @@ components:
   schemas:
     ReportSource:
       type: object
-      required: [key, definition_version, label, description, columns, filters, groupings, metrics, sorts, formats, limits]
+      required: [key, module, definition_version, label, description, columns, filters, groupings, metrics, sorts, formats, limits]
       properties:
         key: { type: string }
+        module:
+          type: object
+          required: [key, label]
+          properties:
+            key: { type: string, description: Identificador estable del módulo para agrupar las fuentes. }
+            label: { type: string, description: Nombre del módulo en español. }
         definition_version: { type: string }
         label: { type: string }
         description: { type: string }
@@ -489,6 +510,13 @@ components:
               value: {}
         from: { type: [string, 'null'], format: date }
         to: { type: [string, 'null'], format: date }
+        date_preset:
+          type: [string, 'null']
+          enum: [last_month, null]
+          description: >-
+            Mes calendario anterior completo en America/Montevideo, desde el día 1 hasta el último día
+            inclusive. Sólo resuelve fechas si from y to son nulos. En configuraciones guardadas
+            conserva ambos nulos para recalcular al abrir. Para guardar fechas fijas, omitir este campo.
         sorts:
           type: array
           maxItems: 10
@@ -641,6 +669,9 @@ components:
         source_key: { type: string }
         definition_version: { type: string }
         configuration: { $ref: '#/components/schemas/ReportQuery' }
+        resolved_configuration:
+          allOf: [{ $ref: '#/components/schemas/ReportQuery' }]
+          description: Configuración con fechas concretas para inicializar la vista. configuration conserva la plantilla relativa.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     ReportExport:

@@ -23,6 +23,7 @@ final readonly class ReportQueryData
         public array $metrics,
         public int $page,
         public int $perPage,
+        public ?string $datePreset = null,
     ) {}
 
     /**
@@ -33,6 +34,7 @@ final readonly class ReportQueryData
     public function toArray(): array
     {
         return [
+            ...($this->datePreset === null ? [] : ['date_preset' => $this->datePreset]),
             'source_key' => $this->sourceKey,
             'definition_version' => $this->definitionVersion,
             'columns' => $this->columns,
@@ -58,5 +60,11 @@ final readonly class ReportQueryData
             'page' => $this->page,
             'per_page' => $this->perPage,
         ];
+    }
+
+    /** Conserva el rango relativo sin fijarlo al día en que se guardó la configuración. @return array<string, mixed> */
+    public function toPresetArray(): array
+    {
+        return $this->datePreset === null ? $this->toArray() : [...$this->toArray(), 'from' => null, 'to' => null];
     }
 }

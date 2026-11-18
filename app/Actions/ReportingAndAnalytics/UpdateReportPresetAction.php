@@ -30,10 +30,10 @@ final readonly class UpdateReportPresetAction
         try {
             return DB::transaction(function () use ($preset, $attributes, $query): ReportPreset {
                 $preset->update([
-                    'name' => $attributes['name'] ?? $preset->name,
+                    'name' => $attributes['name'] ?? $preset->getAttribute('name'),
                     'source_key' => $query->sourceKey,
                     'definition_version' => $query->definitionVersion,
-                    'configuration' => $query->toArray(),
+                    'configuration' => $query->toPresetArray(),
                 ]);
 
                 return $preset->refresh();

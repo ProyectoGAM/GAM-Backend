@@ -127,19 +127,19 @@ final class BusinessReportSourcesTest extends TestCase
         // Preparación: habilita los módulos previos a la incorporación de vehículos.
         $actor = $this->actor(['can_view_reports', 'can_view_inventory', 'can_view_flocks', 'can_view_weighings', 'can_view_egg_collections', 'can_view_management_plans', 'can_view_delivery_history', 'can_view_egg_stock']);
         Sanctum::actingAs($actor);
-        // Consulta: conserva las diez fuentes previas y rechaza las fuentes de vehículos sin permiso.
-        $this->getJson('/api/v1/reportes/fuentes')->assertOk()->assertJsonCount(10, 'data');
+        // Consulta: publica las once fuentes autorizadas y rechaza las fuentes de vehículos sin permiso.
+        $this->getJson('/api/v1/reportes/fuentes')->assertOk()->assertJsonCount(11, 'data');
         foreach (['vehicles.usage', 'vehicles.fuel', 'vehicles.maintenance', 'deliveries.collections', 'lots.summary'] as $sourceKey) {
             $this->postJson('/api/v1/reportes/'.$sourceKey.'/previsualizaciones')->assertForbidden();
         }
 
         // Preparación: concede los permisos funcionales del resto del catálogo.
-        foreach (['can_view_vehicles', 'can_view_vehicle_fuel', 'can_view_vehicle_maintenance', 'can_view_customer_accounts', 'can_view_mortality', 'can_view_flock_feeding'] as $permission) {
+        foreach (['can_view_vehicles', 'can_view_vehicle_fuel', 'can_view_vehicle_maintenance', 'can_view_customer_accounts', 'can_view_mortality', 'can_view_flock_feeding', 'can_view_feed_stock', 'can_view_poultry_houses'] as $permission) {
             $actor->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate($permission, 'web'));
         }
 
-        // Acción: consulta las dieciséis fuentes autorizadas y ejecuta sus consultas estándar.
-        $this->getJson('/api/v1/reportes/fuentes')->assertOk()->assertJsonCount(16, 'data');
+        // Acción: consulta las veintitrés fuentes autorizadas y ejecuta sus consultas estándar.
+        $this->getJson('/api/v1/reportes/fuentes')->assertOk()->assertJsonCount(23, 'data');
         foreach (app(ReportSourceRegistry::class)->all() as $source) {
             $this->postJson('/api/v1/reportes/'.$source->definition()->key.'/previsualizaciones')->assertOk();
             foreach ($source->definition()->standardQueries as $standard) {

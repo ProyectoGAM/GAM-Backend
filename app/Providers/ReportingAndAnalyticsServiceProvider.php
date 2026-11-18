@@ -6,18 +6,25 @@ use App\Models\ReportingAndAnalytics\ReportExport;
 use App\Models\ReportingAndAnalytics\ReportPreset;
 use App\Policies\ReportingAndAnalytics\ReportExportPolicy;
 use App\Policies\ReportingAndAnalytics\ReportPresetPolicy;
+use App\Services\CustomersAndAccounts\CustomerAccountReportSource;
 use App\Services\Deliveries\DeliveriesReportSource;
 use App\Services\Deliveries\DeliveryCollectionsReportSource;
+use App\Services\FarmStructure\MaintenanceReportSource;
 use App\Services\Inventory\EggOutflowReportSource;
+use App\Services\Inventory\FeedBalancesReportSource;
 use App\Services\Inventory\FeedConsumptionReportSource;
+use App\Services\Inventory\FeedManufacturingReportSource;
 use App\Services\Inventory\InventoryMovementsReportSource;
 use App\Services\Inventory\InventoryStockBalancesReportSource;
 use App\Services\Lots\EggProductionReportSource;
 use App\Services\Lots\FlockAdmissionsReportSource;
 use App\Services\Lots\FlockSummaryReportSource;
+use App\Services\Lots\MedicationReportSource;
+use App\Services\Lots\MortalityReportSource;
 use App\Services\Lots\WeighingMeasurementsReportSource;
 use App\Services\ManagementPlans\FeedSupplyReportSource;
 use App\Services\ManagementPlans\ManagementExecutionsReportSource;
+use App\Services\ManagementPlans\ManagementOverviewReportSource;
 use App\Services\ManagementPlans\VaccinationReportSource;
 use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
 use App\Services\Vehicles\VehicleFuelReportSource;
@@ -35,11 +42,18 @@ final class ReportingAndAnalyticsServiceProvider extends ServiceProvider
                 new InventoryStockBalancesReportSource,
                 new InventoryMovementsReportSource,
                 $this->app->make(EggProductionReportSource::class),
+                $this->app->make(MortalityReportSource::class),
+                $this->app->make(MedicationReportSource::class),
+                $this->app->make(CustomerAccountReportSource::class),
+                $this->app->make(FeedManufacturingReportSource::class),
+                $this->app->make(FeedBalancesReportSource::class),
+                $this->app->make(MaintenanceReportSource::class),
                 $this->app->make(FlockAdmissionsReportSource::class),
                 $this->app->make(FlockSummaryReportSource::class),
                 $this->app->make(WeighingMeasurementsReportSource::class),
                 $this->app->make(VaccinationReportSource::class),
                 $this->app->make(ManagementExecutionsReportSource::class),
+                $this->app->make(ManagementOverviewReportSource::class),
                 $this->app->make(FeedSupplyReportSource::class),
                 $this->app->make(FeedConsumptionReportSource::class),
                 $this->app->make(DeliveriesReportSource::class),

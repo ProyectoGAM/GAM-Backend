@@ -27,6 +27,7 @@ final class PreviewReportRequest extends FormRequest
             'filters.*.operator' => ['required', 'string', 'max:20'],
             'filters.*.value' => ['present'],
             'from' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+            'date_preset' => ['sometimes', 'nullable', 'in:last_month'],
             'to' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
             'sorts' => ['sometimes', 'array', 'max:10'],
             'sorts.*' => ['array'],

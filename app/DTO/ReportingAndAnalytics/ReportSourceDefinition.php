@@ -12,6 +12,7 @@ final readonly class ReportSourceDefinition
      * @param  array<string, array{label: string, direction: string}>  $sorts
      * @param  list<string>  $formats
      * @param  array{max_page_size: int, max_range_days: int, max_export_rows: int}  $limits
+     * @param  array{key: string, label: string}|null  $module
      */
     public function __construct(
         public string $key,
@@ -33,6 +34,7 @@ final readonly class ReportSourceDefinition
         public bool $supportsDateRange = true,
         public array $additionalPermissions = [],
         public bool $supportsPublicLinks = true,
+        public ?array $module = null,
     ) {}
 
     /**
@@ -44,6 +46,7 @@ final readonly class ReportSourceDefinition
     {
         return [
             'key' => $this->key,
+            'module' => $this->module ?? $this->defaultModule(),
             'definition_version' => $this->definitionVersion,
             'label' => $this->label,
             'description' => $this->description,
@@ -60,5 +63,18 @@ final readonly class ReportSourceDefinition
             'standard_queries' => $this->standardQueries,
             'supports_date_range' => $this->supportsDateRange,
         ];
+    }
+
+    /** @return array{key: string, label: string} */
+    private function defaultModule(): array
+    {
+        $key = explode('.', $this->key, 2)[0];
+        $label = match ($key) {
+            'inventory' => 'Inventario', 'lots' => 'Lotes', 'management' => 'Manejo',
+            'deliveries' => 'Repartos', 'vehicles' => 'Vehículos', 'commerce' => 'Ventas y donaciones',
+            'accounts' => 'Cuenta corriente', 'expenses' => 'Gastos', default => $key,
+        };
+
+        return ['key' => $key, 'label' => $label];
     }
 }
