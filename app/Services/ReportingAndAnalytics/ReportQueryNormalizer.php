@@ -34,14 +34,22 @@ final readonly class ReportQueryNormalizer
 
         $filters = $this->normalizeFilters($input['filters'] ?? [], $definition);
         foreach ($columns as $column) {
-            if (($definition->columns[$column]['unit'] ?? null) === 'base_unit' && array_key_exists('base_unit', $definition->columns)
-                && ! in_array('base_unit', $columns, true)) {
-                $columns[] = 'base_unit';
-                break;
+            $unit = $definition->columns[$column]['unit'] ?? null;
+            if ($unit !== null && array_key_exists($unit, $definition->columns) && ! in_array($unit, $columns, true)) {
+                $columns[] = $unit;
             }
         }
         $from = $this->normalizeDate($input['from'] ?? null, 'from');
         $to = $this->normalizeDate($input['to'] ?? null, 'to');
+        $datePreset = $input['date_preset'] ?? null;
+        if ($datePreset !== null && $datePreset !== 'last_month') {
+            $this->invalid('date_preset', 'El rango predeterminado debe ser last_month.');
+        }
+        if ($datePreset === 'last_month' && $from === null && $to === null) {
+            $previousMonth = Carbon::now(config('lots.timezone', 'America/Montevideo'))->startOfMonth()->subMonthNoOverflow();
+            $from = $previousMonth->toDateString();
+            $to = $previousMonth->copy()->endOfMonth()->toDateString();
+        }
         $this->assertDateRange($from, $to, $definition);
         if (! $definition->supportsDateRange && ($from !== null || $to !== null)) {
             $this->invalid('from', 'Este reporte representa el estado actual y no admite fechas históricas.');
@@ -57,9 +65,13 @@ final readonly class ReportQueryNormalizer
             $metrics = [$this->defaultMetric($definition)];
         }
 
-        if ($definition->quantityMetricsRequireUnit && $this->hasQuantityMetric($metrics, $definition)
-            && ! in_array('base_unit', $groupings, true) && array_key_exists('base_unit', $definition->groupings)) {
-            $groupings[] = 'base_unit';
+        if ($definition->quantityMetricsRequireUnit) {
+            foreach ($metrics as $metric) {
+                $unit = $definition->metrics[$metric]['unit'] ?? null;
+                if ($unit !== null && array_key_exists($unit, $definition->groupings) && ! in_array($unit, $groupings, true)) {
+                    $groupings[] = $unit;
+                }
+            }
         }
 
         if ($sorts === []) {
@@ -89,13 +101,14 @@ final readonly class ReportQueryNormalizer
             metrics: $metrics,
             page: $page,
             perPage: $perPage,
+            datePreset: $datePreset,
         );
     }
 
     /** @param array<string, mixed> $input */
     private function assertAllowedKeys(array $input): void
     {
-        $allowed = ['columns', 'filters', 'from', 'to', 'sorts', 'sort', 'groupings', 'metrics', 'page', 'per_page'];
+        $allowed = ['columns', 'filters', 'from', 'to', 'date_preset', 'sorts', 'sort', 'groupings', 'metrics', 'page', 'per_page'];
         $unknown = array_values(array_diff(array_keys($input), $allowed));
         if ($unknown !== []) {
             $this->invalid('consulta', 'La consulta contiene claves no permitidas: '.implode(', ', $unknown).'.');
@@ -165,6 +178,8 @@ final readonly class ReportQueryNormalizer
         $valid = match ($definition['type']) {
             'integer' => is_int($value) || (is_string($value) && ctype_digit($value)),
             'boolean' => is_bool($value),
+            'date' => $value !== null && $this->normalizeDate($value, $key) !== null,
+            'number' => is_int($value) || (is_string($value) && preg_match('/^-?[0-9]{1,22}(?:\.[0-9]{1,6})?$/D', $value) === 1),
             'string', 'enum' => is_string($value) && $value !== '' && mb_strlen($value) <= 160,
             default => false,
         };
@@ -298,18 +313,6 @@ final readonly class ReportQueryNormalizer
         }
 
         return ['field' => $field, 'direction' => $direction];
-    }
-
-    /** @param list<string> $metrics */
-    private function hasQuantityMetric(array $metrics, ReportSourceDefinition $definition): bool
-    {
-        foreach ($metrics as $metric) {
-            if (($definition->metrics[$metric]['type'] ?? null) === 'quantity') {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private function defaultMetric(ReportSourceDefinition $definition): string

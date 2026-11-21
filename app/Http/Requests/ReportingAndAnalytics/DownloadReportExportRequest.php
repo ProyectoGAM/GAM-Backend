@@ -2,14 +2,19 @@
 
 namespace App\Http\Requests\ReportingAndAnalytics;
 
+use App\Models\ReportingAndAnalytics\ReportExport;
+use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
 use Illuminate\Foundation\Http\FormRequest;
 
 final class DownloadReportExportRequest extends FormRequest
 {
-    public function authorize(): bool
+    public function authorize(ReportSourceRegistry $registry): bool
     {
         if ($this->boolean('share') && $this->hasValidSignature()) {
-            return true;
+            $export = $this->route('reportExport');
+
+            return $export instanceof ReportExport
+                && $registry->get($export->source_key)->definition()->supportsPublicLinks;
         }
 
         return ($this->user() ?? auth('sanctum')->user())?->can('download', $this->route('reportExport')) ?? false;

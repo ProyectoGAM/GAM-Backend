@@ -98,15 +98,17 @@ final readonly class FeedIngredientStocks
      * @param  array<int, int>  $quantities
      * @param  Collection<int, StockLocation>  $locations
      * @param  Collection<int, StockBalance>  $balances
-     * @return list<array{product_id:int, stock_location_id:int, poultry_house_id:int, plant_name:string, quantity_grams:string, balance_before:string, balance_after:string}>
+     * @return array{distribution:list<array{product_id:int, stock_location_id:int, poultry_house_id:int, plant_name:string, quantity_grams:string, balance_before:string, balance_after:string}>, shortages:array<int, string>}
      */
     public function distribute(array $quantities, int $selectedHouseId, Collection $locations, Collection $balances): array
     {
         $distribution = [];
+        $shortages = [];
         $houses = PoultryHouse::query()->whereIn('id', $locations->pluck('poultry_house_id'))->get()->keyBy('id');
+        $selectedLocationId = (int) $locations->firstWhere('poultry_house_id', $selectedHouseId)->id;
         foreach ($quantities as $productId => $required) {
-            $eligible = $balances->filter(fn (StockBalance $balance): bool => (int) $balance->product_id === $productId
-                && BigDecimal::of((string) $balance->on_hand_quantity)->compareTo(0) > 0)->all();
+            $productBalances = $balances->where('product_id', $productId)->keyBy('stock_location_id');
+            $eligible = $productBalances->filter(fn (StockBalance $balance): bool => BigDecimal::of((string) $balance->on_hand_quantity)->isPositive())->all();
             usort($eligible, function (StockBalance $left, StockBalance $right) use ($selectedHouseId, $locations): int {
                 $leftHouse = (int) $locations->get($left->stock_location_id)->poultry_house_id;
                 $rightHouse = (int) $locations->get($right->stock_location_id)->poultry_house_id;
@@ -115,6 +117,7 @@ final readonly class FeedIngredientStocks
                 return $priority ?: (BigDecimal::of((string) $left->on_hand_quantity)->compareTo((string) $right->on_hand_quantity) ?: ($leftHouse <=> $rightHouse));
             });
             $remaining = BigDecimal::of($required);
+            $lines = [];
             foreach ($eligible as $balance) {
                 if ($remaining->isZero()) {
                     break;
@@ -122,7 +125,7 @@ final readonly class FeedIngredientStocks
                 $available = BigDecimal::of((string) $balance->on_hand_quantity);
                 $taken = $available->compareTo($remaining) < 0 ? $available : $remaining;
                 $houseId = (int) $locations->get($balance->stock_location_id)->poultry_house_id;
-                $distribution[] = [
+                $lines[$balance->stock_location_id] = [
                     'product_id' => $productId, 'stock_location_id' => (int) $balance->stock_location_id,
                     'poultry_house_id' => $houseId, 'plant_name' => $houses->get($houseId)->name,
                     'quantity_grams' => (string) $taken->toScale(6),
@@ -132,10 +135,19 @@ final readonly class FeedIngredientStocks
                 $remaining = $remaining->minus($taken);
             }
             if (! $remaining->isZero()) {
-                throw new FeedRecipeConflict('El stock elegible del ingrediente #'.$productId.' no alcanza para elaborar.');
+                $shortages[$productId] = (string) $remaining->toScale(6);
+                $before = BigDecimal::of((string) $productBalances->get($selectedLocationId)->on_hand_quantity)->toScale(6);
+                $deduction = BigDecimal::of($lines[$selectedLocationId]['quantity_grams'] ?? '0')->plus($remaining)->toScale(6);
+                $lines[$selectedLocationId] = [
+                    'product_id' => $productId, 'stock_location_id' => $selectedLocationId,
+                    'poultry_house_id' => $selectedHouseId, 'plant_name' => $houses->get($selectedHouseId)->name,
+                    'quantity_grams' => (string) $deduction, 'balance_before' => (string) $before,
+                    'balance_after' => (string) $before->minus($deduction),
+                ];
             }
+            $distribution = [...$distribution, ...array_values($lines)];
         }
 
-        return $distribution;
+        return compact('distribution', 'shortages');
     }
 }

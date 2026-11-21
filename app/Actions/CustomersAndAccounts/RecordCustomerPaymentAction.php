@@ -21,7 +21,7 @@ final readonly class RecordCustomerPaymentAction
     public function execute(Customer $customer, User $actor, array $data, string $key, ?Delivery $delivery = null): CustomerOperation
     {
         $data = Validator::make($data, [
-            'amount' => ['required', 'string'], 'payment_method' => ['required', 'in:cash,transfer,other'],
+            'amount' => ['required', 'string'], 'payment_method' => ['required', 'in:cash,transfer,check,other'],
             'payment_reference' => ['sometimes', 'nullable', 'string', 'max:240'],
             'reason' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'client_event_id' => ['sometimes', 'uuid'],

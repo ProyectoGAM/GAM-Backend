@@ -6,7 +6,8 @@ info:
     Consulta paginada, configuraciones privadas, exportación completa e instantáneas HTML.
     Las rutas inglesas anteriores continúan como aliases compatibles. Los reportes de negocio
     abarcan Reparto, Manejo, Lotes, Vacunación, Pesadas, Alimentación y Postura.
-    Alimentación distingue cantidad registrada de pauta diaria estimada. No se fabrican cobros,
+    Alimentación consulta consumos diarios por receta con sus últimas rectificaciones.
+    Alimentación histórica conserva suministros antiguos y su pauta estimada por separado. No se fabrican cobros,
     deudas, tamaños ni datos históricos ausentes. Los permisos de la fuente se revalidan.
     Las sesiones PIN sólo consultan su UP: opciones y agregados se filtran antes de calcularse.
     Las fuentes sin alcance UP demostrable se deniegan. Configuraciones y exportaciones conservan
@@ -90,6 +91,44 @@ paths:
       tags: [Reportes]
       summary: Previsualiza una consulta paginada
       operationId: previsualizarReporte
+      description: >-
+        deliveries.collections combina las entregas confirmadas, los totales del reparto y la cuenta corriente.
+        Requiere can_view_delivery_history y can_view_customer_accounts además del permiso de Reportes.
+        Admite filtros y agrupaciones publicados por la fuente. La deuda es el saldo vigente al consultar,
+        mientras que el cobro y el importe pendiente corresponden al momento de la entrega.
+        lots.summary devuelve una fila por lote con galpón actual, fecha de ingreso, raza,
+        capacidad física, aves actuales, mortandad y postura del período y estado actual.
+        Requiere can_view_flocks, can_view_mortality y can_view_egg_collections.
+        Su rango from/to filtra los hechos e incluye lotes presentes durante el período.
+        entry_date permite filtrar el ingreso por separado. Sus agrupaciones temporales se refieren al ingreso.
+        management.executions incluye management_type como columna, filtro y agrupación.
+        management.executions y management.vaccinations permiten seleccionar, filtrar y agrupar responsible,
+        con el nombre conservado al realizar la aplicación. Un responsable histórico desconocido es nulo.
+        lots.egg-production (Postura) y management.feeding (Alimentación) son fuentes independientes,
+        compatibles en from/to, production_unit_id, poultry_house_id, flock_id y agrupaciones day/week/month,
+        production_unit, poultry_house y flock. from/to incluye ambos días en America/Montevideo.
+        Alimentación requiere can_view_flock_feeding, publica feed_recipe_id/feed_recipe, quantity en kg,
+        mode (Automático o Manual) y notes de la última rectificación. Usa una fila por lote y jornada
+        con la receta y cantidad efectivas, incluso cero; el galpón es el histórico al cierre del día.
+        Sin historia de alojamiento comprobable el galpón es nulo. feed_quantity suma kg y consumption_count
+        cuenta jornadas de lotes. Postura requiere can_view_egg_collections, publica quantity en huevos y egg_count.
+        Ambas permiten filtrar quantity; Alimentación agrega feed_recipe_id y mode.
+        management.feed-supply sigue disponible como Alimentación histórica con sus configuraciones existentes.
+        management.overview reúne Lotes, Plan de manejo vigente, Manejos realizados, Pesadas y Movimientos
+        y fraccionamientos como filas independientes identificadas por section. Permite filtrar por sección,
+        lote, galpón, UP y plan. Requiere todos los permisos de sus componentes. Los movimientos revertidos
+        se excluyen y un traslado aparece una vez por lote afectado, sin sumar sus aves entre secciones.
+        date_preset=last_month resuelve el mes calendario anterior completo en America/Montevideo cuando from/to
+        son nulos. Las fechas explícitas tienen prioridad en consultas y se congelan al solicitar una exportación.
+        El catálogo incorpora lots.mortality, lots.medications, accounts.movements,
+        inventory.feed-manufacturing, inventory.feed-balances y expenses.poultry-house-maintenance.
+        Mortandad y Medicación se agrupan en Lotes. Los mantenimientos de galpones y vehicles.maintenance
+        se agrupan en Gastos mediante module.key/module.label, conservando las claves anteriores.
+        Los importes con unidad dinámica incorporan su moneda en detalle y agregados para no mezclar monedas.
+        La cuenta completa incluye movimientos independientes y compensaciones; su saldo actual no se agrega.
+        No admite sesiones PIN ni enlaces públicos. Stock de alimento representa saldos actuales y rechaza fechas.
+        Elaboraciones conserva canceladas en el historial pero sólo suma producción no cancelada.
+        El gasto de vehículos suma sólo mantenimientos completados; los de galpón excluyen cancelaciones.
       parameters:
         - $ref: '#/components/parameters/Source'
       requestBody:
@@ -193,6 +232,7 @@ paths:
       tags: [Exportaciones]
       summary: Solicita una exportación asíncrona
       operationId: solicitarExportacionDeReporte
+      description: La exportación de deliveries.collections congela el saldo vigente y los demás datos al generarse. La descarga requiere sesión y permisos del reporte y de sus módulos de origen.
       parameters:
         - $ref: '#/components/parameters/Source'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -296,7 +336,9 @@ paths:
     post:
       tags: [Exportaciones]
       summary: Crea un enlace temporal firmado
-      description: 'La duración se expresa en minutos, hasta 30 días. Conserva el archivo y su instantánea al menos hasta el vencimiento del nuevo enlace. No recupera exportaciones ya expiradas ni acorta enlaces anteriores.'
+      description: >-
+        La duración se expresa en minutos, hasta 30 días. Conserva el archivo y su instantánea al menos hasta el vencimiento del nuevo enlace.
+        La fuente deliveries.collections usa descarga privada.
       operationId: crearEnlaceTemporalDeReporte
       parameters:
         - $ref: '#/components/parameters/ReportExport'
@@ -406,9 +448,15 @@ components:
   schemas:
     ReportSource:
       type: object
-      required: [key, definition_version, label, description, columns, filters, groupings, metrics, sorts, formats, limits]
+      required: [key, module, definition_version, label, description, columns, filters, groupings, metrics, sorts, formats, limits]
       properties:
         key: { type: string }
+        module:
+          type: object
+          required: [key, label]
+          properties:
+            key: { type: string, description: Identificador estable del módulo para agrupar las fuentes. }
+            label: { type: string, description: Nombre del módulo en español. }
         definition_version: { type: string }
         label: { type: string }
         description: { type: string }
@@ -458,10 +506,17 @@ components:
             required: [field, operator, value]
             properties:
               field: { type: string }
-              operator: { type: string, enum: [eq, neq, in, not_in] }
+              operator: { type: string, enum: [eq, neq, in, not_in, gt, gte, lt, lte, contains] }
               value: {}
         from: { type: [string, 'null'], format: date }
         to: { type: [string, 'null'], format: date }
+        date_preset:
+          type: [string, 'null']
+          enum: [last_month, null]
+          description: >-
+            Mes calendario anterior completo en America/Montevideo, desde el día 1 hasta el último día
+            inclusive. Sólo resuelve fechas si from y to son nulos. En configuraciones guardadas
+            conserva ambos nulos para recalcular al abrir. Para guardar fechas fijas, omitir este campo.
         sorts:
           type: array
           maxItems: 10
@@ -558,7 +613,7 @@ components:
             required: [field, operator, value]
             properties:
               field: { type: string }
-              operator: { type: string, enum: [eq, neq, in, not_in] }
+              operator: { type: string, enum: [eq, neq, in, not_in, gt, gte, lt, lte, contains] }
               value: {}
         from: { type: string, format: date }
         to: { type: string, format: date }
@@ -614,6 +669,9 @@ components:
         source_key: { type: string }
         definition_version: { type: string }
         configuration: { $ref: '#/components/schemas/ReportQuery' }
+        resolved_configuration:
+          allOf: [{ $ref: '#/components/schemas/ReportQuery' }]
+          description: Configuración con fechas concretas para inicializar la vista. configuration conserva la plantilla relativa.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     ReportExport:

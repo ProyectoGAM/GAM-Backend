@@ -40,10 +40,13 @@ final class DeliveryPricing
     {
         $definitions = EggPresentation::query()->whereIn('code', array_column($requested, 'unit'))->get()->keyBy('code');
         $prices = [];
+        $defaults = [];
+        $entered = [];
         foreach ($requested as $index => $item) {
             $key = $item['unit'].'|'.$item['eggs_per_unit'];
             $definition = $definitions->get($item['unit']);
-            $price = $item['unit_price'] ?? ($definition?->eggs_per_unit === (int) $item['eggs_per_unit'] ? $definition->default_unit_price : null);
+            $default = $definition?->eggs_per_unit === (int) $item['eggs_per_unit'] ? $definition->default_unit_price : null;
+            $price = $item['unit_price'] ?? $default;
             if ($price === null) {
                 throw ValidationException::withMessages(["items.$index.unit_price" => 'Indicá el precio en pesos enteros para esta entrega; la presentación no tiene un precio predeterminado compatible.']);
             }
@@ -51,16 +54,20 @@ final class DeliveryPricing
                 throw ValidationException::withMessages(["items.$index.unit_price" => 'Cada presentación debe tener un único precio unitario en esta entrega.']);
             }
             $prices[$key] = (int) $price;
+            $defaults[$key] = $default;
+            $entered[$key] = isset($item['unit_price']) ? (int) $item['unit_price'] : ($entered[$key] ?? null);
         }
 
         $context = new CustomContext(3);
         $total = BrickMoney::of(0, Money::CURRENCY, $context);
         $items = [];
         foreach ($allocated as $item) {
-            $price = $prices[$item['unit'].'|'.$item['eggs_per_unit']];
+            $key = $item['unit'].'|'.$item['eggs_per_unit'];
+            $price = $prices[$key];
             $line = BrickMoney::of($price, Money::CURRENCY, $context)->multipliedBy($item['amount']);
             $total = $total->plus($line);
-            $items[] = [...$item, 'unit_price' => $price, 'line_amount' => (string) $line->getAmount()];
+            $items[] = [...$item, 'unit_price' => $price, 'default_unit_price' => $defaults[$key],
+                'entered_unit_price' => $entered[$key], 'line_amount' => (string) $line->getAmount()];
         }
 
         return ['items' => $items, 'total_amount' => (string) $total->getAmount()];

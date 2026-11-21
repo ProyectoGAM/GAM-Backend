@@ -6,6 +6,7 @@ use App\Models\Lots\Flock;
 use App\Models\ManagementPlans\ManagementExecutionCorrection;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Str;
 
 /**
  * @extends Factory<ManagementExecutionCorrection>
@@ -22,7 +23,7 @@ class ManagementExecutionCorrectionFactory extends Factory
         return [
             'flock_id' => Flock::factory(),
             'original_type' => 'manual_practice',
-            'original_public_id' => (string) fake()->ulid(),
+            'original_public_id' => (string) Str::ulid(),
             'original_operation_id' => (string) fake()->uuid(),
             'correction_reason' => fake()->sentence(),
             'original_snapshot' => ['title' => 'Despique'],

@@ -16,7 +16,7 @@ final readonly class DeliveryFinancialSummary
         $zero = CustomerAmounts::parse('0.000', allowZero: true);
         $paid = $zero;
         $delta = $zero;
-        $methods = ['cash' => $zero, 'transfer' => $zero, 'other' => $zero];
+        $methods = ['cash' => $zero, 'transfer' => $zero, 'check' => $zero, 'other' => $zero];
         $customers = [];
         foreach ($delivery->accountMovements->sortBy('id') as $movement) {
             /** @var CustomerAccountMovement $movement */

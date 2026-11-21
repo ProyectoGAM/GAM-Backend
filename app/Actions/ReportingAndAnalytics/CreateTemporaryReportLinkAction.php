@@ -8,18 +8,20 @@ use App\Exceptions\ReportingAndAnalytics\ReportConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\ReportingAndAnalytics\ReportExport;
 use App\Models\User;
+use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 
 final readonly class CreateTemporaryReportLinkAction
 {
-    public function __construct(private AuditRecorder $auditRecorder) {}
+    public function __construct(private AuditRecorder $auditRecorder, private ReportSourceRegistry $registry) {}
 
     /** @return array{url: string, expires_at: string, file_expires_at: string|null} */
     public function execute(ReportExport $export, int $expiresInMinutes, User $actor): array
     {
         abort_if($actor->usesDevicePin() || $export->production_unit_id !== null, 403);
+        abort_unless($this->registry->canShare($actor, $this->registry->get($export->source_key)), 403);
 
         return DB::transaction(function () use ($export, $actor, $expiresInMinutes): array {
             $export = ReportExport::query()->lockForUpdate()->findOrFail($export->getKey());

@@ -69,7 +69,8 @@ final readonly class ReportSourceRegistry
 
     public function canShare(User $user, ReportSource $source): bool
     {
-        return ! $user->usesDevicePin() && $this->canRead($user, $source) && $this->allows($user, 'can_share_reports');
+        return $source->definition()->supportsPublicLinks && ! $user->usesDevicePin()
+            && $this->canRead($user, $source) && $this->allows($user, 'can_share_reports');
     }
 
     private function allowsSource(User $user, ReportSource $source): bool

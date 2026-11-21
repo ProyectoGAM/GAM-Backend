@@ -17,10 +17,27 @@ abstract class SqlReportSource implements ReportSource
 {
     abstract protected function baseQuery(): Builder;
 
+    /** Reutiliza el detalle filtrado de una fuente dentro de una vista conjunta, sin multiplicar hechos. */
+    public function detailQuery(?ReportQueryData $period = null): Builder
+    {
+        $definition = $this->definition();
+
+        return $this->query(new ReportQueryData(
+            sourceKey: $definition->key, definitionVersion: $definition->definitionVersion,
+            columns: [...array_keys($definition->columns), 'row_key'], filters: [], from: $period?->from, to: $period?->to,
+            sorts: [], groupings: [], metrics: [], page: 1, perPage: 50,
+        ));
+    }
+
     /** Permite recortar períodos calculados antes de aplicar filtros comunes. */
     protected function prepareRecords(ReportQueryData $query): Builder
     {
         return $this->baseQuery();
+    }
+
+    protected function prepareFilteredRows(Builder $rows, ReportQueryData $query): Builder
+    {
+        return $rows;
     }
 
     /** @return array<string, string> */
@@ -33,10 +50,10 @@ abstract class SqlReportSource implements ReportSource
     }
 
     /** @param array<string, array<string, mixed>> $columns @param array<string, array<string, mixed>> $metrics */
-    protected function describe(string $key, string $label, string $description, string $permission, array $columns, array $metrics, array $extraFilters = [], array $standardQueries = [], array $additionalPermissions = []): ReportSourceDefinition
+    protected function describe(string $key, string $label, string $description, string $permission, array $columns, array $metrics, array $extraFilters = [], array $standardQueries = [], array $additionalPermissions = [], bool $supportsPublicLinks = true, bool $supportsDateRange = true, ?array $module = null): ReportSourceDefinition
     {
         $filters = $extraFilters;
-        $groupings = ['day' => ['label' => 'Día', 'type' => 'date'], 'week' => ['label' => 'Semana', 'type' => 'date'], 'month' => ['label' => 'Mes', 'type' => 'date']];
+        $groupings = $supportsDateRange ? ['day' => ['label' => 'Día', 'type' => 'date'], 'week' => ['label' => 'Semana', 'type' => 'date'], 'month' => ['label' => 'Mes', 'type' => 'date']] : [];
         $sorts = [];
         foreach ($columns as $field => $column) {
             $sorts[$field] = ['label' => $column['label'], 'direction' => 'both'];
@@ -55,24 +72,27 @@ abstract class SqlReportSource implements ReportSource
             permission: $permission, columns: $columns, filters: $filters, groupings: $groupings, metrics: $metrics, sorts: $sorts,
             formats: ['xlsx', 'pdf'], limits: ['max_page_size' => 100, 'max_range_days' => 0, 'max_export_rows' => 50000],
             defaultSort: 'date:desc', defaultColumns: array_values(array_filter(array_keys($columns), fn (string $field): bool => ! str_ends_with($field, '_id'))),
-            standardQueries: $standardQueries, additionalPermissions: $additionalPermissions);
+            standardQueries: $standardQueries, additionalPermissions: $additionalPermissions, supportsPublicLinks: $supportsPublicLinks,
+            supportsDateRange: $supportsDateRange, module: $module);
     }
 
     public function preview(ReportQueryData $query): ReportResultData
     {
         $columns = $this->resultColumns($query);
+        $definition = $this->definition();
         $paginator = $this->query($query)->paginate($query->perPage, ['*'], 'page', $query->page);
 
         return new ReportResultData($query->sourceKey, $query->definitionVersion, $columns,
-            $paginator->getCollection()->map(fn (object $row): array => $this->present($row, $columns))->all(),
+            $paginator->getCollection()->map(fn (object $row): array => $this->present($row, $columns, $definition))->all(),
             [], $this->units($columns), $paginator->currentPage(), $paginator->perPage(), $paginator->total(), $paginator->lastPage(), now());
     }
 
     public function rows(ReportQueryData $query): LazyCollection
     {
         $columns = $this->resultColumns($query);
+        $definition = $this->definition();
 
-        return $this->query($query)->lazy(500)->map(fn (object $row): array => $this->present($row, $columns));
+        return $this->query($query)->lazy(500)->map(fn (object $row): array => $this->present($row, $columns, $definition));
     }
 
     /** Opciones obtenidas de hechos autorizados, incluidos registros históricos. */
@@ -106,15 +126,16 @@ abstract class SqlReportSource implements ReportSource
                 'in' => $builder->whereIn($filter['field'], $filter['value']),
                 'not_in' => $builder->whereNotIn($filter['field'], $filter['value']),
                 'neq' => $builder->where($filter['field'], '<>', $filter['value']),
+                'gt' => $builder->where($filter['field'], '>', $filter['value']),
+                'gte' => $builder->where($filter['field'], '>=', $filter['value']),
+                'lt' => $builder->where($filter['field'], '<', $filter['value']),
+                'lte' => $builder->where($filter['field'], '<=', $filter['value']),
+                'contains' => $builder->whereRaw('strpos(lower("'.$filter['field'].'"), lower(?)) > 0', [$filter['value']]),
                 default => $builder->where($filter['field'], '=', $filter['value']),
             };
         }
-        if ($query->from !== null) {
-            $builder->where('date', '>=', Carbon::parse($query->from, $timezone)->startOfDay()->toIso8601String());
-        }
-        if ($query->to !== null) {
-            $builder->where('date', '<', Carbon::parse($query->to, $timezone)->addDay()->startOfDay()->toIso8601String());
-        }
+        $this->filterPeriod($builder, $query);
+        $builder = $this->prepareFilteredRows($builder, $query);
         $grouped = $query->groupings !== [] || $query->metrics !== [];
         if ($grouped) {
             $builder->select($query->groupings);
@@ -144,6 +165,17 @@ abstract class SqlReportSource implements ReportSource
         return $builder;
     }
 
+    protected function filterPeriod(Builder $builder, ReportQueryData $query): void
+    {
+        $timezone = config('lots.timezone', 'America/Montevideo');
+        if ($query->from !== null) {
+            $builder->where('date', '>=', Carbon::parse($query->from, $timezone)->startOfDay()->toIso8601String());
+        }
+        if ($query->to !== null) {
+            $builder->where('date', '<', Carbon::parse($query->to, $timezone)->addDay()->startOfDay()->toIso8601String());
+        }
+    }
+
     private function resultColumns(ReportQueryData $query): array
     {
         return $query->groupings !== [] || $query->metrics !== [] ? [...$query->groupings, ...$query->metrics] : $query->columns;
@@ -162,12 +194,12 @@ abstract class SqlReportSource implements ReportSource
      * @param  list<string>  $columns
      * @return array<string, mixed>
      */
-    private function present(object $row, array $columns): array
+    private function present(object $row, array $columns, ReportSourceDefinition $definition): array
     {
         $result = [];
         foreach ($columns as $column) {
             $value = $row->{$column} ?? null;
-            $type = ($this->definition()->columns[$column] ?? $this->definition()->metrics[$column] ?? [])['type'] ?? 'string';
+            $type = ($definition->columns[$column] ?? $definition->metrics[$column] ?? [])['type'] ?? 'string';
             $result[$column] = $value === null ? null : (in_array($type, ['number', 'quantity', 'money'], true) ? (string) $value : $value);
         }
 

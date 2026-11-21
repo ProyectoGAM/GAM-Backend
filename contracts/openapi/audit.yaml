@@ -26,10 +26,10 @@ paths:
         No incluye facts, changes, actions ni reversibility dentro del resumen.
         Orden descendente por created_at y luego id. Los filtros y totales se
         calculan en servidor. No filtrar u ocultar registros localmente.
-        log_name representa el módulo funcional: las plantillas y la asignación,
-        herencia y revisión de planes de manejo se presentan como management_plans,
-        también cuando se almacenaron originalmente en lots. Lotes las excluye y
-        Manejo y sanidad las incluye antes de paginar. La historia almacenada no cambia.
+        log_name representa el módulo funcional. Las plantillas, asignaciones,
+        herencias, revisiones de planes y cambios del catálogo de razas se presentan
+        como management_plans, también cuando se almacenaron en lots. Los filtros
+        aplican esa clasificación antes de paginar.
       parameters:
         - { name: log_name, in: query, schema: { type: string, maxLength: 100 } }
         - { name: event, in: query, schema: { type: string, maxLength: 100 } }
@@ -191,6 +191,10 @@ components:
         Una referencia interna o inválida no produce un destino. La referencia
         histórica no otorga acceso ni garantiza existencia actual; el endpoint
         del lote conserva su autorización y sus respuestas 403/404.
+        Vehículos, Clientes y Razas incluyen section cuando hay destino y el
+        usuario tiene acceso. El ID identifica al vehículo, cliente o raza que
+        se abre. En cuenta corriente record_id identifica el movimiento si su
+        ULID se conserva en la entrada.
       required: [label, resource, id]
       example:
         label: null
@@ -200,6 +204,11 @@ components:
         label: { type: [string, 'null'], description: Etiqueta histórica cuando se conserva; null no impide enlazar un lote con ID público válido. }
         resource: { type: [string, 'null'], description: Recurso semántico reconocido; null si no hay destino seguro. }
         id: { $ref: '#/components/schemas/Identifier' }
+        section:
+          type: string
+          enum: [overview, readings, usages, fuel, maintenance_plans, maintenance, documents, profile, account, catalog]
+          description: Sección del recurso que debe abrir el cliente.
+        record_id: { type: string, format: ulid, description: Identificador público del movimiento dentro de la cuenta corriente. }
     Summary:
       type: object
       description: |
@@ -272,7 +281,7 @@ components:
                 type: object
                 required: [kind, label, available, reason, target]
                 properties:
-                  kind: { type: string, enum: [reverse_inventory_movement, correct_feed_consumption, undo_mortality, reverse_flock_status, reverse_flock_redistribution] }
+                  kind: { type: string, enum: [reverse_inventory_movement, correct_feed_consumption, undo_mortality, reverse_flock_status, reverse_flock_redistribution, cancel_vehicle_maintenance, correct_vehicle_reading, reverse_customer_movement] }
                   label: { type: string }
                   available: { type: boolean }
                   reason: { type: [string, 'null'] }
@@ -282,15 +291,19 @@ components:
                       Para reverse_flock_status el recurso es flock. Si está disponible, incluye status y version.
                       Para reverse_flock_redistribution el recurso es flock_redistribution. Si está disponible,
                       incluye version y también destination_version cuando intervienen dos lotes distintos.
-                      Una reversión bloqueada con referencia verificable entrega únicamente resource e id.
+                      Los destinos de Vehículos incluyen vehicle_id. Al anular una intervención
+                      disponible, version es la versión vigente de la intervención.
+                      La reversión de un movimiento de cuenta incluye customer_id.
                     required: [resource, id]
                     properties:
-                      resource: { type: string, enum: [inventory_movement, feed_consumption, mortality_record, flock, flock_redistribution] }
-                      id: { oneOf: [{ type: integer }, { type: string }], description: "ID numérico para inventario y consumos. ULID público para mortalidad, lote y redistribución." }
+                      resource: { type: string, enum: [inventory_movement, feed_consumption, mortality_record, flock, flock_redistribution, vehicle_maintenance, vehicle_meter_reading, customer_account_movement] }
+                      id: { oneOf: [{ type: integer }, { type: string }], description: ID numérico para inventario y consumos. Los demás destinos usan ULID público. }
                       flock_id: { type: string, description: Identificador público del lote; presente para consumos y mortalidad. }
+                      vehicle_id: { type: string, format: ulid, description: Identificador público del vehículo de la intervención o lectura. }
+                      customer_id: { type: string, format: ulid, description: Identificador público del cliente del movimiento. }
                       production_unit_id: { type: integer }
                       status: { type: string, enum: [active, quarantined], description: Estado anterior que se restituye al revertir un cambio de estado. }
-                      version: { type: integer, minimum: 1, description: Versión vigente del lote o del origen original de la redistribución. }
+                      version: { type: integer, minimum: 1, description: Versión vigente del lote origen o de la intervención de mantenimiento. }
                       destination_version: { type: integer, minimum: 1, description: Versión vigente del destinatario original cuando es otro lote. }
     ListEntry:
       type: object

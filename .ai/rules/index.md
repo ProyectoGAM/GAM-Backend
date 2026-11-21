@@ -4,7 +4,12 @@ Before planning or editing, find the row whose globs match the file's path and r
 
 | Applies to | Rule file |
 | --- | --- |
+| app/Services/AuditAndTraceability/** | .ai/rules/audit-and-traceability.md |
+| app/Services/Deliveries/*ReportSource.php | .ai/rules/deliveries.md |
 | app/**/Inventory/*Recipe*.php, app/**/Inventory/*Feed*.php, app/**/Inventory/*.php | .ai/rules/inventory.md |
+| app/Services/Lots/*ReportSource.php | .ai/rules/lots.md |
+| app/**/ReportingAndAnalytics/** | .ai/rules/reporting-and-analytics.md |
 | database/seeders/** | .ai/rules/seeders.md |
+| app/Services/Inventory/*ReportSource.php | .ai/rules/services-inventory.md |
 | app/**/SuppliersAndCatalogs/*.php | .ai/rules/suppliers-and-catalogs.md |
 | tests/** | .ai/rules/tests.md |

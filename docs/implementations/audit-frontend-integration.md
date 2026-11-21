@@ -82,6 +82,18 @@ mostrarse aunque el recurso haya cambiado después. Un sujeto es contexto
 histórico: por sí solo no garantiza existencia actual, autorización o navegación.
 Para acciones usar exclusivamente destinos de kinds reconocidos.
 
+### Enlaces a Vehículos, Clientes y Razas
+
+Usar `presentation.subject.resource`, `id` y `section` en el listado o en el detalle.
+
+| Recurso | ID | Sección |
+| --- | --- | --- |
+| `vehicle` | ULID del vehículo | `overview` para ficha y estado, `readings` para lecturas, `usages` para usos, `fuel` para combustible, `maintenance_plans` para planes, `maintenance` para intervenciones y sus comprobantes, `documents` para documentos del vehículo. |
+| `customer` | ULID del cliente | `profile` para ficha o `account` para cuenta corriente. En `account`, `record_id` permite enfocar el movimiento por ULID cuando está disponible. |
+| `breed` | ID numérico de la raza | `catalog` para abrir Razas con ese registro seleccionado. Consultar su ficha vigente con `GET /breeds?id={subject.id}`. |
+
+La etiqueta puede faltar y el enlace sigue disponible si hay recurso, ID y sección. Si falta un destino utilizable o el usuario carece de permiso para la sección, `resource` e `id` son nulos. Para Razas, usar el filtro de historial `log_name=management_plans`.
+
 ### Enlace al lote desde un pesaje
 
 Los pesajes convencionales individuales y grupales, y los ingresos de pesaje
@@ -348,8 +360,11 @@ El cliente mantiene este mapeo explícito:
 | correct_feed_consumption | POST /lotes/{target.flock_id}/consumos-alimento/{target.id}/rectificaciones | motivo, hasta 2000 caracteres; receta_id, cantidad_g o ambos. |
 | reverse_flock_status | PATCH /flocks/{target.id}/status | `audit_entry_id` de `data.id` del detalle, `status` y `version` del destino, y `reason` obligatorio de hasta 500 caracteres. |
 | reverse_flock_redistribution | POST /redistributions/{target.id}/reversals | `version` del origen original, `destination_version` si aparece en el destino, y `reason` obligatorio de hasta 500 caracteres. |
+| cancel_vehicle_maintenance | POST /vehiculos/mantenimientos/{target.id}/anulacion | `version` de `target.version` y `reason` obligatorio de hasta 500 caracteres. |
+| correct_vehicle_reading | POST /vehiculos/{target.vehicle_id}/lecturas | `event_type: correction`, `corrects_reading_id` de `target.id`, `value` del odómetro y `correction_reason` obligatorio de hasta 500 caracteres. |
+| reverse_customer_movement | POST /clientes/{target.customer_id}/movimientos/{target.id}/reversion | `reason` obligatorio de hasta 2000 caracteres. |
 
-Los comandos usan Idempotency-Key con UUID. En alimentación cantidad_g se envía
+Los comandos de la tabla usan `Idempotency-Key` con UUID, salvo la anulación de intervención, que usa la versión vigente. En alimentación cantidad_g se envía
 en gramos enteros, puede ser cero y admite hasta 999999999999; el texto de los
 facts no sirve como valor editable. Para editar, consultar el recurso de negocio
 vigente y reutilizar el formulario existente. No enviar idempotency_key en el body.

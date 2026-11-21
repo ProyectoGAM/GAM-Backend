@@ -28,7 +28,11 @@ final readonly class ReportExportPolicy
 
     public function share(User $user, ReportExport $export): bool
     {
-        return $this->owns($user, $export) && $this->allowed($user, 'can_share_reports') && $this->canReadSource($user, $export);
+        try {
+            return $this->owns($user, $export) && $this->registry->canShare($user, $this->registry->get($export->source_key));
+        } catch (ReportSourceNotFoundException) {
+            return false;
+        }
     }
 
     private function canReadSource(User $user, ReportExport $export): bool

@@ -15,6 +15,7 @@ final class ListLotsCatalogRequest extends LotsRequest
     public function rules(): array
     {
         return [
+            'id' => ['sometimes', 'integer', 'min:1'],
             'search' => ['sometimes', 'string', 'max:120'],
             'status' => ['sometimes', 'in:active,inactive'],
             'page' => ['sometimes', 'integer', 'min:1', 'max:100000'],

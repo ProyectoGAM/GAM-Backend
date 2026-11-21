@@ -13,7 +13,7 @@ final class RecordCustomerPaymentRequest extends CustomerRequest
 
     public function rules(): array
     {
-        return [...$this->commandRules(), 'amount' => ['required', 'string'], 'payment_method' => ['required', 'in:cash,transfer,other'],
+        return [...$this->commandRules(), 'amount' => ['required', 'string'], 'payment_method' => ['required', 'in:cash,transfer,check,other'],
             'payment_reference' => ['sometimes', 'nullable', 'string', 'max:240'], 'reason' => ['sometimes', 'nullable', 'string', 'max:2000']];
     }
 }

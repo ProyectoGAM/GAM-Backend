@@ -34,13 +34,16 @@ final class AlertConfigurationEndpointTest extends TestCase
         $global = collect($this->getJson('/api/v1/configuracion-alertas')->assertOk()->json('data'))->keyBy('tipo');
         $local = collect($this->getJson($unitPath.'/configuracion-alertas')->assertOk()->json('data'))->keyBy('tipo');
 
-        $this->assertCount(19, $global->keys()->merge($local->keys())->unique());
+        $this->assertCount(20, $global->keys()->merge($local->keys())->unique());
         $this->assertArrayNotHasKey('vaccination_due', $global->all());
+        $this->assertArrayNotHasKey('feed_manufacture_with_shortage', $global->all());
         $this->assertArrayNotHasKey('vehicle_document_expiring', $local->all());
         $this->assertSame(30, $global['vehicle_document_expiring']['configuracion']['dias_anticipacion']);
         $this->assertSame($thresholds, $local['vaccination_due']['criterio_relacionado']['valores']);
         $this->assertSame($unitPath.'/umbrales-alertas/vaccination_due', $local['vaccination_due']['criterio_relacionado']['ruta']);
         $this->assertSame($unitPath.'/configuracion-alertas/vaccination_due', $local['vaccination_due']['ruta']);
+        $this->assertTrue($local['feed_manufacture_with_shortage']['configuracion']['habilitada']);
+        $this->assertSame($unitPath.'/configuracion-alertas/feed_manufacture_with_shortage', $local['feed_manufacture_with_shortage']['ruta']);
     }
 
     // Rechaza solicitudes anónimas, escrituras sin permiso y parámetros ajenos al tipo.
