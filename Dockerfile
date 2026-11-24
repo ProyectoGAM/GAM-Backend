@@ -128,6 +128,13 @@ USER www-data
 
 FROM php-base AS runtime
 
+# Quita las herramientas y cabeceras utilizadas para compilar extensiones.
+RUN set -eux; \
+    apt-get purge -y --auto-remove $PHPIZE_DEPS linux-libc-dev; \
+    php-fpm -t; \
+    pg_dump --version; \
+    pg_restore --version
+
 WORKDIR /var/www/html
 
 COPY --from=vendor --chown=www-data:www-data /var/www/html /var/www/html

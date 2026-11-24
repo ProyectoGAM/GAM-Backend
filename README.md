@@ -33,7 +33,7 @@ botón **Authorize** usa el token Bearer emitido por el login.
 
 docker compose -f compose.dev.yaml up -d --build
 
-La imagen del backend usa PHP 8.5.12 con FPM sobre Debian Trixie. La misma base se usa en desarrollo, CI y producción. Este parche corrige CVE-2026-109618 y CVE-2026-109619. [Aviso oficial de PHP 8.5.12](https://www.php.net/releases/8_5_12.php)
+La imagen del backend usa PHP 8.5.13 con FPM sobre Debian Trixie. La misma base se usa en desarrollo, CI y producción. La etapa de producción retira el compilador y las cabeceras después de construir las extensiones. [PHP 8.5.13](https://www.php.net/releases/8_5_13.php)
 
 ## URLs según el entorno
 
