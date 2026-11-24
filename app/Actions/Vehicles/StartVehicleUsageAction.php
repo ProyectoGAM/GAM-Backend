@@ -41,13 +41,15 @@ final readonly class StartVehicleUsageAction
             if ($availability['availability'] !== 'available') {
                 throw ValidationException::withMessages(['vehicle_id' => $availability['reason'] ?? 'El vehículo no está disponible.']);
             }
-            $usage = VehicleUsage::query()->create([
+            $usage = new VehicleUsage;
+            $usage->forceFill([
+                'public_id' => (string) Str::ulid(),
                 'vehicle_id' => $locked->getKey(), 'driver_id' => $driver->getKey(), 'delivery_id' => $deliveryId,
                 'active_vehicle_key' => (string) $locked->getKey(), 'purpose' => $data['purpose'] ?? 'delivery',
                 'notes' => $data['notes'] ?? null, 'started_at' => now(), 'start_odometer_km' => $data['odometer_km'] ?? null,
                 'vehicle_snapshot' => $locked->snapshot(),
                 'driver_snapshot' => $driver->name, 'idempotency_key' => $key,
-            ]);
+            ])->save();
             $readingActor = $actor ?? $driver;
             if (isset($data['odometer_km'])) {
                 $this->readings->execute($locked, ['meter_type' => 'odometer', 'value' => $data['odometer_km'], 'recorded_at' => now(), 'idempotency_key' => (string) Str::uuid(), 'notes' => 'Lectura al inicio del uso'], $readingActor, $usage->getKey(), 'usage_start');

@@ -81,12 +81,12 @@ final class SharedUserDemoSeederTest extends TestCase
             ->assertUnauthorized();
     }
 
-    /** El PIN conocido de la demo se reserva para local y testing. */
-    public function test_does_not_seed_pin_accounts_in_production(): void
+    /** La carga de cuentas con PIN se omite en producción sin el reset de la demo. */
+    public function test_does_not_seed_pin_accounts_in_production_without_demo_reset(): void
     {
-        // Preparación: deja disponibles los roles y las UP e imita el reset demo de producción.
+        // Preparación: deja disponibles los roles y las UP y deshabilita el reset.
         $this->createPrerequisites();
-        config(['app.demo_db_reset_enabled' => true]);
+        config(['app.demo_db_reset_enabled' => false]);
         $this->app->detectEnvironment(fn () => 'production');
 
         // Carga: invoca el seeder para comprobar su guarda.
@@ -96,6 +96,7 @@ final class SharedUserDemoSeederTest extends TestCase
             $this->app->detectEnvironment(fn () => 'testing');
         }
 
+        // Consulta las cuentas y la auditoría después de la carga.
         $this->assertDatabaseCount('users', 1);
         $this->assertDatabaseMissing('activity_log', ['event' => 'user_registered']);
     }

@@ -50,12 +50,12 @@ final class RoleDemoSeederTest extends TestCase
         $this->assertDatabaseHas('activity_log', ['event' => 'role_created', 'source' => 'seeder', 'subject_id' => $customers->id]);
     }
 
-    /** La carga de roles de demostración se omite en producción. */
-    public function test_does_not_seed_demo_roles_in_production(): void
+    /** La carga de roles de demostración se omite en producción sin el reset de la demo. */
+    public function test_does_not_seed_demo_roles_in_production_without_demo_reset(): void
     {
-        // Preparación: deja un administrador disponible con el reset de demo activo.
+        // Preparación: deja un administrador disponible con el reset deshabilitado.
         $this->createAdmin();
-        config(['app.demo_db_reset_enabled' => true]);
+        config(['app.demo_db_reset_enabled' => false]);
         $this->app->detectEnvironment(fn () => 'production');
 
         // Carga: invoca el seeder directamente para verificar su guarda de entorno.
@@ -65,6 +65,7 @@ final class RoleDemoSeederTest extends TestCase
             $this->app->detectEnvironment(fn () => 'testing');
         }
 
+        // Consulta los roles y la auditoría después de la carga.
         $this->assertDatabaseMissing('roles', ['name' => 'demo_customer_management']);
         $this->assertDatabaseMissing('activity_log', ['event' => 'role_created']);
     }

@@ -7,6 +7,7 @@ use App\Interfaces\AuditAndTraceability\AuditRecorder;
 use App\Models\User;
 use App\Models\Vehicles\Vehicle;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 final readonly class SaveVehicleAction
@@ -35,17 +36,20 @@ final readonly class SaveVehicleAction
             $before = $locked->exists ? $locked->snapshot() : [];
             $locked->fill([...$data, 'plate' => $plate, 'plate_normalized' => $normalized]);
             $locked->version = $locked->exists ? $locked->version + 1 : 1;
+            if ($vehicle === null) {
+                $locked->forceFill(['public_id' => (string) Str::ulid()]);
+            }
             $locked->save();
             $locked->refresh();
             $after = $locked->snapshot();
             if ($vehicle === null) {
-                $locked->statusChanges()->create([
+                $locked->statusChanges()->make([
                     'actor_id' => $actor->getKey(),
                     'from_status' => null,
                     'to_status' => $locked->status,
                     'reason' => 'Alta inicial del vehiculo.',
                     'occurred_at' => now(),
-                ]);
+                ])->forceFill(['public_id' => (string) Str::ulid()])->save();
             }
             $this->audit->record(AuditEntryData::forSubject(
                 subject: $locked,

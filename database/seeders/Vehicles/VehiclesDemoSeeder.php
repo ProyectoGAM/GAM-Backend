@@ -15,12 +15,13 @@ use App\Models\Vehicles\VehicleUsage;
 use DateTimeInterface;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 final class VehiclesDemoSeeder extends Seeder
 {
     public function run(): void
     {
-        if (! app()->environment(['local', 'testing'])) {
+        if (! app()->environment(['local', 'testing']) && ! (app()->environment('production') && config('app.demo_db_reset_enabled'))) {
             return;
         }
 
@@ -78,6 +79,9 @@ final class VehiclesDemoSeeder extends Seeder
     {
         $email = (string) config('auth.demo_delivery.email');
         $driver = User::withTrashed()->firstOrNew(['email' => $email]);
+        if ($driver->exists && $driver->hasRole('admin')) {
+            throw new RuntimeException('DEMO_DELIVERY_EMAIL debe corresponder a una cuenta distinta de la de administración.');
+        }
         $isNew = ! $driver->exists;
 
         if ($driver->trashed()) {
@@ -85,17 +89,20 @@ final class VehiclesDemoSeeder extends Seeder
         }
 
         if ($isNew) {
+            $password = config('auth.demo_delivery.password');
             $driver->forceFill([
                 'name' => 'Repartidor Demo',
                 'email' => $email,
-                'password' => (string) config('auth.demo_delivery.password'),
+                'password' => filled($password) ? (string) $password : (app()->environment('production') ? Str::random(48) : 'ChangeMe123!'),
                 'email_verified_at' => now(),
             ])->save();
         }
 
         $driver->syncRoles([Role::findByName('delivery', 'web')]);
         if ($driver->operation_pin_hash === null) {
-            app(SetUserPinAction::class)->execute($admin, $driver, (string) config('auth.demo_delivery.pin'));
+            $pin = config('auth.demo_delivery.pin');
+            $pin = filled($pin) ? (string) $pin : (app()->environment('production') ? sprintf('%04d', random_int(0, 9999)) : '2468');
+            app(SetUserPinAction::class)->execute($admin, $driver, $pin);
         }
 
         return $driver;
