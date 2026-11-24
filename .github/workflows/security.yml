@@ -1,0 +1,80 @@
+name: Seguridad del componente
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_call:
+    inputs:
+      full_suite:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    name: SSDLC componente
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      SECURITY_BASE_SHA: ${{ vars.GAM_SECURITY_BASE_SHA }}
+      FULL_SUITE: ${{ inputs.full_suite || false }}
+    steps:
+      - name: Resolver referencias
+        id: refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SECURITY_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          case "$GITHUB_REPOSITORY" in
+            ProyectoGAM/GAM-Backend) current=GAM-Backend; other=GAM-Frontend; component=backend ;;
+            ProyectoGAM/GAM-Frontend) current=GAM-Frontend; other=GAM-Backend; component=frontend ;;
+            *) exit 1 ;;
+          esac
+          printf 'current=%s\nother=%s\ncomponent=%s\n' "$current" "$other" "$component" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: ProyectoGAM/Granja-Milpa
+          ref: ${{ env.SECURITY_BASE_SHA }}
+          path: security-workspace
+          persist-credentials: false
+      - name: Obtener submódulo compañero
+        if: inputs.full_suite
+        working-directory: security-workspace
+        env:
+          OTHER: ${{ steps.refs.outputs.other }}
+        run: git submodule update --init -- "$OTHER"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          path: security-workspace/${{ steps.refs.outputs.current }}
+          persist-credentials: false
+      - name: Verificar revisiones y ejecutar suite
+        working-directory: security-workspace
+        shell: bash
+        env:
+          CURRENT: ${{ steps.refs.outputs.current }}
+          OTHER: ${{ steps.refs.outputs.other }}
+          COMPONENT: ${{ steps.refs.outputs.component }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SECURITY_BASE_SHA"
+          test "$(git -C "$CURRENT" rev-parse HEAD)" = "$GITHUB_SHA"
+          if [[ "$FULL_SUITE" == true ]]; then
+            test "$(git -C "$OTHER" rev-parse HEAD)" = "$(git rev-parse "HEAD:$OTHER")"
+            bash security/run.sh all
+          else
+            bash security/run.sh code "$COMPONENT"
+          fi
+      - name: Publicar resultados filtrados
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: security-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            security-workspace/.security-reports/*/summary.json
+            security-workspace/.security-reports/*/summary.md
+          if-no-files-found: warn
+          retention-days: 14

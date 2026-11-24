@@ -16,7 +16,15 @@ concurrency:
   queue: max
 
 jobs:
+  security:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/security.yml
+    with:
+      full_suite: true
   release:
+    needs: security
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     outputs:
