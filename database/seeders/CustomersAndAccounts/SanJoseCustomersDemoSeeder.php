@@ -33,7 +33,7 @@ final class SanJoseCustomersDemoSeeder extends Seeder
         AdjustCustomerAccountAction $adjustAccount,
         RecordCustomerPaymentAction $recordPayment,
     ): void {
-        if (! app()->environment(['local', 'testing'])) {
+        if (! app()->environment(['local', 'testing']) && ! (app()->environment('production') && config('app.demo_db_reset_enabled'))) {
             return;
         }
 

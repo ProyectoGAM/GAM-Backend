@@ -48,12 +48,12 @@ final class SanJoseCustomersDemoSeederTest extends TestCase
         }
     }
 
-    /** La carga de San José de Mayo se omite en producción aun con el reset demo habilitado. */
-    public function test_does_not_seed_in_production(): void
+    /** La carga de San José de Mayo se omite en producción sin el reset de la demo. */
+    public function test_does_not_seed_in_production_without_demo_reset(): void
     {
-        // Preparación: habilita el reset demo y deja un administrador disponible.
+        // Preparación: deshabilita el reset y deja un administrador disponible.
         $this->createAdmin();
-        config(['app.demo_db_reset_enabled' => true]);
+        config(['app.demo_db_reset_enabled' => false]);
         $this->app->detectEnvironment(fn () => 'production');
 
         // Carga: invoca el seeder directamente para probar su guarda de entorno.
@@ -63,6 +63,7 @@ final class SanJoseCustomersDemoSeederTest extends TestCase
             $this->app->detectEnvironment(fn () => 'testing');
         }
 
+        // Consulta las fichas y los movimientos después de la carga.
         $this->assertDatabaseCount('customers', 0);
         $this->assertDatabaseCount('customer_account_movements', 0);
     }

@@ -62,8 +62,10 @@ final class LotsDemoSeederTest extends LotsTestCase
         $this->assertDatabaseCount('feed_supplies', 0);
         $this->assertDatabaseMissing('products', ['kind' => 'finished_feed']);
         $this->assertSame([], DB::table('flocks')->select('poultry_house_id')->whereIn('status', ['active', 'quarantined'])->groupBy('poultry_house_id')->havingRaw('COUNT(*) > 1')->pluck('poultry_house_id')->all());
+
+        // Consulta los saldos tras repetir la carga, con los 90 huevos devueltos en El Ombú.
         $this->assertDatabaseHas('stock_balances', ['product_id' => $product->id, 'on_hand_quantity' => '477.000000']);
-        $this->assertDatabaseHas('stock_balances', ['product_id' => $product->id, 'on_hand_quantity' => '9279.000000']);
+        $this->assertDatabaseHas('stock_balances', ['product_id' => $product->id, 'on_hand_quantity' => '9369.000000']);
         $this->assertSame(0, DB::table('activity_log')->where('log_name', 'lots')->where('source', '<>', 'seeder')->count());
     }
 

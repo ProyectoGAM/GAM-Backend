@@ -140,6 +140,8 @@ El orden de cada reset habilitado es: **merge a `main` → despliegue correcto d
 
 Para volver a migraciones normales sin borrar datos, cambiá `DEMO_DB_RESET_ENABLED` a `false` en el environment `production` de GitHub y en `.env.production` de la VPS. **Hacelo antes de trasladar GAM a la VPS del cliente**. Los seeders de demo en producción sólo se habilitan con la opción activa; en `local` siguen disponibles como antes.
 
+La [guía de seeders y demo de Repartos](docs/implementations/deliveries-demo-seeding.md) describe los datos del reset y las variables para iniciar sesión con las cuentas de prueba de la VPS.
+
 ## Autenticación multi-login
 
 Define ADMIN_PASSWORD e IDENTITY_PIN_PEPPER en el entorno antes de sembrar datos. La web usa cookies stateful y CSRF; nativo usa PAT Bearer. El acceso compartido se vincula con un código de 10 caracteres y conserva una credencial de dispositivo independiente.

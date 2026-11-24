@@ -22,7 +22,7 @@ final class SharedUserDemoSeeder extends Seeder
 
     public function run(RegisterUserAction $registerUser, AccessControl $access): void
     {
-        if (! app()->environment(['local', 'testing'])) {
+        if (! app()->environment(['local', 'testing']) && ! (app()->environment('production') && config('app.demo_db_reset_enabled'))) {
             return;
         }
 
@@ -42,12 +42,19 @@ final class SharedUserDemoSeeder extends Seeder
 
                     $registerUser->execute([
                         'name' => $name,
-                        'pin' => self::PIN,
+                        'pin' => $this->demoPin(),
                         'up_id' => $unit->id,
                         'rol_id' => $role->id,
                     ], $admin, source: 'seeder');
                 }
             }
         }, 3);
+    }
+
+    private function demoPin(): string
+    {
+        $configuredPin = config('auth.demo_shared_user_pin');
+
+        return filled($configuredPin) ? (string) $configuredPin : (app()->environment('production') ? sprintf('%04d', random_int(0, 9999)) : self::PIN);
     }
 }

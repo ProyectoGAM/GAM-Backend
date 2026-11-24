@@ -90,14 +90,14 @@ Actualizar con migraciones normales y el seeder de permisos. La demo de repartid
 
 ### Usuarios de dispositivo compartido para la demo local
 
-`SharedUserDemoSeeder` registra cuatro cuentas PIN con el rol **Operación de galpón**. La carga general lo ejecuta después de sembrar los roles y las UP. En un dispositivo vinculado a la UP correspondiente, elegí el usuario en el selector e ingresá el PIN de demo `1234`.
+`SharedUserDemoSeeder` registra cuatro cuentas PIN con el rol **Operación de galpón**. La carga general lo ejecuta después de sembrar los roles y las UP. En un dispositivo local vinculado a la UP correspondiente, elegí el usuario en el selector e ingresá el PIN de demo `1234`.
 
 | UP | Cuentas |
 | --- | --- |
 | Granja El Ombú | Ana Duarte (demo) y Mateo Silva (demo) |
 | Granja Santa Clara | Lucía Méndez (demo) y Bruno Castro (demo) |
 
-El alta usa el flujo habitual, con hash Argon2id y el pepper del entorno, y registra la UP en la auditoría. Volver a ejecutar la carga conserva los cambios de PIN, rol, UP y estado de las cuentas existentes. Sólo se ejecuta en `local` o `testing`.
+El alta usa el flujo habitual, con hash Argon2id y el pepper del entorno, y registra la UP en la auditoría. Volver a ejecutar la carga conserva los cambios de PIN, rol, UP y estado de las cuentas existentes. Se ejecuta en `local`, `testing` o en el [reset de la demo de la VPS](deliveries-demo-seeding.md). En la VPS el PIN se toma de `DEMO_SHARED_USER_PIN` si está configurado, o se genera al azar por cuenta.
 
 ```bash
 docker compose -f compose.dev.yaml exec -T api php artisan db:seed --class='Database\Seeders\IdentityAndAccess\SharedUserDemoSeeder' --no-interaction

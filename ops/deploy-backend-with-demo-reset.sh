@@ -159,10 +159,17 @@ require "/var/www/html/vendor/autoload.php";
 $app = require "/var/www/html/bootstrap/app.php";
 $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 $admin = \App\Models\User::query()->where("email", config("auth.admin.email"))->first();
-$usable = $admin && ! $admin->trashed() && $admin->hasRole("admin") && $admin->can("admin.dashboard.view")
-    && \App\Models\Lots\Flock::query()->where("code", "DEMO-LOT-A")->exists();
-if (! $usable) {
-    fwrite(STDERR, "The seeded demo admin or sample data is unavailable.\n");
+if (! $admin || $admin->trashed() || ! $admin->hasRole("admin") || ! $admin->can("can_view_admin_dashboard")) {
+    fwrite(STDERR, "The seeded demo admin is unavailable or lacks the expected access.\n");
+    exit(1);
+}
+if (! \App\Models\Lots\Flock::query()->where("code", "DEMO-LOT-A")->exists()) {
+    fwrite(STDERR, "The seeded demo flock is unavailable.\n");
+    exit(1);
+}
+if (! \App\Models\Deliveries\Delivery::query()->where("start_idempotency_key", \Database\Seeders\Deliveries\DeliveriesDemoSeeder::START_KEY)
+    ->where("status", \App\Enums\Deliveries\DeliveryStatus::Completed)->exists()) {
+    fwrite(STDERR, "The completed demo delivery is unavailable.\n");
     exit(1);
 }
 echo "seed-ok\n";
