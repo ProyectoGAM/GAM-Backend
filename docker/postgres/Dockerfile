@@ -5,6 +5,9 @@ FROM postgres:18.7-alpine@sha256:0115267ab5a509022df9319c77be365cef335adb71556c7
 RUN set -eux; \
     apk upgrade --no-cache; \
     apk add --no-cache su-exec; \
+    rm /usr/local/bin/gosu
+
+RUN set -eux; \
     ln -sf /sbin/su-exec /usr/local/bin/gosu; \
     test "$(gosu postgres id -u)" = "$(id -u postgres)"; \
     test "$(gosu postgres id -g)" = "$(id -g postgres)"
