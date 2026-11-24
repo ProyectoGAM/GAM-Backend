@@ -170,7 +170,7 @@ services:
     stop_grace_period: 30s
 
   swagger-ui:
-    image: docker.swagger.io/swaggerapi/swagger-ui:v5.32.14
+    image: docker.swagger.io/swaggerapi/swagger-ui:v5.36.0@sha256:a6c9dae9b7bf7aa691ad8cf76574d0a9c3c8ce6e0d3946d6bb55acc36f24c4e5
     restart: unless-stopped
     environment:
       BASE_URL: /docs
@@ -181,7 +181,9 @@ services:
       - backend
 
   gateway:
-    image: nginxinc/nginx-unprivileged:1.30.6-alpine@sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03
+    image: gam-gateway:${RELEASE_SHA:?Set RELEASE_SHA to the release commit SHA}
+    build:
+      context: ./docker/nginx
     restart: unless-stopped
     environment:
       APP_ENV: production
