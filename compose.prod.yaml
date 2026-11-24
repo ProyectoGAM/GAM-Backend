@@ -82,7 +82,9 @@ x-app: &app
 
 services:
   postgres:
-    image: postgres:18-alpine
+    image: gam-postgres:${RELEASE_SHA:?Set RELEASE_SHA to the release commit SHA}
+    build:
+      context: ./docker/postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_DATABASE:?Set DB_DATABASE in .env.production}
@@ -170,7 +172,9 @@ services:
     stop_grace_period: 30s
 
   swagger-ui:
-    image: docker.swagger.io/swaggerapi/swagger-ui:v5.36.0@sha256:a6c9dae9b7bf7aa691ad8cf76574d0a9c3c8ce6e0d3946d6bb55acc36f24c4e5
+    image: gam-swagger-ui:${RELEASE_SHA:?Set RELEASE_SHA to the release commit SHA}
+    build:
+      context: ./docker/swagger-ui
     restart: unless-stopped
     environment:
       BASE_URL: /docs
