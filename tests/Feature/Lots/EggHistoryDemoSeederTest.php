@@ -64,7 +64,8 @@ final class EggHistoryDemoSeederTest extends TestCase
         $this->assertSame($collections->pluck('operation_id')->sort()->values()->all(), $movementOperationIds->sort()->values()->all());
         $account = EggStockAccount::query()->where('production_unit_id', $flock->production_unit_id)->firstOrFail();
         $balance = StockBalance::query()->where('product_id', $account->product_id)->where('stock_location_id', $account->stock_location_id)->firstOrFail();
-        $this->assertSame(9279, (int) $balance->on_hand_quantity);
+        // La carga general suma al saldo de Lotes las devoluciones de los dos repartos de El Ombú.
+        $this->assertSame(9279 + 60 + 30, (int) $balance->on_hand_quantity);
         $this->assertSame(168, DB::table('activity_log')->where('event', 'eggs_collected')->whereIn('subject_id', $collections->pluck('id'))->count());
         $this->assertSame(96, DB::table('activity_log')->where('event', 'daily_weighing_entry_added')->whereIn('subject_id', DailyWeighing::query()->where('flock_id', $flock->id)->pluck('id'))->count());
         $auditCount = DB::table('activity_log')->count();

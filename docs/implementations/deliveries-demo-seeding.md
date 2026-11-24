@@ -28,6 +28,8 @@ El reparto `DEMO-2042` crea sus doce clientes ficticios y permite revisar la dis
 
 El seeder usa las acciones del módulo para registrar stock, paradas, ventas, cobros, cuenta corriente y auditoría. Reconoce cada reparto por su clave de inicio y agrega los escenarios faltantes sin duplicar los anteriores. En **Repartos → Historial**, filtrá por el día de la carga y elegí el reparto por su matrícula para ver las paradas en el mapa. Los vehículos quedan disponibles después del cierre.
 
+El seeder registra un ingreso de huevos para abastecer cada carga. Las devoluciones de `DEMO-2040` y `DEMO-2041` dejan 90 huevos adicionales en el saldo de Granja El Ombú al terminar la carga general de la demo.
+
 Para repetir únicamente este seeder en una base local ya preparada con los datos demo, ejecutá
 
 ```powershell
