@@ -11,6 +11,7 @@ use App\Models\Inventory\InventoryMovementLine;
 use App\Models\User;
 use App\Services\Inventory\FeedBalanceEvaluator;
 use App\Services\Inventory\FeedIngredientStocks;
+use App\Services\Inventory\FeedManufactureAlerts;
 use App\Services\Inventory\FeedOperationRunner;
 use Brick\Math\BigDecimal;
 
@@ -21,6 +22,7 @@ final readonly class CancelFeedManufactureAction
         private FeedIngredientStocks $stocks,
         private RecordInventoryMovementAction $recordMovement,
         private FeedBalanceEvaluator $evaluator,
+        private FeedManufactureAlerts $alerts,
     ) {}
 
     public function execute(int $manufactureId, string $reason, string $key, User $actor, string $source = 'api'): FeedStockOperation
@@ -100,6 +102,9 @@ final readonly class CancelFeedManufactureAction
                 ])->save();
                 $balance->forceFill(['quantity_grams' => $after])->save();
                 $this->operations->audit($operation, $actor, 'Elaboración cancelada con movimientos compensatorios', $source);
+                if (($original->snapshot['shortages'] ?? []) !== []) {
+                    $this->alerts->resolve($original);
+                }
                 $this->evaluator->evaluate($balance, 'cancellation', $operationId);
 
                 return $operation;

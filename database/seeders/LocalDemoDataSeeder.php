@@ -31,6 +31,7 @@ use App\Services\ReportingAndAnalytics\ReportQueryNormalizer;
 use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
 use Database\Seeders\CustomersAndAccounts\CustomersDemoSeeder;
 use Database\Seeders\CustomersAndAccounts\SanJoseCustomersDemoSeeder;
+use Database\Seeders\Deliveries\DeliveriesDemoSeeder;
 use Database\Seeders\FarmStructure\MaintenanceDemoSeeder;
 use Database\Seeders\IdentityAndAccess\RoleDemoSeeder;
 use Database\Seeders\IdentityAndAccess\SharedUserDemoSeeder;
@@ -97,6 +98,7 @@ final class LocalDemoDataSeeder extends Seeder
         app(PrepareStockStorageAction::class)->execute($admin);
         $this->call(HealthStockDemoSeeder::class);
         $this->call(VehiclesDemoSeeder::class);
+        $this->call(DeliveriesDemoSeeder::class);
         $this->call(NotificationsDemoSeeder::class);
     }
 

@@ -19,6 +19,7 @@ use App\Services\IdentityAndAccess\AccessControl;
 use App\Services\IdentityAndAccess\ProductionUnitAccess;
 use App\Services\Inventory\EggPresentationCatalog;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 final readonly class StartDeliveryAction
 {
@@ -76,6 +77,7 @@ final readonly class StartDeliveryAction
             $vehicleSnapshot = $vehicle->snapshot();
             $startedAt = now();
             $delivery = Delivery::query()->create([
+                'public_id' => (string) Str::ulid(),
                 'driver_id' => $actor->getKey(),
                 'vehicle_id' => $vehicle->getKey(),
                 'vehicle_snapshot' => $vehicleSnapshot,

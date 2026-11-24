@@ -19,8 +19,10 @@ final class VaccinationReportSource extends SqlReportSource
             'production_unit' => ['label' => 'Unidad productiva', 'type' => 'string'], 'poultry_house_id' => ['label' => 'Galpón', 'type' => 'integer'],
             'poultry_house' => ['label' => 'Galpón', 'type' => 'string'], 'flock_id' => ['label' => 'Lote', 'type' => 'string'], 'flock' => ['label' => 'Lote', 'type' => 'string'],
             'vaccine' => ['label' => 'Vacuna', 'type' => 'string'], 'vaccine_batch' => ['label' => 'Lote de vacuna', 'type' => 'string'],
+            'responsible' => ['label' => 'Responsable', 'type' => 'string'],
             'notes' => ['label' => 'Comentarios', 'type' => 'string'],
-        ], ['application_count' => ['label' => 'Aplicaciones', 'type' => 'count']]);
+        ], ['application_count' => ['label' => 'Aplicaciones', 'type' => 'count']],
+            extraFilters: ['responsible' => ['label' => 'Responsable', 'type' => 'string', 'operators' => ['eq', 'neq', 'in', 'not_in'], 'options_source' => 'responsible']]);
     }
 
     protected function baseQuery(): Builder
@@ -29,7 +31,7 @@ final class VaccinationReportSource extends SqlReportSource
 
         return $this->housing->join(DB::query()->fromSub($records, 'r')->join('flocks as f', 'f.id', '=', 'r.flock_id'))
             ->whereNotExists(fn (Builder $q) => $q->selectRaw('1')->from('management_execution_corrections as c')->where('c.original_type', 'vaccination')->whereColumn('c.original_public_id', 'r.public_id'))
-            ->selectRaw("r.id as row_key, r.date, u.id as production_unit_id, u.name as production_unit, h.id as poultry_house_id, h.name as poultry_house, f.public_id as flock_id, f.code as flock, r.product_snapshot->>'name' as vaccine, r.vaccine_batch, r.notes");
+            ->selectRaw("r.id as row_key, r.date, u.id as production_unit_id, u.name as production_unit, h.id as poultry_house_id, h.name as poultry_house, f.public_id as flock_id, f.code as flock, r.product_snapshot->>'name' as vaccine, r.vaccine_batch, r.notes, r.responsible_name_snapshot as responsible");
     }
 
     protected function metricExpressions(): array

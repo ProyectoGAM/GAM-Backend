@@ -130,7 +130,7 @@ Cerrar conserva PIN y sincronización previa, exige saldo físico final cero y r
 
 Aplicar migraciones con el procedimiento habitual y después `IdentityPermissionSeeder` para actualizar el catálogo sin cambiar contraseñas. La migración propia es `2026_10_29_195003_create_customers_and_accounts_tables.php`. No requiere reconstruir repartos antiguos ni ejecutar seeds generales sobre datos reales.
 
-`Database\Seeders\CustomersAndAccounts\CustomersDemoSeeder` crea seis fichas ficticias, una deuda inicial y un saldo a favor mediante las Actions, con claves estables. Se integró en `LocalDemoDataSeeder`; sólo opera en `local/testing`, es idempotente y no se ejecuta en producción.
+`Database\Seeders\CustomersAndAccounts\CustomersDemoSeeder` crea seis fichas ficticias, una deuda inicial y un saldo a favor mediante las Actions, con claves estables. Es idempotente y forma parte de `LocalDemoDataSeeder` en desarrollo y en el [reset de la demo de la VPS](deliveries-demo-seeding.md). También se puede ejecutar por separado en `local` o `testing`.
 
 `SanJoseCustomersDemoSeeder` agrega nueve fichas ficticias con puntos fijos en el centro de San José de Mayo. Si la localidad ya existe en el catálogo, la vincula a las fichas. Los nombres y las direcciones son de demostración. [Referencia geográfica de San José de Mayo](https://www.geodatos.net/coordenadas/uruguay/san-jose-de-mayo)
 
@@ -140,7 +140,7 @@ Aplicar migraciones con el procedimiento habitual y después `IdentityPermission
 | Saldo a favor | 95.000, 320.125 y 640.250 a favor |
 | Saldo al día | Tres cuentas en 0.000, una con un ajuste de 900.000 cancelado con un pago por el mismo importe |
 
-La carga integra `LocalDemoDataSeeder` y también puede ejecutarse por separado con un administrador ya creado. Usa las Actions habituales para guardar fichas y contabilizar ajustes y pagos con auditoría. Las claves estables permiten repetirla sin duplicar fichas ni movimientos. Está habilitada en `local/testing`.
+La carga integra `LocalDemoDataSeeder` en desarrollo y en el reset de la demo de la VPS. También puede ejecutarse por separado en `local` o `testing` con un administrador ya creado. Usa las Actions habituales para guardar fichas y contabilizar ajustes y pagos con auditoría. Las claves estables permiten repetirla sin duplicar fichas ni movimientos.
 
 ```bash
 docker compose -f compose.dev.yaml exec -T api php artisan db:seed --class='Database\Seeders\CustomersAndAccounts\SanJoseCustomersDemoSeeder' --no-interaction

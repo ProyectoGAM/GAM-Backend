@@ -260,7 +260,7 @@ paths:
                 client_reference: { type: string, format: ulid }
                 client_event_id: { type: string, format: uuid, description: Debe coincidir con Idempotency-Key }
                 amount: { $ref: './customers-and-accounts.yaml#/components/schemas/PositiveAmount' }
-                payment_method: { type: string, enum: [cash, transfer, other] }
+                payment_method: { type: string, enum: [cash, transfer, check, other] }
                 payment_reference: { type: [string, 'null'], maxLength: 240 }
                 reason: { type: [string, 'null'], maxLength: 2000 }
                 occurred_at: { type: string, format: date-time, description: Hora de cobro capturada en el dispositivo; created_at conserva la hora de recepción del servidor }
@@ -461,6 +461,8 @@ components:
             label: { type: string }
             eggs: { type: integer, minimum: 1 }
             line_amount: { $ref: '#/components/schemas/ExactDeliveryAmount', nullable: true }
+            default_unit_price: { type: integer, nullable: true, minimum: 0, description: Precio de catálogo compatible al registrar la entrega. }
+            entered_unit_price: { type: integer, nullable: true, minimum: 0, description: Precio ingresado explícitamente por el repartidor. }
     DeliveryUnitBalanceRow:
       type: object
       required: [unit, label, eggs_per_unit, loaded_amount, delivered_amount, remaining_amount, loaded_eggs, delivered_eggs]
@@ -490,7 +492,7 @@ components:
         collected_amount: { type: [string, 'null'], description: Nulo cuando hay entregas históricas sin evidencia de cobro }
         recorded_collected_amount: { type: string, description: 'Cobros efectivamente registrados, incluidas compensaciones' }
         account_delta: { type: string, description: Variación neta de las cuentas por las operaciones de este reparto }
-        by_method: { type: object, properties: { cash: { type: string }, transfer: { type: string }, other: { type: string } } }
+        by_method: { type: object, properties: { cash: { type: string }, transfer: { type: string }, check: { type: string }, other: { type: string } } }
         legacy_unreconciled_count: { type: integer }
         customers: { type: array, items: { type: object, properties: { customer_id: { type: string }, customer_name: { type: string }, merchandise_amount: { type: string }, collected_amount: { type: string }, account_delta: { type: string }, balance_before: { type: string }, balance_after: { type: string } } } }
     DeliveryClient:
@@ -522,7 +524,7 @@ components:
           description: Obligatorio en nueva entrega; amount cero confirma fiado y no crea un pago. Prohibido para not_delivered.
           properties:
             amount: { type: string, pattern: '^\d{1,19}(?:\.\d{1,3})?$', description: Cero o importe positivo efectivamente cobrado en UYU }
-            payment_method: { type: string, enum: [cash, transfer, other], description: Obligatorio cuando amount es positivo }
+            payment_method: { type: string, enum: [cash, transfer, check, other], description: Obligatorio cuando amount es positivo }
             payment_reference: { type: [string, 'null'], maxLength: 240 }
             reason: { type: [string, 'null'], maxLength: 2000 }
         occurred_at: { type: string, format: date-time, description: Hora de visita capturada en el dispositivo; created_at conserva la hora de recepción del servidor }

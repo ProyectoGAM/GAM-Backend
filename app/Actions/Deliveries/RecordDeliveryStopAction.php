@@ -79,7 +79,7 @@ final readonly class RecordDeliveryStopAction
             if ($isDelivered) {
                 $paid = CustomerAmounts::parse($data['payment']['amount'], allowZero: true);
                 if (! $paid->isZero()) {
-                    Validator::make($data['payment'], ['payment_method' => ['required', 'in:cash,transfer,other'],
+                    Validator::make($data['payment'], ['payment_method' => ['required', 'in:cash,transfer,check,other'],
                         'payment_reference' => ['sometimes', 'nullable', 'string', 'max:240'], 'reason' => ['sometimes', 'nullable', 'string', 'max:2000']])->validate();
                 }
             }

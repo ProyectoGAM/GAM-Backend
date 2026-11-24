@@ -4,11 +4,15 @@ namespace App\Services\AuditAndTraceability;
 
 final class AuditEventCatalog
 {
+    /** @var list<string> */
+    public const BREED_EVENTS = ['breed_created', 'breed_updated'];
+
     /** @var list<string> Eventos de manejo registrados originalmente bajo Lotes. */
     public const MANAGEMENT_PLAN_EVENTS = [
         'plan_template_created', 'plan_template_revised', 'plan_template_published',
         'plan_template_retired', 'plan_template_activated',
         'flock_plan_assigned', 'flock_plan_inherited', 'flock_plan_revised',
+        ...self::BREED_EVENTS,
     ];
 
     public static function moduleName(?string $logName, ?string $event): ?string
@@ -19,6 +23,8 @@ final class AuditEventCatalog
 
     /** @var array<string, string> */
     private const LABELS = [
+        'breed_created' => 'Raza registrada',
+        'breed_updated' => 'Raza actualizada',
         'weighing_recorded' => 'Pesaje registrado',
         'weighing_corrected' => 'Pesaje rectificado',
         'weighing_anomaly_confirmed' => 'Anomalía de pesaje confirmada',

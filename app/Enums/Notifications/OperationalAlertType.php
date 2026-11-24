@@ -20,6 +20,7 @@ enum OperationalAlertType: string
     case PoultryHouseOverCapacity = 'poultry_house_over_capacity';
     case StockMinimumReached = 'stock_minimum_reached';
     case EggStockNegative = 'egg_stock_negative';
+    case FeedManufactureWithShortage = 'feed_manufacture_with_shortage';
     case WeighingAnomaly = 'weighing_anomaly';
     case DeliveryEggSurplus = 'delivery_egg_surplus';
     case DeliveryEggBalanceNegative = 'delivery_egg_balance_negative';
@@ -52,6 +53,7 @@ enum OperationalAlertType: string
             self::PoultryHouseOverCapacity => 'Galpón por encima de su capacidad',
             self::StockMinimumReached => 'Stock en el mínimo o por debajo',
             self::EggStockNegative => 'Stock de huevos en negativo',
+            self::FeedManufactureWithShortage => 'Elaboración de ración con faltantes',
             self::WeighingAnomaly => 'Pesaje fuera del rango esperado',
             self::DeliveryEggSurplus => 'Huevos sobrantes en un reparto',
             self::DeliveryEggBalanceNegative => 'Saldo de huevos del reparto en negativo',
@@ -66,7 +68,7 @@ enum OperationalAlertType: string
         return match ($this) {
             self::DailyEggCollectionMissing, self::WeighingAnomaly => 'lots',
             self::PoultryHouseOverCapacity => 'farm_structure',
-            self::StockMinimumReached, self::EggStockNegative => 'inventory',
+            self::StockMinimumReached, self::EggStockNegative, self::FeedManufactureWithShortage => 'inventory',
             self::DeliveryEggSurplus, self::DeliveryEggBalanceNegative => 'deliveries',
             self::VehicleMaintenanceDue, self::VehicleMaintenancePlanDue, self::VehicleDocumentExpiring => 'vehicles',
             default => 'management_plans',

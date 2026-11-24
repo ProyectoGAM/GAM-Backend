@@ -291,18 +291,17 @@ paths:
       operationId: manufactureFeed
       summary: Elabora alimento inmediatamente usando la composición vigente
       description: >-
-        Autenticación y contexto compartido vigentes; no requiere un permiso funcional
-        específico por ahora. Receta e ingredientes activos y planta operativa.
+        Requiere can_manufacture_feed, receta e ingredientes activos y planta operativa.
         Deriva UP de la planta seleccionada. Consume primero su stock positivo;
         luego otras plantas operativas de la misma UP por saldo ascendente de
         cada ingrediente y, en empate, por ID de planta ascendente.
-        Bloquea en orden técnico fijo antes de decidir el consumo. Un cálculo previo
-        no reserva ni congela la composición. Rechaza stock insuficiente sin efectos
-        parciales ni saldos negativos de ingredientes. Acredita alimento por receta
-        y UP y conserva instantánea y distribución. Fecha y hora del registro;
-        sin campos retroactivos. Idempotencia por actor, tipo y contenido normalizado;
-        replay devuelve la operación original con su cancelación actual.
-        Múltiplo inválido o límites calculados producen 409; entradas inválidas 422.
+        Si queda un faltante, devuelve 409 sin registrar movimientos. Tras la segunda
+        confirmación del usuario, reenvía los mismos datos y el mismo Idempotency-Key
+        con confirmacion_faltante. Si el faltante persiste y cambió la distribución
+        proyectada, devuelve una confirmación nueva. Al confirmar se debita el
+        faltante en la planta seleccionada, se acredita la ración por receta y UP
+        y se genera la alerta feed_manufacture_with_shortage si está habilitada.
+        Reintentar el mismo cuerpo con la misma clave devuelve la operación original.
       parameters:
         - {$ref: '#/components/parameters/IdempotencyKey'}
       requestBody:
@@ -317,12 +316,21 @@ paths:
                 receta_id: {type: integer, format: int64, minimum: 1}
                 planta_id: {type: integer, format: int64, minimum: 1}
                 cantidad_g: {$ref: '#/components/schemas/StockPositiveGrams'}
+                confirmacion_faltante: {$ref: '#/components/schemas/FeedShortageConfirmationCode'}
             example: {receta_id: 1, planta_id: 2, cantidad_g: '26000'}
       responses:
         '201': {$ref: '#/components/responses/FeedOperationResponse'}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
-        '409': {$ref: '#/components/responses/Conflict'}
+        '409':
+          description: Faltantes pendientes de confirmación o conflicto de estado, límites o idempotencia.
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - {$ref: '#/components/schemas/FeedShortageConfirmationRequired'}
+                  - {$ref: '#/components/schemas/Error'}
         '422': {$ref: '#/components/responses/ValidationError'}
   /elaboraciones/{operation}:
     parameters:
@@ -717,9 +725,34 @@ components:
         requiere_atencion:
           type: boolean
           description: Verdadero cuando hay un mínimo configurado y el saldo es igual o inferior a él.
+    FeedShortageConfirmationCode:
+      type: string
+      pattern: '^[0-9a-f]{64}$'
+      description: Código devuelto en el 409 de faltantes para el mismo usuario, pedido y clave de idempotencia.
+    FeedIngredientShortage:
+      type: object
+      required: [producto_id, nombre, cantidad_faltante_g]
+      properties:
+        producto_id: {type: integer, format: int64}
+        nombre: {type: string}
+        cantidad_faltante_g:
+          type: string
+          pattern: '^[0-9]+\.[0-9]{6}$'
+          description: Demanda del ingrediente que excede el stock positivo elegible, en gramos.
+    FeedShortageConfirmationRequired:
+      type: object
+      required: [message, code, confirmacion_faltante, faltantes]
+      properties:
+        message: {type: string}
+        code: {const: FEED_STOCK_CONFIRMATION_REQUIRED}
+        confirmacion_faltante: {$ref: '#/components/schemas/FeedShortageConfirmationCode'}
+        faltantes:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/FeedIngredientShortage'}
     FeedOperation:
       type: "object"
-      required: ["id","operacion_id","tipo","receta_id","up_id","planta_id","producto_id","cantidad_g","factor","accion","motivo","saldo_anterior_g","saldo_resultante_g","delta_g","movimiento_id","cancela_id","actor_id","registrado_en","nombre_receta","nombre_planta","nombre_producto","sku","rendimiento_g","estado","ingredientes","distribucion"]
+      required: ["id","operacion_id","tipo","receta_id","up_id","planta_id","producto_id","cantidad_g","factor","accion","motivo","saldo_anterior_g","saldo_resultante_g","delta_g","movimiento_id","cancela_id","actor_id","registrado_en","nombre_receta","nombre_planta","nombre_producto","sku","rendimiento_g","estado","ingredientes","distribucion","faltantes"]
       properties:
         id:
           type: "integer"
@@ -806,6 +839,10 @@ components:
                 $ref: "#/components/schemas/GramsOutput"
               cantidad_requerida_g:
                 $ref: "#/components/schemas/GramsOutput"
+        faltantes:
+          type: array
+          description: Faltantes confirmados de la elaboración original. Vacío cuando el registro no tiene faltantes.
+          items: {$ref: '#/components/schemas/FeedIngredientShortage'}
         distribucion:
           type: "array"
           description: "Cantidades históricas por ingrediente y planta. En elaboración referencia líneas del descuento; en cancelación, líneas de su movimiento compensatorio."

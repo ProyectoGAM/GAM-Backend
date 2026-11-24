@@ -31,7 +31,7 @@ final readonly class CreateReportPresetAction
                 'name' => $attributes['name'],
                 'source_key' => $query->sourceKey,
                 'definition_version' => $query->definitionVersion,
-                'configuration' => $query->toArray(),
+                'configuration' => $query->toPresetArray(),
             ]));
         } catch (QueryException $exception) {
             if ((string) ($exception->errorInfo[0] ?? $exception->getCode()) !== '23505') {

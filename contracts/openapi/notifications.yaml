@@ -397,6 +397,7 @@ components:
         - poultry_house_over_capacity
         - stock_minimum_reached
         - egg_stock_negative
+        - feed_manufacture_with_shortage
         - weighing_anomaly
         - delivery_egg_surplus
         - delivery_egg_balance_negative
@@ -497,6 +498,8 @@ components:
             igualar el mínimo y alta por debajo del mínimo. El aviso se resuelve cuando el saldo supera el mínimo.
             Inventario publica egg_stock_negative con urgencia alta mientras el saldo de huevos de la UP sea
             negativo. Los avisos históricos delivery_egg_stock_negative quedan resueltos al reevaluar la UP.
+            Inventario publica feed_manufacture_with_shortage por cada elaboración con faltantes confirmados
+            en la UP. Por defecto tiene urgencia alta y se resuelve al cancelar la elaboración.
             Repartos publica delivery_egg_balance_negative con urgencia alta si las entregas superan la carga.
             Al regularizar el saldo, resuelve la alerta. El aviso informativo delivery_egg_surplus se publica
             con urgencia baja al ingresar el sobrante en la UP de destino.

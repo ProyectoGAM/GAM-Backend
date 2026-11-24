@@ -27,7 +27,7 @@ final class AuditEntryController
         $actors->prepare($entries->getCollection());
         foreach ($entries->getCollection() as $entry) {
             $entry->setRelation('auditActorPresentation', $actors->present($entry, $viewer));
-            $entry->setRelation('auditPresentation', $presentation->summary($entry));
+            $entry->setRelation('auditPresentation', $presentation->summary($entry, $viewer));
         }
 
         return AuditEntryResource::collection($entries);

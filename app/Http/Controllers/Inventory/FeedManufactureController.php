@@ -34,6 +34,7 @@ final class FeedManufactureController extends Controller
         $operation = $action->execute(
             (int) $request->validated('receta_id'), (int) $request->validated('planta_id'),
             $request->validated('cantidad_g'), $request->validated('idempotency_key'), $request->actor(),
+            shortageConfirmation: $request->validated('confirmacion_faltante'),
         );
 
         return (new FeedStockOperationResource($operation))->response()->setStatusCode(201);

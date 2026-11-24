@@ -9,13 +9,20 @@ use App\Models\Deliveries\DeliveryStop;
 use App\Models\FarmStructure\ProductionUnit;
 use App\Models\Inventory\EggPresentation;
 use App\Models\Notifications\AppNotification;
+use App\Models\ReportingAndAnalytics\ReportExport;
 use App\Models\User;
 use App\Models\Vehicles\Vehicle;
 use App\Services\IdentityAndAccess\PinHasher;
+use App\Services\ReportingAndAnalytics\ReportExportWriter;
+use App\Services\ReportingAndAnalytics\ReportQueryNormalizer;
+use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
 use Database\Seeders\IdentityPermissionSeeder;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use Spatie\SimpleExcel\SimpleExcelReader;
 use Tests\TestCase;
 
 final class DeliveryFinancialTest extends TestCase
@@ -180,6 +187,86 @@ final class DeliveryFinancialTest extends TestCase
         $this->assertDatabaseCount('egg_stock_transactions', 1);
         $this->getJson('/api/v1/repartos/'.$id)->assertOk()->assertJsonPath('data.financial_summary.collected_amount', '2.125')
             ->assertJsonPath('data.financial_summary.merchandise_amount', '12.625');
+    }
+
+    // Flujo: el reporte distingue cobro histórico y saldo actual, e incluye los totales y precios del reparto.
+    public function test_complete_delivery_report_projects_prices_collections_and_current_debt(): void
+    {
+        // Preparación: abre un reparto y registra dos entregas, una parcial con cheque y otra fiada.
+        $this->driver();
+        $first = Customer::factory()->withAccount()->create();
+        $second = Customer::factory()->withAccount()->create();
+        [$id, $presentation, $unit] = $this->start();
+        foreach ([[$first, ['unit_price' => 200], ['amount' => '5', 'payment_method' => 'check']],
+            [$second, [], ['amount' => '0']]] as [$customer, $price, $payment]) {
+            $key = (string) Str::uuid();
+            $this->postJson('/api/v1/repartos/'.$id.'/entregas', [
+                'client_reference' => $customer->public_id, 'status' => 'delivered', 'accounting_version' => 2,
+                'client_event_id' => $key, 'notes' => 'Entregar en recepción',
+                'items' => [['unit' => $presentation->code, 'amount' => '0.125', 'eggs_per_unit' => 24, ...$price]],
+                'payment' => $payment,
+            ], ['Idempotency-Key' => $key])->assertOk();
+        }
+
+        // Mutación: cobra la deuda después, devuelve el sobrante y cambia el precio del catálogo.
+        $key = (string) Str::uuid();
+        $this->postJson('/api/v1/repartos/'.$id.'/cobros', [
+            'client_reference' => $second->public_id, 'client_event_id' => $key, 'amount' => '12.625', 'payment_method' => 'transfer',
+        ], ['Idempotency-Key' => $key])->assertOk();
+        $this->postJson('/api/v1/repartos/'.$id.'/cierre', [
+            'pin' => '0007', 'return_production_unit_id' => $unit->id,
+            'returned_items' => [['unit' => $presentation->code, 'amount' => '0.75', 'eggs_per_unit' => 24]],
+        ], ['Idempotency-Key' => (string) Str::uuid()])->assertOk();
+        $presentation->update(['default_unit_price' => 999]);
+
+        // Consulta: usa la fecha local y comprueba los tres importes de la entrega pagada en parte.
+        $admin = User::factory()->create();
+        $admin->syncRoles('admin');
+        Sanctum::actingAs($admin, ['api:access']);
+        $date = now('America/Montevideo')->toDateString();
+        $path = '/api/v1/reportes/deliveries.collections/previsualizaciones';
+        $period = ['from' => $date, 'to' => $date];
+        $this->postJson($path, [...$period, 'filters' => [
+            ['field' => 'payment_method', 'operator' => 'eq', 'value' => 'Cheque'],
+            ['field' => 'current_debt', 'operator' => 'gte', 'value' => '20.000'],
+            ['field' => 'notes', 'operator' => 'contains', 'value' => 'RECEPCIÓN'],
+        ]])->assertOk()->assertJsonCount(1, 'data.rows')
+            ->assertJsonPath('data.rows.0.quantity', '3')->assertJsonPath('data.rows.0.merchandise_value', '25.000')
+            ->assertJsonPath('data.rows.0.default_merchandise_value', '12.625')
+            ->assertJsonPath('data.rows.0.entered_unit_prices', $presentation->name.': $200')
+            ->assertJsonPath('data.rows.0.paid_at_delivery', '5.000')
+            ->assertJsonPath('data.rows.0.outstanding_at_delivery', '20.000')
+            ->assertJsonPath('data.rows.0.payment_status', 'Pago parcial')
+            ->assertJsonPath('data.rows.0.current_debt_status', 'Con deuda');
+
+        // Consulta: la entrega fiada conserva el cero histórico con la cuenta actual al día.
+        $this->postJson($path, [...$period, 'filters' => [['field' => 'client_id', 'operator' => 'eq', 'value' => $second->public_id]]])
+            ->assertOk()->assertJsonPath('data.rows.0.paid_at_delivery', '0.000')
+            ->assertJsonPath('data.rows.0.outstanding_at_delivery', '12.625')
+            ->assertJsonPath('data.rows.0.current_debt_status', 'Al día');
+
+        // Consulta: al agrupar, la carga y devolución se cuentan una vez por reparto.
+        $this->postJson($path, [...$period, 'groupings' => ['day'], 'metrics' => [
+            'loaded_total', 'returned_total', 'egg_count', 'collected_total', 'current_debt_total', 'customers_settled',
+        ]])->assertOk()->assertJsonPath('data.rows.0', [
+            'day' => $date, 'loaded_total' => '24', 'returned_total' => '18', 'egg_count' => '6',
+            'collected_total' => '5.000', 'current_debt_total' => '20.000', 'customers_settled' => '1',
+        ]);
+
+        // Exportación: verifica una planilla real y bloquea el enlace público de la fuente financiera.
+        Storage::fake('local');
+        $source = app(ReportSourceRegistry::class)->get('deliveries.collections');
+        $query = app(ReportQueryNormalizer::class)->normalize('deliveries.collections', [...$period, 'columns' => ['notes', 'paid_at_delivery', 'current_debt']]);
+        $export = ReportExport::factory()->for($admin)->create(['source_key' => $query->sourceKey, 'definition_version' => $query->definitionVersion, 'query' => $query->toArray()]);
+        $file = app(ReportExportWriter::class)->write($export, $source, $query);
+        $export->update([...$file, 'status' => 'completed', 'completed_at' => now()]);
+        $rows = SimpleExcelReader::create(Storage::disk('local')->path($file['path']))->getRows()->all();
+        $this->assertCount(2, $rows);
+        $this->assertSame(['Observaciones', 'Cobrado en la entrega', 'Deuda actual'], array_keys($rows[0]));
+        $this->postJson('/api/v1/exportaciones-reportes/'.$export->id.'/enlaces-temporales')->assertForbidden();
+        $this->get(URL::temporarySignedRoute('api.v1.report-exports.download.es', now()->addMinutes(10), [
+            'reportExport' => $export->id, 'share' => 1, 'view' => 'html',
+        ]))->assertForbidden();
     }
 
     /** Los cobros independientes no consumen huevos ni chocan con la restricción de una entrega. */

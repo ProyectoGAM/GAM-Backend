@@ -26,6 +26,11 @@ class VehicleMaintenance extends Model
         return 'public_id';
     }
 
+    public function canBeCancelled(): bool
+    {
+        return in_array($this->status, ['planned', 'in_progress'], true);
+    }
+
     /** @return array<string, string> */
     protected function casts(): array
     {
