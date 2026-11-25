@@ -8,4 +8,6 @@ La actualización a 8.5.12 se verificó en Compose local en la API, las colas, e
 
 ## Instalación de PhpRedis
 
-La etapa compartida `php-base` compila PhpRedis 6.3.0 desde el commit publicado por el proyecto en GitHub. Así, una compilación limpia puede obtener la extensión aunque PECL devuelva un error al servir su archivo. El commit fija la misma versión que intentaba descargar la CI. [Release oficial de PhpRedis](https://github.com/phpredis/phpredis/releases/tag/6.3.0)
+La etapa `phpredis-source` obtiene el commit oficial de PhpRedis 6.3.0 con su submódulo `liblzf`. BuildKit monta ese checkout durante la compilación de `php-base`. Así, una compilación limpia puede obtener la extensión aunque PECL devuelva un error al servir su archivo. La ruta local del instalador usa los archivos que requiere `package.xml`. [Release oficial de PhpRedis](https://github.com/phpredis/phpredis/releases/tag/6.3.0) · [Referencias Git en Dockerfile](https://docs.docker.com/reference/dockerfile/#adding-files-from-a-git-repository)
+
+La imagen local de la etapa `development` se reconstruyó en Alpine. En un contenedor de esa imagen, `php --ri redis` confirmó PhpRedis 6.3.0 y la compresión LZF, Zstandard y LZ4.
