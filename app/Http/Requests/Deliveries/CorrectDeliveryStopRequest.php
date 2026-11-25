@@ -10,7 +10,10 @@ final class CorrectDeliveryStopRequest extends DeliveryRequest
     {
         $actor = $this->user();
 
-        return $actor !== null && ! $actor->usesDevicePin() && $actor->can('adjust', Customer::class);
+        return $actor !== null && (
+            (! $actor->usesDevicePin() && $actor->can('adjust', Customer::class))
+            || ($this->delivery()->driver_id === $actor->id && $actor->can('can_update_own_deliveries'))
+        );
     }
 
     /** @return array<string, list<string>> */

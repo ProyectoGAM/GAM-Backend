@@ -42,7 +42,7 @@ Un reparto activo con saldo negativo permanece abierto. El cierre responde `409`
 
 ### Rectificar una entrega y su cargo
 
-Con sesión personal de administrador, consultar `GET /repartos/{reparto}` para obtener el `id`, `version` e `items` de la entrega. Enviar `POST /repartos/{reparto}/entregas/{entrega}/rectificaciones` con `Idempotency-Key` y el motivo de la corrección. Este ejemplo reduce la primera línea a una unidad y conserva las demás.
+Consultar `GET /repartos/{reparto}` para obtener el `id`, `version` e `items` de la entrega. El repartidor con `can_update_own_deliveries` puede reducir las cantidades registradas en su reparto activo con cualquier saldo. Enviar `POST /repartos/{reparto}/entregas/{entrega}/rectificaciones` con `Idempotency-Key` y el motivo de la corrección. Este ejemplo reduce la primera línea a una unidad y conserva las demás.
 
 ```json
 {
@@ -52,7 +52,7 @@ Con sesión personal de administrador, consultar `GET /repartos/{reparto}` para 
 }
 ```
 
-La operación reutiliza las equivalencias y precios guardados. Devuelve `antes`, `despues` y el identificador del crédito si cambia el cargo. Puede corregir un reparto activo o ya cerrado con saldo negativo. Si quedan otras diferencias, el episodio sigue abierto. Para un reparto activo, el sobrante se descarga en el cierre. Para uno cerrado, indicar `return_production_unit_id` en la rectificación para confirmar el ingreso del sobrante. Si ya hubo devolución, se usa la misma UP. La rectificación conserva el resumen de cierre original y el detalle del reparto expone `rectificaciones_entregas`. En registros históricos sin líneas se puede informar `cantidad_entregada` y, si corresponde, `importe`. Si el cargo original nunca se contabilizó, la corrección deja la cuenta corriente sin movimientos.
+La operación reutiliza las equivalencias y precios guardados. Devuelve `antes`, `despues` y el identificador del crédito si cambia el cargo. El administrador con sesión personal puede corregir repartos activos o cerrados con saldo negativo. Si quedan otras diferencias, el episodio sigue abierto. Para un reparto activo, el sobrante se descarga en el cierre. Para uno cerrado, indicar `return_production_unit_id` en la rectificación para confirmar el ingreso del sobrante. Si ya hubo devolución, se usa la misma UP. La rectificación conserva el resumen de cierre original y el detalle del reparto expone `rectificaciones_entregas`. En registros históricos sin líneas se puede informar `cantidad_entregada` y, si corresponde, `importe`. Si el cargo original nunca se contabilizó, la corrección deja la cuenta corriente sin movimientos. La versión de la entrega, la compensación y el evento `delivery_stop_corrected` se guardan en la misma transacción.
 
 Ante una respuesta incierta, reintentar con la misma clave y el mismo cuerpo. Ante `409` por versión, volver a consultar el detalle para obtener las cantidades y la versión vigentes. Después de confirmar, refrescar el detalle del reparto y el contador de alertas. Usar `data.despues.saldo_huevos` para mostrar si queda una diferencia pendiente.
 

@@ -4,6 +4,7 @@ namespace App\Services\Deliveries;
 
 use App\DTO\ReportingAndAnalytics\ReportQueryData;
 use App\DTO\ReportingAndAnalytics\ReportSourceDefinition;
+use App\Models\CustomersAndAccounts\CustomerOperation;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -37,7 +38,7 @@ final class DeliveryCollectionsReportSource extends DeliveriesReportSource
             $filters[$field] = ['label' => $columns[$field]['label'], 'type' => 'string', 'operators' => ['contains']];
         }
         foreach ([
-            'payment_method' => ['Efectivo', 'Transferencia', 'Cheque', 'Otro', 'Sin cobro', 'Desconocida'],
+            'payment_method' => ['Efectivo', 'Transferencia', 'Cheque', 'Otro', 'Mixto', 'Sin cobro', 'Desconocida'],
             'payment_status' => ['Fiado', 'Pago parcial', 'Pagado', 'Sin cargo', 'Desconocido'],
             'current_debt_status' => ['Con deuda', 'A favor', 'Al día', 'Desconocido'],
         ] as $field => $options) {
@@ -79,8 +80,15 @@ final class DeliveryCollectionsReportSource extends DeliveriesReportSource
         $atDelivery = DB::table('customer_account_movements as m')
             ->whereColumn('m.delivery_id', 'd.id')->whereColumn('m.delivery_stop_id', 's.id')
             ->whereIn('m.type', ['payment', 'sale_charge'])
+            // Las rectificaciones en ruta corrigen el cobro de la visita. La reversión administrativa conserva ese dato histórico.
+            ->whereNotExists(fn (Builder $reversal) => $reversal->selectRaw('1')
+                ->from('customer_account_movements as reversal')
+                ->join('customer_operations as correction', 'correction.id', '=', 'reversal.customer_operation_id')
+                ->whereColumn('reversal.reverses_movement_id', 'm.id')
+                ->where('correction.kind', CustomerOperation::DELIVERY_PAYMENT_CORRECTION))
             ->selectRaw("SUM(m.amount) FILTER (WHERE m.type = 'sale_charge') AS charge,
                 -SUM(m.amount) FILTER (WHERE m.type = 'payment') AS paid,
+                COUNT(DISTINCT m.payment_method) FILTER (WHERE m.type = 'payment') AS method_count,
                 MAX(m.payment_method) FILTER (WHERE m.type = 'payment') AS method");
 
         return parent::baseQuery()
@@ -90,15 +98,16 @@ final class DeliveryCollectionsReportSource extends DeliveriesReportSource
             ->selectRaw('(d.started_at AT TIME ZONE ?)::date AS trip_date, d.loaded_quantity,
                 CASE WHEN d.closed_at IS NOT NULL THEN d.returned_quantity END AS returned_quantity', [config('lots.timezone', 'America/Montevideo')])
             ->selectRaw("CASE WHEN s.accounting_status = 'posted' THEN COALESCE(visit.paid, 0.000) END AS paid_at_delivery,
-                CASE WHEN s.accounting_status = 'posted' THEN GREATEST(COALESCE(visit.charge, 0.000) - COALESCE(visit.paid, 0.000), 0.000) END AS outstanding_at_delivery,
+                CASE WHEN s.accounting_status = 'posted' THEN GREATEST(COALESCE(s.total_amount, visit.charge, 0.000) - COALESCE(visit.paid, 0.000), 0.000) END AS outstanding_at_delivery,
                 CASE WHEN s.accounting_status <> 'posted' THEN 'Desconocida'
+                     WHEN visit.method_count > 1 THEN 'Mixto'
                      WHEN visit.method = 'cash' THEN 'Efectivo' WHEN visit.method = 'transfer' THEN 'Transferencia'
                      WHEN visit.method = 'check' THEN 'Cheque' WHEN visit.method = 'other' THEN 'Otro'
                      ELSE 'Sin cobro' END AS payment_method,
                 CASE WHEN s.accounting_status <> 'posted' THEN 'Desconocido'
-                     WHEN COALESCE(visit.charge, 0) = 0 AND COALESCE(visit.paid, 0) = 0 THEN 'Sin cargo'
+                     WHEN COALESCE(s.total_amount, visit.charge, 0) = 0 AND COALESCE(visit.paid, 0) = 0 THEN 'Sin cargo'
                      WHEN COALESCE(visit.paid, 0) = 0 THEN 'Fiado'
-                     WHEN visit.paid < visit.charge THEN 'Pago parcial' ELSE 'Pagado' END AS payment_status,
+                     WHEN visit.paid < COALESCE(s.total_amount, visit.charge, 0) THEN 'Pago parcial' ELSE 'Pagado' END AS payment_status,
                 CASE WHEN account.balance IS NOT NULL THEN GREATEST(account.balance, 0.000) END AS current_debt,
                 CASE WHEN account.balance IS NOT NULL THEN GREATEST(-account.balance, 0.000) END AS current_credit,
                 CASE WHEN account.balance > 0 THEN 'Con deuda' WHEN account.balance < 0 THEN 'A favor'

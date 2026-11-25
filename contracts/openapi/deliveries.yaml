@@ -208,12 +208,13 @@ paths:
   /api/v1/repartos/{reparto}/entregas/{entrega}/rectificaciones:
     post:
       tags: [Repartos]
-      summary: Rectifica una entrega de un reparto con saldo negativo
+      summary: Reduce la cantidad de una entrega registrada
       description: >-
-        Requiere sesión personal de administrador. Admite repartos activos y cerrados. Reduce cantidades,
-        conserva los precios registrados y compensa el cargo sin modificar los cobros. Guarda el antes y el después.
-        Una rectificación parcial deja abierta la alerta hasta regularizar el saldo. Si aparece un sobrante en un reparto
-        cerrado, indicar la UP para ingresar al stock todos los huevos de la diferencia. El cierre financiero original se conserva.
+        El repartidor con permiso de actualización puede reducir cantidades en su reparto activo con cualquier saldo.
+        La rectificación administrativa requiere sesión personal y un saldo negativo en un reparto activo o cerrado.
+        Se conservan los precios registrados y se compensa el cargo. Los cobros siguen vigentes.
+        Una rectificación parcial deja abierta la alerta mientras el saldo sea negativo. En un reparto cerrado,
+        indicar la UP si corresponde ingresar el sobrante al stock. El cierre financiero original se conserva.
       security: [{ bearerAuth: [] }]
       parameters:
         - {name: reparto, in: path, required: true, schema: {type: string, format: ulid}}
@@ -242,8 +243,12 @@ paths:
   /api/v1/repartos/{reparto}/cobros:
     post:
       tags: [Repartos]
-      summary: Cobra deuda sin mercadería o agrega otro pago del cliente
-      description: Sólo repartidor propietario con reparto activo. No genera una entrega ni modifica huevos. El mismo evento reintentado no duplica el cobro. Admite cliente inactivo o sin coordenadas.
+      summary: Registra un cobro independiente o un cobro vinculado a una entrega
+      description: >-
+        El repartidor registra cobros en su reparto activo. Con delivery_stop_id, el cobro se imputa al
+        reporte de una entrega realizada y contabilizada de ese cliente en el mismo reparto.
+        Al omitir el campo, el cobro es independiente y admite un cliente inactivo o sin coordenadas.
+        El mismo evento reintentado no duplica el cobro.
       security: [{ bearerAuth: [] }]
       parameters:
         - { name: reparto, in: path, required: true, schema: { type: string, format: ulid } }
@@ -259,6 +264,7 @@ paths:
               properties:
                 client_reference: { type: string, format: ulid }
                 client_event_id: { type: string, format: uuid, description: Debe coincidir con Idempotency-Key }
+                delivery_stop_id: { type: integer, minimum: 1, description: ID de la entrega realizada y contabilizada del cliente en este reparto }
                 amount: { $ref: './customers-and-accounts.yaml#/components/schemas/PositiveAmount' }
                 payment_method: { type: string, enum: [cash, transfer, check, other] }
                 payment_reference: { type: [string, 'null'], maxLength: 240 }
@@ -271,8 +277,46 @@ paths:
             application/json:
               schema: { $ref: './customers-and-accounts.yaml#/components/schemas/MovementList' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/repartos/{reparto}/cobros/{cobro}/rectificaciones:
+    post:
+      tags: [Repartos]
+      summary: Deja sin efecto o reemplaza un cobro del reparto
+      description: >-
+        El repartidor con permiso de actualización puede rectificar cobros vigentes de su reparto activo.
+        Usar el identificador del movimiento de tipo payment en el detalle del reparto. Un importe de cero
+        registra sólo la reversión. Un importe positivo registra la reversión y un cobro nuevo en una sola operación.
+        El reemplazo conserva la fecha del cobro, el medio, la referencia y el vínculo con la entrega cuando existe.
+        Un reintento con la misma clave y los mismos datos recupera la operación anterior.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - {name: reparto, in: path, required: true, schema: {type: string, format: ulid}}
+        - {name: cobro, in: path, required: true, schema: {type: string, format: ulid}}
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [amount, reason]
+              properties:
+                amount: {type: string, pattern: '^\d{1,19}(?:\.\d{1,3})?$', description: Importe corregido en UYU. Cero deja el cobro sin efecto.}
+                reason: {type: string, minLength: 1, maxLength: 2000, description: Motivo de la rectificación.}
+      responses:
+        '200':
+          description: Reversión y, si corresponde, cobro de reemplazo en ese orden
+          content:
+            application/json:
+              schema: {$ref: './customers-and-accounts.yaml#/components/schemas/MovementList'}
+        '401': {description: Se requiere autenticación}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
   /api/v1/repartos/{reparto}/cargas:
     post:
       tags: [Repartos]
