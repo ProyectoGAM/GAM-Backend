@@ -32,13 +32,34 @@ final readonly class CustomerAccountLedger
         return CustomerAccount::query()->where('customer_id', $customer->id)->lockForUpdate()->firstOrFail();
     }
 
+    /** El llamador verifica el origen del movimiento y conserva el lock de su cuenta. */
+    public function reverse(Customer $customer, CustomerOperation $operation, User $actor, CustomerAccountMovement $original, string $reason): CustomerAccountMovement
+    {
+        if ($original->reversal()->exists()) {
+            throw new CustomerAccountConflict('El movimiento ya tiene una reversión.');
+        }
+
+        return $this->post($customer, $operation, $actor, 'reversal',
+            CustomerAmounts::decimal(CustomerAmounts::parse($original->amount, signed: true)->negated()),
+            ['reason' => $reason, 'reverses_movement_id' => $original->id, 'payment_method' => $original->payment_method,
+                'delivery_stop_id' => $original->delivery_stop_id]);
+    }
+
     /** @param array<string, mixed> $attributes */
     public function post(Customer $customer, CustomerOperation $operation, User $actor, string $type, string $amount, array $attributes = []): CustomerAccountMovement
     {
         if ($actor->trashed() || $operation->created_by !== $actor->id) {
             throw new AuthorizationException;
         }
-        if (in_array($type, ['sale_charge', 'payment'], true) && $operation->delivery_id !== null) {
+        $requiresActiveDelivery = match ($type) {
+            'sale_charge', 'payment' => $operation->delivery_id !== null,
+            'adjustment_decrease' => $operation->delivery_id !== null
+                && $operation->kind === CustomerOperation::DELIVERY_STOP_CORRECTION
+                && isset($attributes['delivery_stop_id']) && ($actor->usesDevicePin() || ! $actor->can('adjust', Customer::class)),
+            'reversal' => $operation->delivery_id !== null && $operation->kind === CustomerOperation::DELIVERY_PAYMENT_CORRECTION,
+            default => false,
+        };
+        if ($requiresActiveDelivery) {
             $delivery = Delivery::query()->whereKey($operation->delivery_id)->lockForUpdate()->firstOrFail();
             if ($delivery->driver_id !== $actor->id || ! $actor->can('can_update_own_deliveries')) {
                 throw new AuthorizationException;

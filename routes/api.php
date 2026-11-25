@@ -267,6 +267,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             ->middleware('throttle:delivery-commands')
             ->name('deliveries.stops.store');
         Route::post('/repartos/{reparto}/cobros', [DeliveryController::class, 'payment'])->middleware('throttle:delivery-commands')->name('deliveries.payments.store');
+        Route::post('/repartos/{reparto}/cobros/{cobro}/rectificaciones', [DeliveryController::class, 'correctPayment'])
+            ->whereUlid('cobro')->middleware('throttle:delivery-commands')->name('deliveries.payments.correct');
         Route::post('/repartos/{reparto}/entregas/{entrega}/rectificaciones', [DeliveryController::class, 'correctStop'])
             ->whereNumber('entrega')->middleware('throttle:delivery-commands')->name('deliveries.stops.correct');
         Route::post('/repartos/{reparto}/cargas', [DeliveryController::class, 'load'])

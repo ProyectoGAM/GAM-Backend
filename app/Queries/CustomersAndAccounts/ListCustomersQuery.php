@@ -54,7 +54,7 @@ final class ListCustomersQuery
             $deliveryId = Delivery::query()->where('public_id', $filters['delivery_id'])->value('id');
             $inDelivery = fn ($q) => $q->where('delivery_id', $deliveryId);
             $delivered = fn ($q) => $q->where('delivery_id', $deliveryId)->where('status', 'delivered');
-            $paid = fn ($q) => $q->where('delivery_id', $deliveryId)->where('type', 'payment');
+            $paid = fn ($q) => $q->where('delivery_id', $deliveryId)->where('type', 'payment')->doesntHave('reversal');
             $query->withExists(['stops as visited_in_delivery' => $inDelivery, 'stops as delivered_in_delivery' => $delivered, 'movements as paid_in_delivery' => $paid]);
             match ($filters['visit_status'] ?? null) {
                 'delivered' => $query->whereHas('stops', $delivered),

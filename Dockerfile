@@ -3,6 +3,10 @@
 # La versión del cliente de PostgreSQL debe coincidir con la usada en Compose.
 ARG POSTGRES_CLIENT_VERSION=18
 
+# El checkout de PhpRedis 6.3.0 trae el submódulo liblzf requerido por package.xml.
+FROM scratch AS phpredis-source
+ADD https://github.com/phpredis/phpredis.git#df4fab2de7fc327c54c94a13af2b9542e4fbd720 /phpredis/
+
 FROM php:8.5.13-fpm-alpine3.24@sha256:51414d5291758fe27f58a64c7e8a078465d32cc7dcef7bda803f5b36019802e0 AS php-base
 
 ARG POSTGRES_CLIENT_VERSION
@@ -16,7 +20,8 @@ COPY --from=mlocati/php-extension-installer:2 \
     /usr/bin/install-php-extensions \
     /usr/local/bin/install-php-extensions
 
-RUN set -eux; \
+RUN --mount=type=bind,from=phpredis-source,source=/phpredis,target=/tmp/phpredis,rw \
+    set -eux; \
     install-php-extensions \
         bcmath \
         exif \
@@ -27,7 +32,7 @@ RUN set -eux; \
         pcntl \
         pdo_pgsql \
         posix \
-        redis \
+        /tmp/phpredis \
         zip; \
     rm -f /usr/local/bin/install-php-extensions
 

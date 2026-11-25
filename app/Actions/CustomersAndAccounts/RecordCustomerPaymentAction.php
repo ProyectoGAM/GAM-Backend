@@ -3,6 +3,7 @@
 namespace App\Actions\CustomersAndAccounts;
 
 use App\Enums\Deliveries\DeliveryStatus;
+use App\Enums\Deliveries\DeliveryStopStatus;
 use App\Exceptions\CustomersAndAccounts\CustomerAccountConflict;
 use App\Models\CustomersAndAccounts\Customer;
 use App\Models\CustomersAndAccounts\CustomerOperation;
@@ -26,8 +27,12 @@ final readonly class RecordCustomerPaymentAction
             'reason' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'client_event_id' => ['sometimes', 'uuid'],
             'occurred_at' => ['sometimes', 'date'],
+            'delivery_stop_id' => $delivery === null ? ['prohibited'] : ['sometimes', 'required', 'integer', 'min:1'],
         ])->validate();
         $data['amount'] = CustomerAmounts::decimal(CustomerAmounts::parse($data['amount']));
+        if (isset($data['delivery_stop_id'])) {
+            $data['delivery_stop_id'] = (int) $data['delivery_stop_id'];
+        }
         if ($delivery !== null && strtolower($data['client_event_id'] ?? '') !== strtolower($key)) {
             throw new CustomerAccountConflict('La identidad del cobro debe coincidir con su clave de idempotencia.');
         }
@@ -43,6 +48,13 @@ final readonly class RecordCustomerPaymentAction
                     if ($currentDelivery->status !== DeliveryStatus::Active) {
                         throw new CustomerAccountConflict('El reparto ya está cerrado.');
                     }
+                    if (isset($data['delivery_stop_id'])) {
+                        $stop = $currentDelivery->stops()->where('customer_id', $customer->id)
+                            ->lockForUpdate()->findOrFail($data['delivery_stop_id']);
+                        if ($stop->status !== DeliveryStopStatus::Delivered || $stop->accounting_status !== 'posted') {
+                            throw new CustomerAccountConflict('El cobro debe vincularse a una entrega realizada y contabilizada.');
+                        }
+                    }
                     $operation->delivery_id = $currentDelivery->id;
                 }
                 $current = Customer::query()->whereKey($customer->id)->lockForUpdate()->firstOrFail();
@@ -51,6 +63,7 @@ final readonly class RecordCustomerPaymentAction
                     'reason' => $data['reason'] ?? null, 'payment_method' => $data['payment_method'],
                     'payment_reference' => $data['payment_reference'] ?? null,
                     'occurred_at' => $data['occurred_at'] ?? now(),
+                    'delivery_stop_id' => $data['delivery_stop_id'] ?? null,
                 ]);
 
                 return ['movement_ids' => [$movement->id]];
