@@ -12,6 +12,7 @@ ENV APP_ENV=production \
 
 # Extensiones necesarias para Laravel, PostgreSQL, Redis, Horizon,
 # Media Library, backups y cálculos habituales del dominio.
+# PhpRedis 6.3.0 se compila desde el commit de la release oficial en GitHub.
 COPY --from=mlocati/php-extension-installer:2 \
     /usr/bin/install-php-extensions \
     /usr/local/bin/install-php-extensions
@@ -27,7 +28,7 @@ RUN set -eux; \
         pcntl \
         pdo_pgsql \
         posix \
-        redis \
+        phpredis/phpredis@df4fab2de7fc327c54c94a13af2b9542e4fbd720 \
         zip; \
     rm -f /usr/local/bin/install-php-extensions
 
