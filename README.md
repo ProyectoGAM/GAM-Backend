@@ -33,7 +33,7 @@ botón **Authorize** usa el token Bearer emitido por el login.
 
 docker compose -f compose.dev.yaml up -d --build
 
-La imagen del backend usa PHP 8.5.12 con FPM sobre Debian Trixie. La misma base se usa en desarrollo, CI y producción. Este parche corrige CVE-2026-109618 y CVE-2026-109619. [Aviso oficial de PHP 8.5.12](https://www.php.net/releases/8_5_12.php)
+La imagen del backend usa PHP 8.5.13 con FPM sobre Alpine 3.24 para disponer de actualizaciones de las bibliotecas del runtime. Desarrollo, CI y producción usan la misma base. El usuario www-data conserva UID y GID 33 para poder leer y escribir en los volúmenes creados antes del cambio. La imagen incluye las utilidades de backup de PostgreSQL 18. [PHP 8.5.13](https://www.php.net/releases/8_5_13.php)
 
 ## URLs según el entorno
 
