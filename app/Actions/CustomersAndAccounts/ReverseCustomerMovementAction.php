@@ -9,7 +9,6 @@ use App\Models\CustomersAndAccounts\CustomerOperation;
 use App\Models\Deliveries\Delivery;
 use App\Models\User;
 use App\Services\CustomersAndAccounts\CustomerAccountLedger;
-use App\Services\CustomersAndAccounts\CustomerAmounts;
 use App\Services\CustomersAndAccounts\CustomerOperationRunner;
 use Illuminate\Support\Facades\Validator;
 
@@ -34,14 +33,8 @@ final readonly class ReverseCustomerMovementAction
                 if (! $original->canReverseIndependently()) {
                     throw new CustomerAccountConflict('Este movimiento se corrige desde su operación de origen.');
                 }
-                if ($original->reversal()->exists()) {
-                    throw new CustomerAccountConflict('El movimiento ya tiene una reversión.');
-                }
                 $operation->customer_id = $current->id;
-                $reversal = $this->ledger->post($current, $operation, $actor, 'reversal',
-                    CustomerAmounts::decimal(CustomerAmounts::parse($original->amount, signed: true)->negated()),
-                    ['reason' => $reason, 'reverses_movement_id' => $original->id, 'payment_method' => $original->payment_method,
-                        'delivery_stop_id' => $original->delivery_stop_id]);
+                $reversal = $this->ledger->reverse($current, $operation, $actor, $original, $reason);
 
                 return ['movement_ids' => [$reversal->id]];
             });

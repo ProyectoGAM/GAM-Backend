@@ -43,10 +43,13 @@ final class DeliveryFinancialTest extends TestCase
             'payment' => ['amount' => '120.125', 'payment_method' => 'cash'],
         ], ['Idempotency-Key' => $event])->assertOk()->assertJsonPath('data.version', 1)->json('data.id');
 
-        // Request: el repartidor carece del permiso administrativo para compensar el cargo.
+        // Request: otro repartidor no puede rectificar el cargo.
         $path = '/api/v1/repartos/'.$deliveryId.'/entregas/'.$stopId.'/rectificaciones';
         $data = ['version' => 1, 'motivo' => 'Cantidad ingresada por error', 'lineas' => [['indice' => 0, 'cantidad' => '1']]];
         $headers = ['Idempotency-Key' => (string) Str::uuid()];
+        $otherDriver = User::factory()->create();
+        $otherDriver->syncRoles('delivery');
+        Sanctum::actingAs($otherDriver, ['api:access']);
         $this->postJson($path, $data, $headers)->assertForbidden();
         $admin = User::factory()->create();
         $admin->syncRoles('admin');
@@ -74,6 +77,264 @@ final class DeliveryFinancialTest extends TestCase
             ->assertJsonPath('data.rectificaciones_entregas.0.operation_id', $correction->json('data.operation_id'));
         $this->postJson('/api/v1/clientes/'.$customer->public_id.'/movimientos/'.$correction->json('data.movimiento_cuenta_id').'/reversion',
             ['reason' => 'Intento de reversión separada'], ['Idempotency-Key' => (string) Str::uuid()])->assertConflict();
+    }
+
+    // Flujo: el repartidor reduce cantidades de un reparto activo con saldo positivo y compensa el cargo.
+    public function test_driver_can_reduce_a_delivery_with_positive_egg_balance(): void
+    {
+        // Preparación: registra media presentación con un cobro parcial.
+        $this->driver();
+        $customer = Customer::factory()->withAccount()->create();
+        [$id, $presentation] = $this->start();
+        $event = (string) Str::uuid();
+        $stop = $this->postJson('/api/v1/repartos/'.$id.'/entregas', [
+            'client_reference' => $customer->public_id, 'status' => 'delivered', 'accounting_version' => 2, 'client_event_id' => $event,
+            'items' => [['unit' => $presentation->code, 'amount' => '0.5', 'eggs_per_unit' => 24]],
+            'payment' => ['amount' => '10', 'payment_method' => 'cash'],
+        ], ['Idempotency-Key' => $event])->assertOk()->json('data.id');
+
+        // Mutación: reduce la primera línea y repite la sincronización con la misma clave.
+        $path = '/api/v1/repartos/'.$id.'/entregas/'.$stop.'/rectificaciones';
+        $payload = ['version' => 1, 'motivo' => 'Recuento en la entrega', 'lineas' => [['indice' => 0, 'cantidad' => '0.25']]];
+        $headers = ['Idempotency-Key' => (string) Str::uuid()];
+        $correction = $this->postJson($path, $payload, $headers)->assertOk()
+            ->assertJsonPath('data.antes.saldo_huevos', 12)->assertJsonPath('data.despues.saldo_huevos', 18)
+            ->assertJsonPath('data.despues.version', 2)->assertJsonPath('data.despues.cantidad_entregada', 6);
+        $this->postJson($path, $payload, $headers)->assertOk()->assertExactJson($correction->json());
+
+        // Consulta: queda el cobro original, el cargo efectivo y una sola salida de huevos.
+        $this->assertDatabaseHas('customer_accounts', ['customer_id' => $customer->id, 'balance' => '15.250']);
+        $this->assertDatabaseCount('customer_account_movements', 3);
+        $this->assertDatabaseCount('egg_stock_transactions', 1);
+        $this->assertDatabaseHas('activity_log', ['event' => 'delivery_stop_corrected', 'operation_id' => $correction->json('data.operation_id')]);
+        $this->getJson('/api/v1/repartos/'.$id)->assertOk()
+            ->assertJsonPath('data.financial_summary.collected_amount', '10.000')
+            ->assertJsonPath('data.financial_summary.merchandise_amount', '25.250');
+
+        // Mutación: al cerrar el reparto, rechaza nuevas rectificaciones del repartidor.
+        Delivery::query()->where('public_id', $id)->firstOrFail()->forceFill(['status' => 'completed', 'closed_at' => now()])->save();
+        $this->postJson($path, [...$payload, 'version' => 2, 'lineas' => [['indice' => 0, 'cantidad' => '0']]],
+            ['Idempotency-Key' => (string) Str::uuid()])->assertConflict();
+        $this->assertDatabaseHas('delivery_stops', ['id' => $stop, 'version' => 2, 'delivered_quantity' => 6]);
+    }
+
+    // Flujo: reemplaza un cobro de entrega, luego lo deja sin efecto y conserva todos los originales.
+    public function test_driver_can_replace_a_delivery_payment_and_mark_it_unpaid(): void
+    {
+        // Preparación: cobra 30 UYU por una entrega de 50,500 UYU.
+        $driver = $this->driver();
+        $customer = Customer::factory()->withAccount()->create();
+        [$id, $presentation] = $this->start();
+        $event = (string) Str::uuid();
+        $delivery = '/api/v1/repartos/'.$id;
+        $stop = $this->postJson($delivery.'/entregas', [
+            'client_reference' => $customer->public_id, 'status' => 'delivered', 'accounting_version' => 2, 'client_event_id' => $event,
+            'items' => [['unit' => $presentation->code, 'amount' => '0.5', 'eggs_per_unit' => 24]],
+            'payment' => ['amount' => '30', 'payment_method' => 'transfer', 'payment_reference' => 'comprobante'],
+        ], ['Idempotency-Key' => $event])->assertOk();
+        $original = $stop->json('data.account_movements.1.id');
+        $path = $delivery.'/cobros/'.$original.'/rectificaciones';
+
+        // Mutación: un reemplazo produce una reversión y un cobro ligados a la misma entrega.
+        $payload = ['amount' => '20.125', 'reason' => 'Diferencia en el comprobante'];
+        $headers = ['Idempotency-Key' => (string) Str::uuid()];
+        $response = $this->postJson($path, $payload, $headers)->assertOk()->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.type', 'reversal')->assertJsonPath('data.0.amount', '30.000')
+            ->assertJsonPath('data.0.reverses_movement_id', $original)
+            ->assertJsonPath('data.1.type', 'payment')->assertJsonPath('data.1.amount', '-20.125')
+            ->assertJsonPath('data.1.delivery_stop_id', $stop->json('data.id'))
+            ->assertJsonPath('data.1.payment_method', 'transfer')->assertJsonPath('data.1.payment_reference', 'comprobante');
+        $this->postJson($path, $payload, $headers)->assertOk()->assertExactJson($response->json());
+        $this->postJson($path, [...$payload, 'amount' => '0'], $headers)->assertConflict();
+        $this->postJson($path, $payload, ['Idempotency-Key' => (string) Str::uuid()])->assertConflict();
+        $this->assertDatabaseHas('customer_accounts', ['customer_id' => $customer->id, 'balance' => '30.375']);
+        $this->assertDatabaseHas('activity_log', ['event' => 'delivery_payment_corrected', 'operation_id' => $response->json('data.0.operation_id')]);
+
+        // Consulta: el reporte usa el cobro de reemplazo una sola vez.
+        $admin = User::factory()->create();
+        $admin->syncRoles('admin');
+        Sanctum::actingAs($admin, ['api:access']);
+        $date = now('America/Montevideo')->toDateString();
+        $report = '/api/v1/reportes/deliveries.collections/previsualizaciones';
+        $this->postJson($report, ['from' => $date, 'to' => $date])->assertOk()
+            ->assertJsonPath('data.rows.0.paid_at_delivery', '20.125')
+            ->assertJsonPath('data.rows.0.outstanding_at_delivery', '30.375');
+
+        // Mutación: dejar sin efecto el reemplazo carga toda la venta a cuenta corriente.
+        Sanctum::actingAs($driver, ['api:access']);
+        $this->postJson($delivery.'/cobros/'.$response->json('data.1.id').'/rectificaciones',
+            ['amount' => '0', 'reason' => 'El cliente confirmó que no pagó'], ['Idempotency-Key' => (string) Str::uuid()])
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.type', 'reversal');
+        $this->assertDatabaseHas('customer_accounts', ['customer_id' => $customer->id, 'balance' => '50.500']);
+        $this->assertDatabaseCount('customer_account_movements', 5);
+        $this->assertDatabaseCount('egg_stock_transactions', 1);
+        $this->getJson($delivery)->assertOk()->assertJsonPath('data.financial_summary.collected_amount', '0.000')
+            ->assertJsonPath('data.delivered_quantity', 12)->assertJsonPath('data.stops.0.total_amount', '50.500');
+
+        // Mutación: vuelve a cobrar la misma entrega después de dejar sin efecto el pago anterior.
+        $event = (string) Str::uuid();
+        $this->postJson($delivery.'/cobros', [
+            'client_reference' => $customer->public_id, 'client_event_id' => $event,
+            'delivery_stop_id' => $stop->json('data.id'), 'amount' => '50.500', 'payment_method' => 'cash',
+        ], ['Idempotency-Key' => $event])->assertOk()->assertJsonPath('data.0.delivery_stop_id', $stop->json('data.id'));
+
+        // Consulta: el reporte cuenta el último cobro y descarta los que se revirtieron en ruta.
+        Sanctum::actingAs($admin, ['api:access']);
+        $this->postJson($report, ['from' => $date, 'to' => $date])->assertOk()
+            ->assertJsonPath('data.rows.0.paid_at_delivery', '50.500')
+            ->assertJsonPath('data.rows.0.payment_status', 'Pagado');
+    }
+
+    // Flujo: cobra una entrega fiada y distingue lo imputado a la entrega del saldo de cuenta corriente.
+    public function test_later_linked_payments_update_the_delivery_report(): void
+    {
+        // Preparación: registra una venta de 50,500 UYU inicialmente fiada.
+        $driver = $this->driver();
+        $customer = Customer::factory()->withAccount()->create();
+        [$id, $presentation] = $this->start();
+        $event = (string) Str::uuid();
+        $delivery = '/api/v1/repartos/'.$id;
+        $stop = $this->postJson($delivery.'/entregas', [
+            'client_reference' => $customer->public_id, 'status' => 'delivered', 'accounting_version' => 2, 'client_event_id' => $event,
+            'items' => [['unit' => $presentation->code, 'amount' => '0.5', 'eggs_per_unit' => 24]],
+            'payment' => ['amount' => '0'],
+        ], ['Idempotency-Key' => $event])->assertOk()->json('data.id');
+
+        // Mutación: registra un pago independiente y un cobro parcial imputado a la entrega.
+        $path = $delivery.'/cobros';
+        $event = (string) Str::uuid();
+        $this->postJson($path, [
+            'client_reference' => $customer->public_id, 'client_event_id' => $event, 'amount' => '2', 'payment_method' => 'cash',
+        ], ['Idempotency-Key' => $event])->assertOk()->assertJsonPath('data.0.delivery_stop_id', null);
+        $event = (string) Str::uuid();
+        $payload = ['client_reference' => $customer->public_id, 'delivery_stop_id' => $stop,
+            'client_event_id' => $event, 'amount' => '20.250', 'payment_method' => 'cash'];
+        $headers = ['Idempotency-Key' => $event];
+        $payment = $this->postJson($path, $payload, $headers)->assertOk()
+            ->assertJsonPath('data.0.delivery_stop_id', $stop)->assertJsonPath('data.0.balance_after', '28.250');
+        $this->postJson($path, $payload, $headers)->assertOk()->assertExactJson($payment->json());
+        $this->postJson($path, array_diff_key($payload, ['delivery_stop_id' => true]), $headers)->assertConflict();
+        $this->assertDatabaseHas('activity_log', ['event' => 'customer_account_payment', 'operation_id' => $payment->json('data.0.operation_id')]);
+
+        // Consulta: el reporte refleja pago parcial y separa la deuda actual de lo pendiente por la entrega.
+        $admin = User::factory()->create();
+        $admin->syncRoles('admin');
+        Sanctum::actingAs($admin, ['api:access']);
+        $date = now('America/Montevideo')->toDateString();
+        $period = ['from' => $date, 'to' => $date];
+        $report = '/api/v1/reportes/deliveries.collections/previsualizaciones';
+        $this->postJson($report, $period)->assertOk()
+            ->assertJsonPath('data.rows.0.paid_at_delivery', '20.250')
+            ->assertJsonPath('data.rows.0.outstanding_at_delivery', '30.250')
+            ->assertJsonPath('data.rows.0.current_debt', '28.250')
+            ->assertJsonPath('data.rows.0.payment_status', 'Pago parcial');
+
+        // Mutación: completa el cobro mediante otro medio en la misma entrega.
+        Sanctum::actingAs($driver, ['api:access']);
+        $event = (string) Str::uuid();
+        $this->postJson($path, [...$payload, 'client_event_id' => $event, 'amount' => '30.250', 'payment_method' => 'transfer'],
+            ['Idempotency-Key' => $event])->assertOk()->assertJsonPath('data.0.delivery_stop_id', $stop);
+        $this->assertDatabaseCount('customer_account_movements', 4);
+        $this->assertDatabaseCount('egg_stock_transactions', 1);
+
+        // Consulta: ambos cobros imputados completan la venta y aparecen como medio mixto.
+        Sanctum::actingAs($admin, ['api:access']);
+        $this->postJson($report, [...$period, 'filters' => [['field' => 'payment_method', 'operator' => 'eq', 'value' => 'Mixto']]])
+            ->assertOk()->assertJsonCount(1, 'data.rows')->assertJsonPath('data.rows.0.paid_at_delivery', '50.500')
+            ->assertJsonPath('data.rows.0.outstanding_at_delivery', '0.000')->assertJsonPath('data.rows.0.payment_status', 'Pagado');
+    }
+
+    // Flujo: un cobro vinculado exige una entrega del cliente, realizada y contabilizada en ese reparto.
+    public function test_linked_payment_rejects_a_foreign_or_unaccounted_stop(): void
+    {
+        // Preparación: crea una entrega válida y otro reparto del mismo repartidor.
+        $driver = $this->driver();
+        $customer = Customer::factory()->withAccount()->create();
+        $otherCustomer = Customer::factory()->withAccount()->create();
+        [$id, $presentation] = $this->start();
+        $other = Delivery::factory()->create(['driver_id' => $driver->id]);
+        $event = (string) Str::uuid();
+        $stop = $this->postJson('/api/v1/repartos/'.$id.'/entregas', [
+            'client_reference' => $customer->public_id, 'status' => 'delivered', 'accounting_version' => 2, 'client_event_id' => $event,
+            'items' => [['unit' => $presentation->code, 'amount' => '0.5', 'eggs_per_unit' => 24]],
+            'payment' => ['amount' => '0'],
+        ], ['Idempotency-Key' => $event])->assertOk()->json('data.id');
+        $event = (string) Str::uuid();
+        $payload = ['client_reference' => $customer->public_id, 'delivery_stop_id' => $stop,
+            'client_event_id' => $event, 'amount' => '20', 'payment_method' => 'cash'];
+        $headers = ['Idempotency-Key' => $event];
+
+        // Requests: rechaza la referencia de cliente o reparto ajeno y el identificador nulo.
+        $path = '/api/v1/repartos/'.$id.'/cobros';
+        $this->postJson($path, [...$payload, 'client_reference' => $otherCustomer->public_id], $headers)->assertNotFound();
+        $this->postJson('/api/v1/repartos/'.$other->public_id.'/cobros', $payload, $headers)->assertNotFound();
+        $this->postJson($path, [...$payload, 'delivery_stop_id' => null], $headers)->assertUnprocessable()
+            ->assertJsonValidationErrors('delivery_stop_id');
+
+        // Mutación: una entrega sin contabilidad conciliada no recibe cobros imputados.
+        DeliveryStop::query()->findOrFail($stop)->forceFill(['accounting_status' => 'legacy_unreconciled'])->save();
+        $this->postJson($path, $payload, $headers)->assertConflict();
+        $this->assertDatabaseCount('customer_account_movements', 1);
+        $this->assertDatabaseHas('customer_accounts', ['customer_id' => $customer->id, 'balance' => '50.500']);
+    }
+
+    // Flujo: el mapa deja de mostrar como cobrado al cliente sin visitas ni pagos vigentes.
+    public function test_voiding_a_standalone_payment_updates_the_customer_map(): void
+    {
+        // Preparación: registra un cobro independiente a un cliente dentro del mapa.
+        $this->driver();
+        $customer = Customer::factory()->withAccount()->create(['latitude' => '-34.90', 'longitude' => '-56.20']);
+        [$id] = $this->start();
+        $event = (string) Str::uuid();
+        $path = '/api/v1/repartos/'.$id.'/cobros';
+        $payment = $this->postJson($path, [
+            'client_reference' => $customer->public_id, 'client_event_id' => $event, 'amount' => '15', 'payment_method' => 'cash',
+        ], ['Idempotency-Key' => $event])->assertOk()->json('data.0.id');
+        $markers = '/api/v1/clientes/mapa?west=-57&east=-56&south=-35&north=-34&delivery_id='.$id;
+        $this->getJson($markers.'&visit_status=paid')->assertOk()->assertJsonPath('data.0.id', $customer->public_id);
+
+        // Mutación y consulta: deshace el saldo a favor y el cliente vuelve a pendiente.
+        $this->postJson($path.'/'.$payment.'/rectificaciones',
+            ['amount' => '0', 'reason' => 'No se recibió dinero'], ['Idempotency-Key' => (string) Str::uuid()])
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.delivery_stop_id', null);
+        $this->getJson($markers.'&visit_status=paid')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson($markers.'&visit_status=pending')->assertOk()
+            ->assertJsonPath('data.0.id', $customer->public_id)->assertJsonPath('data.0.visit_status', 'pending');
+        $this->assertDatabaseHas('customer_accounts', ['customer_id' => $customer->id, 'balance' => '0.000']);
+    }
+
+    // Flujo: limita la rectificación de cobros al reparto propio activo y a un pago de ese reparto.
+    public function test_payment_correction_rejects_foreign_payments_and_closed_deliveries(): void
+    {
+        // Preparación: registra un cobro independiente y crea otro reparto del mismo conductor.
+        $driver = $this->driver();
+        $customer = Customer::factory()->withAccount()->create();
+        [$id] = $this->start();
+        $event = (string) Str::uuid();
+        $payment = $this->postJson('/api/v1/repartos/'.$id.'/cobros', [
+            'client_reference' => $customer->public_id, 'client_event_id' => $event, 'amount' => '15', 'payment_method' => 'cash',
+        ], ['Idempotency-Key' => $event])->assertOk()->json('data.0.id');
+        $other = Delivery::factory()->create(['driver_id' => $driver->id]);
+        $suffix = '/cobros/'.$payment.'/rectificaciones';
+        $payload = ['amount' => '0', 'reason' => 'Cobro ingresado por error'];
+        $headers = ['Idempotency-Key' => (string) Str::uuid()];
+
+        // Requests: el cobro ajeno al reparto no se encuentra y un tercero no puede editar.
+        $this->postJson('/api/v1/repartos/'.$other->public_id.$suffix, $payload, $headers)->assertNotFound();
+        $anotherDriver = User::factory()->create();
+        $anotherDriver->syncRoles('delivery');
+        Sanctum::actingAs($anotherDriver, ['api:access']);
+        $path = '/api/v1/repartos/'.$id.$suffix;
+        $this->postJson($path, $payload, $headers)->assertForbidden();
+
+        // Requests: rechaza una cantidad inválida y luego una rectificación nueva posterior al cierre.
+        Sanctum::actingAs($driver, ['api:access']);
+        $this->postJson($path, ['amount' => '-1'], $headers)->assertUnprocessable()
+            ->assertJsonValidationErrors(['amount', 'reason']);
+        Delivery::query()->where('public_id', $id)->firstOrFail()->forceFill(['status' => 'completed', 'closed_at' => now()])->save();
+        $this->postJson($path, $payload, $headers)->assertConflict();
+        $this->assertDatabaseHas('customer_accounts', ['customer_id' => $customer->id, 'balance' => '-15.000']);
+        $this->assertDatabaseCount('customer_account_movements', 1);
     }
 
     // Flujo: un cierre histórico conserva su resumen y acredita el sobrante rectificado en la UP confirmada.

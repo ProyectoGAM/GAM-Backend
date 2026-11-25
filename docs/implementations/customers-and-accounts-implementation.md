@@ -22,7 +22,7 @@ Se permite saldo a favor por sobrepago o ajuste de disminución. Importes HTTP c
 
 Una entrega confirmada contabiliza su valor exacto y, si existe, un pago separado en la misma transacción. «Fiado» exige confirmación explícita de cobro cero. Un cargo de valor cero no genera una fila financiera de importe cero. «Sólo cobro» no crea una entrega fallida ni modifica stock; se pueden registrar varios pagos del mismo cliente y reparto, antes o después de su entrega.
 
-**Ajustar deuda** permite aumentar o disminuir mediante importe positivo y motivo obligatorio de hasta 2000 caracteres. Envía `expected_version`: un cambio concurrente devuelve `409` y exige consultar el saldo y confirmar otra vez. Sólo un administrador activo puede ajustar o revertir, también al invocar directamente una Action. El saldo no es un campo editable del cliente.
+**Ajustar deuda** permite aumentar o disminuir mediante importe positivo y motivo obligatorio de hasta 2000 caracteres. Envía `expected_version`: un cambio concurrente devuelve `409` y exige consultar el saldo y confirmar otra vez. Los ajustes y las reversiones desde la cuenta del cliente requieren un administrador activo, también al invocar directamente su Action. El saldo no es un campo editable del cliente.
 
 Los movimientos conservan su registro original. Un pago o ajuste general incorrecto se compensa mediante una reversión exacta, vinculada y con motivo obligatorio, una sola vez. La [rectificación de mercadería](operational-summary-implementation.md#rectificar-una-entrega-y-su-cargo) crea un `adjustment_decrease` ligado a la entrega cuando se redujo un cargo contabilizado. Para proteger la coherencia con las cantidades, esa compensación se gestiona desde Repartos.
 
@@ -45,7 +45,8 @@ Contratos: [clientes y cuentas](../../contracts/openapi/customers-and-accounts.y
 | `POST /clientes/{cliente}/movimientos/{movimiento}/reversion` | Compensar pago/ajuste. |
 | `GET /repartos/clientes` | Proyección operativa paginada y última entrega. |
 | `POST /repartos/{reparto}/entregas` | Entrega/visita e integración contable atómica. |
-| `POST /repartos/{reparto}/cobros` | Cobro independiente en reparto propio activo. |
+| `POST /repartos/{reparto}/cobros` | Cobro independiente o vinculado a una entrega del reparto propio activo. |
+| `POST /repartos/{reparto}/cobros/{cobro}/rectificaciones` | Reversión o reemplazo de un cobro vigente en reparto propio activo. |
 
 Ejemplo de disminución: el saldo consultado es `1000.125`, versión 7.
 
@@ -80,7 +81,32 @@ Ejemplo de cobro independiente de mercadería:
 }
 ```
 
-Los medios son `cash`, `transfer` y `other`, presentados como Efectivo, Transferencia y Otro. El cobro administrativo utiliza esos mismos campos de pago sin `client_reference` ni `client_event_id`; el cliente pertenece a la ruta.
+Los medios son `cash`, `transfer`, `check` y `other`, presentados como Efectivo, Transferencia, Cheque y Otro. El cobro administrativo utiliza esos mismos campos de pago sin `client_reference` ni `client_event_id`; el cliente pertenece a la ruta.
+
+### Cobrar una entrega ya realizada
+
+Desde el formulario de una entrega impaga, enviá los mismos datos a `POST /api/v1/repartos/{reparto}/cobros` con `"delivery_stop_id": 123`, usando el `id` de la entrega y su `client_reference`. La entrega debe estar realizada y contabilizada, en el reparto activo del repartidor. Omití `delivery_stop_id` para un cobro independiente.
+
+El movimiento y la auditoría guardan el ID de la entrega. El reporte suma los cobros vinculados a esa visita y presenta su estado según el importe cubierto. Si hay cobros con más de un medio para la misma entrega, el medio figura como **Mixto**. La cuenta corriente incluye también los cobros independientes. Usá una clave nueva para cada cobro y la misma clave y datos para reintentarlo. La escritura reutiliza el vínculo existente y se ejecuta en la transacción del libro contable.
+
+Las pruebas HTTP en PostgreSQL cubren el cobro posterior de una entrega fiada o con un pago revertido, el efecto sobre el reporte, el reintento y el rechazo de entregas de otro cliente o reparto y de entregas sin conciliar.
+
+### Rectificar un cobro desde el reparto
+
+En un reparto propio activo, el repartidor con `can_update_own_deliveries` puede rectificar un cobro de la entrega o un cobro independiente. Tomá el `id` de un movimiento `payment` vigente en `data.account_movements` del detalle del reparto. `delivery_stop_id` identifica la entrega cuando existe. Un movimiento revertido tiene `reversal_id`. Enviá el identificador como `{cobro}` y una clave UUID en `Idempotency-Key`.
+
+```json
+{
+  "amount": "120.125",
+  "reason": "Importe verificado con el cliente"
+}
+```
+
+Usá `"amount": "0"` para dejar sin efecto ese cobro. Si era el único cobro de la entrega, la venta queda impaga. Un monto positivo crea un reemplazo con el mismo medio, referencia, fecha del cobro y vínculo con la entrega. La respuesta `data` trae la reversión seguida por el nuevo `payment` cuando corresponde. Para rectificar otra vez, usá el ID del pago vigente. Ante una respuesta incierta, repetí el cuerpo con la misma clave. Un intento nuevo sobre un pago ya revertido o en un reparto cerrado recibe `409`.
+
+La reversión, el reemplazo, la actualización del saldo y la auditoría `delivery_payment_corrected` se guardan en la misma transacción. El reporte de la visita usa el cobro corregido en ruta y el mapa cuenta los cobros vigentes. La rectificación opera sobre los movimientos de cobro y reutiliza las tablas de operaciones y movimientos.
+
+Las pruebas HTTP con PostgreSQL cubren la reducción de mercadería, el reemplazo y la reversión de un cobro, la repetición idempotente, el rechazo por contexto ajeno o cierre y las proyecciones del reporte y del mapa. La verificación se ejecuta sobre el contrato del backend.
 
 ### Ubicación durante el alta
 

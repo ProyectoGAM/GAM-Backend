@@ -30,6 +30,8 @@ class CustomerOperation extends Model
 
     public const string DELIVERY_STOP_CORRECTION = 'delivery_stop_correction';
 
+    public const string DELIVERY_PAYMENT_CORRECTION = 'delivery_payment_correction';
+
     protected $dateFormat = 'Y-m-d H:i:sP';
 
     protected function casts(): array

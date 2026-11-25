@@ -3,7 +3,11 @@
 # La versión del cliente de PostgreSQL debe coincidir con la usada en Compose.
 ARG POSTGRES_CLIENT_VERSION=18
 
-FROM php:8.5.12-fpm-trixie AS php-base
+# El checkout de PhpRedis 6.3.0 trae el submódulo liblzf requerido por package.xml.
+FROM scratch AS phpredis-source
+ADD https://github.com/phpredis/phpredis.git#df4fab2de7fc327c54c94a13af2b9542e4fbd720 /phpredis/
+
+FROM php:8.5.13-fpm-alpine3.24@sha256:51414d5291758fe27f58a64c7e8a078465d32cc7dcef7bda803f5b36019802e0 AS php-base
 
 ARG POSTGRES_CLIENT_VERSION
 
@@ -16,7 +20,8 @@ COPY --from=mlocati/php-extension-installer:2 \
     /usr/bin/install-php-extensions \
     /usr/local/bin/install-php-extensions
 
-RUN set -eux; \
+RUN --mount=type=bind,from=phpredis-source,source=/phpredis,target=/tmp/phpredis,rw \
+    set -eux; \
     install-php-extensions \
         bcmath \
         exif \
@@ -27,26 +32,18 @@ RUN set -eux; \
         pcntl \
         pdo_pgsql \
         posix \
-        redis \
+        /tmp/phpredis \
         zip; \
     rm -f /usr/local/bin/install-php-extensions
 
-# pg_dump es requerido por spatie/laravel-backup.
-# Se utiliza el repositorio oficial para poder instalar la misma versión
-# principal que tendrá el servidor PostgreSQL.
+# Mantiene UID/GID 33 para los volúmenes persistentes creados en Debian.
 RUN set -eux; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates curl tini; \
-    install -d /usr/share/postgresql-common/pgdg; \
-    curl --fail --silent --show-error \
-        --output /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
-        https://www.postgresql.org/media/keys/ACCC4CF8.asc; \
-    . /etc/os-release; \
-    echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
-        > /etc/apt/sources.list.d/pgdg.list; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends "postgresql-client-${POSTGRES_CLIENT_VERSION}"; \
-    rm -rf /var/lib/apt/lists/*
+    test -z "$(awk -F: '$3 == 33' /etc/passwd /etc/group)"; \
+    sed -i 's/^www-data:x:82:82:/www-data:x:33:33:/' /etc/passwd; \
+    sed -i 's/^www-data:x:82:/www-data:x:33:/' /etc/group; \
+    test "$(id -u www-data):$(id -g www-data)" = 33:33; \
+    apk upgrade --no-cache; \
+    apk add --no-cache ca-certificates curl tini tzdata "postgresql${POSTGRES_CLIENT_VERSION}-client"
 
 WORKDIR /var/www/html
 
@@ -128,6 +125,11 @@ USER www-data
 
 FROM php-base AS runtime
 
+RUN set -eux; \
+    php-fpm -t; \
+    pg_dump --version; \
+    pg_restore --version
+
 WORKDIR /var/www/html
 
 COPY --from=vendor --chown=www-data:www-data /var/www/html /var/www/html
@@ -142,5 +144,5 @@ EXPOSE 9000
 
 STOPSIGNAL SIGQUIT
 
-ENTRYPOINT ["/usr/bin/tini", "--"]
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["php-fpm", "-F"]

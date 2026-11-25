@@ -38,16 +38,24 @@ final readonly class CorrectDeliveryStopAction
     /** @param array<string, mixed> $data */
     public function execute(Delivery $delivery, int $stopId, User $actor, array $data, string $key): CustomerOperation
     {
-        if ($actor->usesDevicePin()) {
+        $administrative = ! $actor->usesDevicePin() && $actor->can('adjust', Customer::class);
+        if (! $administrative && $delivery->driver_id !== $actor->id) {
             throw new AuthorizationException;
         }
         unset($data['idempotency_key']);
         $data['motivo'] = trim($data['motivo']);
         $data['version'] = (int) $data['version'];
 
-        return $this->operations->run(CustomerOperation::DELIVERY_STOP_CORRECTION, $key, ['delivery' => $delivery->public_id, 'stop' => $stopId, 'data' => $data], $actor, 'adjust',
-            function (CustomerOperation $operation, User $actor) use ($delivery, $stopId, $data): array {
+        return $this->operations->run(CustomerOperation::DELIVERY_STOP_CORRECTION, $key, ['delivery' => $delivery->public_id, 'stop' => $stopId, 'data' => $data],
+            $actor, $administrative ? 'adjust' : 'can_update_own_deliveries',
+            function (CustomerOperation $operation, User $actor) use ($delivery, $stopId, $data, $administrative): array {
                 $delivery = Delivery::query()->whereKey($delivery->id)->lockForUpdate()->firstOrFail();
+                if ($administrative ? $actor->usesDevicePin() : $delivery->driver_id !== $actor->id) {
+                    throw new AuthorizationException;
+                }
+                if (! $administrative && $delivery->status !== DeliveryStatus::Active) {
+                    throw new DeliveryConflict('Solo podés rectificar entregas de un reparto activo.');
+                }
                 $stop = $delivery->stops()->whereKey($stopId)->lockForUpdate()->firstOrFail();
                 if ($delivery->status === DeliveryStatus::Cancelled || $stop->status !== DeliveryStopStatus::Delivered
                     || $stop->version !== $data['version']) {
@@ -56,7 +64,7 @@ final readonly class CorrectDeliveryStopAction
 
                 $delivered = (int) $delivery->stops()->where('status', DeliveryStopStatus::Delivered)->sum('delivered_quantity');
                 $beforeBalance = $delivery->loaded_quantity - $delivered - $delivery->returned_quantity;
-                if ($beforeBalance >= 0) {
+                if ($administrative && $beforeBalance >= 0) {
                     throw new DeliveryConflict('El reparto no tiene un saldo negativo que rectificar.');
                 }
                 $before = $this->snapshot($delivery, $stop, $beforeBalance);
@@ -86,7 +94,7 @@ final readonly class CorrectDeliveryStopAction
                 ];
                 $this->audit->record(AuditEntryData::forSubject(
                     subject: $stop, actor: $actor, logName: 'deliveries', event: 'delivery_stop_corrected',
-                    description: 'Entrega rectificada para regularizar el saldo del reparto', operationId: $operation->operation_id,
+                    description: 'Cantidad de mercadería entregada rectificada', operationId: $operation->operation_id,
                     upId: $delivery->production_unit_id, source: 'delivery',
                     properties: ['delivery_id' => $delivery->public_id, 'reason' => $data['motivo'],
                         'account_movement_id' => $credit, 'returned_quantity' => $returned, 'result' => 'success'],
