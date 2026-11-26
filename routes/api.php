@@ -251,6 +251,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             ->name('deliveries.current');
         Route::get('/repartos/clientes', [DeliveryController::class, 'clients'])
             ->name('deliveries.clients');
+        Route::get('/repartos/clientes/{cliente}/historial', [DeliveryController::class, 'clientHistory'])
+            ->whereUlid('cliente')->name('deliveries.clients.history');
         Route::get('/repartos/unidades-productivas', [DeliveryController::class, 'productionUnits'])->name('deliveries.production-units');
         Route::get('/inventario/presentaciones-huevos', [EggPresentationController::class, 'index'])->name('egg-presentations.index');
         Route::post('/inventario/presentaciones-huevos', [EggPresentationController::class, 'store'])->name('egg-presentations.store');
