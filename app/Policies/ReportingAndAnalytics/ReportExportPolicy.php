@@ -18,12 +18,13 @@ final readonly class ReportExportPolicy
 
     public function view(User $user, ReportExport $export): bool
     {
-        return $this->owns($user, $export) && $this->allowed($user, 'can_view_reports');
+        return $this->owns($user, $export) && $this->allowed($user, 'can_view_reports')
+            && (! $export->isCombined() || $this->canReadSource($user, $export));
     }
 
     public function download(User $user, ReportExport $export): bool
     {
-        return $this->view($user, $export) && $this->canReadSource($user, $export);
+        return $this->view($user, $export) && ($export->isCombined() || $this->canReadSource($user, $export));
     }
 
     public function share(User $user, ReportExport $export): bool
@@ -38,7 +39,17 @@ final readonly class ReportExportPolicy
     private function canReadSource(User $user, ReportExport $export): bool
     {
         try {
-            return $this->registry->canRead($user, $this->registry->get($export->source_key));
+            $keys = $export->sourceKeys();
+            if ($keys === [] || ($export->isCombined() && $user->usesDevicePin() && $export->production_unit_id !== $user->production_unit_id)) {
+                return false;
+            }
+            foreach ($keys as $key) {
+                if (! $this->registry->canRead($user, $this->registry->get($key))) {
+                    return false;
+                }
+            }
+
+            return true;
         } catch (ReportSourceNotFoundException) {
             return false;
         }

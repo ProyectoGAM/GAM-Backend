@@ -20,7 +20,7 @@ final readonly class CreateTemporaryReportLinkAction
     /** @return array{url: string, expires_at: string, file_expires_at: string|null} */
     public function execute(ReportExport $export, int $expiresInMinutes, User $actor): array
     {
-        abort_if($actor->usesDevicePin() || $export->production_unit_id !== null, 403);
+        abort_if($export->isCombined() || $actor->usesDevicePin() || $export->production_unit_id !== null, 403);
         abort_unless($this->registry->canShare($actor, $this->registry->get($export->source_key)), 403);
 
         return DB::transaction(function () use ($export, $actor, $expiresInMinutes): array {

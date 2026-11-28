@@ -59,16 +59,33 @@ final class GenerateReportExport implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $source = $registry->get($export->source_key);
         if ($export->user === null) {
             throw new ModelNotFoundException('El solicitante del reporte ya no está disponible.');
         }
         if ($export->user->usesDevicePin() && (int) $export->production_unit_id !== $export->user->production_unit_id) {
             throw new \RuntimeException('La UP del solicitante ya no coincide con la exportación.');
         }
-        $registry->assertCanExport($export->user, $source);
-        if ($export->definition_version !== $source->definition()->definitionVersion) {
-            throw new \RuntimeException('La versión de la fuente de reporte ya no es compatible.');
+        $combined = $export->isCombined();
+        $storedQueries = $combined ? $export->query['sections'] : [$export->query];
+        $sections = [];
+        foreach ($storedQueries as $storedQuery) {
+            $sourceKey = $combined ? $storedQuery['source_key'] : $export->source_key;
+            $version = $combined ? $storedQuery['definition_version'] : $export->definition_version;
+            $source = $registry->get($sourceKey);
+            $registry->assertCanExport($export->user, $source);
+            if ($combined) {
+                $registry->assertCanRead($export->user, $source);
+            }
+            if ($version !== $source->definition()->definitionVersion) {
+                throw new \RuntimeException('La versión de la fuente de reporte ya no es compatible.');
+            }
+            unset($storedQuery['source_key'], $storedQuery['definition_version']);
+            // Una consulta agregada puede recibir un orden predeterminado implícito.
+            $sort = $storedQuery['sorts'][0]['field'] ?? null;
+            if ($combined && $sort !== null && ! array_key_exists($sort, $source->definition()->sorts)) {
+                unset($storedQuery['sorts']);
+            }
+            $sections[] = ['source' => $source, 'query' => $normalizer->normalize($sourceKey, $storedQuery)];
         }
 
         $processing = DB::transaction(function () use ($export, $auditRecorder): bool {
@@ -103,13 +120,12 @@ final class GenerateReportExport implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $storedQuery = $export->query;
-        unset($storedQuery['source_key'], $storedQuery['definition_version']);
-        $query = $normalizer->normalize($export->source_key, $storedQuery);
         try {
             $file = app(ProductionUnitAccess::class)->within(
                 $export->production_unit_id === null ? null : (int) $export->production_unit_id,
-                fn (): array => $writer->write($export, $source, $query),
+                fn (): array => $combined
+                    ? $writer->writeCombined($export, $sections)
+                    : $writer->write($export, $sections[0]['source'], $sections[0]['query']),
             );
         } catch (ReportConflict $exception) {
             // Un límite de negocio es definitivo; repetir el mismo reporte no lo corrige.

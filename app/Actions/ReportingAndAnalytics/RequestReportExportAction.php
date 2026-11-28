@@ -3,7 +3,6 @@
 namespace App\Actions\ReportingAndAnalytics;
 
 use App\DTO\AuditAndTraceability\AuditEntryData;
-use App\DTO\ReportingAndAnalytics\ReportQueryData;
 use App\Enums\ReportingAndAnalytics\ReportExportFormat;
 use App\Exceptions\ReportingAndAnalytics\ReportConflict;
 use App\Interfaces\AuditAndTraceability\AuditRecorder;
@@ -37,10 +36,45 @@ final readonly class RequestReportExportAction
             throw new ReportConflict('El formato solicitado no está disponible para esta fuente.');
         }
         $query = $this->normalizer->normalize($sourceKey, [...$input, 'page' => 1, 'per_page' => min(50, $source->definition()->limits['max_page_size'])]);
+
+        return $this->queue($sourceKey, $query->definitionVersion, $query->toArray(), $format, $idempotencyKey, $actor);
+    }
+
+    /**
+     * @param  list<array{source_key: string, query: array<string, mixed>}>  $sections
+     * @return array{export: ReportExport, replay: bool}
+     */
+    public function executeCombined(array $sections, ReportExportFormat $format, string $idempotencyKey, User $actor): array
+    {
+        $queries = [];
+        foreach ($sections as $section) {
+            $sourceKey = $section['source_key'];
+            $source = $this->registry->get($sourceKey);
+            $this->registry->assertCanRead($actor, $source);
+            $this->registry->assertCanExport($actor, $source);
+            if (! in_array($format->value, $source->definition()->formats, true)) {
+                throw new ReportConflict('El formato solicitado no está disponible para '.$source->definition()->label.'.');
+            }
+            $queries[] = $this->normalizer->normalize($sourceKey, [
+                ...$section['query'],
+                'page' => 1,
+                'per_page' => min(50, $source->definition()->limits['max_page_size']),
+            ])->toArray();
+        }
+
+        return $this->queue(ReportExport::COMBINED_SOURCE, '1', ['sections' => $queries], $format, $idempotencyKey, $actor);
+    }
+
+    /**
+     * @param  array<string, mixed>  $query
+     * @return array{export: ReportExport, replay: bool}
+     */
+    private function queue(string $sourceKey, string $version, array $query, ReportExportFormat $format, string $idempotencyKey, User $actor): array
+    {
         $payloadHash = $this->hash($query);
         $idempotencyHash = hash('sha256', $actor->getKey().'|'.$idempotencyKey);
 
-        $result = DB::transaction(function () use ($actor, $format, $idempotencyHash, $payloadHash, $query): array {
+        $result = DB::transaction(function () use ($actor, $format, $idempotencyHash, $payloadHash, $sourceKey, $version, $query): array {
             $existing = ReportExport::query()
                 ->where('user_id', $actor->getKey())
                 ->where('idempotency_key_hash', $idempotencyHash)
@@ -62,13 +96,13 @@ final readonly class RequestReportExportAction
                     'operation_id' => Str::uuid()->toString(),
                     'idempotency_key_hash' => $idempotencyHash,
                     'payload_hash' => $payloadHash,
-                    'source_key' => $query->sourceKey,
-                    'definition_version' => $query->definitionVersion,
-                    'query' => $query->toArray(),
+                    'source_key' => $sourceKey,
+                    'definition_version' => $version,
+                    'query' => $query,
                     'format' => $format,
                     'status' => 'pending',
                     'disk' => config('reporting.storage_disk', 'local'),
-                    'file_name' => 'reporte-'.$query->sourceKey.'.'.$format->value,
+                    'file_name' => ($sourceKey === ReportExport::COMBINED_SOURCE ? 'reporte-varios-modulos' : 'reporte-'.$sourceKey).'.'.$format->value,
                     'expires_at' => now()->addMinutes((int) config('reporting.file_ttl_minutes', 1440)),
                 ]);
             } catch (QueryException $exception) {
@@ -107,10 +141,11 @@ final readonly class RequestReportExportAction
         return $result;
     }
 
-    private function hash(ReportQueryData $query): string
+    /** @param array<string, mixed> $query */
+    private function hash(array $query): string
     {
         try {
-            return hash('sha256', json_encode($query->toArray(), JSON_THROW_ON_ERROR));
+            return hash('sha256', json_encode($query, JSON_THROW_ON_ERROR));
         } catch (JsonException $exception) {
             throw new ReportConflict('No fue posible normalizar la consulta del reporte.');
         }

@@ -72,6 +72,7 @@ final readonly class DownloadReportExportAction
         }
 
         if ($asHtml) {
+            abort_if($export->isCombined(), 422, 'Descarga el PDF o Excel para ver todas las secciones.');
             $snapshot = $this->snapshots->page($export, $page);
             $result = $snapshot['result'];
             $source = (object) ['label' => $snapshot['header']['label'], 'columns' => $snapshot['header']['metadata'], 'metrics' => []];

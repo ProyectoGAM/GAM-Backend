@@ -353,6 +353,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::patch('/configuraciones-reportes/{reportPreset}', [ReportPresetController::class, 'update'])->name('report-presets.update.es');
             Route::delete('/configuraciones-reportes/{reportPreset}', [ReportPresetController::class, 'destroy'])->name('report-presets.destroy.es');
             Route::post('/reportes/{source}/exportaciones', [ReportExportController::class, 'store'])->middleware('throttle:reporting')->name('report-exports.store.es');
+            Route::post('/exportaciones-reportes/combinadas', [ReportExportController::class, 'storeCombined'])->middleware('throttle:reporting')->name('report-exports.combined.store');
             Route::get('/exportaciones-reportes', [ReportExportController::class, 'index'])->name('report-exports.index.es');
             Route::get('/exportaciones-reportes/{reportExport}', [ReportExportController::class, 'show'])->name('report-exports.show.es');
             Route::post('/exportaciones-reportes/{reportExport}/enlaces-temporales', [ReportExportController::class, 'share'])->name('report-exports.share.es');
