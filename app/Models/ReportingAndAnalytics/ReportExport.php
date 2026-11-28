@@ -41,6 +41,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class ReportExport extends Model
 {
+    public const COMBINED_SOURCE = 'combined';
+
+    public function isCombined(): bool
+    {
+        return $this->source_key === self::COMBINED_SOURCE;
+    }
+
+    /** @return list<string> */
+    public function sourceKeys(): array
+    {
+        return $this->isCombined() ? array_column($this->query['sections'] ?? [], 'source_key') : [$this->source_key];
+    }
+
     /** Conserva el huso horario al persistir vencimientos en PostgreSQL. */
     protected $dateFormat = 'Y-m-d H:i:sP';
 

@@ -157,6 +157,52 @@ paths:
                   data: { type: array, items: { $ref: '#/components/schemas/DeliveryClient' } }
                   meta: { type: object }
                   links: { type: object }
+  /api/v1/repartos/clientes/{cliente}/historial:
+    get:
+      tags: [Repartos]
+      summary: Consulta el historial reciente de entregas y cobros del cliente
+      description: >-
+        Requiere can_view_own_deliveries. Devuelve hasta cinco registros por sección, del más reciente al más antiguo,
+        sin restringir por reparto actual ni por repartidor. Excluye los cobros revertidos y los repartos cancelados.
+        Las cuentas personales pueden ver cobros sin reparto. Las cuentas PIN solo reciben operaciones de su unidad productiva.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: cliente, in: path, required: true, schema: { type: string, format: ulid } }
+      responses:
+        '200':
+          description: Entregas y cobros del cliente visibles para la sesión
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [deliveries, payments]
+                    properties:
+                      deliveries:
+                        type: array
+                        maxItems: 5
+                        items:
+                          type: object
+                          required: [id, visited_at, delivered_quantity, total_amount]
+                          properties:
+                            id: { type: integer }
+                            visited_at: { type: string, format: date-time }
+                            delivered_quantity: { type: integer }
+                            total_amount: { type: [string, 'null'], description: Importe de la mercadería en UYU }
+                      payments:
+                        type: array
+                        maxItems: 5
+                        items:
+                          type: object
+                          required: [id, occurred_at, amount, payment_method]
+                          properties:
+                            id: { type: string, format: ulid }
+                            occurred_at: { type: string, format: date-time }
+                            amount: { type: string, description: Importe cobrado en UYU }
+                            payment_method: { type: [string, 'null'], enum: [cash, transfer, check, other, null] }
   /api/v1/repartos/unidades:
     get:
       tags: [Repartos]

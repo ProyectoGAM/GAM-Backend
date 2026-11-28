@@ -13,6 +13,7 @@ use App\Models\ReportingAndAnalytics\ReportExport;
 use App\Models\User;
 use App\Models\Vehicles\Vehicle;
 use App\Services\IdentityAndAccess\PinHasher;
+use App\Services\IdentityAndAccess\ProductionUnitAccess;
 use App\Services\ReportingAndAnalytics\ReportExportWriter;
 use App\Services\ReportingAndAnalytics\ReportQueryNormalizer;
 use App\Services\ReportingAndAnalytics\ReportSourceRegistry;
@@ -278,6 +279,72 @@ final class DeliveryFinancialTest extends TestCase
         $this->assertDatabaseHas('customer_accounts', ['customer_id' => $customer->id, 'balance' => '50.500']);
     }
 
+    // Flujo: limita el historial a las cinco últimas entregas del cliente sin restringir por repartidor.
+    public function test_driver_sees_latest_five_customer_deliveries_across_drivers(): void
+    {
+        // Preparación: seis entregas propias, una visita sin entrega más reciente y una entrega de otro repartidor.
+        $driver = $this->driver();
+        $customer = Customer::factory()->withAccount()->create();
+        $attributes = ['customer_id' => $customer->id, 'client_reference' => $customer->public_id,
+            'client_name' => $customer->displayName(), 'address' => 'Dirección', 'latitude' => '-34.90', 'longitude' => '-56.20',
+            'sequence' => 1, 'status' => DeliveryStopStatus::Delivered, 'delivered_quantity' => 24];
+        foreach (range(1, 6) as $day) {
+            $delivery = Delivery::factory()->completed()->create(['driver_id' => $driver->id]);
+            $delivery->stops()->create([...$attributes, 'visited_at' => now()->subDays($day), 'delivered_quantity' => $day]);
+        }
+        $delivery = Delivery::factory()->create(['driver_id' => $driver->id]);
+        $delivery->stops()->create([...$attributes, 'status' => DeliveryStopStatus::NotDelivered, 'visited_at' => now(), 'delivered_quantity' => 0]);
+        $otherDelivery = Delivery::factory()->completed()->create();
+        $otherDelivery->stops()->create([...$attributes, 'visited_at' => now()]);
+        $path = '/api/v1/repartos/clientes/'.$customer->public_id.'/historial';
+
+        // Consulta: excluye la visita sin entrega e incluye el reparto del otro conductor.
+        $history = $this->getJson($path)->assertOk()->assertJsonCount(5, 'data.deliveries')
+            ->assertJsonCount(0, 'data.payments');
+        $this->assertSame([24, 1, 2, 3, 4], array_column($history->json('data.deliveries'), 'delivered_quantity'));
+
+        // Consulta: cuando se aplica un alcance de UP, las demás entregas quedan fuera del historial.
+        app(ProductionUnitAccess::class)->within($otherDelivery->production_unit_id, fn () => $this->getJson($path))
+            ->assertOk()->assertJsonCount(1, 'data.deliveries')->assertJsonPath('data.deliveries.0.delivered_quantity', 24);
+
+        // Consulta: una cuenta sin permiso operativo recibe acceso denegado.
+        Sanctum::actingAs(User::factory()->create(), ['api:access']);
+        $this->getJson($path)->assertForbidden();
+    }
+
+    // Flujo: consulta cobros del cliente realizados en otros repartos y fuera de reparto.
+    public function test_customer_history_includes_payments_across_deliveries_and_standalone_payments(): void
+    {
+        // Preparación: registra un cobro fuera de reparto como administrador.
+        $driver = $this->driver();
+        $customer = Customer::factory()->withAccount()->create();
+        $admin = User::factory()->create();
+        $admin->syncRoles('admin');
+        Sanctum::actingAs($admin, ['api:access']);
+        $standalone = $this->postJson('/api/v1/clientes/'.$customer->public_id.'/pagos',
+            ['amount' => '10.125', 'payment_method' => 'transfer'], ['Idempotency-Key' => (string) Str::uuid()])
+            ->assertSuccessful()->json('data.0.id');
+
+        // Mutación: otro repartidor registra un cobro en su propio reparto.
+        $otherDriver = User::factory()->create();
+        $otherDriver->syncRoles('delivery');
+        Sanctum::actingAs($otherDriver, ['api:access']);
+        $delivery = Delivery::factory()->create(['driver_id' => $otherDriver->id]);
+        $event = (string) Str::uuid();
+        $collection = $this->postJson('/api/v1/repartos/'.$delivery->public_id.'/cobros', [
+            'client_reference' => $customer->public_id, 'client_event_id' => $event, 'amount' => '15.000', 'payment_method' => 'cash',
+        ], ['Idempotency-Key' => $event])->assertOk()->json('data.0.id');
+
+        // Consulta: el historial personal incluye ambos cobros y el alcance de UP conserva el de su reparto.
+        Sanctum::actingAs($driver, ['api:access']);
+        $path = '/api/v1/repartos/clientes/'.$customer->public_id.'/historial';
+        $this->getJson($path)->assertOk()->assertJsonCount(2, 'data.payments')
+            ->assertJsonPath('data.payments.0.id', $collection)
+            ->assertJsonPath('data.payments.1.id', $standalone);
+        app(ProductionUnitAccess::class)->within($delivery->production_unit_id, fn () => $this->getJson($path))
+            ->assertOk()->assertJsonCount(1, 'data.payments')->assertJsonPath('data.payments.0.id', $collection);
+    }
+
     // Flujo: el mapa deja de mostrar como cobrado al cliente sin visitas ni pagos vigentes.
     public function test_voiding_a_standalone_payment_updates_the_customer_map(): void
     {
@@ -291,12 +358,19 @@ final class DeliveryFinancialTest extends TestCase
             'client_reference' => $customer->public_id, 'client_event_id' => $event, 'amount' => '15', 'payment_method' => 'cash',
         ], ['Idempotency-Key' => $event])->assertOk()->json('data.0.id');
         $markers = '/api/v1/clientes/mapa?west=-57&east=-56&south=-35&north=-34&delivery_id='.$id;
+        $history = '/api/v1/repartos/clientes/'.$customer->public_id.'/historial';
         $this->getJson($markers.'&visit_status=paid')->assertOk()->assertJsonPath('data.0.id', $customer->public_id);
+        $this->getJson($history)->assertOk()->assertJsonCount(0, 'data.deliveries')->assertJsonCount(1, 'data.payments')
+            ->assertJsonPath('data.payments.0.id', $payment)
+            ->assertJsonPath('data.payments.0.amount', '15.000')
+            ->assertJsonPath('data.payments.0.payment_method', 'cash')
+            ->assertJsonMissingPath('data.payments.0.balance_after');
 
         // Mutación y consulta: deshace el saldo a favor y el cliente vuelve a pendiente.
         $this->postJson($path.'/'.$payment.'/rectificaciones',
             ['amount' => '0', 'reason' => 'No se recibió dinero'], ['Idempotency-Key' => (string) Str::uuid()])
             ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.delivery_stop_id', null);
+        $this->getJson($history)->assertOk()->assertJsonCount(0, 'data.payments');
         $this->getJson($markers.'&visit_status=paid')->assertOk()->assertJsonCount(0, 'data');
         $this->getJson($markers.'&visit_status=pending')->assertOk()
             ->assertJsonPath('data.0.id', $customer->public_id)->assertJsonPath('data.0.visit_status', 'pending');

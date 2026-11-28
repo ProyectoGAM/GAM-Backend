@@ -251,6 +251,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             ->name('deliveries.current');
         Route::get('/repartos/clientes', [DeliveryController::class, 'clients'])
             ->name('deliveries.clients');
+        Route::get('/repartos/clientes/{cliente}/historial', [DeliveryController::class, 'clientHistory'])
+            ->whereUlid('cliente')->name('deliveries.clients.history');
         Route::get('/repartos/unidades-productivas', [DeliveryController::class, 'productionUnits'])->name('deliveries.production-units');
         Route::get('/inventario/presentaciones-huevos', [EggPresentationController::class, 'index'])->name('egg-presentations.index');
         Route::post('/inventario/presentaciones-huevos', [EggPresentationController::class, 'store'])->name('egg-presentations.store');
@@ -351,6 +353,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::patch('/configuraciones-reportes/{reportPreset}', [ReportPresetController::class, 'update'])->name('report-presets.update.es');
             Route::delete('/configuraciones-reportes/{reportPreset}', [ReportPresetController::class, 'destroy'])->name('report-presets.destroy.es');
             Route::post('/reportes/{source}/exportaciones', [ReportExportController::class, 'store'])->middleware('throttle:reporting')->name('report-exports.store.es');
+            Route::post('/exportaciones-reportes/combinadas', [ReportExportController::class, 'storeCombined'])->middleware('throttle:reporting')->name('report-exports.combined.store');
             Route::get('/exportaciones-reportes', [ReportExportController::class, 'index'])->name('report-exports.index.es');
             Route::get('/exportaciones-reportes/{reportExport}', [ReportExportController::class, 'show'])->name('report-exports.show.es');
             Route::post('/exportaciones-reportes/{reportExport}/enlaces-temporales', [ReportExportController::class, 'share'])->name('report-exports.share.es');

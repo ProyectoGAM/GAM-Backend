@@ -14,6 +14,7 @@ final class DownloadReportExportRequest extends FormRequest
             $export = $this->route('reportExport');
 
             return $export instanceof ReportExport
+                && ! $export->isCombined()
                 && $registry->get($export->source_key)->definition()->supportsPublicLinks;
         }
 
