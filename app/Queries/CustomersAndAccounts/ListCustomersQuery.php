@@ -2,8 +2,13 @@
 
 namespace App\Queries\CustomersAndAccounts;
 
+use App\Enums\CustomersAndAccounts\CustomerMovementType;
+use App\Enums\Deliveries\DeliveryStatus;
+use App\Enums\Deliveries\DeliveryStopStatus;
 use App\Models\CustomersAndAccounts\Customer;
+use App\Models\CustomersAndAccounts\CustomerAccountMovement;
 use App\Models\Deliveries\Delivery;
+use App\Models\Deliveries\DeliveryStop;
 use App\Services\IdentityAndAccess\ProductionUnitAccess;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -44,6 +49,39 @@ final class ListCustomersQuery
     {
         return $this->query($filters)->with('lastDelivery.delivery:id,public_id')
             ->paginate($filters['per_page'] ?? $filters['limit'] ?? 50)->withQueryString();
+    }
+
+    /**
+     * @return array{deliveries: list<array<string, mixed>>, payments: list<array<string, mixed>>}
+     */
+    public function deliveryHistory(Customer $customer): array
+    {
+        $validDelivery = fn (Builder $delivery): Builder => $delivery->whereIn('status', [DeliveryStatus::Active, DeliveryStatus::Completed]);
+
+        $deliveries = $customer->stops()->whereHas('delivery', $validDelivery)
+            ->where('status', DeliveryStopStatus::Delivered)->whereNotNull('visited_at')
+            ->orderByDesc('visited_at')->orderByDesc('id')->limit(5)
+            ->get(['id', 'visited_at', 'delivered_quantity', 'total_amount'])
+            ->map(fn (DeliveryStop $stop): array => [
+                'id' => $stop->id,
+                'visited_at' => $stop->visited_at,
+                'delivered_quantity' => $stop->delivered_quantity,
+                'total_amount' => $stop->total_amount,
+            ])->values()->all();
+
+        $payments = $customer->movements()->where(fn (Builder $payments): Builder => $payments
+            ->whereNull('customer_account_movements.delivery_id')->orWhereHas('delivery', $validDelivery))
+            ->where('type', CustomerMovementType::Payment)->doesntHave('reversal')
+            ->orderByDesc('occurred_at')->orderByDesc('customer_account_movements.id')->limit(5)
+            ->get(['customer_account_movements.public_id', 'occurred_at', 'amount', 'payment_method'])
+            ->map(fn (CustomerAccountMovement $movement): array => [
+                'id' => $movement->public_id,
+                'occurred_at' => $movement->occurred_at,
+                'amount' => ltrim($movement->amount, '-'),
+                'payment_method' => $movement->payment_method,
+            ])->values()->all();
+
+        return ['deliveries' => $deliveries, 'payments' => $payments];
     }
 
     public function markers(array $filters): array

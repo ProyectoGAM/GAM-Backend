@@ -8,6 +8,7 @@ use App\Actions\ReportingAndAnalytics\RequestReportExportAction;
 use App\Enums\ReportingAndAnalytics\ReportExportFormat;
 use App\Http\Requests\ReportingAndAnalytics\DownloadReportExportRequest;
 use App\Http\Requests\ReportingAndAnalytics\ListReportExportsRequest;
+use App\Http\Requests\ReportingAndAnalytics\StoreCombinedReportExportRequest;
 use App\Http\Requests\ReportingAndAnalytics\StoreReportExportRequest;
 use App\Http\Requests\ReportingAndAnalytics\StoreTemporaryReportLinkRequest;
 use App\Http\Requests\ReportingAndAnalytics\ViewReportExportRequest;
@@ -29,6 +30,22 @@ final readonly class ReportExportController
         $result = $action->execute(
             sourceKey: $source,
             input: $attributes,
+            format: ReportExportFormat::from((string) $request->validated('format')),
+            idempotencyKey: (string) $request->validated('idempotency_key'),
+            actor: $actor,
+        );
+
+        return (new ReportExportResource($result['export']))
+            ->response()
+            ->setStatusCode(Response::HTTP_ACCEPTED);
+    }
+
+    public function storeCombined(StoreCombinedReportExportRequest $request, RequestReportExportAction $action): JsonResponse
+    {
+        /** @var User $actor */
+        $actor = $request->user();
+        $result = $action->executeCombined(
+            sections: $request->validated('sections'),
             format: ReportExportFormat::from((string) $request->validated('format')),
             idempotencyKey: (string) $request->validated('idempotency_key'),
             actor: $actor,

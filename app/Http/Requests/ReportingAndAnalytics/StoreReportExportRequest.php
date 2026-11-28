@@ -28,6 +28,14 @@ final class StoreReportExportRequest extends FormRequest
         return [
             'idempotency_key' => ['required', 'uuid'],
             'format' => ['required', Rule::enum(ReportExportFormat::class)],
+            ...self::queryRules(),
+        ];
+    }
+
+    /** @return array<string, array<int, mixed>> */
+    public static function queryRules(string $prefix = ''): array
+    {
+        $rules = [
             'columns' => ['sometimes', 'array', 'max:30'],
             'columns.*' => ['string', 'max:80'],
             'filters' => ['sometimes', 'array', 'max:20'],
@@ -37,7 +45,7 @@ final class StoreReportExportRequest extends FormRequest
             'filters.*.value' => ['present'],
             'from' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
             'date_preset' => ['sometimes', 'nullable', 'in:last_month'],
-            'to' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'to' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:'.$prefix.'from'],
             'sorts' => ['sometimes', 'array', 'max:10'],
             'sorts.*' => ['array'],
             'sorts.*.field' => ['required', 'string', 'max:80'],
@@ -53,5 +61,7 @@ final class StoreReportExportRequest extends FormRequest
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
+
+        return array_combine(array_map(fn (string $key): string => $prefix.$key, array_keys($rules)), $rules);
     }
 }

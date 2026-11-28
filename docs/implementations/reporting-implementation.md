@@ -286,3 +286,9 @@ El recorrido detectó y corrigió la selección visual inicial de la UP en Donac
 Ambos Compose montan una plantilla de Nginx, sustituyen sólo `APP_ENV` al arrancar y escriben la configuración en un tmpfs, manteniendo el filesystem de la imagen en modo read-only. Desarrollo comparte el valor de entorno con Laravel; producción fija `production`. Ver configuración y recreación del gateway en el [README](../../README.md#urls-según-el-entorno).
 
 Se validó con la misma imagen de gateway en ambos modos: un enlace local conservó `:8080`; uno emitido por un gateway aislado con `APP_ENV=production`, `Host=reports.example:8081` y protocolo externo HTTPS produjo `https://reports.example` sin puerto. Ambos enlaces abrieron su HTML con firma válida, sin sesión. Esta comprobación simula el proxy público y no constituye un despliegue al sitio final.
+
+## Exportaciones de varios módulos
+
+El creador consulta el catálogo autorizado y previsualiza cada sección con su fuente habitual. Envía las consultas en orden a POST /api/v1/exportaciones-reportes/combinadas con el formato y una clave de idempotencia. Cada consulta conserva sus columnas, agrupaciones, período y filtros. Las fuentes de saldo actual se solicitan sin fechas.
+
+La cola de reportes genera un Excel con una hoja por sección o un PDF con secciones sucesivas. Los límites se aplican a cada fuente y al conjunto completo. El historial identifica estas exportaciones con source_key igual a combined. El acceso al archivo requiere una sesión del propietario y se verifican los permisos de todas las fuentes al solicitar, generar y descargar. El formato combinado admite descarga privada.

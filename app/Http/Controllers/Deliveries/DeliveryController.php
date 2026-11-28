@@ -48,6 +48,11 @@ final readonly class DeliveryController
         return DeliveryClientResource::collection($query->operational($request->validated()));
     }
 
+    public function clientHistory(ListDeliveryClientsRequest $request, Customer $cliente, ListCustomersQuery $query): JsonResponse
+    {
+        return response()->json(['data' => $query->deliveryHistory($cliente)]);
+    }
+
     public function payment(StoreDeliveryPaymentRequest $request, Delivery $reparto, RecordCustomerPaymentAction $action): AnonymousResourceCollection
     {
         $data = $request->attributesForAction();

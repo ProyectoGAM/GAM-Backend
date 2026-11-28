@@ -44,6 +44,7 @@ Contratos: [clientes y cuentas](../../contracts/openapi/customers-and-accounts.y
 | `POST /clientes/{cliente}/ajustes` | Aumentar/disminuir deuda con versión y motivo. |
 | `POST /clientes/{cliente}/movimientos/{movimiento}/reversion` | Compensar pago/ajuste. |
 | `GET /repartos/clientes` | Proyección operativa paginada y última entrega. |
+| `GET /repartos/clientes/{cliente}/historial` | Hasta cinco entregas y cinco cobros vigentes del cliente, independientemente del reparto y del repartidor. Las cuentas personales incluyen cobros sin reparto y las cuentas PIN conservan su alcance de UP. |
 | `POST /repartos/{reparto}/entregas` | Entrega/visita e integración contable atómica. |
 | `POST /repartos/{reparto}/cobros` | Cobro independiente o vinculado a una entrega del reparto propio activo. |
 | `POST /repartos/{reparto}/cobros/{cobro}/rectificaciones` | Reversión o reemplazo de un cobro vigente en reparto propio activo. |
